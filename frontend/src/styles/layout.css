@@ -1,0 +1,312 @@
+/* Layout CSS for reference image UI pattern - Vintage Style */
+:root {
+  --primary-color: #0a246a; /* Classic Windows title bar blue */
+  --primary-light: #316ac5; /* Highlight color */
+  --primary-dark: #000000;
+  --secondary-color: #aca899; /* Classic Windows button dark */
+  --secondary-light: #ffffff; /* Classic Windows button light */
+  --secondary-dark: #404040; /* Classic Windows button shadow */
+  --background-color: #ece9d8; /* Classic Windows background */
+  --text-color: #000000;
+  --border-color: #000000;
+  --success-color: #28a745;
+  --danger-color: #dc3545;
+  --warning-color: #ffc107;
+  --info-color: #17a2b8;
+}
+
+/* Main layout structure */
+.app-layout {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  background-color: var(--background-color);
+}
+
+/* Top Navigation Bar */
+.top-navbar {
+  background-color: var(--primary-color);
+  color: white;
+  padding: 0.5rem 1rem;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  z-index: 1000;
+  border-bottom: 1px solid var(--button-dark);
+}
+
+.navbar-content {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  max-width: 100%;
+  margin: 0 auto;
+}
+
+.app-title {
+  font-size: 1.5rem;
+  font-weight: bold;
+  color: white;
+  margin: 0;
+}
+
+.user-info {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.user-name {
+  font-weight: 500;
+}
+
+.logout-btn {
+  background-color: var(--button-face);
+  border-top: 1px solid var(--button-light);
+  border-left: 1px solid var(--button-light);
+  border-right: 1px solid var(--button-dark);
+  border-bottom: 1px solid var(--button-dark);
+  padding: 4px 12px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  min-width: 75px;
+  text-align: center;
+  color: var(--text-color);
+  font-family: var(--font-family);
+  font-size: var(--font-size);
+}
+
+.logout-btn:active {
+  border-top: 1px solid var(--button-dark);
+  border-left: 1px solid var(--button-dark);
+  border-right: 1px solid var(--button-light);
+  border-bottom: 1px solid var(--button-light);
+}
+
+.logout-btn:hover {
+  background-color: var(--button-primary-hover);
+  color: var(--selection-text);
+}
+
+/* Main content area */
+.main-content {
+  display: flex;
+  flex: 1;
+  padding: 12px;
+  gap: 12px;
+}
+
+/* Left sidebar for forms */
+.sidebar {
+  flex: 0 0 300px;
+  background-color: var(--panel-bg);
+  border: 1px solid var(--panel-border);
+  padding: 12px;
+  height: fit-content;
+}
+
+.sidebar-title {
+  font-size: 16px;
+  font-weight: bold;
+  color: var(--text-color);
+  margin-bottom: 12px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--panel-border);
+}
+
+.form-group {
+  margin-bottom: 8px;
+}
+
+.form-label {
+  display: block;
+  margin-bottom: 4px;
+  font-weight: normal;
+  color: var(--text-color);
+}
+
+.form-control {
+  width: 100%;
+  padding: 2px 4px;
+  border: 1px solid var(--input-border);
+  font-size: 11px;
+  box-sizing: border-box;
+  background-color: var(--input-bg);
+}
+
+.form-control:focus {
+  outline: 1px dotted #000000;
+}
+
+.btn {
+  background-color: var(--button-face);
+  border-top: 1px solid var(--button-light);
+  border-left: 1px solid var(--button-light);
+  border-right: 1px solid var(--button-dark);
+  border-bottom: 1px solid var(--button-dark);
+  padding: 4px 12px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  min-width: 75px;
+  text-align: center;
+  color: var(--text-color);
+  font-family: var(--font-family);
+  font-size: var(--font-size);
+}
+
+.btn:active {
+  border-top: 1px solid var(--button-dark);
+  border-left: 1px solid var(--button-dark);
+  border-right: 1px solid var(--button-light);
+  border-bottom: 1px solid var(--button-light);
+}
+
+.btn-primary {
+  background-color: var(--button-primary);
+  color: white;
+}
+
+.btn-primary:hover {
+  background-color: var(--button-primary-hover);
+  color: var(--selection-text);
+}
+
+.btn-secondary {
+  background-color: var(--button-face);
+  color: var(--text-color);
+}
+
+.btn-secondary:hover {
+  background-color: var(--button-primary-hover);
+  color: var(--selection-text);
+}
+
+/* Right panel for data grid */
+.content-panel {
+  flex: 1;
+  background-color: var(--panel-bg);
+  border: 1px solid var(--panel-border);
+  padding: 12px;
+}
+
+.panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--panel-border);
+}
+
+.panel-title {
+  font-size: 16px;
+  font-weight: bold;
+  color: var(--text-color);
+  margin: 0;
+}
+
+/* Data grid styling */
+.data-grid {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 12px;
+  background-color: var(--input-bg);
+  border: 1px solid var(--input-border);
+}
+
+.data-grid th {
+  background-color: var(--grid-header);
+  color: white;
+  text-align: left;
+  padding: 4px;
+  font-weight: normal;
+}
+
+.data-grid td {
+  padding: 4px;
+  border-bottom: 1px solid var(--panel-border);
+}
+
+.data-grid tr:nth-child(even) {
+  background-color: var(--grid-row-even);
+}
+
+.data-grid tr:nth-child(odd) {
+  background-color: var(--grid-row-odd);
+}
+
+.data-grid tr:hover {
+  background-color: var(--selection-highlight);
+  color: var(--selection-text);
+}
+
+/* Form rows for multiple columns */
+.form-row {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.form-row .form-group {
+  flex: 1;
+  margin-bottom: 0;
+}
+
+/* Status badges */
+.status-badge {
+  display: inline-block;
+  padding: 2px 4px;
+  font-size: 11px;
+  font-weight: normal;
+}
+
+.status-active {
+  background-color: var(--success-color);
+  color: white;
+}
+
+.status-inactive {
+  background-color: var(--danger-color);
+  color: white;
+}
+
+/* Error messages */
+.error-message {
+  background-color: #f8d7da;
+  color: #721c24;
+  padding: 4px;
+  margin-bottom: 8px;
+  border: 1px solid #f5c6cb;
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
+  .main-content {
+    flex-direction: column;
+  }
+  
+  .sidebar {
+    flex: 0 0 auto;
+    width: 100%;
+    margin-bottom: 12px;
+  }
+  
+  .navbar-content {
+    flex-direction: column;
+    gap: 6px;
+    text-align: center;
+  }
+  
+  .user-info {
+    justify-content: center;
+  }
+  
+  .form-row {
+    flex-direction: column;
+    gap: 0;
+  }
+}

@@ -1,0 +1,511 @@
+/* Classic Admin Dashboard Styles - Early 2010s Desktop App Style */
+:root {
+  --primary-bg: #e0e0e0;
+  --panel-bg: #f0f0f0;
+  --header-bg: #000000;
+  --header-text: #ffffff;
+  --sidebar-bg: #d0d0d0;
+  --sidebar-hover: #b0b0b0;
+  --border-color: #808080;
+  --input-border: #a0a0a0;
+  --button-primary: #000080;
+  --button-hover: #000060;
+  --button-secondary: #c0c0c0;
+  --button-secondary-hover: #a0a0a0;
+  --highlight: #ffff00; /* Pale yellow highlight for selected rows */
+  --text-color: #000000;
+  --shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+  --inset-shadow: inset 1px 1px 2px rgba(0, 0, 0, 0.2);
+  --audit-color: #006400; /* Dark green for audit fields */
+}
+
+/* Reset and Base Styles */
+* {
+  box-sizing: border-box;
+  font-family: Arial, Tahoma, Verdana, sans-serif;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  background-color: var(--primary-bg);
+  color: var(--text-color);
+}
+
+/* Main Dashboard Layout */
+.admin-dashboard {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  background-color: var(--primary-bg);
+}
+
+/* Fixed Top Bar */
+.top-bar {
+  background-color: var(--header-bg);
+  color: var(--header-text);
+  padding: 8px 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 2px solid var(--border-color);
+  box-shadow: var(--shadow);
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 1000;
+  height: 40px;
+}
+
+.top-bar-title {
+  font-size: 16px;
+  font-weight: bold;
+  margin: 0;
+  text-align: center;
+  flex-grow: 1;
+}
+
+.user-block {
+  display: flex;
+  align-items: center;
+  font-size: 14px;
+}
+
+.user-name {
+  margin-right: 12px;
+  font-weight: bold;
+}
+
+.logout-btn {
+  padding: 4px 8px;
+  background-color: var(--button-secondary);
+  border: 1px solid var(--border-color);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.logout-btn:hover {
+  background-color: var(--button-secondary-hover);
+}
+
+/* Navigation Row */
+.nav-row {
+  position: fixed;
+  top: 40px;
+  left: 0;
+  right: 0;
+  background-color: var(--panel-bg);
+  border-bottom: 1px solid var(--border-color);
+  padding: 0 16px;
+  z-index: 999;
+  height: 32px;
+  display: flex;
+  align-items: center;
+}
+
+.nav-button {
+  padding: 6px 12px;
+  margin-right: 4px;
+  background: linear-gradient(to bottom, #ffffff, #d0d0d0);
+  border: 1px solid var(--border-color);
+  font-size: 13px;
+  cursor: pointer;
+  box-shadow: 1px 1px 1px rgba(0, 0, 0, 0.2);
+}
+
+.nav-button:hover {
+  background: linear-gradient(to bottom, #f0f0f0, #c0c0c0);
+}
+
+.nav-button.active {
+  background: linear-gradient(to bottom, #000080, #000060);
+  color: white;
+  border-color: #000000;
+}
+
+/* Main Content Area */
+.main-content {
+  display: flex;
+  flex: 1;
+  margin-top: 72px; /* Top bar (40px) + Nav row (32px) */
+  height: calc(100vh - 72px);
+}
+
+/* Sidebar Navigation */
+.sidebar {
+  width: 200px;
+  background-color: var(--sidebar-bg);
+  border-right: 1px solid var(--border-color);
+  padding: 8px 0;
+  overflow-y: auto;
+  display: none; /* Hide sidebar since we're using top nav */
+}
+
+.nav-item {
+  padding: 10px 16px;
+  cursor: pointer;
+  border-bottom: 1px solid var(--border-color);
+  font-size: 14px;
+  transition: background-color 0.2s;
+}
+
+.nav-item:hover {
+  background-color: var(--sidebar-hover);
+}
+
+.nav-item.active {
+  background-color: var(--highlight);
+  font-weight: bold;
+}
+
+/* Dashboard Content */
+.dashboard-content {
+  flex: 1;
+  display: flex;
+  padding: 16px;
+  gap: 16px;
+  overflow: hidden;
+}
+
+/* Left Panel - Form */
+.left-panel {
+  flex: 0 0 400px;
+  background-color: var(--panel-bg);
+  border: 2px solid var(--border-color);
+  box-shadow: var(--shadow);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - 104px); /* Account for top bars and padding */
+}
+
+.panel-header {
+  font-size: 16px;
+  font-weight: bold;
+  margin-bottom: 16px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border-color);
+  text-align: center;
+}
+
+/* Form Styles */
+.form-container {
+  flex: 1;
+  overflow-y: auto;
+  margin-bottom: 16px;
+}
+
+.form-group {
+  margin-bottom: 12px;
+}
+
+.form-label {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 13px;
+  font-weight: bold;
+}
+
+.form-label.required {
+  color: #ff0000;
+}
+
+.form-label.required::after {
+  content: " *";
+  color: #ff0000;
+}
+
+.form-control {
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid var(--input-border);
+  background-color: #ffffff;
+  font-size: 13px;
+  box-shadow: var(--inset-shadow);
+}
+
+.form-control:focus {
+  outline: 2px solid var(--button-primary);
+  box-shadow: 0 0 3px rgba(0, 0, 128, 0.5);
+}
+
+.form-row {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.form-row .form-group {
+  flex: 1;
+  margin-bottom: 0;
+}
+
+.checkbox-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.checkbox-group input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+}
+
+.remarks-box {
+  width: 100%;
+  height: 80px;
+  padding: 6px 8px;
+  border: 1px solid var(--input-border);
+  background-color: #ffffff;
+  font-size: 13px;
+  box-shadow: var(--inset-shadow);
+  resize: vertical;
+}
+
+/* Action Buttons */
+.action-buttons {
+  display: flex;
+  gap: 8px;
+  padding: 8px 0;
+  border-top: 1px solid var(--border-color);
+  margin-top: auto;
+  flex-wrap: wrap;
+}
+
+.btn {
+  padding: 6px 12px;
+  font-size: 13px;
+  border: 2px solid var(--border-color);
+  background: linear-gradient(to bottom, #ffffff, #d0d0d0);
+  cursor: pointer;
+  box-shadow: 2px 2px 2px rgba(0, 0, 0, 0.2);
+  min-width: 70px;
+  font-weight: bold;
+}
+
+.btn:hover {
+  background: linear-gradient(to bottom, #f0f0f0, #c0c0c0);
+}
+
+.btn-primary {
+  background: linear-gradient(to bottom, var(--button-primary), var(--button-hover));
+  color: white;
+  border-color: #000000;
+}
+
+.btn-primary:hover {
+  background: linear-gradient(to bottom, #0000a0, #000050);
+}
+
+.btn:focus {
+  outline: 1px dotted #000;
+}
+
+/* Right Panel - Data Grid */
+.right-panel {
+  flex: 1;
+  background-color: var(--panel-bg);
+  border: 2px solid var(--border-color);
+  box-shadow: var(--shadow);
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - 104px); /* Account for top bars and padding */
+}
+
+/* Filter Section */
+.filter-section {
+  padding: 12px;
+  border-bottom: 1px solid var(--border-color);
+  background-color: #e8e8e8;
+}
+
+.filter-row {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.filter-row:last-child {
+  margin-bottom: 0;
+}
+
+.filter-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.filter-label {
+  font-size: 13px;
+  font-weight: bold;
+  min-width: 100px;
+}
+
+.filter-control {
+  padding: 4px 6px;
+  border: 1px solid var(--input-border);
+  font-size: 13px;
+  box-shadow: var(--inset-shadow);
+  min-width: 120px;
+}
+
+/* Table Container */
+.table-container {
+  flex: 1;
+  overflow: auto;
+  padding: 8px;
+}
+
+/* Data Table */
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  border: 1px solid var(--border-color);
+}
+
+.data-table th {
+  background-color: #c0c0c0;
+  border: 1px solid var(--border-color);
+  padding: 8px 6px;
+  text-align: left;
+  font-weight: bold;
+  position: sticky;
+  top: 0;
+}
+
+.data-table td {
+  border: 1px solid var(--border-color);
+  padding: 6px;
+  vertical-align: top;
+}
+
+.data-table tr:nth-child(odd) {
+  background-color: #ffffff;
+}
+
+.data-table tr:nth-child(even) {
+  background-color: #f0f0f0;
+}
+
+.data-table tr:hover {
+  background-color: #d0d0d0;
+}
+
+.data-table tr.selected {
+  background-color: var(--highlight);
+}
+
+/* Checkbox in table */
+.table-checkbox {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  padding: 0;
+}
+
+/* Pagination */
+.pagination {
+  display: flex;
+  justify-content: center;
+  padding: 8px;
+  border-top: 1px solid var(--border-color);
+  background-color: #e8e8e8;
+}
+
+.pagination button {
+  padding: 4px 8px;
+  margin: 0 2px;
+  font-size: 12px;
+  border: 2px solid var(--border-color);
+  background: linear-gradient(to bottom, #ffffff, #d0d0d0);
+  cursor: pointer;
+  box-shadow: 1px 1px 1px rgba(0, 0, 0, 0.2);
+}
+
+.pagination button:hover {
+  background: linear-gradient(to bottom, #f0f0f0, #c0c0c0);
+}
+
+.pagination button.active {
+  background: linear-gradient(to bottom, var(--button-primary), var(--button-hover));
+  color: white;
+  border-color: #000000;
+}
+
+/* Audit Fields */
+.audit-fields {
+  margin-top: 16px;
+  padding: 12px;
+  border: 1px solid var(--border-color);
+  background-color: #e8e8e8;
+  font-size: 12px;
+  color: var(--audit-color);
+}
+
+.audit-fields h4 {
+  margin: 0 0 8px 0;
+  font-size: 13px;
+  font-weight: bold;
+  color: var(--audit-color);
+}
+
+.audit-row {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 4px;
+}
+
+.audit-field {
+  display: flex;
+  gap: 4px;
+}
+
+.audit-label {
+  font-weight: bold;
+}
+
+/* Status Badge */
+.status-badge {
+  display: inline-block;
+  padding: 2px 6px;
+  border-radius: 0;
+  font-size: 11px;
+  font-weight: bold;
+}
+
+.status-active {
+  background-color: #90ee90;
+  color: #006400;
+  border: 1px solid #006400;
+}
+
+.status-inactive {
+  background-color: #ffcccb;
+  color: #8b0000;
+  border: 1px solid #8b0000;
+}
+
+/* Responsive Design */
+@media (max-width: 1024px) {
+  .dashboard-content {
+    flex-direction: column;
+  }
+  
+  .left-panel {
+    flex: 0 0 auto;
+    height: auto;
+    margin-bottom: 16px;
+  }
+  
+  .right-panel {
+    flex: 1;
+    height: auto;
+  }
+  
+  .sidebar {
+    width: 150px;
+  }
+}

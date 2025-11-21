@@ -1,0 +1,106 @@
+.header {
+  background-color: var(--title-bar-bg);
+  color: var(--title-bar-text);
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  border-bottom: 1px solid var(--button-dark);
+}
+
+.header .container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  height: 60px;
+}
+
+.header .logo h1 {
+  margin: 0;
+  color: var(--title-bar-text);
+  font-size: 1.5rem;
+}
+
+.header .navigation ul {
+  display: flex;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  gap: 20px;
+}
+
+.header .navigation li {
+  margin: 0;
+}
+
+.header .navigation a {
+  text-decoration: none;
+  color: var(--title-bar-text);
+  font-weight: 500;
+  padding: 8px 12px;
+  border-radius: 4px;
+  transition: all 0.2s;
+  background-color: var(--button-face);
+  border-top: 1px solid var(--button-light);
+  border-left: 1px solid var(--button-light);
+  border-right: 1px solid var(--button-dark);
+  border-bottom: 1px solid var(--button-dark);
+  display: inline-block;
+  height: 22px;
+  line-height: 22px;
+}
+
+.header .navigation a:hover {
+  background-color: var(--button-primary-hover);
+  color: var(--selection-text);
+  text-decoration: none;
+}
+
+.header .navigation a.active {
+  background-color: var(--button-primary);
+  color: var(--selection-text);
+  font-weight: 600;
+}
+
+.footer {
+  background-color: var(--panel-bg);
+  color: var(--text-color);
+  padding: 20px 0;
+  margin-top: auto;
+  border-top: 1px solid var(--panel-border);
+}
+
+.footer .container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 20px;
+  text-align: center;
+}
+
+.footer p {
+  margin: 0;
+  color: var(--text-color);
+}
+
+@media (max-width: 768px) {
+  .header .container {
+    flex-direction: column;
+    height: auto;
+    padding: 10px 20px;
+  }
+  
+  .header .navigation ul {
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 10px;
+    margin-top: 10px;
+  }
+  
+  .header .navigation a {
+    padding: 6px 10px;
+    font-size: 0.9rem;
+  }
+}

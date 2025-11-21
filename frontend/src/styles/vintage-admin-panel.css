@@ -1,0 +1,379 @@
+/* Vintage Enterprise Admin Panel - Classic Windows XP/2000 Style */
+:root {
+  --window-bg: #ece9d8; /* Classic Windows background */
+  --window-border: #000000;
+  --title-bar-bg: #0a246a; /* Classic Windows title bar blue */
+  --title-bar-text: #ffffff;
+  --menu-bar-bg: #ece9d8;
+  --menu-bar-border: #aca899;
+  --button-face: #ece9d8;
+  --button-light: #ffffff;
+  --button-dark: #aca899;
+  --button-shadow: #404040;
+  --input-bg: #ffffff;
+  --input-border: #000000;
+  --grid-header: #808080;
+  --grid-row-odd: #ffffff;
+  --grid-row-even: #f0f0f0;
+  --selection-highlight: #316ac5;
+  --selection-text: #ffffff;
+  --status-bar: #ece9d8;
+  --status-border: #aca899;
+  --text-color: #000000;
+  --disabled-text: #808080;
+}
+
+/* Reset and Base Styles */
+* {
+  box-sizing: border-box;
+  font-family: "Tahoma", "Arial", sans-serif;
+  font-size: 11px;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  background-color: var(--window-bg);
+  color: var(--text-color);
+}
+
+/* Main Container */
+.vintage-admin-panel {
+  width: 100vw;
+  height: 100vh;
+  background-color: var(--window-bg);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Title Bar */
+.title-bar {
+  background-color: var(--title-bar-bg);
+  color: var(--title-bar-text);
+  height: 24px;
+  display: flex;
+  align-items: center;
+  padding: 0 4px;
+  border-bottom: 1px solid var(--window-border);
+  user-select: none;
+}
+
+.title-text {
+  font-weight: bold;
+  flex-grow: 1;
+  text-align: center;
+}
+
+.system-menu {
+  width: 16px;
+  height: 16px;
+  background-color: var(--title-bar-text);
+  margin-right: 4px;
+  cursor: pointer;
+}
+
+/* Menu Bar */
+.menu-bar {
+  background-color: var(--menu-bar-bg);
+  height: 22px;
+  border-bottom: 1px solid var(--menu-bar-border);
+  display: flex;
+  align-items: center;
+  padding: 0 2px;
+}
+
+.menu-item {
+  padding: 2px 6px;
+  cursor: pointer;
+  height: 18px;
+  display: flex;
+  align-items: center;
+}
+
+.menu-item:hover {
+  background-color: var(--selection-highlight);
+  color: var(--selection-text);
+}
+
+/* Toolbar */
+.toolbar {
+  background-color: var(--menu-bar-bg);
+  height: 28px;
+  border-bottom: 1px solid var(--menu-bar-border);
+  display: flex;
+  align-items: center;
+  padding: 2px 4px;
+  gap: 2px;
+}
+
+.tool-button {
+  background-color: var(--button-face);
+  border-top: 1px solid var(--button-light);
+  border-left: 1px solid var(--button-light);
+  border-right: 1px solid var(--button-dark);
+  border-bottom: 1px solid var(--button-dark);
+  padding: 2px 6px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  min-width: 24px;
+  text-align: center;
+}
+
+.tool-button:active {
+  border-top: 1px solid var(--button-dark);
+  border-left: 1px solid var(--button-dark);
+  border-right: 1px solid var(--button-light);
+  border-bottom: 1px solid var(--button-light);
+}
+
+.tool-separator {
+  width: 1px;
+  height: 20px;
+  background-color: var(--button-dark);
+  margin: 0 2px;
+}
+
+/* Main Content Area */
+.main-content {
+  flex: 1;
+  display: flex;
+  padding: 4px;
+  gap: 4px;
+  overflow: hidden;
+}
+
+/* Navigation Panel */
+.nav-panel {
+  width: 180px;
+  background-color: var(--menu-bar-bg);
+  border: 1px solid var(--menu-bar-border);
+  padding: 4px;
+  overflow-y: auto;
+}
+
+.nav-header {
+  font-weight: bold;
+  padding: 2px 4px;
+  margin-bottom: 4px;
+  border-bottom: 1px solid var(--menu-bar-border);
+}
+
+.nav-item {
+  padding: 2px 8px;
+  cursor: pointer;
+}
+
+.nav-item:hover {
+  background-color: var(--selection-highlight);
+  color: var(--selection-text);
+}
+
+.nav-item.active {
+  background-color: var(--selection-highlight);
+  color: var(--selection-text);
+}
+
+/* Work Area */
+.work-area {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+/* Form Panel */
+.form-panel {
+  background-color: var(--menu-bar-bg);
+  border: 1px solid var(--menu-bar-border);
+  padding: 8px;
+  height: 200px;
+}
+
+.panel-header {
+  font-weight: bold;
+  margin-bottom: 8px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--menu-bar-border);
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: 80px 1fr 80px 1fr;
+  gap: 4px;
+}
+
+.form-label {
+  display: flex;
+  align-items: center;
+  padding-right: 4px;
+  text-align: right;
+}
+
+.form-label.required::after {
+  content: "*";
+  color: red;
+  margin-left: 2px;
+}
+
+.form-input {
+  background-color: var(--input-bg);
+  border: 1px solid var(--input-border);
+  padding: 2px 4px;
+  height: 20px;
+}
+
+.form-input:focus {
+  outline: 1px dotted #000000;
+}
+
+.form-row {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 4px;
+}
+
+.form-actions {
+  display: flex;
+  gap: 4px;
+  margin-top: 8px;
+}
+
+/* Grid Panel */
+.grid-panel {
+  flex: 1;
+  background-color: var(--menu-bar-bg);
+  border: 1px solid var(--menu-bar-border);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.grid-toolbar {
+  background-color: var(--menu-bar-bg);
+  height: 24px;
+  border-bottom: 1px solid var(--menu-bar-border);
+  display: flex;
+  align-items: center;
+  padding: 2px 4px;
+  gap: 4px;
+}
+
+.filter-input {
+  background-color: var(--input-bg);
+  border: 1px solid var(--input-border);
+  padding: 2px 4px;
+  height: 18px;
+  width: 100px;
+}
+
+.grid-container {
+  flex: 1;
+  overflow: auto;
+  padding: 2px;
+}
+
+.grid-table {
+  width: 100%;
+  border-collapse: collapse;
+  background-color: var(--input-bg);
+}
+
+.grid-table th {
+  background-color: var(--grid-header);
+  color: var(--title-bar-text);
+  padding: 3px 4px;
+  text-align: left;
+  font-weight: normal;
+  border: 1px solid var(--button-dark);
+}
+
+.grid-table td {
+  padding: 2px 4px;
+  border: 1px solid var(--menu-bar-border);
+}
+
+.grid-table tr:nth-child(odd) {
+  background-color: var(--grid-row-odd);
+}
+
+.grid-table tr:nth-child(even) {
+  background-color: var(--grid-row-even);
+}
+
+.grid-table tr:hover {
+  background-color: var(--selection-highlight);
+  color: var(--selection-text);
+}
+
+.grid-table tr.selected {
+  background-color: var(--selection-highlight);
+  color: var(--selection-text);
+}
+
+.grid-pagination {
+  background-color: var(--status-bar);
+  border-top: 1px solid var(--status-border);
+  height: 20px;
+  display: flex;
+  align-items: center;
+  padding: 0 4px;
+  font-size: 10px;
+}
+
+.page-button {
+  background-color: var(--button-face);
+  border-top: 1px solid var(--button-light);
+  border-left: 1px solid var(--button-light);
+  border-right: 1px solid var(--button-dark);
+  border-bottom: 1px solid var(--button-dark);
+  padding: 0 4px;
+  height: 16px;
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  margin: 0 1px;
+  font-size: 10px;
+}
+
+.page-button:active {
+  border-top: 1px solid var(--button-dark);
+  border-left: 1px solid var(--button-dark);
+  border-right: 1px solid var(--button-light);
+  border-bottom: 1px solid var(--button-light);
+}
+
+.page-button.active {
+  background-color: var(--selection-highlight);
+  color: var(--selection-text);
+}
+
+/* Status Bar */
+.status-bar {
+  background-color: var(--status-bar);
+  border-top: 1px solid var(--status-border);
+  height: 20px;
+  display: flex;
+  align-items: center;
+  padding: 0 4px;
+  font-size: 10px;
+}
+
+.status-item {
+  margin-right: 12px;
+}
+
+.status-panel {
+  margin-left: auto;
+  background-color: var(--button-face);
+  border-top: 1px solid var(--button-light);
+  border-left: 1px solid var(--button-light);
+  border-right: 1px solid var(--button-dark);
+  border-bottom: 1px solid var(--button-dark);
+  padding: 0 6px;
+  height: 16px;
+  display: flex;
+  align-items: center;
+}

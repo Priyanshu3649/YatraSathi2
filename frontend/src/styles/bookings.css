@@ -1,0 +1,301 @@
+.bookings {
+  padding: 20px;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.bookings-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--panel-border);
+}
+
+.bookings-header h2 {
+  margin: 0;
+  color: var(--text-color);
+}
+
+.header-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.header-actions button {
+  padding: 4px 12px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  min-width: 75px;
+  text-align: center;
+  color: var(--text-color);
+  background-color: var(--button-face);
+  border-top: 1px solid var(--button-light);
+  border-left: 1px solid var(--button-light);
+  border-right: 1px solid var(--button-dark);
+  border-bottom: 1px solid var(--button-dark);
+  font-family: var(--font-family);
+  font-size: var(--font-size);
+}
+
+.header-actions button:active {
+  border-top: 1px solid var(--button-dark);
+  border-left: 1px solid var(--button-dark);
+  border-right: 1px solid var(--button-light);
+  border-bottom: 1px solid var(--button-light);
+  background-color: var(--button-primary);
+  color: var(--selection-text);
+}
+
+.header-actions button:hover {
+  background-color: var(--button-primary-hover);
+  color: var(--selection-text);
+}
+
+.header-actions .btn-warning {
+  background-color: var(--button-primary);
+  color: var(--selection-text);
+  border-top: 1px solid var(--button-dark);
+  border-left: 1px solid var(--button-dark);
+  border-right: 1px solid var(--button-light);
+  border-bottom: 1px solid var(--button-light);
+}
+
+.header-actions .btn-warning:hover {
+  background-color: var(--button-primary-hover);
+}
+
+.error-message {
+  background-color: #ffd7d7;
+  color: #800000;
+  padding: 8px 12px;
+  margin-bottom: 12px;
+  border: 1px solid var(--panel-border);
+}
+
+.search-form, .booking-form {
+  background-color: var(--panel-bg);
+  padding: 12px;
+  margin-bottom: 12px;
+  border: 1px solid var(--panel-border);
+}
+
+.search-form h3, .booking-form h3 {
+  margin-top: 0;
+  color: var(--text-color);
+  font-size: 14px;
+  font-weight: bold;
+  margin-bottom: 12px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--panel-border);
+}
+
+.form-row {
+  display: flex;
+  margin: 0 -6px;
+  margin-bottom: 10px;
+}
+
+.form-group {
+  padding: 0 6px;
+  margin-bottom: 10px;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 4px;
+  font-weight: bold;
+  color: var(--text-color);
+}
+
+.form-group input,
+.form-group select,
+.form-group textarea {
+  background-color: var(--input-bg);
+  border: 1px solid var(--input-border);
+  padding: 2px 4px;
+  font-family: var(--font-family);
+  font-size: var(--font-size);
+  width: 100%;
+}
+
+.form-group input:focus,
+.form-group select:focus,
+.form-group textarea:focus {
+  outline: 1px dotted #000000;
+}
+
+.search-form button,
+.booking-form button {
+  padding: 4px 12px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  min-width: 75px;
+  text-align: center;
+  color: var(--text-color);
+  background-color: var(--button-face);
+  border-top: 1px solid var(--button-light);
+  border-left: 1px solid var(--button-light);
+  border-right: 1px solid var(--button-dark);
+  border-bottom: 1px solid var(--button-dark);
+  font-family: var(--font-family);
+  font-size: var(--font-size);
+}
+
+.search-form button:active,
+.booking-form button:active {
+  border-top: 1px solid var(--button-dark);
+  border-left: 1px solid var(--button-dark);
+  border-right: 1px solid var(--button-light);
+  border-bottom: 1px solid var(--button-light);
+  background-color: var(--button-primary);
+  color: var(--selection-text);
+}
+
+.search-form button:hover,
+.booking-form button:hover {
+  background-color: var(--button-primary-hover);
+  color: var(--selection-text);
+}
+
+.search-form button[type="button"] {
+  background-color: var(--button-face);
+  color: var(--text-color);
+  border-top: 1px solid var(--button-light);
+  border-left: 1px solid var(--button-light);
+  border-right: 1px solid var(--button-dark);
+  border-bottom: 1px solid var(--button-dark);
+}
+
+.search-form button[type="button"]:hover {
+  background-color: var(--button-primary-hover);
+  color: var(--selection-text);
+}
+
+.bookings-list h3 {
+  color: var(--text-color);
+  margin-bottom: 15px;
+  font-size: 14px;
+  font-weight: bold;
+}
+
+.bookings-table-container {
+  overflow-x: auto;
+}
+
+.bookings-table {
+  width: 100%;
+  border-collapse: collapse;
+  background-color: var(--input-bg);
+}
+
+.bookings-table th,
+.bookings-table td {
+  padding: 4px 6px;
+  text-align: left;
+  border: 1px solid var(--menu-bar-border);
+}
+
+.bookings-table th {
+  background-color: var(--grid-header);
+  color: var(--title-bar-text);
+  font-weight: normal;
+}
+
+.bookings-table tbody tr:nth-child(odd) {
+  background-color: var(--grid-row-odd);
+}
+
+.bookings-table tbody tr:nth-child(even) {
+  background-color: var(--grid-row-even);
+}
+
+.bookings-table tbody tr:hover {
+  background-color: var(--selection-highlight);
+  color: var(--selection-text);
+}
+
+.status-badge {
+  padding: 2px 6px;
+  border-radius: 0;
+  font-size: 11px;
+  font-weight: bold;
+}
+
+.status-pending {
+  background-color: #ffcccb;
+  color: #8b0000;
+  border: 1px solid #8b0000;
+}
+
+.status-confirmed {
+  background-color: #90ee90;
+  color: #006400;
+  border: 1px solid #006400;
+}
+
+.status-cancelled {
+  background-color: #ffd7d7;
+  color: #800000;
+  border: 1px solid #800000;
+}
+
+.action-buttons {
+  display: flex;
+  gap: 5px;
+}
+
+.btn-cancel, .btn-delete {
+  padding: 4px 8px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.btn-cancel {
+  background-color: #ffc107;
+  color: #212529;
+}
+
+.btn-cancel:hover {
+  background-color: #e0a800;
+}
+
+.btn-delete {
+  background-color: #dc3545;
+  color: white;
+}
+
+.btn-delete:hover {
+  background-color: #c82333;
+}
+
+@media (max-width: 768px) {
+  .bookings-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+  
+  .form-row {
+    flex-direction: column;
+    gap: 10px;
+  }
+  
+  .bookings-table {
+    font-size: 14px;
+  }
+  
+  .bookings-table th,
+  .bookings-table td {
+    padding: 8px 10px;
+  }
+}

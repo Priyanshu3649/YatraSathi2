@@ -1,0 +1,383 @@
+.payments {
+  padding: 20px;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.payments-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--panel-border);
+}
+
+.payments-header h2 {
+  margin: 0;
+  color: var(--text-color);
+}
+
+.payments-header button {
+  padding: 4px 12px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  min-width: 75px;
+  text-align: center;
+  color: var(--text-color);
+  background-color: var(--button-face);
+  border-top: 1px solid var(--button-light);
+  border-left: 1px solid var(--button-light);
+  border-right: 1px solid var(--button-dark);
+  border-bottom: 1px solid var(--button-dark);
+  font-family: var(--font-family);
+  font-size: var(--font-size);
+}
+
+.payments-header button:active {
+  border-top: 1px solid var(--button-dark);
+  border-left: 1px solid var(--button-dark);
+  border-right: 1px solid var(--button-light);
+  border-bottom: 1px solid var(--button-light);
+  background-color: var(--button-primary);
+  color: var(--selection-text);
+}
+
+.payments-header button:hover {
+  background-color: var(--button-primary-hover);
+  color: var(--selection-text);
+}
+
+.payments-header .btn-warning {
+  background-color: var(--button-primary);
+  color: var(--selection-text);
+  border-top: 1px solid var(--button-dark);
+  border-left: 1px solid var(--button-dark);
+  border-right: 1px solid var(--button-light);
+  border-bottom: 1px solid var(--button-light);
+}
+
+.payments-header .btn-warning:hover {
+  background-color: var(--button-primary-hover);
+}
+
+.error-message {
+  background-color: #ffd7d7;
+  color: #800000;
+  padding: 8px 12px;
+  margin-bottom: 12px;
+  border: 1px solid var(--panel-border);
+}
+
+.payment-form {
+  background-color: var(--panel-bg);
+  padding: 12px;
+  margin-bottom: 12px;
+  border: 1px solid var(--panel-border);
+}
+
+.payment-form h3 {
+  margin-top: 0;
+  color: var(--text-color);
+  font-size: 14px;
+  font-weight: bold;
+  margin-bottom: 12px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--panel-border);
+}
+
+.form-row {
+  display: flex;
+  margin: 0 -6px;
+  margin-bottom: 10px;
+}
+
+.form-group {
+  padding: 0 6px;
+  margin-bottom: 10px;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 4px;
+  font-weight: bold;
+  color: var(--text-color);
+}
+
+.form-group input,
+.form-group select,
+.form-group textarea {
+  background-color: var(--input-bg);
+  border: 1px solid var(--input-border);
+  padding: 2px 4px;
+  font-family: var(--font-family);
+  font-size: var(--font-size);
+  width: 100%;
+}
+
+.form-group input:focus,
+.form-group select:focus,
+.form-group textarea:focus {
+  outline: 1px dotted #000000;
+}
+
+.payment-form button {
+  padding: 4px 12px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  min-width: 75px;
+  text-align: center;
+  color: var(--text-color);
+  background-color: var(--button-face);
+  border-top: 1px solid var(--button-light);
+  border-left: 1px solid var(--button-light);
+  border-right: 1px solid var(--button-dark);
+  border-bottom: 1px solid var(--button-dark);
+  font-family: var(--font-family);
+  font-size: var(--font-size);
+}
+
+.payment-form button:active {
+  border-top: 1px solid var(--button-dark);
+  border-left: 1px solid var(--button-dark);
+  border-right: 1px solid var(--button-light);
+  border-bottom: 1px solid var(--button-light);
+  background-color: var(--button-primary);
+  color: var(--selection-text);
+}
+
+.payment-form button:hover {
+  background-color: var(--button-primary-hover);
+  color: var(--selection-text);
+}
+
+.payments-list h3 {
+  color: var(--text-color);
+  margin-bottom: 15px;
+  font-size: 14px;
+  font-weight: bold;
+}
+
+.payments-table-container {
+  overflow-x: auto;
+}
+
+.payments-table {
+  width: 100%;
+  border-collapse: collapse;
+  background-color: var(--input-bg);
+}
+
+.payments-table th,
+.payments-table td {
+  padding: 4px 6px;
+  text-align: left;
+  border: 1px solid var(--menu-bar-border);
+}
+
+.payments-table th {
+  background-color: var(--grid-header);
+  color: var(--title-bar-text);
+  font-weight: normal;
+}
+
+.payments-table tbody tr:nth-child(odd) {
+  background-color: var(--grid-row-odd);
+}
+
+.payments-table tbody tr:nth-child(even) {
+  background-color: var(--grid-row-even);
+}
+
+.payments-table tbody tr:hover {
+  background-color: var(--selection-highlight);
+  color: var(--selection-text);
+}
+
+.status-badge {
+  padding: 2px 6px;
+  border-radius: 0;
+  font-size: 11px;
+  font-weight: bold;
+}
+
+.status-received {
+  background-color: #90ee90;
+  color: #006400;
+  border: 1px solid #006400;
+}
+
+.status-pending {
+  background-color: #ffcccb;
+  color: #8b0000;
+  border: 1px solid #8b0000;
+}
+
+.status-refunded {
+  background-color: #d1ecf1;
+  color: #0c5460;
+  border: 1px solid #0c5460;
+}
+
+.btn-refund {
+  padding: 4px 8px;
+  background-color: #ffc107;
+  color: #212529;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  margin-right: 5px;
+}
+
+.btn-refund:hover {
+  background-color: #e0a800;
+}
+
+.btn-delete {
+  padding: 4px 8px;
+  background-color: #dc3545;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.btn-delete:hover {
+  background-color: #c82333;
+}
+
+/* Modal styles for refund form */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+
+.modal-content {
+  background-color: var(--panel-bg);
+  padding: 16px;
+  border: 2px solid var(--panel-border);
+  max-width: 500px;
+  width: 90%;
+}
+
+.modal-content h3 {
+  margin-top: 0;
+  color: var(--text-color);
+  font-size: 14px;
+  font-weight: bold;
+  margin-bottom: 12px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--panel-border);
+}
+
+.form-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  margin-top: 20px;
+}
+
+.form-actions button {
+  padding: 4px 12px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  min-width: 75px;
+  text-align: center;
+  color: var(--text-color);
+  background-color: var(--button-face);
+  border-top: 1px solid var(--button-light);
+  border-left: 1px solid var(--button-light);
+  border-right: 1px solid var(--button-dark);
+  border-bottom: 1px solid var(--button-dark);
+  font-family: var(--font-family);
+  font-size: var(--font-size);
+}
+
+.form-actions button:active {
+  border-top: 1px solid var(--button-dark);
+  border-left: 1px solid var(--button-dark);
+  border-right: 1px solid var(--button-light);
+  border-bottom: 1px solid var(--button-light);
+  background-color: var(--button-primary);
+  color: var(--selection-text);
+}
+
+.form-actions button:hover {
+  background-color: var(--button-primary-hover);
+  color: var(--selection-text);
+}
+
+.form-actions button[type="button"] {
+  background-color: var(--button-face);
+  color: var(--text-color);
+  border-top: 1px solid var(--button-light);
+  border-left: 1px solid var(--button-light);
+  border-right: 1px solid var(--button-dark);
+  border-bottom: 1px solid var(--button-dark);
+}
+
+.form-actions button[type="button"]:hover {
+  background-color: var(--button-primary-hover);
+  color: var(--selection-text);
+}
+
+.form-actions button[type="submit"] {
+  background-color: var(--button-primary);
+  color: var(--selection-text);
+  border-top: 1px solid var(--button-dark);
+  border-left: 1px solid var(--button-dark);
+  border-right: 1px solid var(--button-light);
+  border-bottom: 1px solid var(--button-light);
+}
+
+.form-actions button[type="submit"]:hover {
+  background-color: var(--button-primary-hover);
+}
+
+@media (max-width: 768px) {
+  .payments-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+  
+  .form-row {
+    flex-direction: column;
+    gap: 10px;
+  }
+  
+  .payments-table {
+    font-size: 14px;
+  }
+  
+  .payments-table th,
+  .payments-table td {
+    padding: 8px 10px;
+  }
+  
+  .btn-refund,
+  .btn-delete {
+    display: block;
+    margin-bottom: 5px;
+    margin-right: 0;
+  }
+}
