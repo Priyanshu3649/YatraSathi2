@@ -15,9 +15,9 @@ const Dashboard = () => {
         setLoading(true);
         let data;
         
-        if (user.us_usertype === 'admin') {
+        if (user && user.us_usertype === 'admin') {
           data = await dashboardAPI.getAdminStats();
-        } else if (user.us_usertype === 'employee') {
+        } else if (user && user.us_usertype === 'employee') {
           data = await dashboardAPI.getEmployeeStats();
         } else {
           data = await dashboardAPI.getCustomerStats();
@@ -49,9 +49,9 @@ const Dashboard = () => {
   }
 
   // Render dashboard based on user type
-  if (user.us_usertype === 'admin') {
+  if (user && user.us_usertype === 'admin') {
     return <AdminDashboard stats={stats} />;
-  } else if (user.us_usertype === 'employee') {
+  } else if (user && user.us_usertype === 'employee') {
     return <EmployeeDashboard stats={stats} />;
   } else {
     return <CustomerDashboard stats={stats} />;
@@ -71,88 +71,68 @@ const AdminDashboard = ({ stats }) => {
       {/* Overview Stats */}
       <div className="row">
         <div className="col-3">
-          <div className="card">
-            <div className="card-header">Total Users</div>
-            <div className="p-2 text-center">
-              <h3>{overview.totalUsers}</h3>
-            </div>
+          <div className="stat-card">
+            <h3>Total Users</h3>
+            <p>{overview.totalUsers}</p>
           </div>
         </div>
         <div className="col-3">
-          <div className="card">
-            <div className="card-header">Total Bookings</div>
-            <div className="p-2 text-center">
-              <h3>{overview.totalBookings}</h3>
-            </div>
+          <div className="stat-card">
+            <h3>Total Bookings</h3>
+            <p>{overview.totalBookings}</p>
           </div>
         </div>
         <div className="col-3">
-          <div className="card">
-            <div className="card-header">Total Revenue</div>
-            <div className="p-2 text-center">
-              <h3>₹{overview.totalRevenue?.toLocaleString() || '0'}</h3>
-            </div>
+          <div className="stat-card">
+            <h3>Total Revenue</h3>
+            <p>₹{overview.totalRevenue?.toLocaleString() || '0'}</p>
           </div>
         </div>
         <div className="col-3">
-          <div className="card">
-            <div className="card-header">Pending Amount</div>
-            <div className="p-2 text-center">
-              <h3>₹{overview.totalPending?.toLocaleString() || '0'}</h3>
-            </div>
+          <div className="stat-card">
+            <h3>Pending Amount</h3>
+            <p>₹{overview.totalPending?.toLocaleString() || '0'}</p>
           </div>
         </div>
       </div>
       
       {/* Booking Stats */}
-      <div className="panel card">
-        <div className="panel-header">
-          <h3>Booking Status Overview</h3>
-        </div>
+      <div className="panel">
+        <h3>Booking Status Overview</h3>
         <div className="row">
           <div className="col-4">
-            <div className="card text-center">
-              <div className="card-header">Pending</div>
-              <div className="p-2">
-                <h4>{bookingStats.pending}</h4>
-              </div>
+            <div className="stat-card">
+              <h3>Pending</h3>
+              <h4>{bookingStats.pending}</h4>
             </div>
           </div>
           <div className="col-4">
-            <div className="card text-center">
-              <div className="card-header">Confirmed</div>
-              <div className="p-2">
-                <h4>{bookingStats.confirmed}</h4>
-              </div>
+            <div className="stat-card">
+              <h3>Confirmed</h3>
+              <h4>{bookingStats.confirmed}</h4>
             </div>
           </div>
           <div className="col-4">
-            <div className="card text-center">
-              <div className="card-header">Cancelled</div>
-              <div className="p-2">
-                <h4>{bookingStats.cancelled}</h4>
-              </div>
+            <div className="stat-card">
+              <h3>Cancelled</h3>
+              <h4>{bookingStats.cancelled}</h4>
             </div>
           </div>
         </div>
       </div>
       
       {/* Employee Performance */}
-      <div className="panel card">
-        <div className="panel-header">
-          <h3>Employee Performance</h3>
-        </div>
+      <div className="panel">
+        <h3>Employee Performance</h3>
         <div className="row">
           {employeePerformance && employeePerformance.map((employee, index) => (
-            <div key={index} className="col-4 mb-2">
-              <div className="card">
-                <div className="card-header">{employee.name}</div>
-                <div className="p-2">
-                  <p className="mb-1">Department: {employee.department || 'N/A'}</p>
-                  <p className="mb-1">Total Bookings: {employee.totalBookings}</p>
-                  <p className="mb-1">Confirmed: {employee.confirmedBookings}</p>
-                  <p>Revenue: ₹{employee.revenueGenerated?.toLocaleString() || '0'}</p>
-                </div>
+            <div key={index} className="col-4">
+              <div className="performance-card">
+                <h4>{employee.name}</h4>
+                <p><strong>Department:</strong> {employee.department || 'N/A'}</p>
+                <p><strong>Total Bookings:</strong> {employee.totalBookings}</p>
+                <p><strong>Confirmed:</strong> {employee.confirmedBookings}</p>
+                <p><strong>Revenue:</strong> ₹{employee.revenueGenerated?.toLocaleString() || '0'}</p>
               </div>
             </div>
           ))}
@@ -175,45 +155,35 @@ const EmployeeDashboard = ({ stats }) => {
       {/* Overview Stats */}
       <div className="row">
         <div className="col-3">
-          <div className="card">
-            <div className="card-header">Total Bookings</div>
-            <div className="p-2 text-center">
-              <h3>{overview.totalBookings}</h3>
-            </div>
+          <div className="stat-card">
+            <h3>Total Bookings</h3>
+            <p>{overview.totalBookings}</p>
           </div>
         </div>
         <div className="col-3">
-          <div className="card">
-            <div className="card-header">Pending Bookings</div>
-            <div className="p-2 text-center">
-              <h3>{overview.pendingBookings}</h3>
-            </div>
+          <div className="stat-card">
+            <h3>Pending Bookings</h3>
+            <p>{overview.pendingBookings}</p>
           </div>
         </div>
         <div className="col-3">
-          <div className="card">
-            <div className="card-header">Confirmed Bookings</div>
-            <div className="p-2 text-center">
-              <h3>{overview.confirmedBookings}</h3>
-            </div>
+          <div className="stat-card">
+            <h3>Confirmed Bookings</h3>
+            <p>{overview.confirmedBookings}</p>
           </div>
         </div>
         <div className="col-3">
-          <div className="card">
-            <div className="card-header">Revenue Generated</div>
-            <div className="p-2 text-center">
-              <h3>₹{overview.revenueGenerated?.toLocaleString() || '0'}</h3>
-            </div>
+          <div className="stat-card">
+            <h3>Revenue Generated</h3>
+            <p>₹{overview.revenueGenerated?.toLocaleString() || '0'}</p>
           </div>
         </div>
       </div>
       
       {/* Recent Activity */}
-      <div className="panel card">
-        <div className="panel-header">
-          <h3>Your Recent Bookings</h3>
-        </div>
-        <div className="p-2">
+      <div className="panel">
+        <h3>Your Recent Bookings</h3>
+        <div className="summary-details">
           <p>Recent booking activity will be displayed here.</p>
         </div>
       </div>
@@ -234,62 +204,50 @@ const CustomerDashboard = ({ stats }) => {
       {/* Overview Stats */}
       <div className="row">
         <div className="col-3">
-          <div className="card">
-            <div className="card-header">Total Bookings</div>
-            <div className="p-2 text-center">
-              <h3>{overview.totalBookings}</h3>
-            </div>
+          <div className="stat-card">
+            <h3>Total Bookings</h3>
+            <p>{overview.totalBookings}</p>
           </div>
         </div>
         <div className="col-3">
-          <div className="card">
-            <div className="card-header">Pending Bookings</div>
-            <div className="p-2 text-center">
-              <h3>{overview.pendingBookings}</h3>
-            </div>
+          <div className="stat-card">
+            <h3>Pending Bookings</h3>
+            <p>{overview.pendingBookings}</p>
           </div>
         </div>
         <div className="col-3">
-          <div className="card">
-            <div className="card-header">Confirmed Bookings</div>
-            <div className="p-2 text-center">
-              <h3>{overview.confirmedBookings}</h3>
-            </div>
+          <div className="stat-card">
+            <h3>Confirmed Bookings</h3>
+            <p>{overview.confirmedBookings}</p>
           </div>
         </div>
         <div className="col-3">
-          <div className="card">
-            <div className="card-header">Total Paid</div>
-            <div className="p-2 text-center">
-              <h3>₹{overview.totalPaid?.toLocaleString() || '0'}</h3>
-            </div>
+          <div className="stat-card">
+            <h3>Total Paid</h3>
+            <p>₹{overview.totalPaid?.toLocaleString() || '0'}</p>
           </div>
         </div>
       </div>
       
       {/* Payment Summary */}
-      <div className="panel card">
-        <div className="panel-header">
-          <h3>Payment Summary</h3>
-        </div>
-        <div className="p-2">
-          <p className="mb-1">Total Amount: ₹{overview.totalAmount?.toLocaleString() || '0'}</p>
-          <p className="mb-1">Paid: ₹{overview.totalPaid?.toLocaleString() || '0'}</p>
-          <p>Pending: ₹{overview.totalPending?.toLocaleString() || '0'}</p>
+      <div className="panel">
+        <h3>Payment Summary</h3>
+        <div className="summary-details">
+          <p><strong>Total Amount:</strong> ₹{overview.totalAmount?.toLocaleString() || '0'}</p>
+          <p><strong>Paid:</strong> ₹{overview.totalPaid?.toLocaleString() || '0'}</p>
+          <p><strong>Pending:</strong> ₹{overview.totalPending?.toLocaleString() || '0'}</p>
         </div>
       </div>
       
       {/* Corporate Info (if applicable) */}
       {corporateInfo && (
-        <div className="panel card">
-          <div className="panel-header">
-            <h3>Corporate Information</h3>
-          </div>
-          <div className="p-2">
-            <p className="mb-1">Company: {corporateInfo.companyName}</p>
-            <p className="mb-1">Credit Limit: ₹{corporateInfo.creditLimit?.toLocaleString() || '0'}</p>
-            <p className="mb-1">Credit Used: ₹{corporateInfo.creditUsed?.toLocaleString() || '0'}</p>
-            <p>Credit Available: ₹{(corporateInfo.creditLimit - corporateInfo.creditUsed)?.toLocaleString() || '0'}</p>
+        <div className="panel">
+          <h3>Corporate Information</h3>
+          <div className="info-details">
+            <p><strong>Company:</strong> {corporateInfo.companyName}</p>
+            <p><strong>Credit Limit:</strong> ₹{corporateInfo.creditLimit?.toLocaleString() || '0'}</p>
+            <p><strong>Credit Used:</strong> ₹{corporateInfo.creditUsed?.toLocaleString() || '0'}</p>
+            <p><strong>Credit Available:</strong> ₹{(corporateInfo.creditLimit - corporateInfo.creditUsed)?.toLocaleString() || '0'}</p>
           </div>
         </div>
       )}

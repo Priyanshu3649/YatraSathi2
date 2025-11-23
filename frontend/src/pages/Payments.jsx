@@ -30,7 +30,7 @@ const Payments = () => {
   // Fetch payments and bookings when component mounts
   useEffect(() => {
     fetchPayments();
-    if (user.us_usertype === 'admin' || user.us_usertype === 'employee') {
+    if (user && (user.us_usertype === 'admin' || user.us_usertype === 'employee')) {
       fetchAllBookings();
     } else {
       fetchCustomerBookings();
@@ -42,7 +42,7 @@ const Payments = () => {
       setLoading(true);
       let data;
       
-      if (user.us_usertype === 'admin') {
+      if (user && user.us_usertype === 'admin') {
         data = await paymentAPI.getAllPayments();
       } else {
         data = await paymentAPI.getMyPayments();
@@ -432,7 +432,7 @@ const Payments = () => {
                           Refund
                         </button>
                       )}
-                      {(user.us_usertype === 'admin' || user.us_usertype === 'employee') && (
+                      {user && (user.us_usertype === 'admin' || user.us_usertype === 'employee') && (
                         <button 
                           className="btn btn-danger" 
                           onClick={() => handleDeletePayment(payment.pt_ptid)}

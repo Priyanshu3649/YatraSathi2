@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate, Link } from 'react-router-dom';
-import api from '../services/api';
+import { travelPlanApi } from '../utils/travelPlanApi';
 import ShareTravelPlanModal from '../components/ShareTravelPlanModal';
 import '../styles/travelPlans.css';
 
@@ -21,8 +21,8 @@ const TravelPlans = () => {
   const fetchTravelPlans = async () => {
     try {
       setLoading(true);
-      const response = await api.get('/travel-plans');
-      setTravelPlans(response.data);
+      const data = await travelPlanApi.getAll();
+      setTravelPlans(data);
       setError('');
     } catch (err) {
       setError('Failed to fetch travel plans');
@@ -35,7 +35,7 @@ const TravelPlans = () => {
   const handleDelete = async (planId) => {
     if (window.confirm('Are you sure you want to delete this travel plan?')) {
       try {
-        await api.delete(`/travel-plans/${planId}`);
+        await travelPlanApi.delete(planId);
         fetchTravelPlans();
       } catch (err) {
         setError('Failed to delete travel plan');

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import api from '../services/api';
+import { travelPlanApi } from '../utils/travelPlanApi';
 import '../styles/travelPlans.css';
 
 const EditTravelPlan = () => {
@@ -33,18 +33,18 @@ const EditTravelPlan = () => {
   const fetchTravelPlan = async () => {
     try {
       setLoading(true);
-      const response = await api.get(`/travel-plans/${id}`);
-      setTravelPlan(response.data);
+      const data = await travelPlanApi.getById(id);
+      setTravelPlan(data);
       
       // Populate form data
       setFormData({
-        title: response.data.tp_title,
-        description: response.data.tp_description,
-        startDate: response.data.tp_startdate.split('T')[0],
-        endDate: response.data.tp_enddate.split('T')[0],
-        destination: response.data.tp_destination,
-        budget: response.data.tp_budget,
-        activities: response.data.tp_activities ? JSON.parse(response.data.tp_activities).join(', ') : ''
+        title: data.tp_title,
+        description: data.tp_description,
+        startDate: data.tp_startdate.split('T')[0],
+        endDate: data.tp_enddate.split('T')[0],
+        destination: data.tp_destination,
+        budget: data.tp_budget,
+        activities: data.tp_activities ? JSON.parse(data.tp_activities).join(', ') : ''
       });
       setError('');
     } catch (err) {
@@ -79,10 +79,10 @@ const EditTravelPlan = () => {
       
       if (id) {
         // Update existing plan
-        await api.put(`/travel-plans/${id}`, planData);
+        await travelPlanApi.update(id, planData);
       } else {
         // Create new plan
-        await api.post('/travel-plans', planData);
+        await travelPlanApi.create(planData);
       }
       
       navigate('/travel-plans');

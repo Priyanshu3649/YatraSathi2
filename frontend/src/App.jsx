@@ -10,9 +10,7 @@ import './styles/vintage-theme.css';
 // Import components
 import Header from './components/Header';
 import Footer from './components/Footer';
-import SampleLayout from './components/SampleLayout';
-import AdminDashboard from './components/AdminDashboard';
-import VintageAdminPanel from './components/VintageAdminPanel';
+import DynamicAdminPanel from './components/DynamicAdminPanel';
 
 // Import pages
 import Home from './pages/Home';
@@ -34,7 +32,10 @@ function App() {
       <BookingProvider>
         <PaymentProvider>
           <ReportProvider>
-            <Router>
+            <Router future={{ 
+              v7_startTransition: true,
+              v7_relativeSplatPath: true 
+            }}>
               <div className="App">
                 <Header />
                 <main>
@@ -52,9 +53,7 @@ function App() {
                     <Route path="/travel-plans/new" element={<EditTravelPlan />} />
                     <Route path="/profile" element={<Profile />} />
                     <Route path="/employees" element={<EmployeeManagement />} />
-                    <Route path="/sample-layout" element={<SampleLayout />} />
-                    <Route path="/admin-dashboard" element={<AdminDashboard />} />
-                    <Route path="/vintage-admin" element={<VintageAdminPanel />} />
+                    <Route path="/admin-dashboard" element={<DynamicAdminPanel />} />
                   </Routes>
                 </main>
                 <Footer />

@@ -69,7 +69,28 @@
   color: #800000;
   padding: 8px 12px;
   margin-bottom: 12px;
-  border: 1px solid var(--panel-border);
+  border: 1px solid #c00000;
+  font-weight: bold;
+}
+
+.alert {
+  padding: 8px 12px;
+  margin-bottom: 12px;
+  border-radius: 0;
+  font-size: 11px;
+  font-weight: bold;
+}
+
+.alert-error {
+  background-color: #ffd7d7;
+  color: #800000;
+  border: 1px solid #c00000;
+}
+
+.alert-success {
+  background-color: #d4edda;
+  color: #004d00;
+  border: 1px solid #00a000;
 }
 
 .payment-form {
@@ -209,20 +230,23 @@
 
 .status-received {
   background-color: #90ee90;
-  color: #006400;
+  color: #000000;
   border: 1px solid #006400;
+  font-weight: bold;
 }
 
 .status-pending {
-  background-color: #ffcccb;
-  color: #8b0000;
-  border: 1px solid #8b0000;
+  background-color: #ffff99;
+  color: #000000;
+  border: 1px solid #808000;
+  font-weight: bold;
 }
 
 .status-refunded {
   background-color: #d1ecf1;
-  color: #0c5460;
+  color: #000000;
   border: 1px solid #0c5460;
+  font-weight: bold;
 }
 
 .btn-refund {

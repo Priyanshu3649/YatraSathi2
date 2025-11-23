@@ -71,9 +71,11 @@ export const authAPI = {
   
   // Logout user
   logout: async () => {
+    const sessionId = localStorage.getItem('sessionId');
     const response = await fetch(`${API_BASE_URL}/auth/logout`, {
       method: 'POST',
-      headers: getHeaders(true)
+      headers: getHeaders(true),
+      body: JSON.stringify({ sessionId })
     });
     
     const data = await response.json();

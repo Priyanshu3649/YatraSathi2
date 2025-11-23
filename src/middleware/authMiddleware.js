@@ -32,7 +32,9 @@ const auth = async (req, res, next) => {
     }
 
     req.user = user;
-    console.log('Auth successful, calling next()');
+    console.log('Auth successful, user type:', user.us_usertype);
+    console.log('Full user object:', user.toJSON());
+    console.log('Calling next()');
     next();
   } catch (error) {
     console.error('Auth error:', error.message);

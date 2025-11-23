@@ -1,211 +1,252 @@
-/* Dashboard Styles */
+/* Vintage Dashboard Styles - Windows XP/2000 ERP Style */
 
 .dashboard {
-  max-width: 1200px;
-  margin: 0 auto;
-  padding: 20px;
+  max-width: 100%;
+  margin: 0;
+  padding: var(--spacing-lg);
+  background-color: var(--main-bg);
 }
 
-.dashboard h2 {
-  color: var(--text-color);
-  margin-bottom: 1.5rem;
+/* Panel Header */
+.panel-header {
+  background-color: var(--card-bg);
+  border: 1px solid var(--border-color);
+  padding: var(--spacing-md);
+  margin-bottom: var(--spacing-lg);
+}
+
+.panel-header h2 {
+  color: var(--text-primary);
+  margin: 0;
+  font-size: var(--font-size-xl);
+  font-weight: var(--font-weight-bold);
   text-align: center;
-  font-size: 16px;
-  font-weight: bold;
 }
 
-.dashboard-stats {
+/* Card Styles - Classic Panel Look */
+.card {
+  background-color: var(--card-bg);
+  border: 2px solid var(--border-color);
+  border-top-color: var(--button-light);
+  border-left-color: var(--button-light);
+  border-right-color: var(--button-dark);
+  border-bottom-color: var(--button-dark);
+  padding: var(--spacing-md);
+  margin-bottom: var(--spacing-lg);
+}
+
+.card-header {
+  background-color: var(--grid-header);
+  color: var(--text-on-dark);
+  border: 1px solid var(--border-dark);
+  padding: var(--spacing-sm) var(--spacing-md);
+  font-weight: var(--font-weight-bold);
+  font-size: var(--font-size-base);
+  text-align: center;
+  margin: calc(var(--spacing-md) * -1) calc(var(--spacing-md) * -1) var(--spacing-md);
+}
+
+/* Grid Layout */
+.row {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-  gap: 12px;
-  margin-bottom: 20px;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: var(--spacing-lg);
+  margin-bottom: var(--spacing-lg);
 }
 
+/* Stat Cards - Classic Windows Panel Style */
 .stat-card {
-  background: var(--panel-bg);
-  border: 1px solid var(--panel-border);
-  padding: 12px;
-}
-
-.stat-card:hover {
-  border-color: var(--selection-highlight);
+  background-color: var(--card-bg);
+  border: 2px solid;
+  border-top-color: var(--button-light);
+  border-left-color: var(--button-light);
+  border-right-color: var(--button-dark);
+  border-bottom-color: var(--button-dark);
+  padding: var(--spacing-lg);
+  text-align: center;
+  min-height: 100px;
 }
 
 .stat-card h3 {
-  margin: 0 0 8px 0;
-  color: var(--text-color);
-  font-size: 13px;
-  font-weight: bold;
+  margin: 0 0 var(--spacing-md) 0;
+  color: var(--text-primary);
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-bold);
+  text-align: center;
 }
 
 .stat-card h4 {
-  margin: 0 0 8px 0;
-  color: var(--text-color);
-  font-size: 12px;
-  font-weight: bold;
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 24px;
+  font-weight: var(--font-weight-bold);
+  text-align: center;
 }
 
 .stat-card p {
   margin: 0;
-  font-size: 14px;
-  font-weight: bold;
-  color: var(--text-color);
+  font-size: 24px;
+  font-weight: var(--font-weight-bold);
+  color: var(--text-primary);
+  text-align: center;
 }
 
-.booking-stats {
-  margin-bottom: 20px;
+/* Panel Sections */
+.panel {
+  background-color: var(--card-bg);
+  border: 2px solid;
+  border-top-color: var(--button-light);
+  border-left-color: var(--button-light);
+  border-right-color: var(--button-dark);
+  border-bottom-color: var(--button-dark);
+  padding: var(--spacing-lg);
+  margin-bottom: var(--spacing-lg);
 }
 
-.booking-stats h3 {
-  margin-bottom: 12px;
-  color: var(--text-color);
-  font-size: 14px;
-  font-weight: bold;
+.panel h3 {
+  margin: 0 0 var(--spacing-md) 0;
+  color: var(--text-primary);
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-bold);
+  padding-bottom: var(--spacing-sm);
+  border-bottom: 1px solid var(--border-color);
+  text-align: left;
 }
 
-.booking-stats .stat-cards {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-  gap: 12px;
-}
-
-.booking-stats .stat-card {
-  background: var(--panel-bg);
-}
-
-.employee-performance h3 {
-  margin-bottom: 12px;
-  color: var(--text-color);
-  font-size: 14px;
-  font-weight: bold;
-}
-
-.performance-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-  gap: 12px;
-}
-
+/* Performance Cards */
 .performance-card {
-  background: var(--panel-bg);
-  border: 1px solid var(--panel-border);
-  padding: 12px;
+  background-color: var(--card-bg);
+  border: 2px solid;
+  border-top-color: var(--button-light);
+  border-left-color: var(--button-light);
+  border-right-color: var(--button-dark);
+  border-bottom-color: var(--button-dark);
+  padding: var(--spacing-md);
+  min-height: 140px;
 }
 
 .performance-card h4 {
-  margin: 0 0 8px 0;
-  color: var(--text-color);
-  font-size: 13px;
-  font-weight: bold;
+  margin: 0 0 var(--spacing-md) 0;
+  color: var(--text-primary);
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-bold);
+  padding-bottom: var(--spacing-sm);
+  border-bottom: 1px solid var(--border-color);
+  text-align: left;
 }
 
 .performance-card p {
-  margin: 4px 0;
-  font-size: 12px;
-  color: var(--text-color);
+  margin: var(--spacing-xs) 0;
+  font-size: var(--font-size-base);
+  color: var(--text-primary);
+  padding: var(--spacing-xs) 0;
 }
 
-.recent-activity h3,
-.payment-summary h3,
-.corporate-info h3 {
-  margin-bottom: 12px;
-  color: var(--text-color);
-  font-size: 14px;
-  font-weight: bold;
+.performance-card p strong {
+  font-weight: var(--font-weight-bold);
+  margin-right: var(--spacing-xs);
 }
 
+/* Summary Details */
 .summary-details,
 .info-details {
-  background: var(--panel-bg);
-  border: 1px solid var(--panel-border);
-  padding: 12px;
+  background-color: var(--secondary-card-bg);
+  border: 1px solid var(--border-color);
+  padding: var(--spacing-md);
+  margin-top: var(--spacing-md);
 }
 
 .summary-details p,
 .info-details p {
-  margin: 6px 0;
-  color: var(--text-color);
-  font-size: 12px;
+  margin: var(--spacing-sm) 0;
+  color: var(--text-primary);
+  font-size: var(--font-size-base);
+  padding: var(--spacing-xs) 0;
 }
 
-.error-message {
-  background-color: #ffd7d7;
-  color: #800000;
-  padding: 8px 12px;
-  border: 1px solid var(--panel-border);
+.summary-details p strong,
+.info-details p strong {
+  font-weight: var(--font-weight-bold);
+  margin-right: var(--spacing-xs);
+  min-width: 120px;
+  display: inline-block;
+}
+
+/* Alert Messages */
+.alert {
+  padding: var(--spacing-md);
+  margin-bottom: var(--spacing-lg);
+  border: 2px solid;
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-normal);
   text-align: center;
 }
 
-/* Admin Dashboard Specific Styles */
-.admin-dashboard .stat-card p {
-  color: var(--text-color);
+.alert-error {
+  color: #800000;
+  background-color: var(--accent-danger);
+  border-color: #800000;
 }
 
-/* Employee Dashboard Specific Styles */
-.employee-dashboard .stat-card p {
-  color: var(--text-color);
+.alert-success {
+  color: #008000;
+  background-color: var(--accent-success);
+  border-color: #008000;
 }
 
-/* Customer Dashboard Specific Styles */
-.customer-dashboard .stat-card p {
-  color: var(--text-color);
+.alert-warning {
+  color: #808000;
+  background-color: var(--accent-warning);
+  border-color: #808000;
 }
 
-/* Update button styles to match new theme */
-.dashboard .btn {
-  padding: 4px 12px;
-  height: 22px;
-  display: inline-flex;
+.alert-info {
+  color: #000080;
+  background-color: var(--accent-info);
+  border-color: #000080;
+}
+
+/* Loading State */
+.loading {
+  display: flex;
   align-items: center;
   justify-content: center;
-  cursor: pointer;
-  min-width: 75px;
-  text-align: center;
-  color: var(--text-color);
-  background-color: var(--button-face);
-  border-top: 1px solid var(--button-light);
-  border-left: 1px solid var(--button-light);
-  border-right: 1px solid var(--button-dark);
-  border-bottom: 1px solid var(--button-dark);
-  font-family: var(--font-family);
-  font-size: var(--font-size);
+  padding: var(--spacing-xl);
+  font-size: var(--font-size-lg);
+  color: var(--text-primary);
+  min-height: 200px;
 }
 
-.dashboard .btn:active {
-  border-top: 1px solid var(--button-dark);
-  border-left: 1px solid var(--button-dark);
-  border-right: 1px solid var(--button-light);
-  border-bottom: 1px solid var(--button-light);
-  background-color: var(--button-primary);
-  color: var(--selection-text);
+/* Dashboard Type Specific Styles */
+.admin-dashboard .stat-card {
+  border-left: 4px solid var(--accent-primary);
 }
 
-.dashboard .btn:hover {
-  background-color: var(--button-primary-hover);
-  color: var(--selection-text);
+.employee-dashboard .stat-card {
+  border-left: 4px solid #000080;
 }
 
-.dashboard .btn-warning {
-  background-color: var(--button-primary);
-  color: var(--selection-text);
-  border-top: 1px solid var(--button-dark);
-  border-left: 1px solid var(--button-dark);
-  border-right: 1px solid var(--button-light);
-  border-bottom: 1px solid var(--button-light);
+.customer-dashboard .stat-card {
+  border-left: 4px solid #008000;
 }
 
-.dashboard .btn-warning:hover {
-  background-color: var(--button-primary-hover);
-}
-
+/* Responsive Design */
 @media (max-width: 768px) {
   .dashboard {
-    padding: 12px;
+    padding: var(--spacing-md);
   }
   
-  .dashboard-stats,
-  .performance-grid,
-  .booking-stats .stat-cards {
+  .row {
     grid-template-columns: 1fr;
+    gap: var(--spacing-md);
+  }
+  
+  .stat-card {
+    min-height: 80px;
+  }
+  
+  .stat-card h4,
+  .stat-card p {
+    font-size: 20px;
   }
 }

@@ -145,7 +145,7 @@ const Reports = () => {
         >
           Booking Reports
         </button>
-        {user.us_usertype === 'admin' && (
+        {user && user.us_usertype === 'admin' && (
           <>
             <button 
               className={`btn ml-2 ${activeTab === 'employeePerformance' ? 'btn-primary' : ''}`}
@@ -274,7 +274,7 @@ const Reports = () => {
         </div>
       )}
 
-      {activeTab === 'employeePerformance' && user.us_usertype === 'admin' && (
+      {activeTab === 'employeePerformance' && user && user.us_usertype === 'admin' && (
         <div className="report-content panel mb-3">
           <div className="report-data">
             <h3>Employee Performance Report</h3>
@@ -316,7 +316,7 @@ const Reports = () => {
         </div>
       )}
 
-      {activeTab === 'financial' && user.us_usertype === 'admin' && (
+      {activeTab === 'financial' && user && user.us_usertype === 'admin' && (
         <div className="report-content panel mb-3">
           <div className="report-filters panel mb-3">
             <h3>Filters</h3>
@@ -527,7 +527,7 @@ const Reports = () => {
         </div>
       )}
 
-      {activeTab === 'customerAnalytics' && user.us_usertype === 'admin' && (
+      {activeTab === 'customerAnalytics' && user && user.us_usertype === 'admin' && (
         <div className="report-content panel mb-3">
           <div className="report-filters panel mb-3">
             <h3>Filters</h3>
@@ -647,7 +647,7 @@ const Reports = () => {
         </div>
       )}
 
-      {activeTab === 'corporateCustomers' && user.us_usertype === 'admin' && (
+      {activeTab === 'corporateCustomers' && user && user.us_usertype === 'admin' && (
         <div className="report-content panel">
           <div className="report-data">
             <h3>Corporate Customers Report</h3>

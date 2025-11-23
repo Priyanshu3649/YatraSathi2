@@ -46,6 +46,10 @@ const notificationRoutes = require('./routes/notificationRoutes');
 const searchRoutes = require('./routes/searchRoutes');
 const statisticsRoutes = require('./routes/statisticsRoutes');
 const testRoutes = require('./routes/testRoutes');
+const stationRoutes = require('./routes/stationRoutes');
+const trainRoutes = require('./routes/trainRoutes');
+const companyRoutes = require('./routes/companyRoutes');
+const userRoutes = require('./routes/userRoutes');
 
 // Use routes
 console.log('Registering auth routes');
@@ -65,6 +69,10 @@ app.use('/api/notifications', notificationRoutes);
 app.use('/api/search', searchRoutes);
 app.use('/api/statistics', statisticsRoutes);
 app.use('/api/test', testRoutes);
+app.use('/api/stations', stationRoutes);
+app.use('/api/trains', trainRoutes);
+app.use('/api/company', companyRoutes);
+app.use('/api/users', userRoutes);
 
 // 404 handler
 app.use(notFound);

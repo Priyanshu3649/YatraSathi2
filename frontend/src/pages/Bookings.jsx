@@ -37,7 +37,7 @@ const Bookings = () => {
       setLoading(true);
       let data;
       
-      if (user.us_usertype === 'admin') {
+      if (user && user.us_usertype === 'admin') {
         data = await bookingAPI.getAllBookings();
       } else {
         data = await bookingAPI.getMyBookings();
@@ -382,7 +382,7 @@ const Bookings = () => {
                           Cancel
                         </button>
                       )}
-                      {(user.us_usertype === 'admin' || user.us_usertype === 'employee') && (
+                      {user && (user.us_usertype === 'admin' || user.us_usertype === 'employee') && (
                         <button 
                           className="btn btn-danger" 
                           onClick={() => handleDeleteBooking(booking.bk_bkid)}

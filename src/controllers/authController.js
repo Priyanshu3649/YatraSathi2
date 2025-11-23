@@ -32,14 +32,17 @@ const registerUser = async (req, res) => {
     const verificationTokenHash = crypto.createHash('sha256').update(verificationToken).digest('hex');
     const verificationTokenExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
 
-    // Create user
+    // Create user - Generate shorter ID
+    const timestamp = Date.now().toString().slice(-9); // Last 9 digits
     const user = await User.create({
-      us_usid: `USR${Date.now()}`, // Generate unique user ID
+      us_usid: `U${timestamp}`, // Generate unique user ID (max 10 chars)
       us_fname: name,
       us_email: email,
       us_phone: phone,
       us_usertype: 'customer', // Default user type
       us_active: 1,
+      us_roid: 'CUS', // Default customer role
+      us_coid: 'TRV', // Default company
       eby: 'SYSTEM',
       mby: 'SYSTEM'
     });

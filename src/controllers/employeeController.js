@@ -1,4 +1,6 @@
-const { User, Employee, Booking, CorporateCustomer, Sequelize } = require('../models');
+const { User, Employee, Booking, CorporateCustomer, Login } = require('../models');
+const { Op } = require('sequelize');
+const bcrypt = require('bcryptjs');
 
 // Get all employees (admin only)
 const getAllEmployees = async (req, res) => {
@@ -73,9 +75,10 @@ const createEmployee = async (req, res) => {
     } = req.body;
     
     // Check if employee already exists
+    const { Op } = require('sequelize');
     const existingEmployee = await User.findOne({ 
       where: {
-        [Sequelize.Op.or]: [
+        [Op.or]: [
           { us_email: email },
           { us_phone: phone },
           { us_aadhaar: aadhaarNumber }
@@ -100,7 +103,25 @@ const createEmployee = async (req, res) => {
       us_phone: phone,
       us_aadhaar: aadhaarNumber,
       us_usertype: 'employee',
+      us_roid: 'AGT', // Default role for employees
+      us_coid: 'TRV', // Default company
       us_active: 1,
+      eby: req.user.us_usid,
+      mby: req.user.us_usid
+    });
+    
+    // Create login credentials with default password
+    const bcrypt = require('bcryptjs');
+    const { Login } = require('../models');
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(password || 'employee123', salt);
+    
+    await Login.create({
+      lg_usid: employeeId,
+      lg_email: email,
+      lg_passwd: hashedPassword,
+      lg_salt: salt,
+      lg_active: 1,
       eby: req.user.us_usid,
       mby: req.user.us_usid
     });

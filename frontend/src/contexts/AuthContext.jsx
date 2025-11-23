@@ -59,6 +59,7 @@ export const AuthProvider = ({ children }) => {
     } finally {
       // Always clear local storage and state
       localStorage.removeItem('token');
+      localStorage.removeItem('sessionId');
       setUser(null);
       setIsAuthenticated(false);
     }

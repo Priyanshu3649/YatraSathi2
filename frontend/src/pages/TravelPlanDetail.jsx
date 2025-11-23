@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import api from '../services/api';
+import { travelPlanApi } from '../utils/travelPlanApi';
 import '../styles/travelPlans.css';
 
 const TravelPlanDetail = () => {
@@ -19,8 +19,8 @@ const TravelPlanDetail = () => {
   const fetchTravelPlan = async () => {
     try {
       setLoading(true);
-      const response = await api.get(`/travel-plans/${id}`);
-      setTravelPlan(response.data);
+      const data = await travelPlanApi.getById(id);
+      setTravelPlan(data);
       setError('');
     } catch (err) {
       setError('Failed to fetch travel plan');

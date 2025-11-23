@@ -1,27 +1,36 @@
+/* Vintage Header Styles - Windows XP/2000 Style */
+
 .header {
-  background-color: var(--title-bar-bg);
-  color: var(--title-bar-text);
-  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  background-color: var(--nav-bg);
+  color: var(--nav-text);
+  border-bottom: 2px solid var(--border-dark);
   position: sticky;
   top: 0;
-  z-index: 100;
-  border-bottom: 1px solid var(--button-dark);
+  z-index: 1000;
 }
 
 .header .container {
-  max-width: 1200px;
-  margin: 0 auto;
-  padding: 0 20px;
+  max-width: 100%;
+  margin: 0;
+  padding: 0 var(--spacing-md);
   display: flex;
   justify-content: space-between;
   align-items: center;
-  height: 60px;
+  min-height: 32px;
+}
+
+.header .logo {
+  text-decoration: none;
+  display: flex;
+  align-items: center;
 }
 
 .header .logo h1 {
   margin: 0;
-  color: var(--title-bar-text);
-  font-size: 1.5rem;
+  color: #000000;
+  font-size: 14px;
+  font-weight: var(--font-weight-bold);
+  letter-spacing: 0.5px;
 }
 
 .header .navigation ul {
@@ -29,78 +38,120 @@
   list-style: none;
   margin: 0;
   padding: 0;
-  gap: 20px;
+  gap: 2px;
+  align-items: center;
 }
 
 .header .navigation li {
   margin: 0;
+  display: flex;
+  align-items: center;
 }
 
 .header .navigation a {
   text-decoration: none;
-  color: var(--title-bar-text);
-  font-weight: 500;
-  padding: 8px 12px;
-  border-radius: 4px;
-  transition: all 0.2s;
-  background-color: var(--button-face);
-  border-top: 1px solid var(--button-light);
-  border-left: 1px solid var(--button-light);
-  border-right: 1px solid var(--button-dark);
-  border-bottom: 1px solid var(--button-dark);
-  display: inline-block;
-  height: 22px;
-  line-height: 22px;
+  color: #000000;
+  font-weight: var(--font-weight-normal);
+  font-size: var(--font-size-base);
+  padding: 4px 8px;
+  background-color: transparent;
+  border: none;
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  white-space: nowrap;
 }
 
 .header .navigation a:hover {
-  background-color: var(--button-primary-hover);
-  color: var(--selection-text);
+  background-color: var(--nav-hover);
+  color: #000000;
   text-decoration: none;
 }
 
 .header .navigation a.active {
-  background-color: var(--button-primary);
-  color: var(--selection-text);
-  font-weight: 600;
+  background-color: var(--nav-hover);
+  color: #000000;
+  font-weight: var(--font-weight-bold);
 }
 
+.header .navigation button {
+  background-color: var(--button-face);
+  color: var(--text-primary);
+  border-top: 1px solid var(--button-light);
+  border-left: 1px solid var(--button-light);
+  border-right: 1px solid var(--button-dark);
+  border-bottom: 1px solid var(--button-dark);
+  padding: 4px 8px;
+  font-weight: var(--font-weight-normal);
+  font-size: var(--font-size-base);
+  cursor: pointer;
+  min-height: 22px;
+  margin-left: var(--spacing-sm);
+}
+
+.header .navigation button:hover {
+  background-color: var(--button-primary-hover);
+  color: var(--selection-text);
+}
+
+.header .navigation button:active {
+  border-top: 1px solid var(--button-dark);
+  border-left: 1px solid var(--button-dark);
+  border-right: 1px solid var(--button-light);
+  border-bottom: 1px solid var(--button-light);
+}
+
+/* Footer Styles */
 .footer {
-  background-color: var(--panel-bg);
-  color: var(--text-color);
-  padding: 20px 0;
+  background-color: var(--status-bar);
+  color: var(--text-primary);
+  padding: var(--spacing-md) 0;
   margin-top: auto;
-  border-top: 1px solid var(--panel-border);
+  border-top: 2px solid var(--border-dark);
 }
 
 .footer .container {
-  max-width: 1200px;
+  max-width: 100%;
   margin: 0 auto;
-  padding: 0 20px;
+  padding: 0 var(--spacing-md);
   text-align: center;
 }
 
 .footer p {
   margin: 0;
-  color: var(--text-color);
+  color: var(--text-primary);
+  font-size: var(--font-size-base);
 }
 
+/* Responsive Design */
 @media (max-width: 768px) {
   .header .container {
     flex-direction: column;
-    height: auto;
-    padding: 10px 20px;
+    min-height: auto;
+    padding: var(--spacing-sm) var(--spacing-md);
+    gap: var(--spacing-sm);
+  }
+  
+  .header .logo h1 {
+    font-size: 12px;
   }
   
   .header .navigation ul {
     flex-wrap: wrap;
     justify-content: center;
-    gap: 10px;
-    margin-top: 10px;
+    gap: 2px;
   }
   
   .header .navigation a {
-    padding: 6px 10px;
-    font-size: 0.9rem;
+    padding: 2px 6px;
+    font-size: var(--font-size-sm);
+    min-height: 18px;
+  }
+  
+  .header .navigation button {
+    margin-left: 0;
+    min-height: 18px;
+    padding: 2px 6px;
+    font-size: var(--font-size-sm);
   }
 }

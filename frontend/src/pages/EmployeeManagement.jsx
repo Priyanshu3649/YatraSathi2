@@ -14,6 +14,7 @@ const EmployeeManagement = () => {
     name: '',
     email: '',
     phone: '',
+    password: 'employee123', // Default password
     aadhaarNumber: '',
     department: '',
     designation: '',
@@ -68,6 +69,7 @@ const EmployeeManagement = () => {
         name: '',
         email: '',
         phone: '',
+        password: 'employee123',
         aadhaarNumber: '',
         department: '',
         designation: '',
@@ -91,6 +93,7 @@ const EmployeeManagement = () => {
       name: employee.us_fname || '',
       email: employee.us_email || '',
       phone: employee.us_phone || '',
+      password: 'employee123',
       aadhaarNumber: employee.us_aadhaar || '',
       department: employee.Employee?.em_dept || '',
       designation: employee.Employee?.em_designation || '',
@@ -122,6 +125,7 @@ const EmployeeManagement = () => {
       name: '',
       email: '',
       phone: '',
+      password: 'employee123',
       aadhaarNumber: '',
       department: '',
       designation: '',
@@ -205,6 +209,22 @@ const EmployeeManagement = () => {
             </div>
             
             <div className="form-group">
+              <label className="form-label">Password {!editingEmployee && '*'}</label>
+              <input
+                type="password"
+                name="password"
+                className="form-control"
+                value={formData.password}
+                onChange={handleInputChange}
+                placeholder="Default: employee123"
+                required={!editingEmployee}
+              />
+              <small style={{ color: 'var(--text-color)', fontSize: '10px' }}>
+                {editingEmployee ? 'Leave blank to keep current password' : 'Default password: employee123'}
+              </small>
+            </div>
+            
+            <div className="form-group">
               <label className="form-label">Aadhaar Number *</label>
               <input
                 type="text"
@@ -219,24 +239,45 @@ const EmployeeManagement = () => {
             <div className="form-row">
               <div className="form-group col-6">
                 <label className="form-label">Department</label>
-                <input
-                  type="text"
+                <select
                   name="department"
                   className="form-control"
                   value={formData.department}
                   onChange={handleInputChange}
-                />
+                >
+                  <option value="">Select Department</option>
+                  <option value="Operations">Operations</option>
+                  <option value="Sales">Sales</option>
+                  <option value="Marketing">Marketing</option>
+                  <option value="Customer Service">Customer Service</option>
+                  <option value="Finance">Finance</option>
+                  <option value="Human Resources">Human Resources</option>
+                  <option value="IT">IT</option>
+                  <option value="Administration">Administration</option>
+                </select>
               </div>
               
               <div className="form-group col-6">
                 <label className="form-label">Designation</label>
-                <input
-                  type="text"
+                <select
                   name="designation"
                   className="form-control"
                   value={formData.designation}
                   onChange={handleInputChange}
-                />
+                >
+                  <option value="">Select Designation</option>
+                  <option value="Manager">Manager</option>
+                  <option value="Senior Executive">Senior Executive</option>
+                  <option value="Executive">Executive</option>
+                  <option value="Team Leader">Team Leader</option>
+                  <option value="Booking Agent">Booking Agent</option>
+                  <option value="Travel Consultant">Travel Consultant</option>
+                  <option value="Customer Support">Customer Support</option>
+                  <option value="Accountant">Accountant</option>
+                  <option value="HR Executive">HR Executive</option>
+                  <option value="IT Support">IT Support</option>
+                  <option value="Administrator">Administrator</option>
+                </select>
               </div>
             </div>
             

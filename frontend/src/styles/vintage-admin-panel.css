@@ -73,6 +73,31 @@ body {
   cursor: pointer;
 }
 
+.close-button {
+  background-color: var(--button-face);
+  border: 1px solid var(--button-light);
+  color: var(--text-color);
+  width: 20px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: bold;
+  padding: 0;
+  margin-left: 4px;
+}
+
+.close-button:hover {
+  background-color: #ff0000;
+  color: #ffffff;
+}
+
+.close-button:active {
+  background-color: #cc0000;
+}
+
 /* Menu Bar */
 .menu-bar {
   background-color: var(--menu-bar-bg);

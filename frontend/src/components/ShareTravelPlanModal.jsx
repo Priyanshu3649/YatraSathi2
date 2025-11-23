@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import api from '../services/api';
+import { travelPlanApi } from '../utils/travelPlanApi';
 import '../styles/vintage-theme.css';
 
 const ShareTravelPlanModal = ({ plan, onClose, onShareSuccess }) => {
@@ -15,9 +15,9 @@ const ShareTravelPlanModal = ({ plan, onClose, onShareSuccess }) => {
 
   const fetchSharedUsers = async () => {
     try {
-      const response = await api.get(`/travel-plans/${plan.tp_tpid}/shared-users`);
-      setIsPublic(response.data.isPublic);
-      setSharedUsers(response.data.sharedWith || []);
+      const data = await travelPlanApi.getSharedUsers(plan.tp_tpid);
+      setIsPublic(data.isPublic);
+      setSharedUsers(data.sharedWith || []);
     } catch (err) {
       console.error('Error fetching shared users:', err);
     }

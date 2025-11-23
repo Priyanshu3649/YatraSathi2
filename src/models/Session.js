@@ -38,9 +38,9 @@ const Session = sequelize.define('ssSession', {
     comment: 'User Agent'
   },
   ss_token: {
-    type: DataTypes.STRING(40),
+    type: DataTypes.STRING(512),
     allowNull: true,
-    comment: 'Session Token'
+    comment: 'Session Token (JWT can be long)'
   },
   ss_active: {
     type: DataTypes.TINYINT,
