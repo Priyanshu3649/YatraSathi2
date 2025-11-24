@@ -21,6 +21,9 @@ router.post('/modules', securityController.createModule);
 router.get('/users', securityController.getAllUsers);
 router.post('/users', securityController.createUser);
 
+// ==================== CUSTOMER ROUTES ====================
+router.get('/customers', securityController.getAllCustomers);
+
 // ==================== ROLE PERMISSION ROUTES ====================
 router.get('/role-permissions', securityController.getAllRolePermissions);
 router.post('/role-permissions', securityController.createRolePermission);

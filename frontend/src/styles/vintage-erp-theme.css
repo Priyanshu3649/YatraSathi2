@@ -1,26 +1,44 @@
-/* Vintage ERP Theme - Global Styles */
+/* Classic Enterprise ERP Theme - Global Styles */
 :root {
-  --erp-bg-main: #d4d0c8;
-  --erp-bg-light: #ece9d8;
-  --erp-bg-panel: #e8e5d8;
-  --erp-bg-blue: #cfe0f1;
-  --erp-border: #919b9c;
+  /* Main backgrounds */
+  --erp-bg-main: #f5f5f5;
+  --erp-bg-light: #f0f0f0;
+  --erp-bg-panel: #e8f4f8;
+  --erp-bg-panel-alt: #f0f8ff;
+  --erp-bg-blue: #e8f4f8;
+  --erp-bg-sidebar: #f5f5f0;
+  --erp-bg-cream: #fffef5;
+  
+  /* Borders */
+  --erp-border: #cccccc;
+  --erp-border-dark: #999999;
   --erp-border-light: #fff;
-  --erp-blue-dark: #0054e3;
-  --erp-blue-title: #0997ff;
-  --erp-blue-selected: #316ac5;
+  
+  /* Primary colors */
+  --erp-blue-dark: #4169E1;
+  --erp-blue-title: #4169E1;
+  --erp-blue-selected: #4169E1;
+  --erp-navy: #2c3e50;
   --erp-yellow-highlight: #ffffcc;
+  --erp-hover-blue: #e8f4ff;
+  
+  /* Text colors */
   --erp-text: #000;
   --erp-text-disabled: #808080;
+  --erp-text-green: #006400;
+  --erp-text-white: #ffffff;
 }
 
 * {
   box-sizing: border-box;
+  border-radius: 0 !important;
+  box-shadow: none !important;
 }
 
 body {
-  font-family: 'Tahoma', 'MS Sans Serif', Arial, sans-serif;
-  font-size: 11px;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  font-size: 12px;
+  line-height: 1.4;
   background: var(--erp-bg-main);
   color: var(--erp-text);
   margin: 0;
@@ -35,54 +53,60 @@ body {
 }
 
 .erp-panel-header {
-  background: linear-gradient(180deg, #0997ff 0%, #0053ee 50%, #0050ee 50%, #06f 100%);
+  background: var(--erp-blue-dark);
   color: white;
-  padding: 3px 8px;
+  padding: 6px 12px;
   font-weight: bold;
-  font-size: 11px;
-  border-bottom: 1px solid var(--erp-border);
+  font-size: 12px;
+  border-bottom: 1px solid var(--erp-border-dark);
 }
 
-/* Button Styles */
+/* Button Styles - Classic Gradient */
 .erp-button {
-  background: linear-gradient(180deg, #fff 0%, var(--erp-bg-light) 100%);
-  border: 1px solid #aca899;
-  padding: 3px 12px;
+  background: linear-gradient(to bottom, #f8f8f8, #e0e0e0);
+  border: 1px solid var(--erp-border-dark);
+  padding: 4px 12px;
   cursor: pointer;
   font-size: 11px;
-  font-family: 'Tahoma', Arial, sans-serif;
+  font-family: 'Segoe UI', Tahoma, sans-serif;
   color: var(--erp-text);
-  min-height: 22px;
+  min-height: 24px;
 }
 
 .erp-button:hover {
-  background: linear-gradient(180deg, #ffefd5 0%, #f0e9d8 100%);
-  border-color: var(--erp-blue-dark);
+  background: linear-gradient(to bottom, #fff, #e8e8e8);
 }
 
 .erp-button:active {
-  background: linear-gradient(180deg, #d8d0c8 0%, var(--erp-bg-light) 100%);
-  border-color: var(--erp-blue-dark);
+  background: #d0d0d0;
+  box-shadow: inset 0 1px 3px rgba(0,0,0,0.2) !important;
 }
 
 .erp-button:disabled {
+  background: #f0f0f0;
   color: var(--erp-text-disabled);
   cursor: not-allowed;
+  border-color: var(--erp-border);
 }
 
 .erp-button-primary {
-  background: linear-gradient(180deg, #4a90e2 0%, #2171d6 100%);
+  background: linear-gradient(to bottom, #5a7fdd, var(--erp-blue-dark));
   color: white;
   font-weight: bold;
+  border-color: #2d4a9d;
 }
 
-/* Input Styles */
+.erp-button-primary:hover {
+  background: linear-gradient(to bottom, #6a8fed, #5179f1);
+}
+
+/* Input Styles - Cream Background */
 .erp-input {
-  background: white;
-  border: 1px solid #7f9db9;
-  padding: 2px 4px;
-  font-size: 11px;
-  font-family: 'Tahoma', Arial, sans-serif;
+  background: var(--erp-bg-cream);
+  border: 1px solid var(--erp-border);
+  padding: 3px 6px;
+  font-size: 12px;
+  font-family: 'Segoe UI', Tahoma, sans-serif;
   color: var(--erp-text);
 }
 
@@ -93,52 +117,58 @@ body {
 
 .erp-input:disabled,
 .erp-input:read-only {
-  background: var(--erp-bg-light);
+  background: #f0f0f0;
   color: var(--erp-text-disabled);
 }
 
-/* Table Styles */
+/* Table Styles - Classic Enterprise Grid */
 .erp-table {
   width: 100%;
   border-collapse: collapse;
   font-size: 11px;
   background: white;
+  border: 1px solid var(--erp-border);
 }
 
 .erp-table thead {
-  background: linear-gradient(180deg, #fff 0%, var(--erp-bg-main) 100%);
+  background: var(--erp-blue-dark);
+  color: white;
 }
 
 .erp-table th {
-  padding: 4px 6px;
+  padding: 4px 8px;
   text-align: left;
-  border-right: 1px solid var(--erp-bg-main);
-  border-bottom: 1px solid var(--erp-border);
+  border: 1px solid var(--erp-border-dark);
   font-weight: bold;
   font-size: 11px;
 }
 
 .erp-table tbody tr {
   cursor: pointer;
-  border-bottom: 1px solid #e0e0e0;
+  border: 1px solid #ddd;
+}
+
+.erp-table tbody tr:nth-child(even) {
+  background: #f9f9f9;
 }
 
 .erp-table tbody tr:hover {
-  background: var(--erp-bg-panel);
+  background: var(--erp-hover-blue);
 }
 
 .erp-table tbody tr.selected {
-  background: var(--erp-yellow-highlight);
+  background: var(--erp-yellow-highlight) !important;
+  color: #000;
 }
 
 .erp-table tbody tr.active {
-  background: var(--erp-blue-selected);
-  color: white;
+  background: var(--erp-yellow-highlight) !important;
+  color: #000;
 }
 
 .erp-table td {
-  padding: 3px 6px;
-  border-right: 1px solid #e0e0e0;
+  padding: 4px 8px;
+  border: 1px solid #ddd;
   font-size: 11px;
 }
 
@@ -234,14 +264,14 @@ body {
 .erp-audit-label {
   text-align: right;
   font-size: 11px;
-  color: green;
+  color: var(--erp-text-green);
   font-weight: bold;
 }
 
 .erp-audit-input {
   background: #f0f0f0 !important;
-  border: 1px solid #7f9db9;
-  padding: 2px 4px;
+  border: 1px solid var(--erp-border);
+  padding: 3px 6px;
   font-size: 11px;
   color: var(--erp-text);
 }
@@ -260,31 +290,32 @@ body {
   border-bottom: 1px solid var(--erp-border);
 }
 
-/* Navigation Sidebar */
+/* Navigation Sidebar - Classic Menu */
 .erp-nav-sidebar {
-  background: var(--erp-bg-main);
+  background: var(--erp-bg-sidebar);
   border-right: 1px solid var(--erp-border);
   width: 180px;
   overflow-y: auto;
 }
 
 .erp-nav-header {
-  background: linear-gradient(180deg, #fff 0%, var(--erp-bg-main) 100%);
-  padding: 5px 8px;
+  background: var(--erp-blue-dark);
+  color: white;
+  padding: 6px 12px;
   font-weight: bold;
-  border-bottom: 1px solid var(--erp-border);
-  font-size: 11px;
+  border-bottom: 1px solid var(--erp-border-dark);
+  font-size: 12px;
 }
 
 .erp-nav-item {
-  padding: 5px 12px;
+  padding: 6px 20px;
   cursor: pointer;
-  border-bottom: 1px solid var(--erp-border-light);
-  font-size: 11px;
+  border-bottom: 1px solid #e8e8e8;
+  font-size: 12px;
 }
 
 .erp-nav-item:hover {
-  background: var(--erp-bg-panel);
+  background: #d0d0c8;
 }
 
 .erp-nav-item.active {

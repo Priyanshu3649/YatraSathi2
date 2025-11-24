@@ -1,6 +1,9 @@
 /* Import Vintage ERP Theme */
 @import './styles/vintage-erp-theme.css';
 
+/* Import Classic Enterprise Global Overrides */
+@import './styles/classic-enterprise-global.css';
+
 /* Vintage Application Styles - Windows XP/2000 ERP Style */
 
 .App {

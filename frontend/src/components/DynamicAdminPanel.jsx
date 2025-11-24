@@ -46,6 +46,20 @@ const DynamicAdminPanel = () => {
     closedBy: ''
   });
 
+  // Helper function to create unique record identifier
+  const getRecordId = (record, moduleName) => {
+    const module = modules[moduleName];
+    // For modules with composite keys, concatenate all key columns
+    const keyColumns = module.columns.slice(0, 3); // Use first 3 columns as potential keys
+    return keyColumns.map(col => record[col]).filter(val => val !== undefined).join('|');
+  };
+
+  // Helper function to compare records
+  const isSameRecord = (record1, record2, moduleName) => {
+    if (!record1 || !record2) return false;
+    return getRecordId(record1, moduleName) === getRecordId(record2, moduleName);
+  };
+
   // Module configurations
   const modules = {
     // ==================== SECURITY MODULES ====================
@@ -176,6 +190,26 @@ const DynamicAdminPanel = () => {
       filterFields: ['up_usid', 'up_opid', 'up_allow', 'active'],
       specialFeatures: ['effectivePermissions', 'colorCoding']
     },
+    customers: {
+      name: 'Customer List',
+      endpoint: '/api/security/customers',
+      fields: [
+        { name: 'cu_usid', label: 'User ID', type: 'text', required: true, readOnly: true },
+        { name: 'cu_custno', label: 'Customer Number', type: 'text', required: true, readOnly: true },
+        { name: 'cu_name', label: 'Customer Name', type: 'text', readOnly: true },
+        { name: 'cu_email', label: 'Email', type: 'email', readOnly: true },
+        { name: 'cu_phone', label: 'Phone', type: 'tel', readOnly: true },
+        { name: 'cu_custtype', label: 'Customer Type', type: 'text' },
+        { name: 'cu_company', label: 'Company Name', type: 'text' },
+        { name: 'cu_gst', label: 'GST Number', type: 'text' },
+        { name: 'cu_creditlmt', label: 'Credit Limit', type: 'number', step: '0.01' },
+        { name: 'cu_status', label: 'Status', type: 'text' },
+      ],
+      columns: ['cu_custno', 'cu_name', 'cu_email', 'cu_phone', 'cu_custtype', 'cu_company', 'cu_status', 'edtm'],
+      columnLabels: ['Customer No', 'Name', 'Email', 'Phone', 'Type', 'Company', 'Status', 'Registered On'],
+      columnWidths: ['120px', '180px', '200px', '130px', '100px', '150px', '80px', '150px'],
+      filterFields: ['cu_custno', 'cu_name', 'cu_email', 'cu_custtype', 'cu_status']
+    },
     // ==================== MASTER DATA MODULES ====================
     stations: {
       name: 'Stations',
@@ -280,6 +314,62 @@ const DynamicAdminPanel = () => {
     setFilteredData(filtered);
     setCurrentPage(1); // Reset to first page when filtering
   }, [filters, data]);
+
+  // Auto-select first record when data changes (only on initial load or module change)
+  useEffect(() => {
+    if (filteredData.length > 0 && !selectedRecord && !isEditing) {
+      const firstRecord = filteredData[0];
+      handleRecordSelect(firstRecord);
+    }
+  }, [activeModule, data.length]); // Only trigger on module change or data load
+
+  // Keyboard navigation - Arrow keys
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (!selectedRecord || isEditing) return;
+      
+      const paginatedData = getPaginatedData();
+      const currentIndex = paginatedData.findIndex(item => 
+        isSameRecord(item, selectedRecord, activeModule)
+      );
+      
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        if (currentIndex < paginatedData.length - 1) {
+          handleRecordSelect(paginatedData[currentIndex + 1]);
+          scrollToSelectedRow();
+        }
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        if (currentIndex > 0) {
+          handleRecordSelect(paginatedData[currentIndex - 1]);
+          scrollToSelectedRow();
+        }
+      } else if (e.key === 'Enter' && !isEditing) {
+        e.preventDefault();
+        handleEdit();
+      } else if (e.key === 'Escape' && isEditing) {
+        e.preventDefault();
+        setIsEditing(false);
+        if (selectedRecord) {
+          setFormData(selectedRecord);
+        }
+      }
+    };
+    
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [selectedRecord, isEditing, activeModule, filteredData, currentPage]);
+
+  // Scroll to selected row
+  const scrollToSelectedRow = () => {
+    setTimeout(() => {
+      const selectedRow = document.querySelector('.erp-table tbody tr.selected');
+      if (selectedRow) {
+        selectedRow.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }
+    }, 100);
+  };
 
   useEffect(() => {
     fetchData();
@@ -521,7 +611,7 @@ const DynamicAdminPanel = () => {
     let newIndex = 0;
     if (selectedRecord) {
       const currentIndex = paginatedData.findIndex(item => 
-        item[modules[activeModule].columns[0]] === selectedRecord[modules[activeModule].columns[0]]
+        isSameRecord(item, selectedRecord, activeModule)
       );
       
       switch(direction) {
@@ -701,6 +791,12 @@ const DynamicAdminPanel = () => {
                   onClick={() => handleModuleChange('userPermissions')}
                 >
                   User Permission
+                </div>
+                <div 
+                  className={`erp-nav-item sub-item ${activeModule === 'customers' ? 'active' : ''}`}
+                  onClick={() => handleModuleChange('customers')}
+                >
+                  Customer List
                 </div>
               </>
             )}
@@ -887,7 +983,7 @@ const DynamicAdminPanel = () => {
                       <tr><td colSpan={currentModule.columns.length + 1} style={{ textAlign: 'center' }}>No records found</td></tr>
                     ) : (
                       paginatedData.map((record, idx) => {
-                        const isSelected = selectedRecord && selectedRecord[currentModule.columns[0]] === record[currentModule.columns[0]];
+                        const isSelected = selectedRecord && isSameRecord(record, selectedRecord, activeModule);
                         return (
                           <tr 
                             key={idx}

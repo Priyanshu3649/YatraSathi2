@@ -5,6 +5,8 @@ const RoleTVL = require('../models/RoleTVL');
 const UserTVL = require('../models/UserTVL');
 const RolePermissionTVL = require('../models/RolePermissionTVL');
 const UserPermissionTVL = require('../models/UserPermissionTVL');
+const Customer = require('../models/Customer');
+const User = require('../models/User');
 
 // ==================== APPLICATION OPERATIONS ====================
 
@@ -387,6 +389,48 @@ const getEffectivePermissions = async (req, res) => {
   }
 };
 
+// ==================== CUSTOMER OPERATIONS ====================
+
+// Get all customers
+const getAllCustomers = async (req, res) => {
+  try {
+    const customers = await Customer.findAll({
+      include: [{
+        model: User,
+        attributes: ['us_fname', 'us_lname', 'us_email', 'us_phone']
+      }],
+      order: [['cu_custno', 'ASC']],
+      raw: false
+    });
+    
+    // Format data for frontend
+    const formattedCustomers = customers.map(cust => {
+      const custData = cust.toJSON();
+      return {
+        cu_usid: custData.cu_usid,
+        cu_custno: custData.cu_custno,
+        cu_custtype: custData.cu_custtype,
+        cu_company: custData.cu_company,
+        cu_email: custData.usUser?.us_email || '',
+        cu_phone: custData.usUser?.us_phone || '',
+        cu_name: custData.usUser ? `${custData.usUser.us_fname} ${custData.usUser.us_lname}` : '',
+        cu_gst: custData.cu_gst,
+        cu_creditlmt: custData.cu_creditlmt,
+        cu_status: custData.cu_status,
+        edtm: custData.edtm,
+        eby: custData.eby,
+        mdtm: custData.mdtm,
+        mby: custData.mby
+      };
+    });
+    
+    res.json(formattedCustomers);
+  } catch (error) {
+    console.error('Error fetching customers:', error);
+    res.status(500).json({ message: error.message });
+  }
+};
+
 module.exports = {
   // Applications
   getAllApplications,
@@ -402,6 +446,9 @@ module.exports = {
   // Users
   getAllUsers,
   createUser,
+  
+  // Customers
+  getAllCustomers,
   
   // Role Permissions
   getAllRolePermissions,

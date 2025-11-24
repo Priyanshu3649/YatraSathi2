@@ -1,9 +1,9 @@
-/* Vintage Header Styles - Windows XP/2000 Style */
+/* Classic Enterprise Header Styles */
 
 .header {
-  background-color: var(--nav-bg);
-  color: var(--nav-text);
-  border-bottom: 2px solid var(--border-dark);
+  background-color: #3a3a3a;
+  color: white;
+  border-bottom: 2px solid #2a2a2a;
   position: sticky;
   top: 0;
   z-index: 1000;
@@ -28,8 +28,8 @@
 .header .logo h1 {
   margin: 0;
   color: #000000;
-  font-size: 14px;
-  font-weight: var(--font-weight-bold);
+  font-size: 18px;
+  font-weight: bold;
   letter-spacing: 0.5px;
 }
 
@@ -51,54 +51,49 @@
 .header .navigation a {
   text-decoration: none;
   color: #000000;
-  font-weight: var(--font-weight-normal);
-  font-size: var(--font-size-base);
-  padding: 4px 8px;
+  font-weight: bold;
+  font-size: 13px;
+  padding: 8px 20px;
   background-color: transparent;
   border: none;
+  border-right: 1px solid rgba(0,0,0,0.2);
   display: inline-flex;
   align-items: center;
-  min-height: 22px;
+  min-height: 30px;
   white-space: nowrap;
 }
 
 .header .navigation a:hover {
-  background-color: var(--nav-hover);
+  background-color: rgba(0,0,0,0.15);
   color: #000000;
   text-decoration: none;
 }
 
 .header .navigation a.active {
-  background-color: var(--nav-hover);
+  background-color: rgba(0,0,0,0.15);
   color: #000000;
-  font-weight: var(--font-weight-bold);
+  font-weight: bold;
 }
 
 .header .navigation button {
-  background-color: var(--button-face);
-  color: var(--text-primary);
-  border-top: 1px solid var(--button-light);
-  border-left: 1px solid var(--button-light);
-  border-right: 1px solid var(--button-dark);
-  border-bottom: 1px solid var(--button-dark);
-  padding: 4px 8px;
-  font-weight: var(--font-weight-normal);
-  font-size: var(--font-size-base);
+  background: linear-gradient(to bottom, #f8f8f8, #e0e0e0);
+  color: #000;
+  border: 1px solid #999;
+  padding: 4px 12px;
+  font-weight: normal;
+  font-size: 11px;
   cursor: pointer;
-  min-height: 22px;
-  margin-left: var(--spacing-sm);
+  min-height: 24px;
+  margin-left: 8px;
 }
 
 .header .navigation button:hover {
-  background-color: var(--button-primary-hover);
-  color: var(--selection-text);
+  background: linear-gradient(to bottom, #fff, #e8e8e8);
 }
 
 .header .navigation button:active {
-  border-top: 1px solid var(--button-dark);
-  border-left: 1px solid var(--button-dark);
-  border-right: 1px solid var(--button-light);
-  border-bottom: 1px solid var(--button-light);
+  background: #d0d0d0;
+  box-shadow: inset 0 1px 3px rgba(0,0,0,0.2) !important;
 }
 
 /* Footer Styles */
@@ -164,26 +159,27 @@
 .header .navigation .dropdown > span {
   text-decoration: none;
   color: #000000;
-  font-weight: var(--font-weight-normal);
-  font-size: var(--font-size-base);
-  padding: 4px 8px;
+  font-weight: bold;
+  font-size: 15px;
+  padding: 8px 20px;
   background-color: transparent;
   display: inline-flex;
   align-items: center;
-  min-height: 22px;
+  min-height: 40px;
   white-space: nowrap;
   cursor: pointer;
+  border-right: 1px solid rgba(0,0,0,0.2);
 }
 
 .header .navigation .dropdown > span:hover {
-  background-color: var(--nav-hover);
+  background-color: rgba(0,0,0,0.15);
   color: #000000;
 }
 
 .header .navigation .dropdown > span.active {
-  background-color: var(--nav-hover);
+  background-color: rgba(0,0,0,0.15);
   color: #000000;
-  font-weight: var(--font-weight-bold);
+  font-weight: bold;
 }
 
 .header .navigation .dropdown-menu {
