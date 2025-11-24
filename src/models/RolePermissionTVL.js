@@ -1,80 +1,74 @@
 const { DataTypes } = require('sequelize');
-const { sequelize, BaseModel } = require('./baseModel');
+const { sequelizeTVL } = require('../../config/db');
 
-const Role = sequelize.define('fnXfunction', {
-  fn_fnid: {
+const RolePermissionTVL = sequelizeTVL.define('fpXfuncperm', {
+  fp_fnid: {
     type: DataTypes.STRING(6),
     primaryKey: true,
     allowNull: false,
     defaultValue: '',
-    comment: 'Function Id.'
+    comment: 'Function/Role ID'
   },
-  fn_fnshort: {
-    type: DataTypes.STRING(30),
-    allowNull: true,
+  fp_opid: {
+    type: DataTypes.STRING(12),
+    primaryKey: true,
+    allowNull: false,
     defaultValue: '',
-    unique: true,
-    comment: 'Short Description'
+    comment: 'Operation ID (ap_apid + mo_moid + op_opid)'
   },
-  fn_fndesc: {
-    type: DataTypes.STRING(60),
-    allowNull: true,
-    defaultValue: '',
-    comment: 'Description'
+  fp_allow: {
+    type: DataTypes.TINYINT,
+    allowNull: false,
+    defaultValue: 0,
+    comment: 'Allow? (1=Allow, 0=Deny)'
   },
-  fn_rmrks: {
+  fp_rmrks: {
     type: DataTypes.TEXT('long'),
     allowNull: true,
     comment: 'Remarks'
   },
-  fn_active: {
+  fp_active: {
     type: DataTypes.TINYINT,
     allowNull: false,
     defaultValue: 0,
-    comment: 'Active ?'
+    comment: 'Active?'
   },
-  fn_edtm: {
+  fp_edtm: {
     type: DataTypes.DATE,
     allowNull: true,
     comment: 'Entered On'
   },
-  fn_eby: {
+  fp_eby: {
     type: DataTypes.STRING(30),
     allowNull: true,
     defaultValue: '',
     comment: 'Entered By'
   },
-  fn_mdtm: {
+  fp_mdtm: {
     type: DataTypes.DATE,
     allowNull: true,
     comment: 'Modified On'
   },
-  fn_mby: {
+  fp_mby: {
     type: DataTypes.STRING(30),
     allowNull: true,
     defaultValue: '',
     comment: 'Modified By'
   },
-  fn_cdtm: {
+  fp_cdtm: {
     type: DataTypes.DATE,
     allowNull: true,
     comment: 'Closed On'
   },
-  fn_cby: {
+  fp_cby: {
     type: DataTypes.STRING(30),
     allowNull: true,
     defaultValue: '',
     comment: 'Closed By'
   }
 }, {
-  tableName: 'fnXfunction',
-  timestamps: false,
-  indexes: [
-    {
-      unique: true,
-      fields: ['fn_fnshort']
-    }
-  ]
+  tableName: 'fpXfuncperm',
+  timestamps: false
 });
 
-module.exports = Role;
+module.exports = RolePermissionTVL;

@@ -1,7 +1,7 @@
 const { DataTypes } = require('sequelize');
-const { sequelize, BaseModel } = require('./baseModel');
+const { sequelizeTVL } = require('../../config/db');
 
-const Permission = sequelize.define('opXoperation', {
+const PermissionTVL = sequelizeTVL.define('opXoperation', {
   op_apid: {
     type: DataTypes.STRING(4),
     primaryKey: true,
@@ -108,4 +108,4 @@ const Permission = sequelize.define('opXoperation', {
   timestamps: false
 });
 
-module.exports = Permission;
+module.exports = PermissionTVL;

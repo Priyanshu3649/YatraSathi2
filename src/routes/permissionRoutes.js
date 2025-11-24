@@ -4,7 +4,9 @@ const {
   getAllRoles,
   getRoleById,
   updateRole,
-  deleteRole
+  deleteRole,
+  getAllPermissions,
+  createPermission
 } = require('../controllers/permissionController');
 const authMiddleware = require('../middleware/authMiddleware');
 
@@ -16,7 +18,7 @@ router.use(authMiddleware);
 // Admin-only routes
 router.use(async (req, res, next) => {
   // Check if user is admin
-  if (req.user.userType !== 'admin') {
+  if (req.user.us_usertype !== 'admin') {
     return res.status(403).json({ message: 'Access denied. Admin access required.' });
   }
   next();
@@ -28,5 +30,9 @@ router.get('/roles', getAllRoles);
 router.get('/roles/:id', getRoleById);
 router.put('/roles/:id', updateRole);
 router.delete('/roles/:id', deleteRole);
+
+// Permission/Operation management routes
+router.get('/', getAllPermissions);
+router.post('/', createPermission);
 
 module.exports = router;

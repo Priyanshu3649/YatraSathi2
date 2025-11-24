@@ -1,28 +1,34 @@
-const Role = require('../models/Role');
+const RoleTVL = require('../models/RoleTVL');
+const PermissionTVL = require('../models/PermissionTVL');
 
 // Create a new role
 const createRole = async (req, res) => {
   try {
-    const { roleName, description, userType, department, permissions } = req.body;
+    const { fn_fnid, fn_fnshort, fn_fndesc, fn_rmrks } = req.body;
     
     // Check if role already exists
-    const existingRole = await Role.findOne({ roleName });
+    const existingRole = await RoleTVL.findOne({ 
+      where: { fn_fnshort: fn_fnshort } 
+    });
+    
     if (existingRole) {
       return res.status(400).json({ message: 'Role already exists' });
     }
     
     // Create new role
-    const role = new Role({
-      roleName,
-      description,
-      userType,
-      department,
-      permissions
+    const role = await RoleTVL.create({
+      fn_fnid,
+      fn_fnshort,
+      fn_fndesc,
+      fn_rmrks,
+      fn_active: 1,
+      fn_eby: req.user?.us_usid || 'SYSTEM',
+      fn_edtm: new Date()
     });
     
-    const savedRole = await role.save();
-    res.status(201).json(savedRole);
+    res.status(201).json(role);
   } catch (error) {
+    console.error('Error creating role:', error);
     res.status(500).json({ message: error.message });
   }
 };
@@ -30,9 +36,14 @@ const createRole = async (req, res) => {
 // Get all roles
 const getAllRoles = async (req, res) => {
   try {
-    const roles = await Role.find();
+    const roles = await RoleTVL.findAll({
+      where: { fn_active: 1 },
+      order: [['fn_fnid', 'ASC']],
+      raw: true
+    });
     res.json(roles);
   } catch (error) {
+    console.error('Error fetching roles:', error);
     res.status(500).json({ message: error.message });
   }
 };
@@ -40,12 +51,13 @@ const getAllRoles = async (req, res) => {
 // Get role by ID
 const getRoleById = async (req, res) => {
   try {
-    const role = await Role.findById(req.params.id);
+    const role = await RoleTVL.findByPk(req.params.id);
     if (!role) {
       return res.status(404).json({ message: 'Role not found' });
     }
     res.json(role);
   } catch (error) {
+    console.error('Error fetching role:', error);
     res.status(500).json({ message: error.message });
   }
 };
@@ -53,23 +65,25 @@ const getRoleById = async (req, res) => {
 // Update role
 const updateRole = async (req, res) => {
   try {
-    const { roleName, description, userType, department, permissions } = req.body;
+    const { fn_fnshort, fn_fndesc, fn_rmrks } = req.body;
     
-    const role = await Role.findById(req.params.id);
+    const role = await RoleTVL.findByPk(req.params.id);
     if (!role) {
       return res.status(404).json({ message: 'Role not found' });
     }
     
     // Update role fields
-    role.roleName = roleName || role.roleName;
-    role.description = description || role.description;
-    role.userType = userType || role.userType;
-    role.department = department || role.department;
-    role.permissions = permissions || role.permissions;
+    await role.update({
+      fn_fnshort: fn_fnshort || role.fn_fnshort,
+      fn_fndesc: fn_fndesc || role.fn_fndesc,
+      fn_rmrks: fn_rmrks || role.fn_rmrks,
+      fn_mby: req.user?.us_usid || 'SYSTEM',
+      fn_mdtm: new Date()
+    });
     
-    const updatedRole = await role.save();
-    res.json(updatedRole);
+    res.json(role);
   } catch (error) {
+    console.error('Error updating role:', error);
     res.status(500).json({ message: error.message });
   }
 };
@@ -77,30 +91,54 @@ const updateRole = async (req, res) => {
 // Delete role
 const deleteRole = async (req, res) => {
   try {
-    const role = await Role.findById(req.params.id);
+    const role = await RoleTVL.findByPk(req.params.id);
     if (!role) {
       return res.status(404).json({ message: 'Role not found' });
     }
     
-    await role.remove();
+    await role.destroy();
     res.json({ message: 'Role deleted successfully' });
   } catch (error) {
+    console.error('Error deleting role:', error);
     res.status(500).json({ message: error.message });
   }
 };
 
-// Check if user has specific permission
-const checkPermission = async (userId, permission) => {
+// Get all permissions
+const getAllPermissions = async (req, res) => {
   try {
-    // This would typically involve checking the user's role and the role's permissions
-    // For now, we'll implement a basic check
-    // In a real implementation, you would join with the User model to get the user's role
-    // and then check if that role has the required permission
-    
-    // Placeholder implementation - in a real app, you would check against the database
-    return true;
+    const permissions = await PermissionTVL.findAll({
+      where: { op_active: 1 },
+      order: [['op_apid', 'ASC'], ['op_moid', 'ASC'], ['op_opid', 'ASC']],
+      raw: true
+    });
+    res.json(permissions);
   } catch (error) {
-    return false;
+    console.error('Error fetching permissions:', error);
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// Create permission
+const createPermission = async (req, res) => {
+  try {
+    const { op_apid, op_moid, op_opid, op_opshort, op_opdesc } = req.body;
+    
+    const permission = await PermissionTVL.create({
+      op_apid,
+      op_moid,
+      op_opid,
+      op_opshort,
+      op_opdesc,
+      op_active: 1,
+      op_eby: req.user?.us_usid || 'SYSTEM',
+      op_edtm: new Date()
+    });
+    
+    res.status(201).json(permission);
+  } catch (error) {
+    console.error('Error creating permission:', error);
+    res.status(500).json({ message: error.message });
   }
 };
 
@@ -110,5 +148,6 @@ module.exports = {
   getRoleById,
   updateRole,
   deleteRole,
-  checkPermission
+  getAllPermissions,
+  createPermission
 };

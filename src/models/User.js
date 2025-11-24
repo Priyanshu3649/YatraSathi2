@@ -112,7 +112,7 @@ const User = sequelize.define('usUser', {
 // Define associations
 User.belongsTo(Role, {
   foreignKey: 'us_roid',
-  targetKey: 'ur_roid'
+  targetKey: 'fn_fnid'
 });
 
 User.belongsTo(Company, {

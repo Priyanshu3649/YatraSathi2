@@ -1,7 +1,7 @@
 const { DataTypes } = require('sequelize');
-const { sequelize, BaseModel } = require('./baseModel');
+const { sequelizeTVL } = require('../../config/db');
 
-const Role = sequelize.define('fnXfunction', {
+const RoleTVL = sequelizeTVL.define('fnXfunction', {
   fn_fnid: {
     type: DataTypes.STRING(6),
     primaryKey: true,
@@ -77,4 +77,4 @@ const Role = sequelize.define('fnXfunction', {
   ]
 });
 
-module.exports = Role;
+module.exports = RoleTVL;

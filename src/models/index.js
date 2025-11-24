@@ -27,14 +27,14 @@ const TravelPlan = require('./TravelPlan');
 Company.hasMany(User, { foreignKey: 'us_coid', sourceKey: 'co_coid' });
 
 // Role associations
-Role.hasMany(User, { foreignKey: 'us_roid', sourceKey: 'ur_roid' });
-Role.hasMany(RolePermission, { foreignKey: 'rp_roid', sourceKey: 'ur_roid' });
+Role.hasMany(User, { foreignKey: 'us_roid', sourceKey: 'fn_fnid' });
+Role.hasMany(RolePermission, { foreignKey: 'rp_roid', sourceKey: 'fn_fnid' });
 
 // Permission associations
-Permission.hasMany(RolePermission, { foreignKey: 'rp_peid', sourceKey: 'pr_peid' });
+Permission.hasMany(RolePermission, { foreignKey: 'rp_peid', sourceKey: 'op_opid' });
 
 // User associations
-User.belongsTo(Role, { foreignKey: 'us_roid', targetKey: 'ur_roid' });
+User.belongsTo(Role, { foreignKey: 'us_roid', targetKey: 'fn_fnid' });
 User.belongsTo(Company, { foreignKey: 'us_coid', targetKey: 'co_coid' });
 User.hasOne(Login, { foreignKey: 'lg_usid', sourceKey: 'us_usid' });
 User.hasOne(Employee, { foreignKey: 'em_usid', sourceKey: 'us_usid' });

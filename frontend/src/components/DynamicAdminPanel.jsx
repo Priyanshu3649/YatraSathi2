@@ -7,14 +7,36 @@ import '../styles/dynamic-admin-panel.css';
 const DynamicAdminPanel = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
-  const [activeModule, setActiveModule] = useState('roles');
+  const [activeModule, setActiveModule] = useState('applications');
   const [data, setData] = useState([]);
+  const [filteredData, setFilteredData] = useState([]);
   const [loading, setLoading] = useState(false);
   const [selectedRecord, setSelectedRecord] = useState(null);
-  const [showDropdown, setShowDropdown] = useState(null);
   const [formData, setFormData] = useState({});
   const [isEditing, setIsEditing] = useState(false);
   const [expandedNav, setExpandedNav] = useState({ master: true, security: true });
+  const [currentPage, setCurrentPage] = useState(1);
+  const recordsPerPage = 100;
+  
+  // Dropdown data sources
+  const [dropdownData, setDropdownData] = useState({
+    applications: [],
+    modules: [],
+    operations: [],
+    roles: [],
+    users: []
+  });
+  
+  // Filter state
+  const [filters, setFilters] = useState({
+    ap_apid: '',
+    mo_apid: '',
+    shortName: '',
+    active: '',
+    fp_allow: '',
+    up_allow: ''
+  });
+  
   const [auditData, setAuditData] = useState({
     enteredOn: '',
     enteredBy: user?.us_usid || 'ADMIN',
@@ -26,45 +48,135 @@ const DynamicAdminPanel = () => {
 
   // Module configurations
   const modules = {
+    // ==================== SECURITY MODULES ====================
+    applications: {
+      name: 'Application',
+      endpoint: '/api/security/applications',
+      fields: [
+        { name: 'ap_apid', label: 'Application ID', type: 'text', required: true, readOnly: false, maxLength: 4 },
+        { name: 'ap_apshort', label: 'Short Name', type: 'text', required: true, maxLength: 30 },
+        { name: 'ap_apdesc', label: 'Application Name/Description', type: 'text', maxLength: 60 },
+        { name: 'ap_rmrks', label: 'Remarks', type: 'textarea' },
+        { name: 'ap_active', label: 'Active', type: 'checkbox', defaultValue: 1 },
+      ],
+      columns: ['ap_apid', 'ap_apshort', 'ap_apdesc', 'ap_active', 'ap_edtm', 'ap_mdtm'],
+      columnLabels: ['ID', 'Short Name', 'Description', 'Active', 'Entered On', 'Modified On'],
+      columnWidths: ['100px', '200px', '300px', '80px', '150px', '150px'],
+      filterFields: ['ap_apid', 'ap_apshort', 'active']
+    },
+    modules: {
+      name: 'Module',
+      endpoint: '/api/security/modules',
+      fields: [
+        { name: 'mo_apid', label: 'Application ID', type: 'dropdown', required: true, source: 'applications', displayField: 'ap_apshort', valueField: 'ap_apid' },
+        { name: 'mo_moid', label: 'Module ID', type: 'text', required: true, maxLength: 4 },
+        { name: 'mo_moshort', label: 'Short Name', type: 'text', required: true, maxLength: 30 },
+        { name: 'mo_modesc', label: 'Module Description', type: 'text', maxLength: 60 },
+        { name: 'mo_group', label: 'Group', type: 'text', maxLength: 60 },
+        { name: 'mo_grsrl', label: 'Group Serial', type: 'number' },
+        { name: 'mo_mhint', label: 'Module Hint', type: 'text', maxLength: 320 },
+        { name: 'mo_isform', label: 'Is Form?', type: 'checkbox' },
+        { name: 'mo_ready', label: 'Ready?', type: 'checkbox' },
+        { name: 'mo_rmrks', label: 'Remarks', type: 'textarea' },
+        { name: 'mo_active', label: 'Active', type: 'checkbox', defaultValue: 1 },
+      ],
+      columns: ['mo_apid', 'mo_moid', 'mo_moshort', 'mo_modesc', 'mo_group', 'mo_ready', 'mo_active', 'mo_edtm'],
+      columnLabels: ['App ID', 'Module ID', 'Short Name', 'Description', 'Group', 'Ready', 'Active', 'Entered On'],
+      columnWidths: ['80px', '100px', '180px', '250px', '150px', '80px', '80px', '150px'],
+      filterFields: ['mo_apid', 'mo_moid', 'mo_moshort', 'mo_group', 'active']
+    },
+    operations: {
+      name: 'Operation',
+      endpoint: '/api/permissions',
+      fields: [
+        { name: 'op_apid', label: 'Application ID', type: 'dropdown', required: true, source: 'applications', displayField: 'ap_apshort', valueField: 'ap_apid' },
+        { name: 'op_moid', label: 'Module ID', type: 'dropdown', required: true, source: 'modules', displayField: 'mo_moshort', valueField: 'mo_moid', cascadeFrom: 'op_apid' },
+        { name: 'op_opid', label: 'Operation ID', type: 'text', required: true, maxLength: 4 },
+        { name: 'op_opshort', label: 'Short Name', type: 'text', required: true, maxLength: 30 },
+        { name: 'op_opdesc', label: 'Operation Description', type: 'text', maxLength: 60 },
+        { name: 'op_appop', label: 'Application Operation?', type: 'checkbox', defaultValue: 1 },
+        { name: 'op_avail', label: 'Will be Available?', type: 'checkbox' },
+        { name: 'op_ready', label: 'Ready & Working?', type: 'checkbox' },
+        { name: 'op_secure', label: 'Secure?', type: 'checkbox', defaultValue: 1 },
+        { name: 'op_rmrks', label: 'Remarks', type: 'textarea' },
+        { name: 'op_active', label: 'Active', type: 'checkbox', defaultValue: 1 },
+      ],
+      columns: ['op_apid', 'op_moid', 'op_opid', 'op_opshort', 'op_opdesc', 'op_ready', 'op_secure', 'op_active', 'op_edtm'],
+      columnLabels: ['App', 'Module', 'Operation', 'Short Name', 'Description', 'Ready', 'Secure', 'Active', 'Entered On'],
+      columnWidths: ['70px', '90px', '100px', '150px', '250px', '70px', '70px', '70px', '150px'],
+      filterFields: ['op_apid', 'op_moid', 'op_opid', 'op_opshort', 'active'],
+      computedFields: [
+        { name: 'fullOpId', label: 'Full Operation ID', formula: (data) => `${data.op_apid || ''}${data.op_moid || ''}${data.op_opid || ''}` }
+      ]
+    },
     roles: {
       name: 'Role List',
       endpoint: '/api/permissions/roles',
       fields: [
-        { name: 'ur_roid', label: 'Role ID', type: 'text', required: true, readOnly: true },
-        { name: 'ur_roshort', label: 'Short Name', type: 'text', required: true },
-        { name: 'ur_rodesc', label: 'Description', type: 'text', required: true },
-        { name: 'ur_dept', label: 'Department', type: 'text' },
+        { name: 'fn_fnid', label: 'Function/Role ID', type: 'text', required: true, readOnly: false, maxLength: 6 },
+        { name: 'fn_fnshort', label: 'Short Name', type: 'text', required: true, maxLength: 30 },
+        { name: 'fn_fndesc', label: 'Description', type: 'text', maxLength: 60 },
+        { name: 'fn_rmrks', label: 'Remarks', type: 'textarea' },
+        { name: 'fn_active', label: 'Active', type: 'checkbox', defaultValue: 1 },
       ],
-      columns: ['ur_roid', 'ur_roshort', 'ur_rodesc', 'ur_dept'],
-      columnLabels: ['ID', 'Short Name', 'Description', 'Department']
-    },
-    permissions: {
-      name: 'Permissions',
-      endpoint: '/api/permissions',
-      fields: [
-        { name: 'pr_peid', label: 'Permission ID', type: 'text', required: true, readOnly: true },
-        { name: 'pr_peshort', label: 'Short Name', type: 'text', required: true },
-        { name: 'pr_pedesc', label: 'Description', type: 'text', required: true },
-        { name: 'pr_module', label: 'Module', type: 'text' },
-      ],
-      columns: ['pr_peid', 'pr_peshort', 'pr_pedesc', 'pr_module'],
-      columnLabels: ['ID', 'Short Name', 'Description', 'Module']
+      columns: ['fn_fnid', 'fn_fnshort', 'fn_fndesc', 'fn_active', 'fn_edtm', 'fn_mdtm'],
+      columnLabels: ['Role ID', 'Short Name', 'Description', 'Active', 'Entered On', 'Modified On'],
+      columnWidths: ['120px', '200px', '300px', '80px', '150px', '150px'],
+      filterFields: ['fn_fnid', 'fn_fnshort', 'active']
     },
     users: {
       name: 'User List',
-      endpoint: '/api/users',
+      endpoint: '/api/security/users',
       fields: [
-        { name: 'us_usid', label: 'User ID', type: 'text', required: true, readOnly: true },
-        { name: 'us_fname', label: 'First Name', type: 'text', required: true },
-        { name: 'us_lname', label: 'Last Name', type: 'text' },
-        { name: 'us_email', label: 'Email', type: 'email', required: true },
-        { name: 'us_phone', label: 'Phone', type: 'tel' },
-        { name: 'us_usertype', label: 'User Type', type: 'select', options: ['admin', 'employee', 'customer'] },
-        { name: 'us_active', label: 'Active', type: 'checkbox' },
+        { name: 'us_usid', label: 'User ID', type: 'text', required: true, readOnly: false, maxLength: 15 },
+        { name: 'us_email', label: 'Email', type: 'email', required: true, maxLength: 120 },
+        { name: 'us_usname', label: 'User Name', type: 'text', required: true, maxLength: 100 },
+        { name: 'us_title', label: 'Job Title', type: 'text', maxLength: 100 },
+        { name: 'us_phone', label: 'Phone', type: 'tel', maxLength: 30 },
+        { name: 'us_admin', label: 'Is Application Administrator?', type: 'checkbox' },
+        { name: 'us_security', label: 'Is Security Administrator?', type: 'checkbox' },
+        { name: 'us_limit', label: 'Authorization Limit', type: 'number', step: '0.01' },
+        { name: 'us_rmrks', label: 'Remarks', type: 'textarea' },
+        { name: 'us_active', label: 'Active', type: 'checkbox', defaultValue: 1 },
       ],
-      columns: ['us_usid', 'us_fname', 'us_lname', 'us_email', 'us_usertype', 'us_active'],
-      columnLabels: ['User ID', 'First Name', 'Last Name', 'Email', 'Type', 'Active']
+      columns: ['us_usid', 'us_usname', 'us_email', 'us_title', 'us_phone', 'us_admin', 'us_active', 'us_edtm'],
+      columnLabels: ['User ID', 'Name', 'Email', 'Title', 'Phone', 'Admin', 'Active', 'Entered On'],
+      columnWidths: ['120px', '180px', '200px', '150px', '130px', '70px', '70px', '150px'],
+      filterFields: ['us_usid', 'us_usname', 'us_email', 'us_title', 'active', 'us_admin']
     },
+    rolePermissions: {
+      name: 'Role Permission',
+      endpoint: '/api/security/role-permissions',
+      fields: [
+        { name: 'fp_fnid', label: 'Function/Role', type: 'dropdown', required: true, source: 'roles', displayField: 'fn_fnshort', valueField: 'fn_fnid' },
+        { name: 'fp_opid', label: 'Operation ID', type: 'dropdown', required: true, source: 'operations', displayField: 'op_opshort', valueField: 'fullOpId' },
+        { name: 'fp_allow', label: 'Allow?', type: 'checkbox', defaultValue: 1 },
+        { name: 'fp_rmrks', label: 'Remarks', type: 'textarea' },
+        { name: 'fp_active', label: 'Active', type: 'checkbox', defaultValue: 1 },
+      ],
+      columns: ['fp_fnid', 'roleName', 'fp_opid', 'operationName', 'fp_allow', 'fp_active', 'fp_edtm'],
+      columnLabels: ['Role ID', 'Role Name', 'Operation ID', 'Operation Name', 'Allow/Deny', 'Active', 'Entered On'],
+      columnWidths: ['120px', '180px', '120px', '200px', '100px', '80px', '150px'],
+      filterFields: ['fp_fnid', 'fp_opid', 'fp_allow', 'active'],
+      specialFeatures: ['bulkAssign', 'colorCoding']
+    },
+    userPermissions: {
+      name: 'User Permission',
+      endpoint: '/api/security/user-permissions',
+      fields: [
+        { name: 'up_usid', label: 'User ID', type: 'dropdown', required: true, source: 'users', displayField: 'us_usname', valueField: 'us_usid' },
+        { name: 'up_opid', label: 'Operation ID', type: 'dropdown', required: true, source: 'operations', displayField: 'op_opshort', valueField: 'fullOpId' },
+        { name: 'up_allow', label: 'Allow?', type: 'checkbox', defaultValue: 1 },
+        { name: 'up_rmrks', label: 'Remarks', type: 'textarea' },
+        { name: 'up_active', label: 'Active', type: 'checkbox', defaultValue: 1 },
+      ],
+      columns: ['up_usid', 'userName', 'up_opid', 'operationName', 'up_allow', 'up_active', 'up_edtm'],
+      columnLabels: ['User ID', 'User Name', 'Operation ID', 'Operation Name', 'Allow/Deny', 'Active', 'Entered On'],
+      columnWidths: ['120px', '180px', '120px', '200px', '100px', '80px', '150px'],
+      filterFields: ['up_usid', 'up_opid', 'up_allow', 'active'],
+      specialFeatures: ['effectivePermissions', 'colorCoding']
+    },
+    // ==================== MASTER DATA MODULES ====================
     stations: {
       name: 'Stations',
       endpoint: '/api/stations',
@@ -76,7 +188,8 @@ const DynamicAdminPanel = () => {
         { name: 'st_state', label: 'State', type: 'text' },
       ],
       columns: ['st_stid', 'st_stcode', 'st_stname', 'st_city', 'st_state'],
-      columnLabels: ['Station ID', 'Code', 'Name', 'City', 'State']
+      columnLabels: ['Station ID', 'Code', 'Name', 'City', 'State'],
+      filterFields: ['shortName']
     },
     trains: {
       name: 'Trains',
@@ -89,7 +202,8 @@ const DynamicAdminPanel = () => {
         { name: 'tr_tost', label: 'To Station', type: 'text' },
       ],
       columns: ['tr_trid', 'tr_trno', 'tr_trname', 'tr_fromst', 'tr_tost'],
-      columnLabels: ['Train ID', 'Number', 'Name', 'From', 'To']
+      columnLabels: ['Train ID', 'Number', 'Name', 'From', 'To'],
+      filterFields: ['shortName']
     },
     company: {
       name: 'Company',
@@ -102,13 +216,120 @@ const DynamicAdminPanel = () => {
         { name: 'co_state', label: 'State', type: 'text' },
       ],
       columns: ['co_coid', 'co_coshort', 'co_codesc', 'co_city', 'co_state'],
-      columnLabels: ['Company ID', 'Short Name', 'Description', 'City', 'State']
+      columnLabels: ['Company ID', 'Short Name', 'Description', 'City', 'State'],
+      filterFields: ['shortName']
     }
   };
 
+  // Get unique modules for dropdown
+  const getModules = () => {
+    const mods = new Set();
+    data.forEach(record => {
+      if (record.op_moid) mods.add(record.op_moid);
+    });
+    return Array.from(mods).sort();
+  };
+
+  // Apply filters - live filtering
+  useEffect(() => {
+    let filtered = [...data];
+    
+    // Filter by application ID (exact match)
+    if (filters.ap_apid) {
+      filtered = filtered.filter(record => 
+        record.ap_apid?.toLowerCase().includes(filters.ap_apid.toLowerCase())
+      );
+    }
+    
+    // Filter by application (for modules)
+    if (filters.mo_apid) {
+      filtered = filtered.filter(record => 
+        record.mo_apid === filters.mo_apid
+      );
+    }
+    
+    // Filter by short name (LIKE) - works across different field names
+    if (filters.shortName) {
+      const searchTerm = filters.shortName.toLowerCase();
+      filtered = filtered.filter(record => {
+        // Try different short name fields
+        const shortFields = ['ap_apshort', 'mo_moshort', 'op_opshort', 'fn_fnshort', 'us_usname', 'us_email'];
+        return shortFields.some(field => 
+          record[field]?.toLowerCase().includes(searchTerm)
+        );
+      });
+    }
+    
+    // Filter by active status
+    if (filters.active !== '' && filters.active !== undefined) {
+      const activeValue = parseInt(filters.active);
+      filtered = filtered.filter(record => {
+        const activeFields = ['ap_active', 'mo_active', 'op_active', 'fn_active', 'us_active', 'fp_active', 'up_active'];
+        return activeFields.some(field => record[field] === activeValue);
+      });
+    }
+    
+    // Filter by permission type (allow/deny)
+    if (filters.fp_allow !== '' && filters.fp_allow !== undefined) {
+      const allowValue = parseInt(filters.fp_allow);
+      filtered = filtered.filter(record => 
+        record.fp_allow === allowValue || record.up_allow === allowValue
+      );
+    }
+    
+    setFilteredData(filtered);
+    setCurrentPage(1); // Reset to first page when filtering
+  }, [filters, data]);
+
   useEffect(() => {
     fetchData();
+    fetchDropdownData();
+    // Reset filters when module changes
+    setFilters({ 
+      ap_apid: '', 
+      mo_apid: '', 
+      shortName: '', 
+      active: '', 
+      fp_allow: '',
+      up_allow: ''
+    });
   }, [activeModule]);
+
+  const fetchDropdownData = async () => {
+    const token = localStorage.getItem('token');
+    try {
+      // Fetch all dropdown sources
+      const [appsRes, modsRes, opsRes, rolesRes, usersRes] = await Promise.all([
+        fetch('http://localhost:5003/api/security/applications', { headers: { 'Authorization': `Bearer ${token}` } }),
+        fetch('http://localhost:5003/api/security/modules', { headers: { 'Authorization': `Bearer ${token}` } }),
+        fetch('http://localhost:5003/api/permissions', { headers: { 'Authorization': `Bearer ${token}` } }),
+        fetch('http://localhost:5003/api/permissions/roles', { headers: { 'Authorization': `Bearer ${token}` } }),
+        fetch('http://localhost:5003/api/security/users', { headers: { 'Authorization': `Bearer ${token}` } })
+      ]);
+
+      const apps = appsRes.ok ? await appsRes.json() : [];
+      const mods = modsRes.ok ? await modsRes.json() : [];
+      const ops = opsRes.ok ? await opsRes.json() : [];
+      const roles = rolesRes.ok ? await rolesRes.json() : [];
+      const users = usersRes.ok ? await usersRes.json() : [];
+
+      // Add computed fullOpId to operations
+      const opsWithFullId = (Array.isArray(ops) ? ops : ops.data || []).map(op => ({
+        ...op,
+        fullOpId: `${op.op_apid || ''}${op.op_moid || ''}${op.op_opid || ''}`
+      }));
+
+      setDropdownData({
+        applications: Array.isArray(apps) ? apps : apps.data || [],
+        modules: Array.isArray(mods) ? mods : mods.data || [],
+        operations: opsWithFullId,
+        roles: Array.isArray(roles) ? roles : roles.data || [],
+        users: Array.isArray(users) ? users : users.data || []
+      });
+    } catch (error) {
+      console.error('Error fetching dropdown data:', error);
+    }
+  };
 
   const fetchData = async () => {
     setLoading(true);
@@ -120,13 +341,17 @@ const DynamicAdminPanel = () => {
       
       if (response.ok) {
         const result = await response.json();
-        setData(Array.isArray(result) ? result : result.data || []);
+        const dataArray = Array.isArray(result) ? result : result.data || [];
+        setData(dataArray);
+        setFilteredData(dataArray);
       } else {
         setData([]);
+        setFilteredData([]);
       }
     } catch (error) {
       console.error('Error fetching data:', error);
       setData([]);
+      setFilteredData([]);
     } finally {
       setLoading(false);
     }
@@ -137,7 +362,7 @@ const DynamicAdminPanel = () => {
     setSelectedRecord(null);
     setFormData({});
     setIsEditing(false);
-    setShowDropdown(null);
+    setCurrentPage(1);
   };
 
   const handleRecordSelect = (record) => {
@@ -145,13 +370,26 @@ const DynamicAdminPanel = () => {
     setFormData(record);
     setIsEditing(false);
     
+    // Try different field name patterns for audit fields based on table prefix
+    const prefixes = ['ap_', 'mo_', 'op_', 'fn_', 'us_', 'fp_', 'up_', 'st_', 'tr_', 'co_'];
+    let edtm, eby, mdtm, mby, cdtm, cby;
+    
+    for (const prefix of prefixes) {
+      if (record[`${prefix}edtm`]) edtm = record[`${prefix}edtm`];
+      if (record[`${prefix}eby`]) eby = record[`${prefix}eby`];
+      if (record[`${prefix}mdtm`]) mdtm = record[`${prefix}mdtm`];
+      if (record[`${prefix}mby`]) mby = record[`${prefix}mby`];
+      if (record[`${prefix}cdtm`]) cdtm = record[`${prefix}cdtm`];
+      if (record[`${prefix}cby`]) cby = record[`${prefix}cby`];
+    }
+    
     setAuditData({
-      enteredOn: record.edtm ? new Date(record.edtm).toLocaleString() : '',
-      enteredBy: record.eby || '',
-      modifiedOn: record.mdtm ? new Date(record.mdtm).toLocaleString() : '',
-      modifiedBy: record.mby || '',
-      closedOn: '',
-      closedBy: ''
+      enteredOn: edtm ? new Date(edtm).toLocaleString() : '',
+      enteredBy: eby || '',
+      modifiedOn: mdtm ? new Date(mdtm).toLocaleString() : '',
+      modifiedBy: mby || '',
+      closedOn: cdtm ? new Date(cdtm).toLocaleString() : '',
+      closedBy: cby || ''
     });
   };
 
@@ -163,11 +401,36 @@ const DynamicAdminPanel = () => {
     }));
   };
 
+  const handleFilterChange = (e) => {
+    const { name, value } = e.target;
+    setFilters(prev => ({
+      ...prev,
+      [name]: value
+    }));
+  };
+
+  const handleClearFilters = () => {
+    setFilters({ 
+      ap_apid: '', 
+      mo_apid: '', 
+      shortName: '', 
+      active: '', 
+      fp_allow: '',
+      up_allow: ''
+    });
+  };
+
   const handleNew = () => {
     setSelectedRecord(null);
     const newData = {};
     modules[activeModule].fields.forEach(field => {
-      newData[field.name] = field.type === 'checkbox' ? 0 : '';
+      if (field.defaultValue !== undefined) {
+        newData[field.name] = field.defaultValue;
+      } else if (field.type === 'checkbox') {
+        newData[field.name] = 0;
+      } else {
+        newData[field.name] = '';
+      }
     });
     setFormData(newData);
     setIsEditing(true);
@@ -176,7 +439,7 @@ const DynamicAdminPanel = () => {
       enteredOn: '',
       enteredBy: user?.us_usid || 'ADMIN',
       modifiedOn: '',
-      modifiedBy: user?.us_usid || 'ADMIN',
+      modifiedBy: '',
       closedOn: '',
       closedBy: ''
     });
@@ -252,63 +515,108 @@ const DynamicAdminPanel = () => {
   };
 
   const handleNavigation = (direction) => {
-    if (data.length === 0) return;
+    const paginatedData = getPaginatedData();
+    if (paginatedData.length === 0) return;
     
     let newIndex = 0;
     if (selectedRecord) {
-      const currentIndex = data.findIndex(item => 
+      const currentIndex = paginatedData.findIndex(item => 
         item[modules[activeModule].columns[0]] === selectedRecord[modules[activeModule].columns[0]]
       );
       
       switch(direction) {
         case 'first': newIndex = 0; break;
         case 'prev': newIndex = currentIndex > 0 ? currentIndex - 1 : 0; break;
-        case 'next': newIndex = currentIndex < data.length - 1 ? currentIndex + 1 : data.length - 1; break;
-        case 'last': newIndex = data.length - 1; break;
+        case 'next': newIndex = currentIndex < paginatedData.length - 1 ? currentIndex + 1 : paginatedData.length - 1; break;
+        case 'last': newIndex = paginatedData.length - 1; break;
         default: break;
       }
     }
     
-    handleRecordSelect(data[newIndex]);
+    handleRecordSelect(paginatedData[newIndex]);
   };
 
   const toggleNav = (section) => {
     setExpandedNav(prev => ({ ...prev, [section]: !prev[section] }));
   };
 
+  // Pagination
+  const getPaginatedData = () => {
+    const startIndex = (currentPage - 1) * recordsPerPage;
+    const endIndex = startIndex + recordsPerPage;
+    return filteredData.slice(startIndex, endIndex);
+  };
+
+  const totalPages = Math.ceil(filteredData.length / recordsPerPage);
+  const paginatedData = getPaginatedData();
+  
+  // Check if navigation buttons should be disabled
+  const isFirstRecord = selectedRecord && paginatedData.length > 0 && 
+    paginatedData[0][modules[activeModule].columns[0]] === selectedRecord[modules[activeModule].columns[0]];
+  const isLastRecord = selectedRecord && paginatedData.length > 0 && 
+    paginatedData[paginatedData.length - 1][modules[activeModule].columns[0]] === selectedRecord[modules[activeModule].columns[0]];
+
   const currentModule = modules[activeModule];
 
   return (
     <div className="erp-admin-container">
-      {/* Top Menu Bar */}
+      {/* Top Menu Bar - Static */}
       <div className="erp-menu-bar">
         <div className="erp-menu-item" onClick={() => navigate('/dashboard')}>← Start</div>
-        <div className="erp-menu-item">Application</div>
-        <div className="erp-menu-item">Module</div>
-        <div className="erp-menu-item">Operation</div>
-        <div className="erp-menu-item">Role List</div>
-        <div className="erp-menu-item">User List</div>
-        <div className="erp-menu-item">Role Permission</div>
-        <div className="erp-menu-item">User Permission</div>
+        <div className="erp-menu-item" onClick={() => handleModuleChange('applications')}>Application</div>
+        <div className="erp-menu-item" onClick={() => handleModuleChange('modules')}>Module</div>
+        <div className="erp-menu-item" onClick={() => handleModuleChange('operations')}>Operation</div>
+        <div className="erp-menu-item" onClick={() => handleModuleChange('roles')}>Role List</div>
+        <div className="erp-menu-item" onClick={() => handleModuleChange('users')}>User List</div>
+        <div className="erp-menu-item" onClick={() => handleModuleChange('rolePermissions')}>Role Permission</div>
+        <div className="erp-menu-item" onClick={() => handleModuleChange('userPermissions')}>User Permission</div>
         <div className="erp-user-info">ADMINISTRATOR ⚙</div>
       </div>
 
-      {/* Toolbar */}
+      {/* Toolbar - Static */}
       <div className="erp-toolbar">
         <button className="erp-icon-button" onClick={() => navigate('/dashboard')} title="Home">🏠</button>
-        <button className="erp-icon-button" onClick={() => handleNavigation('first')} title="First">|◀</button>
-        <button className="erp-icon-button" onClick={() => handleNavigation('prev')} title="Previous">◀</button>
-        <button className="erp-icon-button" onClick={() => handleNavigation('next')} title="Next">▶</button>
-        <button className="erp-icon-button" onClick={() => handleNavigation('last')} title="Last">▶|</button>
-        <button className="erp-icon-button" onClick={handleNew} title="New">📄</button>
-        <button className="erp-icon-button" onClick={handleEdit} title="Edit">✏️</button>
-        <button className="erp-icon-button" onClick={handleDelete} title="Delete">🗑️</button>
+        <button 
+          className="erp-icon-button" 
+          onClick={() => handleNavigation('first')} 
+          disabled={!selectedRecord || isFirstRecord}
+          title="First"
+        >
+          |◀
+        </button>
+        <button 
+          className="erp-icon-button" 
+          onClick={() => handleNavigation('prev')} 
+          disabled={!selectedRecord || isFirstRecord}
+          title="Previous"
+        >
+          ◀
+        </button>
+        <button 
+          className="erp-icon-button" 
+          onClick={() => handleNavigation('next')} 
+          disabled={!selectedRecord || isLastRecord}
+          title="Next"
+        >
+          ▶
+        </button>
+        <button 
+          className="erp-icon-button" 
+          onClick={() => handleNavigation('last')} 
+          disabled={!selectedRecord || isLastRecord}
+          title="Last"
+        >
+          ▶|
+        </button>
+        <button className="erp-button" onClick={handleNew} title="New">New</button>
+        <button className="erp-button" onClick={handleEdit} title="Edit">Edit</button>
+        <button className="erp-button" onClick={handleDelete} title="Delete">Delete</button>
         <div className="erp-tool-separator"></div>
         <button className="erp-button" onClick={handleSave} disabled={!isEditing}>Save</button>
         <button className="erp-button" onClick={fetchData}>Refresh</button>
       </div>
 
-      {/* Main Content Area */}
+      {/* Main Content Area - Scrollable */}
       <div className="erp-main-content">
         {/* Left Sidebar Navigation */}
         <div className="erp-nav-sidebar">
@@ -353,22 +661,46 @@ const DynamicAdminPanel = () => {
             {expandedNav.security && (
               <>
                 <div 
+                  className={`erp-nav-item sub-item ${activeModule === 'applications' ? 'active' : ''}`}
+                  onClick={() => handleModuleChange('applications')}
+                >
+                  Application
+                </div>
+                <div 
+                  className={`erp-nav-item sub-item ${activeModule === 'modules' ? 'active' : ''}`}
+                  onClick={() => handleModuleChange('modules')}
+                >
+                  Module
+                </div>
+                <div 
+                  className={`erp-nav-item sub-item ${activeModule === 'operations' ? 'active' : ''}`}
+                  onClick={() => handleModuleChange('operations')}
+                >
+                  Operation
+                </div>
+                <div 
                   className={`erp-nav-item sub-item ${activeModule === 'roles' ? 'active' : ''}`}
                   onClick={() => handleModuleChange('roles')}
                 >
                   Role List
                 </div>
                 <div 
-                  className={`erp-nav-item sub-item ${activeModule === 'permissions' ? 'active' : ''}`}
-                  onClick={() => handleModuleChange('permissions')}
-                >
-                  Permissions
-                </div>
-                <div 
                   className={`erp-nav-item sub-item ${activeModule === 'users' ? 'active' : ''}`}
                   onClick={() => handleModuleChange('users')}
                 >
                   User List
+                </div>
+                <div 
+                  className={`erp-nav-item sub-item ${activeModule === 'rolePermissions' ? 'active' : ''}`}
+                  onClick={() => handleModuleChange('rolePermissions')}
+                >
+                  Role Permission
+                </div>
+                <div 
+                  className={`erp-nav-item sub-item ${activeModule === 'userPermissions' ? 'active' : ''}`}
+                  onClick={() => handleModuleChange('userPermissions')}
+                >
+                  User Permission
                 </div>
               </>
             )}
@@ -377,47 +709,139 @@ const DynamicAdminPanel = () => {
 
         {/* Center Content */}
         <div className="erp-center-content">
-          {/* Form Panel */}
+          {/* Form Panel - Static */}
           <div className="erp-form-section">
-            {currentModule.fields.map(field => (
-              <div key={field.name} className="erp-form-row">
-                <label className={`erp-form-label ${field.required ? 'required' : ''}`}>
-                  {field.label}
-                </label>
-                {field.type === 'select' ? (
-                  <select
-                    name={field.name}
-                    className="erp-input"
-                    value={formData[field.name] || ''}
-                    onChange={handleInputChange}
-                    disabled={!isEditing}
-                  >
-                    <option value="">Select...</option>
-                    {field.options.map(opt => (
-                      <option key={opt} value={opt}>{opt}</option>
-                    ))}
-                  </select>
-                ) : field.type === 'checkbox' ? (
-                  <input
-                    type="checkbox"
-                    name={field.name}
-                    checked={formData[field.name] === 1}
-                    onChange={handleInputChange}
-                    disabled={!isEditing}
-                  />
-                ) : (
-                  <input
-                    type={field.type}
-                    name={field.name}
-                    className="erp-input"
-                    value={formData[field.name] || ''}
-                    onChange={handleInputChange}
-                    disabled={!isEditing || field.readOnly}
-                    readOnly={field.readOnly}
-                  />
-                )}
-              </div>
-            ))}
+            {(() => {
+              const fields = currentModule.fields;
+              const renderedFields = [];
+              let checkboxGroup = [];
+              
+              fields.forEach((field, index) => {
+                // Handle cascading dropdowns
+                let dropdownOptions = [];
+                if (field.type === 'dropdown' && field.source) {
+                  dropdownOptions = dropdownData[field.source] || [];
+                  // Filter by cascade if needed
+                  if (field.cascadeFrom && formData[field.cascadeFrom]) {
+                    const cascadeValue = formData[field.cascadeFrom];
+                    if (field.source === 'modules') {
+                      dropdownOptions = dropdownOptions.filter(opt => opt.mo_apid === cascadeValue);
+                    }
+                  }
+                }
+
+                // If it's a checkbox, add to group
+                if (field.type === 'checkbox') {
+                  checkboxGroup.push(field);
+                  
+                  // If we have 3 checkboxes or it's the last field, render the group
+                  if (checkboxGroup.length === 3 || index === fields.length - 1) {
+                    renderedFields.push(
+                      <div key={`checkbox-group-${index}`} className="erp-checkbox-group">
+                        {checkboxGroup.map(cbField => (
+                          <div key={cbField.name} className="erp-checkbox-item">
+                            <input
+                              type="checkbox"
+                              id={cbField.name}
+                              name={cbField.name}
+                              checked={formData[cbField.name] === 1}
+                              onChange={handleInputChange}
+                              disabled={!isEditing}
+                            />
+                            <label htmlFor={cbField.name}>{cbField.label}</label>
+                          </div>
+                        ))}
+                      </div>
+                    );
+                    checkboxGroup = [];
+                  }
+                } else {
+                  // Render any pending checkbox group first
+                  if (checkboxGroup.length > 0) {
+                    renderedFields.push(
+                      <div key={`checkbox-group-${index}`} className="erp-checkbox-group">
+                        {checkboxGroup.map(cbField => (
+                          <div key={cbField.name} className="erp-checkbox-item">
+                            <input
+                              type="checkbox"
+                              id={cbField.name}
+                              name={cbField.name}
+                              checked={formData[cbField.name] === 1}
+                              onChange={handleInputChange}
+                              disabled={!isEditing}
+                            />
+                            <label htmlFor={cbField.name}>{cbField.label}</label>
+                          </div>
+                        ))}
+                      </div>
+                    );
+                    checkboxGroup = [];
+                  }
+                  
+                  // Render non-checkbox field
+                  renderedFields.push(
+                    <div key={field.name} className="erp-form-row">
+                      <label className={`erp-form-label ${field.required ? 'required' : ''}`}>
+                        {field.label}
+                      </label>
+                      {field.type === 'dropdown' ? (
+                        <select
+                          name={field.name}
+                          className="erp-input"
+                          value={formData[field.name] || ''}
+                          onChange={handleInputChange}
+                          disabled={!isEditing}
+                        >
+                          <option value="">Select...</option>
+                          {dropdownOptions.map(opt => (
+                            <option key={opt[field.valueField]} value={opt[field.valueField]}>
+                              {opt[field.valueField]} - {opt[field.displayField]}
+                            </option>
+                          ))}
+                        </select>
+                      ) : field.type === 'select' ? (
+                        <select
+                          name={field.name}
+                          className="erp-input"
+                          value={formData[field.name] || ''}
+                          onChange={handleInputChange}
+                          disabled={!isEditing}
+                        >
+                          <option value="">Select...</option>
+                          {field.options.map(opt => (
+                            <option key={opt} value={opt}>{opt}</option>
+                          ))}
+                        </select>
+                      ) : field.type === 'textarea' ? (
+                        <textarea
+                          name={field.name}
+                          className="erp-input"
+                          value={formData[field.name] || ''}
+                          onChange={handleInputChange}
+                          disabled={!isEditing || (field.readOnly && selectedRecord)}
+                          readOnly={field.readOnly && selectedRecord}
+                          rows={3}
+                        />
+                      ) : (
+                        <input
+                          type={field.type}
+                          name={field.name}
+                          className="erp-input"
+                          value={formData[field.name] || ''}
+                          onChange={handleInputChange}
+                          disabled={!isEditing || (field.readOnly && selectedRecord)}
+                          readOnly={field.readOnly && selectedRecord}
+                          maxLength={field.maxLength}
+                          step={field.step}
+                        />
+                      )}
+                    </div>
+                  );
+                }
+              });
+              
+              return renderedFields;
+            })()}
 
             {/* Audit Section */}
             <div className="erp-audit-section">
@@ -442,48 +866,61 @@ const DynamicAdminPanel = () => {
             </div>
           </div>
 
-          {/* Data Grid */}
+          {/* Data Grid - Scrollable */}
           <div className="erp-grid-section">
             <div className="erp-panel-header">{currentModule.name}</div>
             {loading ? (
               <div style={{ padding: '20px', textAlign: 'center' }}>Loading...</div>
             ) : (
-              <div className="erp-grid-container">
+              <div className="erp-grid-container" style={{ maxHeight: 'calc(100vh - 450px)', overflowY: 'auto' }}>
                 <table className="erp-table">
                   <thead>
                     <tr>
                       <th style={{ width: '30px' }}></th>
                       {currentModule.columnLabels.map((label, idx) => (
-                        <th key={idx}>{label}</th>
+                        <th key={idx} style={{ width: currentModule.columnWidths?.[idx] }}>{label}</th>
                       ))}
-                      <th>Action</th>
-                      <th>Entered On</th>
-                      <th>Modified On</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {data.length === 0 ? (
-                      <tr><td colSpan={currentModule.columns.length + 4} style={{ textAlign: 'center' }}>No records found</td></tr>
+                    {paginatedData.length === 0 ? (
+                      <tr><td colSpan={currentModule.columns.length + 1} style={{ textAlign: 'center' }}>No records found</td></tr>
                     ) : (
-                      data.map((record, idx) => (
-                        <tr 
-                          key={idx}
-                          className={selectedRecord && selectedRecord[currentModule.columns[0]] === record[currentModule.columns[0]] ? 'selected' : ''}
-                          onClick={() => handleRecordSelect(record)}
-                        >
-                          <td><input type="checkbox" checked={selectedRecord && selectedRecord[currentModule.columns[0]] === record[currentModule.columns[0]]} onChange={() => {}} /></td>
-                          {currentModule.columns.map((col, colIdx) => (
-                            <td key={colIdx}>
-                              {col.includes('active') || col.includes('ispublic') 
-                                ? (record[col] === 1 ? '☑' : '☐')
-                                : record[col] || '-'}
-                            </td>
-                          ))}
-                          <td>📝</td>
-                          <td>{record.edtm ? new Date(record.edtm).toLocaleDateString() : '-'}</td>
-                          <td>{record.mdtm ? new Date(record.mdtm).toLocaleDateString() : '-'}</td>
-                        </tr>
-                      ))
+                      paginatedData.map((record, idx) => {
+                        const isSelected = selectedRecord && selectedRecord[currentModule.columns[0]] === record[currentModule.columns[0]];
+                        return (
+                          <tr 
+                            key={idx}
+                            className={isSelected ? 'selected' : ''}
+                            onClick={() => handleRecordSelect(record)}
+                          >
+                            <td><input type="checkbox" checked={isSelected} onChange={() => {}} /></td>
+                            {currentModule.columns.map((col, colIdx) => {
+                              let value = record[col];
+                              
+                              // Handle checkbox/boolean columns
+                              if (col.includes('active') || col.includes('admin') || col.includes('security') || 
+                                  col.includes('allow') || col.includes('ready') || col.includes('secure')) {
+                                value = value === 1 ? '☑' : '☐';
+                                // Color coding for allow/deny
+                                if (col.includes('allow')) {
+                                  return <td key={colIdx} style={{ color: value === '☑' ? 'green' : 'red', fontWeight: 'bold' }}>{value === '☑' ? 'Allow' : 'Deny'}</td>;
+                                }
+                              }
+                              // Handle date columns
+                              else if (col.includes('edtm') || col.includes('mdtm') || col.includes('cdtm')) {
+                                value = value ? new Date(value).toLocaleDateString() : '-';
+                              }
+                              // Default
+                              else if (!value && value !== 0) {
+                                value = '-';
+                              }
+                              
+                              return <td key={colIdx}>{value}</td>;
+                            })}
+                          </tr>
+                        );
+                      })
                     )}
                   </tbody>
                 </table>
@@ -495,30 +932,145 @@ const DynamicAdminPanel = () => {
         {/* Right Filter Panel */}
         <div className="erp-filter-panel">
           <div className="erp-filter-header">Filter Criteria</div>
-          <div className="erp-form-row">
-            <label className="erp-form-label">Module</label>
-            <input type="text" className="erp-input" placeholder="All" />
-          </div>
-          <div className="erp-form-row">
-            <label className="erp-form-label">Short Name</label>
-            <input type="text" className="erp-input" />
-          </div>
-          <div className="erp-form-row">
-            <label className="erp-form-label">Description</label>
-            <input type="text" className="erp-input" />
-          </div>
+          
+          {/* Dynamic filters based on module */}
+          {currentModule.filterFields?.includes('ap_apid') && (
+            <div className="erp-form-row">
+              <label className="erp-form-label">Application ID</label>
+              <input 
+                type="text" 
+                name="ap_apid"
+                className="erp-input"
+                value={filters.ap_apid || ''}
+                onChange={handleFilterChange}
+                placeholder="Search..."
+              />
+            </div>
+          )}
+          
+          {currentModule.filterFields?.includes('mo_apid') && (
+            <div className="erp-form-row">
+              <label className="erp-form-label">Application</label>
+              <select 
+                name="mo_apid"
+                className="erp-input"
+                value={filters.mo_apid || ''}
+                onChange={handleFilterChange}
+              >
+                <option value="">All</option>
+                {dropdownData.applications.map(app => (
+                  <option key={app.ap_apid} value={app.ap_apid}>{app.ap_apid} - {app.ap_apshort}</option>
+                ))}
+              </select>
+            </div>
+          )}
+          
+          {(currentModule.filterFields?.includes('shortName') || 
+            currentModule.filterFields?.includes('ap_apshort') ||
+            currentModule.filterFields?.includes('mo_moshort') ||
+            currentModule.filterFields?.includes('op_opshort') ||
+            currentModule.filterFields?.includes('fn_fnshort')) && (
+            <div className="erp-form-row">
+              <label className="erp-form-label">Short Name</label>
+              <input 
+                type="text" 
+                name="shortName"
+                className="erp-input"
+                value={filters.shortName || ''}
+                onChange={handleFilterChange}
+                placeholder="Type to search..."
+              />
+            </div>
+          )}
+          
+          {currentModule.filterFields?.includes('active') && (
+            <div className="erp-form-row">
+              <label className="erp-form-label">Active Status</label>
+              <select 
+                name="active"
+                className="erp-input"
+                value={filters.active || ''}
+                onChange={handleFilterChange}
+              >
+                <option value="">All</option>
+                <option value="1">Active</option>
+                <option value="0">Inactive</option>
+              </select>
+            </div>
+          )}
+          
+          {currentModule.filterFields?.includes('fp_allow') && (
+            <div className="erp-form-row">
+              <label className="erp-form-label">Permission Type</label>
+              <select 
+                name="fp_allow"
+                className="erp-input"
+                value={filters.fp_allow || ''}
+                onChange={handleFilterChange}
+              >
+                <option value="">All</option>
+                <option value="1">Allow</option>
+                <option value="0">Deny</option>
+              </select>
+            </div>
+          )}
+          
           <div style={{ marginTop: '12px' }}>
-            <button className="erp-button erp-button-primary" style={{ width: '100%', marginBottom: '4px' }}>Search</button>
-            <button className="erp-button" style={{ width: '100%' }}>Clear</button>
+            <button 
+              className="erp-button" 
+              style={{ width: '100%', marginBottom: '4px' }}
+              onClick={handleClearFilters}
+            >
+              Clear Filters
+            </button>
           </div>
         </div>
       </div>
 
-      {/* Status Bar */}
+      {/* Status Bar - Static */}
       <div className="erp-status-bar">
         <div className="erp-status-item">{isEditing ? 'Editing' : 'Ready'}</div>
-        <div className="erp-status-item">Records: {data.length}</div>
-        <div className="erp-status-item" style={{ marginLeft: 'auto' }}>[Pg=1]</div>
+        <div className="erp-status-item">
+          Records: {filteredData.length !== data.length ? `${filteredData.length}/${data.length}` : filteredData.length}
+        </div>
+        <div className="erp-status-item">
+          Showing: {paginatedData.length > 0 ? `${((currentPage - 1) * recordsPerPage) + 1}-${Math.min(currentPage * recordsPerPage, filteredData.length)}` : '0'} of {filteredData.length}
+        </div>
+        <div className="erp-status-item" style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '4px' }}>
+          <button 
+            className="erp-icon-button" 
+            onClick={() => setCurrentPage(1)}
+            disabled={currentPage === 1}
+            title="First Page"
+          >
+            |◀
+          </button>
+          <button 
+            className="erp-icon-button" 
+            onClick={() => setCurrentPage(currentPage - 1)}
+            disabled={currentPage === 1}
+            title="Previous Page"
+          >
+            ◀
+          </button>
+          <span style={{ margin: '0 4px', fontSize: '12px' }}>Page {currentPage}/{totalPages || 1}</span>
+          <button 
+            className="erp-icon-button" 
+            onClick={() => setCurrentPage(currentPage + 1)}
+            disabled={currentPage === totalPages || totalPages === 0}
+            title="Next Page"
+          >
+            ▶
+          </button>
+          <button 
+            className="erp-icon-button" 
+            onClick={() => setCurrentPage(totalPages)}
+            disabled={currentPage === totalPages || totalPages === 0}
+            title="Last Page"
+          >
+            ▶|
+          </button>
+        </div>
       </div>
     </div>
   );

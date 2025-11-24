@@ -1,111 +1,109 @@
 const { DataTypes } = require('sequelize');
-const { sequelize, BaseModel } = require('./baseModel');
+const { sequelizeTVL } = require('../../config/db');
 
-const Permission = sequelize.define('opXoperation', {
-  op_apid: {
-    type: DataTypes.STRING(4),
+const UserTVL = sequelizeTVL.define('usXuser', {
+  us_usid: {
+    type: DataTypes.STRING(15),
     primaryKey: true,
     allowNull: false,
     defaultValue: '',
-    comment: 'Application ID'
+    comment: 'User ID'
   },
-  op_moid: {
-    type: DataTypes.STRING(4),
-    primaryKey: true,
+  us_email: {
+    type: DataTypes.STRING(120),
+    allowNull: false,
+    unique: true,
+    defaultValue: '',
+    comment: 'Email'
+  },
+  us_usname: {
+    type: DataTypes.STRING(100),
     allowNull: false,
     defaultValue: '',
-    comment: 'Module ID'
+    comment: 'User Name'
   },
-  op_opid: {
-    type: DataTypes.STRING(4),
-    primaryKey: true,
-    allowNull: false,
+  us_title: {
+    type: DataTypes.STRING(100),
+    allowNull: true,
     defaultValue: '',
-    comment: 'Operation ID'
+    comment: 'Job Title'
   },
-  op_opshort: {
+  us_phone: {
     type: DataTypes.STRING(30),
     allowNull: true,
     defaultValue: '',
-    comment: 'Short Description'
+    comment: 'Phone'
   },
-  op_opdesc: {
-    type: DataTypes.STRING(60),
+  us_admin: {
+    type: DataTypes.TINYINT,
+    allowNull: false,
+    defaultValue: 0,
+    comment: 'Is Application Administrator?'
+  },
+  us_security: {
+    type: DataTypes.TINYINT,
+    allowNull: false,
+    defaultValue: 0,
+    comment: 'Is Security Administrator?'
+  },
+  us_limit: {
+    type: DataTypes.DECIMAL(18, 2),
     allowNull: true,
-    defaultValue: '',
-    comment: 'Description'
+    comment: 'Authorization Limit'
   },
-  op_appop: {
-    type: DataTypes.TINYINT,
-    allowNull: false,
-    defaultValue: 0,
-    comment: 'Application Operation?'
-  },
-  op_avail: {
-    type: DataTypes.TINYINT,
-    allowNull: false,
-    defaultValue: 0,
-    comment: 'Available?'
-  },
-  op_ready: {
-    type: DataTypes.TINYINT,
-    allowNull: false,
-    defaultValue: 0,
-    comment: 'Ready?'
-  },
-  op_rmrks: {
+  us_rmrks: {
     type: DataTypes.TEXT('long'),
     allowNull: true,
     comment: 'Remarks'
   },
-  op_active: {
+  us_active: {
     type: DataTypes.TINYINT,
     allowNull: false,
     defaultValue: 0,
     comment: 'Active?'
   },
-  op_edtm: {
+  us_edtm: {
     type: DataTypes.DATE,
     allowNull: true,
     comment: 'Entered On'
   },
-  op_eby: {
+  us_eby: {
     type: DataTypes.STRING(30),
     allowNull: true,
     defaultValue: '',
     comment: 'Entered By'
   },
-  op_mdtm: {
+  us_mdtm: {
     type: DataTypes.DATE,
     allowNull: true,
     comment: 'Modified On'
   },
-  op_mby: {
+  us_mby: {
     type: DataTypes.STRING(30),
     allowNull: true,
     defaultValue: '',
     comment: 'Modified By'
   },
-  op_cdtm: {
+  us_cdtm: {
     type: DataTypes.DATE,
     allowNull: true,
     comment: 'Closed On'
   },
-  op_cby: {
+  us_cby: {
     type: DataTypes.STRING(30),
     allowNull: true,
     defaultValue: '',
     comment: 'Closed By'
-  },
-  op_secure: {
-    type: DataTypes.TINYINT,
-    allowNull: false,
-    defaultValue: 1,
-    comment: 'Secure?'
   }
 }, {
-  tableName: 'opXoperation',
-  timestamps: false
+  tableName: 'usXuser',
+  timestamps: false,
+  indexes: [
+    {
+      unique: true,
+      fields: ['us_email']
+    }
+  ]
 });
 
-module.exports = Permission;
+module.exports = UserTVL;

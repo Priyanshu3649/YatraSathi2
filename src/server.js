@@ -50,10 +50,12 @@ const stationRoutes = require('./routes/stationRoutes');
 const trainRoutes = require('./routes/trainRoutes');
 const companyRoutes = require('./routes/companyRoutes');
 const userRoutes = require('./routes/userRoutes');
+const securityRoutes = require('./routes/securityRoutes');
 
 // Use routes
 console.log('Registering auth routes');
 app.use('/api/auth', authRoutes);
+app.use('/api/security', securityRoutes);
 console.log('Auth routes registered');
 app.use('/api/travel-plans', travelPlanRoutes);
 app.use('/api/reports', reportRoutes);

@@ -1,111 +1,109 @@
 const { DataTypes } = require('sequelize');
-const { sequelize, BaseModel } = require('./baseModel');
+const { sequelizeTVL } = require('../../config/db');
 
-const Permission = sequelize.define('opXoperation', {
-  op_apid: {
+const ModuleTVL = sequelizeTVL.define('moXmodule', {
+  mo_apid: {
     type: DataTypes.STRING(4),
     primaryKey: true,
     allowNull: false,
     defaultValue: '',
     comment: 'Application ID'
   },
-  op_moid: {
+  mo_moid: {
     type: DataTypes.STRING(4),
     primaryKey: true,
     allowNull: false,
     defaultValue: '',
     comment: 'Module ID'
   },
-  op_opid: {
-    type: DataTypes.STRING(4),
-    primaryKey: true,
+  mo_moshort: {
+    type: DataTypes.STRING(30),
     allowNull: false,
     defaultValue: '',
-    comment: 'Operation ID'
+    comment: 'Short Name'
   },
-  op_opshort: {
-    type: DataTypes.STRING(30),
-    allowNull: true,
-    defaultValue: '',
-    comment: 'Short Description'
-  },
-  op_opdesc: {
+  mo_modesc: {
     type: DataTypes.STRING(60),
     allowNull: true,
     defaultValue: '',
     comment: 'Description'
   },
-  op_appop: {
+  mo_group: {
+    type: DataTypes.STRING(60),
+    allowNull: true,
+    defaultValue: '',
+    comment: 'Group'
+  },
+  mo_grsrl: {
+    type: DataTypes.INTEGER,
+    allowNull: true,
+    comment: 'Group Serial'
+  },
+  mo_mhint: {
+    type: DataTypes.STRING(320),
+    allowNull: true,
+    defaultValue: '',
+    comment: 'Module Hint'
+  },
+  mo_isform: {
     type: DataTypes.TINYINT,
     allowNull: false,
     defaultValue: 0,
-    comment: 'Application Operation?'
+    comment: 'Is Form?'
   },
-  op_avail: {
-    type: DataTypes.TINYINT,
-    allowNull: false,
-    defaultValue: 0,
-    comment: 'Available?'
-  },
-  op_ready: {
+  mo_ready: {
     type: DataTypes.TINYINT,
     allowNull: false,
     defaultValue: 0,
     comment: 'Ready?'
   },
-  op_rmrks: {
+  mo_rmrks: {
     type: DataTypes.TEXT('long'),
     allowNull: true,
     comment: 'Remarks'
   },
-  op_active: {
+  mo_active: {
     type: DataTypes.TINYINT,
     allowNull: false,
     defaultValue: 0,
     comment: 'Active?'
   },
-  op_edtm: {
+  mo_edtm: {
     type: DataTypes.DATE,
     allowNull: true,
     comment: 'Entered On'
   },
-  op_eby: {
+  mo_eby: {
     type: DataTypes.STRING(30),
     allowNull: true,
     defaultValue: '',
     comment: 'Entered By'
   },
-  op_mdtm: {
+  mo_mdtm: {
     type: DataTypes.DATE,
     allowNull: true,
     comment: 'Modified On'
   },
-  op_mby: {
+  mo_mby: {
     type: DataTypes.STRING(30),
     allowNull: true,
     defaultValue: '',
     comment: 'Modified By'
   },
-  op_cdtm: {
+  mo_cdtm: {
     type: DataTypes.DATE,
     allowNull: true,
     comment: 'Closed On'
   },
-  op_cby: {
+  mo_cby: {
     type: DataTypes.STRING(30),
     allowNull: true,
     defaultValue: '',
     comment: 'Closed By'
-  },
-  op_secure: {
-    type: DataTypes.TINYINT,
-    allowNull: false,
-    defaultValue: 1,
-    comment: 'Secure?'
   }
 }, {
-  tableName: 'opXoperation',
+  tableName: 'moXmodule',
   timestamps: false
 });
 
-module.exports = Permission;
+module.exports = ModuleTVL;

@@ -60,13 +60,13 @@ const RolePermission = sequelize.define('rpRolePermission', {
 // Define associations
 RolePermission.belongsTo(Role, {
   foreignKey: 'rp_roid',
-  targetKey: 'ur_roid'
+  targetKey: 'fn_fnid'
 });
 
 RolePermission.belongsTo(Permission, {
   foreignKey: 'rp_peid',
-  targetKey: 'pr_peid',
-  as: 'Permission'  // Add alias for the association
+  targetKey: 'op_opid',
+  as: 'Permission'
 });
 
 module.exports = RolePermission;

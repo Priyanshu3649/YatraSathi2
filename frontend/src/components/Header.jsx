@@ -37,7 +37,15 @@ const Header = () => {
                 <li><Link to="/travel-plans" className={isActive('/travel-plans') ? 'active' : ''}>Travel Plans</Link></li>
                 <li><Link to="/payments" className={isActive('/payments') ? 'active' : ''}>Payments</Link></li>
                 {(user.us_usertype === 'admin' || user.us_usertype === 'employee') && (
-                  <li><Link to="/reports" className={isActive('/reports') ? 'active' : ''}>Reports</Link></li>
+                  <li className="dropdown">
+                    <span className={isActive('/reports') ? 'active' : ''}>Reports ▼</span>
+                    <ul className="dropdown-menu">
+                      <li><Link to="/reports/booking">Booking Reports</Link></li>
+                      <li><Link to="/reports/customer">Customer Analytics</Link></li>
+                      <li><Link to="/reports/employee">Employee Performance</Link></li>
+                      <li><Link to="/reports/revenue">Revenue Reports</Link></li>
+                    </ul>
+                  </li>
                 )}
                 {user.us_usertype === 'admin' && (
                   <>
@@ -45,7 +53,6 @@ const Header = () => {
                     <li><Link to="/admin-dashboard" className={isActive('/admin-dashboard') ? 'active' : ''}>Admin Panel</Link></li>
                   </>
                 )}
-                <li><Link to="/sample-layout" className={isActive('/sample-layout') ? 'active' : ''}>Sample Layout</Link></li>
                 <li><Link to="/profile" className={isActive('/profile') ? 'active' : ''}>Profile</Link></li>
                 <li>
                   <button onClick={handleLogout} className="btn btn-primary" style={{ marginLeft: '10px' }}>

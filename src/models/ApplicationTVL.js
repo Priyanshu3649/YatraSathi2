@@ -1,80 +1,73 @@
 const { DataTypes } = require('sequelize');
-const { sequelize, BaseModel } = require('./baseModel');
+const { sequelizeTVL } = require('../../config/db');
 
-const Role = sequelize.define('fnXfunction', {
-  fn_fnid: {
-    type: DataTypes.STRING(6),
+const ApplicationTVL = sequelizeTVL.define('apXapplication', {
+  ap_apid: {
+    type: DataTypes.STRING(4),
     primaryKey: true,
     allowNull: false,
     defaultValue: '',
-    comment: 'Function Id.'
+    comment: 'Application ID'
   },
-  fn_fnshort: {
+  ap_apshort: {
     type: DataTypes.STRING(30),
-    allowNull: true,
+    allowNull: false,
     defaultValue: '',
-    unique: true,
-    comment: 'Short Description'
+    comment: 'Short Name'
   },
-  fn_fndesc: {
+  ap_apdesc: {
     type: DataTypes.STRING(60),
     allowNull: true,
     defaultValue: '',
     comment: 'Description'
   },
-  fn_rmrks: {
+  ap_rmrks: {
     type: DataTypes.TEXT('long'),
     allowNull: true,
     comment: 'Remarks'
   },
-  fn_active: {
+  ap_active: {
     type: DataTypes.TINYINT,
     allowNull: false,
     defaultValue: 0,
-    comment: 'Active ?'
+    comment: 'Active?'
   },
-  fn_edtm: {
+  ap_edtm: {
     type: DataTypes.DATE,
     allowNull: true,
     comment: 'Entered On'
   },
-  fn_eby: {
+  ap_eby: {
     type: DataTypes.STRING(30),
     allowNull: true,
     defaultValue: '',
     comment: 'Entered By'
   },
-  fn_mdtm: {
+  ap_mdtm: {
     type: DataTypes.DATE,
     allowNull: true,
     comment: 'Modified On'
   },
-  fn_mby: {
+  ap_mby: {
     type: DataTypes.STRING(30),
     allowNull: true,
     defaultValue: '',
     comment: 'Modified By'
   },
-  fn_cdtm: {
+  ap_cdtm: {
     type: DataTypes.DATE,
     allowNull: true,
     comment: 'Closed On'
   },
-  fn_cby: {
+  ap_cby: {
     type: DataTypes.STRING(30),
     allowNull: true,
     defaultValue: '',
     comment: 'Closed By'
   }
 }, {
-  tableName: 'fnXfunction',
-  timestamps: false,
-  indexes: [
-    {
-      unique: true,
-      fields: ['fn_fnshort']
-    }
-  ]
+  tableName: 'apXapplication',
+  timestamps: false
 });
 
-module.exports = Role;
+module.exports = ApplicationTVL;

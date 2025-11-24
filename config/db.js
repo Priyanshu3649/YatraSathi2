@@ -23,9 +23,10 @@ if (!process.env.DB_NAME || !process.env.DB_HOST || !process.env.DB_USER) {
   process.exit(1);
 }
 
-// Create MySQL Sequelize instance
-console.log('🔧 Configuring MySQL database connection...');
-console.log('  Database:', process.env.DB_NAME);
+// Create MySQL Sequelize instance for main database (yatrasathi)
+console.log('🔧 Configuring MySQL database connections...');
+console.log('  Main Database:', process.env.DB_NAME);
+console.log('  TVL Database:', process.env.DB_NAME_TVL || 'TVL_001');
 console.log('  Host:', process.env.DB_HOST);
 console.log('  User:', process.env.DB_USER);
 console.log('  Password:', process.env.DB_PASSWORD ? '✅ Configured' : '⚠️  Not set');
@@ -37,20 +38,38 @@ const sequelize = new Sequelize(
   {
     host: process.env.DB_HOST,
     dialect: 'mysql',
-    logging: false, // Set to console.log to see SQL queries
+    logging: false,
     pool: {
-      max: 10,        // Maximum number of connections
-      min: 0,         // Minimum number of connections
-      acquire: 30000, // Maximum time (ms) to get connection
-      idle: 10000     // Maximum time (ms) connection can be idle
+      max: 10,
+      min: 0,
+      acquire: 30000,
+      idle: 10000
     },
     define: {
       timestamps: false,
       freezeTableName: true
+    }
+  }
+);
+
+// Create separate connection for TVL_001 database (for roles and permissions)
+const sequelizeTVL = new Sequelize(
+  process.env.DB_NAME_TVL || 'TVL_001',
+  process.env.DB_USER,
+  process.env.DB_PASSWORD || '',
+  {
+    host: process.env.DB_HOST,
+    dialect: 'mysql',
+    logging: false,
+    pool: {
+      max: 5,
+      min: 0,
+      acquire: 30000,
+      idle: 10000
     },
-    dialectOptions: {
-      charset: 'utf8mb4',
-      collate: 'utf8mb4_unicode_ci'
+    define: {
+      timestamps: false,
+      freezeTableName: true
     }
   }
 );
@@ -58,10 +77,14 @@ const sequelize = new Sequelize(
 // Test the connection and sync models
 const connectDB = async () => {
   try {
-    console.log('🔌 Connecting to MySQL database...');
+    console.log('🔌 Connecting to MySQL databases...');
     await sequelize.authenticate();
-    console.log('✅ MySQL database connected successfully!');
+    console.log('✅ Main database connected successfully!');
     console.log(`   Connected to: ${process.env.DB_NAME}@${process.env.DB_HOST}`);
+    
+    await sequelizeTVL.authenticate();
+    console.log('✅ TVL database connected successfully!');
+    console.log(`   Connected to: ${process.env.DB_NAME_TVL}@${process.env.DB_HOST}`);
     
     // Sync all models without altering existing tables
     console.log('🔄 Synchronizing database models...');
@@ -100,4 +123,4 @@ const connectDB = async () => {
   }
 };
 
-module.exports = { sequelize, connectDB };
+module.exports = { sequelize, sequelizeTVL, connectDB };
