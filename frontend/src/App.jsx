@@ -11,6 +11,7 @@ import './styles/vintage-theme.css';
 import Header from './components/Header';
 import Footer from './components/Footer';
 import DynamicAdminPanel from './components/DynamicAdminPanel';
+import MessageDisplay from './components/MessageDisplay';
 
 // Import pages
 import Home from './pages/Home';
@@ -37,6 +38,7 @@ function App() {
               v7_relativeSplatPath: true 
             }}>
               <div className="App">
+                <MessageDisplay />
                 <Header />
                 <main>
                   <Routes>

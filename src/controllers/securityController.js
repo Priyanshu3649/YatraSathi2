@@ -14,14 +14,14 @@ const User = require('../models/User');
 const getAllApplications = async (req, res) => {
   try {
     const applications = await ApplicationTVL.findAll({
-      where: { ap_active: 1 },
       order: [['ap_apid', 'ASC']],
       raw: true
     });
     res.json(applications);
   } catch (error) {
     console.error('Error fetching applications:', error);
-    res.status(500).json({ message: error.message });
+    const { status, message } = parseDbError(error);
+    res.status(status).json({ message });
   }
 };
 
@@ -43,32 +43,59 @@ const createApplication = async (req, res) => {
     res.status(201).json(application);
   } catch (error) {
     console.error('Error creating application:', error);
-    res.status(500).json({ message: error.message });
+    const { status, message } = parseDbError(error);
+    res.status(status).json({ message });
   }
 };
 
 // Update application
 const updateApplication = async (req, res) => {
   try {
-    const { ap_apshort, ap_apdesc, ap_rmrks } = req.body;
-    
     const application = await ApplicationTVL.findByPk(req.params.id);
     if (!application) {
       return res.status(404).json({ message: 'Application not found' });
     }
     
-    await application.update({
-      ap_apshort: ap_apshort || application.ap_apshort,
-      ap_apdesc: ap_apdesc || application.ap_apdesc,
-      ap_rmrks: ap_rmrks || application.ap_rmrks,
+    console.log('=== UPDATE APPLICATION DEBUG ===');
+    console.log('Request body:', req.body);
+    console.log('Current active status:', application.ap_active);
+    console.log('New active status:', req.body.ap_active);
+    
+    const updateData = {
+      ...req.body,
       ap_mby: req.user?.us_usid || 'SYSTEM',
       ap_mdtm: new Date()
-    });
+    };
+    
+    // Convert active to integer
+    if ('ap_active' in req.body) {
+      updateData.ap_active = parseInt(req.body.ap_active) || 0;
+    }
+    
+    // If active status is being set to 0 (inactive), set closed fields
+    if (updateData.ap_active === 0) {
+      updateData.ap_cby = req.user?.us_usid || 'SYSTEM';
+      updateData.ap_cdtm = new Date();
+      console.log('Setting closed fields:', updateData.ap_cby, updateData.ap_cdtm);
+    } else if (updateData.ap_active === 1) {
+      // If reactivating, clear closed fields
+      updateData.ap_cby = null;
+      updateData.ap_cdtm = null;
+      console.log('Clearing closed fields (reactivating)');
+    }
+    
+    console.log('Update data:', updateData);
+    
+    await application.update(updateData);
+    
+    console.log('Updated application:', application.toJSON());
+    console.log('================================');
     
     res.json(application);
   } catch (error) {
     console.error('Error updating application:', error);
-    res.status(500).json({ message: error.message });
+    const { status, message } = parseDbError(error);
+    res.status(status).json({ message });
   }
 };
 
@@ -84,7 +111,8 @@ const deleteApplication = async (req, res) => {
     res.json({ message: 'Application deleted successfully' });
   } catch (error) {
     console.error('Error deleting application:', error);
-    res.status(500).json({ message: error.message });
+    const { status, message } = parseDbError(error);
+    res.status(status).json({ message });
   }
 };
 
@@ -94,14 +122,14 @@ const deleteApplication = async (req, res) => {
 const getAllModules = async (req, res) => {
   try {
     const modules = await ModuleTVL.findAll({
-      where: { mo_active: 1 },
       order: [['mo_apid', 'ASC'], ['mo_moid', 'ASC']],
       raw: true
     });
     res.json(modules);
   } catch (error) {
     console.error('Error fetching modules:', error);
-    res.status(500).json({ message: error.message });
+    const { status, message } = parseDbError(error);
+    res.status(status).json({ message });
   }
 };
 
@@ -119,7 +147,8 @@ const getModulesByApplication = async (req, res) => {
     res.json(modules);
   } catch (error) {
     console.error('Error fetching modules by application:', error);
-    res.status(500).json({ message: error.message });
+    const { status, message } = parseDbError(error);
+    res.status(status).json({ message });
   }
 };
 
@@ -150,7 +179,74 @@ const createModule = async (req, res) => {
     res.status(201).json(module);
   } catch (error) {
     console.error('Error creating module:', error);
-    res.status(500).json({ message: error.message });
+    const { status, message } = parseDbError(error);
+    res.status(status).json({ message });
+  }
+};
+
+// Update module
+const updateModule = async (req, res) => {
+  try {
+    const { appId, moduleId } = req.params;
+    const module = await ModuleTVL.findOne({
+      where: { mo_apid: appId, mo_moid: moduleId }
+    });
+    
+    if (!module) {
+      return res.status(404).json({ message: 'Module not found' });
+    }
+    
+    const updateData = {
+      ...req.body,
+      mo_isform: req.body.mo_isform ? 1 : 0,
+      mo_ready: req.body.mo_ready ? 1 : 0,
+      mo_mby: req.user?.us_usid || 'SYSTEM',
+      mo_mdtm: new Date()
+    };
+    
+    // Convert active to integer
+    if ('mo_active' in req.body) {
+      updateData.mo_active = parseInt(req.body.mo_active) || 0;
+    }
+    
+    // If active status is being set to 0 (inactive), set closed fields
+    if (updateData.mo_active === 0) {
+      updateData.mo_cby = req.user?.us_usid || 'SYSTEM';
+      updateData.mo_cdtm = new Date();
+    } else if (updateData.mo_active === 1) {
+      // If reactivating, clear closed fields
+      updateData.mo_cby = null;
+      updateData.mo_cdtm = null;
+    }
+    
+    await module.update(updateData);
+    
+    res.json(module);
+  } catch (error) {
+    console.error('Error updating module:', error);
+    const { status, message } = parseDbError(error);
+    res.status(status).json({ message });
+  }
+};
+
+// Delete module
+const deleteModule = async (req, res) => {
+  try {
+    const { appId, moduleId } = req.params;
+    const module = await ModuleTVL.findOne({
+      where: { mo_apid: appId, mo_moid: moduleId }
+    });
+    
+    if (!module) {
+      return res.status(404).json({ message: 'Module not found' });
+    }
+    
+    await module.destroy();
+    res.json({ message: 'Module deleted successfully' });
+  } catch (error) {
+    console.error('Error deleting module:', error);
+    const { status, message } = parseDbError(error);
+    res.status(status).json({ message });
   }
 };
 
@@ -160,14 +256,14 @@ const createModule = async (req, res) => {
 const getAllUsers = async (req, res) => {
   try {
     const users = await UserTVL.findAll({
-      where: { us_active: 1 },
       order: [['us_usid', 'ASC']],
       raw: true
     });
     res.json(users);
   } catch (error) {
     console.error('Error fetching users:', error);
-    res.status(500).json({ message: error.message });
+    const { status, message } = parseDbError(error);
+    res.status(status).json({ message });
   }
 };
 
@@ -197,7 +293,8 @@ const createUser = async (req, res) => {
     res.status(201).json(user);
   } catch (error) {
     console.error('Error creating user:', error);
-    res.status(500).json({ message: error.message });
+    const { status, message } = parseDbError(error);
+    res.status(status).json({ message });
   }
 };
 
@@ -207,7 +304,6 @@ const createUser = async (req, res) => {
 const getAllRolePermissions = async (req, res) => {
   try {
     const rolePermissions = await RolePermissionTVL.findAll({
-      where: { fp_active: 1 },
       order: [['fp_fnid', 'ASC'], ['fp_opid', 'ASC']],
       raw: true
     });
@@ -233,7 +329,8 @@ const getAllRolePermissions = async (req, res) => {
     res.json(enhanced);
   } catch (error) {
     console.error('Error fetching role permissions:', error);
-    res.status(500).json({ message: error.message });
+    const { status, message } = parseDbError(error);
+    res.status(status).json({ message });
   }
 };
 
@@ -255,7 +352,8 @@ const createRolePermission = async (req, res) => {
     res.status(201).json(rolePermission);
   } catch (error) {
     console.error('Error creating role permission:', error);
-    res.status(500).json({ message: error.message });
+    const { status, message } = parseDbError(error);
+    res.status(status).json({ message });
   }
 };
 
@@ -280,7 +378,8 @@ const bulkAssignRolePermissions = async (req, res) => {
     res.status(201).json(result);
   } catch (error) {
     console.error('Error bulk assigning role permissions:', error);
-    res.status(500).json({ message: error.message });
+    const { status, message } = parseDbError(error);
+    res.status(status).json({ message });
   }
 };
 
@@ -290,7 +389,6 @@ const bulkAssignRolePermissions = async (req, res) => {
 const getAllUserPermissions = async (req, res) => {
   try {
     const userPermissions = await UserPermissionTVL.findAll({
-      where: { up_active: 1 },
       order: [['up_usid', 'ASC'], ['up_opid', 'ASC']],
       raw: true
     });
@@ -316,7 +414,8 @@ const getAllUserPermissions = async (req, res) => {
     res.json(enhanced);
   } catch (error) {
     console.error('Error fetching user permissions:', error);
-    res.status(500).json({ message: error.message });
+    const { status, message } = parseDbError(error);
+    res.status(status).json({ message });
   }
 };
 
@@ -338,7 +437,8 @@ const createUserPermission = async (req, res) => {
     res.status(201).json(userPermission);
   } catch (error) {
     console.error('Error creating user permission:', error);
-    res.status(500).json({ message: error.message });
+    const { status, message } = parseDbError(error);
+    res.status(status).json({ message });
   }
 };
 
@@ -385,7 +485,8 @@ const getEffectivePermissions = async (req, res) => {
     res.json(permissions);
   } catch (error) {
     console.error('Error getting effective permissions:', error);
-    res.status(500).json({ message: error.message });
+    const { status, message } = parseDbError(error);
+    res.status(status).json({ message });
   }
 };
 
@@ -427,7 +528,420 @@ const getAllCustomers = async (req, res) => {
     res.json(formattedCustomers);
   } catch (error) {
     console.error('Error fetching customers:', error);
-    res.status(500).json({ message: error.message });
+    const { status, message } = parseDbError(error);
+    res.status(status).json({ message });
+  }
+};
+
+// ==================== OPERATION CRUD ====================
+const getAllOperations = async (req, res) => {
+  try {
+    const operations = await PermissionTVL.findAll({
+      order: [['op_apid', 'ASC'], ['op_moid', 'ASC'], ['op_opid', 'ASC']],
+      raw: true
+    });
+    res.json(operations);
+  } catch (error) {
+    console.error('Error fetching operations:', error);
+    const { status, message } = parseDbError(error);
+    res.status(status).json({ message });
+  }
+};
+
+const createOperation = async (req, res) => {
+  try {
+    const operation = await PermissionTVL.create({
+      ...req.body,
+      op_active: 1,
+      op_eby: req.user?.us_usid || 'SYSTEM',
+      op_edtm: new Date()
+    });
+    res.status(201).json(operation);
+  } catch (error) {
+    console.error('Error creating operation:', error);
+    const { status, message } = parseDbError(error);
+    res.status(status).json({ message });
+  }
+};
+
+const updateOperation = async (req, res) => {
+  try {
+    const { appId, moduleId, opId } = req.params;
+    const operation = await PermissionTVL.findOne({
+      where: { op_apid: appId, op_moid: moduleId, op_opid: opId }
+    });
+    
+    if (!operation) {
+      return res.status(404).json({ message: 'Operation not found' });
+    }
+    
+    const updateData = {
+      ...req.body,
+      op_mby: req.user?.us_usid || 'SYSTEM',
+      op_mdtm: new Date()
+    };
+    
+    // Convert active to integer
+    if ('op_active' in req.body) {
+      updateData.op_active = parseInt(req.body.op_active) || 0;
+    }
+    
+    // If active status is being set to 0 (inactive), set closed fields
+    if (updateData.op_active === 0) {
+      updateData.op_cby = req.user?.us_usid || 'SYSTEM';
+      updateData.op_cdtm = new Date();
+    } else if (updateData.op_active === 1) {
+      // If reactivating, clear closed fields
+      updateData.op_cby = null;
+      updateData.op_cdtm = null;
+    }
+    
+    await operation.update(updateData);
+    
+    res.json(operation);
+  } catch (error) {
+    console.error('Error updating operation:', error);
+    const { status, message } = parseDbError(error);
+    res.status(status).json({ message });
+  }
+};
+
+const deleteOperation = async (req, res) => {
+  try {
+    const { appId, moduleId, opId } = req.params;
+    const operation = await PermissionTVL.findOne({
+      where: { op_apid: appId, op_moid: moduleId, op_opid: opId }
+    });
+    
+    if (!operation) {
+      return res.status(404).json({ message: 'Operation not found' });
+    }
+    
+    await operation.destroy();
+    res.json({ message: 'Operation deleted successfully' });
+  } catch (error) {
+    console.error('Error deleting operation:', error);
+    const { status, message } = parseDbError(error);
+    res.status(status).json({ message });
+  }
+};
+
+// ==================== ROLE CRUD ====================
+const getAllRoles = async (req, res) => {
+  try {
+    const roles = await RoleTVL.findAll({
+      order: [['fn_fnid', 'ASC']],
+      raw: true
+    });
+    console.log('Fetched roles sample:', roles[0]);
+    res.json(roles);
+  } catch (error) {
+    console.error('Error fetching roles:', error);
+    const { status, message } = parseDbError(error);
+    res.status(status).json({ message });
+  }
+};
+
+const createRole = async (req, res) => {
+  try {
+    const role = await RoleTVL.create({
+      ...req.body,
+      fn_active: 1,
+      fn_eby: req.user?.us_usid || 'SYSTEM',
+      fn_edtm: new Date()
+    });
+    res.status(201).json(role);
+  } catch (error) {
+    console.error('Error creating role:', error);
+    const { status, message } = parseDbError(error);
+    res.status(status).json({ message });
+  }
+};
+
+const updateRole = async (req, res) => {
+  try {
+    const role = await RoleTVL.findByPk(req.params.id);
+    
+    if (!role) {
+      return res.status(404).json({ message: 'Role not found' });
+    }
+    
+    const updateData = {
+      ...req.body,
+      fn_mby: req.user?.us_usid || 'SYSTEM',
+      fn_mdtm: new Date()
+    };
+    
+    // Convert active to integer
+    if ('fn_active' in req.body) {
+      updateData.fn_active = parseInt(req.body.fn_active) || 0;
+    }
+    
+    // If active status is being set to 0 (inactive), set closed fields
+    if (updateData.fn_active === 0) {
+      updateData.fn_cby = req.user?.us_usid || 'SYSTEM';
+      updateData.fn_cdtm = new Date();
+    } else if (updateData.fn_active === 1) {
+      // If reactivating, clear closed fields
+      updateData.fn_cby = null;
+      updateData.fn_cdtm = null;
+    }
+    
+    await role.update(updateData);
+    
+    res.json(role);
+  } catch (error) {
+    console.error('Error updating role:', error);
+    const { status, message } = parseDbError(error);
+    res.status(status).json({ message });
+  }
+};
+
+const deleteRole = async (req, res) => {
+  try {
+    const role = await RoleTVL.findByPk(req.params.id);
+    
+    if (!role) {
+      return res.status(404).json({ message: 'Role not found' });
+    }
+    
+    await role.destroy();
+    res.json({ message: 'Role deleted successfully' });
+  } catch (error) {
+    console.error('Error deleting role:', error);
+    const { status, message } = parseDbError(error);
+    res.status(status).json({ message });
+  }
+};
+
+// Update user
+const updateUser = async (req, res) => {
+  try {
+    const user = await UserTVL.findByPk(req.params.id);
+    
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+    
+    const updateData = {
+      ...req.body,
+      us_admin: req.body.us_admin ? 1 : 0,
+      us_security: req.body.us_security ? 1 : 0,
+      us_mby: req.user?.us_usid || 'SYSTEM',
+      us_mdtm: new Date()
+    };
+    
+    // Convert active to integer
+    if ('us_active' in req.body) {
+      updateData.us_active = parseInt(req.body.us_active) || 0;
+    }
+    
+    // If active status is being set to 0 (inactive), set closed fields
+    if (updateData.us_active === 0) {
+      updateData.us_cby = req.user?.us_usid || 'SYSTEM';
+      updateData.us_cdtm = new Date();
+    } else if (updateData.us_active === 1) {
+      // If reactivating, clear closed fields
+      updateData.us_cby = null;
+      updateData.us_cdtm = null;
+    }
+    
+    await user.update(updateData);
+    
+    res.json(user);
+  } catch (error) {
+    console.error('Error updating user:', error);
+    const { status, message } = parseDbError(error);
+    res.status(status).json({ message });
+  }
+};
+
+// Delete user
+const deleteUser = async (req, res) => {
+  try {
+    const user = await UserTVL.findByPk(req.params.id);
+    
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+    
+    await user.destroy();
+    res.json({ message: 'User deleted successfully' });
+  } catch (error) {
+    console.error('Error deleting user:', error);
+    const { status, message } = parseDbError(error);
+    res.status(status).json({ message });
+  }
+};
+
+// Update customer
+const updateCustomer = async (req, res) => {
+  try {
+    const customer = await Customer.findByPk(req.params.id);
+    
+    if (!customer) {
+      return res.status(404).json({ message: 'Customer not found' });
+    }
+    
+    await customer.update({
+      ...req.body,
+      mby: req.user?.us_usid || 'SYSTEM',
+      mdtm: new Date()
+    });
+    
+    res.json(customer);
+  } catch (error) {
+    console.error('Error updating customer:', error);
+    const { status, message } = parseDbError(error);
+    res.status(status).json({ message });
+  }
+};
+
+// Delete customer
+const deleteCustomer = async (req, res) => {
+  try {
+    const customer = await Customer.findByPk(req.params.id);
+    
+    if (!customer) {
+      return res.status(404).json({ message: 'Customer not found' });
+    }
+    
+    await customer.destroy();
+    res.json({ message: 'Customer deleted successfully' });
+  } catch (error) {
+    console.error('Error deleting customer:', error);
+    const { status, message } = parseDbError(error);
+    res.status(status).json({ message });
+  }
+};
+
+// Update role permission
+const updateRolePermission = async (req, res) => {
+  try {
+    const { roleId, opId } = req.params;
+    const permission = await RolePermissionTVL.findOne({
+      where: { fp_fnid: roleId, fp_opid: opId }
+    });
+    
+    if (!permission) {
+      return res.status(404).json({ message: 'Role permission not found' });
+    }
+    
+    const updateData = {
+      ...req.body,
+      fp_allow: req.body.fp_allow ? 1 : 0,
+      fp_mby: req.user?.us_usid || 'SYSTEM',
+      fp_mdtm: new Date()
+    };
+    
+    // Convert active to integer
+    if ('fp_active' in req.body) {
+      updateData.fp_active = parseInt(req.body.fp_active) || 0;
+    }
+    
+    // If active status is being set to 0 (inactive), set closed fields
+    if (updateData.fp_active === 0) {
+      updateData.fp_cby = req.user?.us_usid || 'SYSTEM';
+      updateData.fp_cdtm = new Date();
+    } else if (updateData.fp_active === 1) {
+      // If reactivating, clear closed fields
+      updateData.fp_cby = null;
+      updateData.fp_cdtm = null;
+    }
+    
+    await permission.update(updateData);
+    
+    res.json(permission);
+  } catch (error) {
+    console.error('Error updating role permission:', error);
+    const { status, message } = parseDbError(error);
+    res.status(status).json({ message });
+  }
+};
+
+// Delete role permission
+const deleteRolePermission = async (req, res) => {
+  try {
+    const { roleId, opId } = req.params;
+    const permission = await RolePermissionTVL.findOne({
+      where: { fp_fnid: roleId, fp_opid: opId }
+    });
+    
+    if (!permission) {
+      return res.status(404).json({ message: 'Role permission not found' });
+    }
+    
+    await permission.destroy();
+    res.json({ message: 'Role permission deleted successfully' });
+  } catch (error) {
+    console.error('Error deleting role permission:', error);
+    const { status, message } = parseDbError(error);
+    res.status(status).json({ message });
+  }
+};
+
+// Update user permission
+const updateUserPermission = async (req, res) => {
+  try {
+    const { userId, opId } = req.params;
+    const permission = await UserPermissionTVL.findOne({
+      where: { up_usid: userId, up_opid: opId }
+    });
+    
+    if (!permission) {
+      return res.status(404).json({ message: 'User permission not found' });
+    }
+    
+    const updateData = {
+      ...req.body,
+      up_allow: req.body.up_allow ? 1 : 0,
+      up_mby: req.user?.us_usid || 'SYSTEM',
+      up_mdtm: new Date()
+    };
+    
+    // Convert active to integer
+    if ('up_active' in req.body) {
+      updateData.up_active = parseInt(req.body.up_active) || 0;
+    }
+    
+    // If active status is being set to 0 (inactive), set closed fields
+    if (updateData.up_active === 0) {
+      updateData.up_cby = req.user?.us_usid || 'SYSTEM';
+      updateData.up_cdtm = new Date();
+    } else if (updateData.up_active === 1) {
+      // If reactivating, clear closed fields
+      updateData.up_cby = null;
+      updateData.up_cdtm = null;
+    }
+    
+    await permission.update(updateData);
+    
+    res.json(permission);
+  } catch (error) {
+    console.error('Error updating user permission:', error);
+    const { status, message } = parseDbError(error);
+    res.status(status).json({ message });
+  }
+};
+
+// Delete user permission
+const deleteUserPermission = async (req, res) => {
+  try {
+    const { userId, opId } = req.params;
+    const permission = await UserPermissionTVL.findOne({
+      where: { up_usid: userId, up_opid: opId }
+    });
+    
+    if (!permission) {
+      return res.status(404).json({ message: 'User permission not found' });
+    }
+    
+    await permission.destroy();
+    res.json({ message: 'User permission deleted successfully' });
+  } catch (error) {
+    console.error('Error deleting user permission:', error);
+    const { status, message } = parseDbError(error);
+    res.status(status).json({ message });
   }
 };
 
@@ -442,21 +956,43 @@ module.exports = {
   getAllModules,
   getModulesByApplication,
   createModule,
+  updateModule,
+  deleteModule,
+  
+  // Operations
+  getAllOperations,
+  createOperation,
+  updateOperation,
+  deleteOperation,
+  
+  // Roles
+  getAllRoles,
+  createRole,
+  updateRole,
+  deleteRole,
   
   // Users
   getAllUsers,
   createUser,
+  updateUser,
+  deleteUser,
   
   // Customers
   getAllCustomers,
+  updateCustomer,
+  deleteCustomer,
   
   // Role Permissions
   getAllRolePermissions,
   createRolePermission,
+  updateRolePermission,
+  deleteRolePermission,
   bulkAssignRolePermissions,
   
   // User Permissions
   getAllUserPermissions,
   createUserPermission,
+  updateUserPermission,
+  deleteUserPermission,
   getEffectivePermissions
 };

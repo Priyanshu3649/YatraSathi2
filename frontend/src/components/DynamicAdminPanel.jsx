@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
+import { showMessage } from './MessageDisplay';
+import { parseError, validateFormData } from '../utils/errorParser';
 import '../styles/vintage-erp-theme.css';
 import '../styles/dynamic-admin-panel.css';
 
@@ -27,15 +29,50 @@ const DynamicAdminPanel = () => {
     users: []
   });
   
-  // Filter state
+  // Filter state - Enhanced with all module-specific filters
   const [filters, setFilters] = useState({
+    // Application filters
     ap_apid: '',
+    ap_apshort: '',
+    // Module filters
     mo_apid: '',
-    shortName: '',
-    active: '',
+    mo_moid: '',
+    mo_moshort: '',
+    mo_group: '',
+    // Operation filters
+    op_apid: '',
+    op_moid: '',
+    op_opid: '',
+    op_opshort: '',
+    // Role filters
+    fn_fnid: '',
+    fn_fnshort: '',
+    // User filters
+    us_usid: '',
+    us_usname: '',
+    us_email: '',
+    us_title: '',
+    // Role Permission filters
+    fp_fnid: '',
+    fp_opid: '',
     fp_allow: '',
-    up_allow: ''
+    // User Permission filters
+    up_usid: '',
+    up_opid: '',
+    up_allow: '',
+    // Customer filters
+    cu_custno: '',
+    cu_name: '',
+    cu_email: '',
+    cu_custtype: '',
+    cu_status: '',
+    // General filters
+    shortName: '',
+    active: ''
   });
+  
+  // Filter timeout for live search
+  const [filterTimeout, setFilterTimeout] = useState(null);
   
   const [auditData, setAuditData] = useState({
     enteredOn: '',
@@ -125,9 +162,9 @@ const DynamicAdminPanel = () => {
     },
     roles: {
       name: 'Role List',
-      endpoint: '/api/permissions/roles',
+      endpoint: '/api/security/roles',
       fields: [
-        { name: 'fn_fnid', label: 'Function/Role ID', type: 'text', required: true, readOnly: false, maxLength: 6 },
+        { name: 'fn_fnid', label: 'Function/Role ID', type: 'text', required: true, readOnly: false, maxLength: 3, pattern: '[A-Z]{1,3}', title: 'Only uppercase letters (A-Z), max 3 characters' },
         { name: 'fn_fnshort', label: 'Short Name', type: 'text', required: true, maxLength: 30 },
         { name: 'fn_fndesc', label: 'Description', type: 'text', maxLength: 60 },
         { name: 'fn_rmrks', label: 'Remarks', type: 'textarea' },
@@ -264,30 +301,155 @@ const DynamicAdminPanel = () => {
     return Array.from(mods).sort();
   };
 
-  // Apply filters - live filtering
+  // Apply filters - Enhanced live filtering with 500ms debounce
   useEffect(() => {
     let filtered = [...data];
     
-    // Filter by application ID (exact match)
+    // ==================== APPLICATION FILTERS ====================
     if (filters.ap_apid) {
       filtered = filtered.filter(record => 
         record.ap_apid?.toLowerCase().includes(filters.ap_apid.toLowerCase())
       );
     }
-    
-    // Filter by application (for modules)
-    if (filters.mo_apid) {
+    if (filters.ap_apshort) {
       filtered = filtered.filter(record => 
-        record.mo_apid === filters.mo_apid
+        record.ap_apshort?.toLowerCase().includes(filters.ap_apshort.toLowerCase())
       );
     }
     
+    // ==================== MODULE FILTERS ====================
+    if (filters.mo_apid) {
+      filtered = filtered.filter(record => record.mo_apid === filters.mo_apid);
+    }
+    if (filters.mo_moid) {
+      filtered = filtered.filter(record => 
+        record.mo_moid?.toLowerCase().includes(filters.mo_moid.toLowerCase())
+      );
+    }
+    if (filters.mo_moshort) {
+      filtered = filtered.filter(record => 
+        record.mo_moshort?.toLowerCase().includes(filters.mo_moshort.toLowerCase())
+      );
+    }
+    if (filters.mo_group) {
+      filtered = filtered.filter(record => 
+        record.mo_group?.toLowerCase().includes(filters.mo_group.toLowerCase())
+      );
+    }
+    
+    // ==================== OPERATION FILTERS ====================
+    if (filters.op_apid) {
+      filtered = filtered.filter(record => record.op_apid === filters.op_apid);
+    }
+    if (filters.op_moid) {
+      filtered = filtered.filter(record => record.op_moid === filters.op_moid);
+    }
+    if (filters.op_opid) {
+      filtered = filtered.filter(record => 
+        record.op_opid?.toLowerCase().includes(filters.op_opid.toLowerCase())
+      );
+    }
+    if (filters.op_opshort) {
+      filtered = filtered.filter(record => 
+        record.op_opshort?.toLowerCase().includes(filters.op_opshort.toLowerCase())
+      );
+    }
+    
+    // ==================== ROLE FILTERS ====================
+    if (filters.fn_fnid) {
+      filtered = filtered.filter(record => 
+        record.fn_fnid?.toLowerCase().includes(filters.fn_fnid.toLowerCase())
+      );
+    }
+    if (filters.fn_fnshort) {
+      filtered = filtered.filter(record => 
+        record.fn_fnshort?.toLowerCase().includes(filters.fn_fnshort.toLowerCase())
+      );
+    }
+    
+    // ==================== USER FILTERS ====================
+    if (filters.us_usid) {
+      filtered = filtered.filter(record => 
+        record.us_usid?.toLowerCase().includes(filters.us_usid.toLowerCase())
+      );
+    }
+    if (filters.us_usname) {
+      filtered = filtered.filter(record => 
+        record.us_usname?.toLowerCase().includes(filters.us_usname.toLowerCase())
+      );
+    }
+    if (filters.us_email) {
+      filtered = filtered.filter(record => 
+        record.us_email?.toLowerCase().includes(filters.us_email.toLowerCase())
+      );
+    }
+    if (filters.us_title) {
+      filtered = filtered.filter(record => 
+        record.us_title?.toLowerCase().includes(filters.us_title.toLowerCase())
+      );
+    }
+    
+    // ==================== ROLE PERMISSION FILTERS ====================
+    if (filters.fp_fnid) {
+      filtered = filtered.filter(record => record.fp_fnid === filters.fp_fnid);
+    }
+    if (filters.fp_opid) {
+      filtered = filtered.filter(record => 
+        record.fp_opid?.toLowerCase().includes(filters.fp_opid.toLowerCase())
+      );
+    }
+    if (filters.fp_allow !== '' && filters.fp_allow !== undefined) {
+      const allowValue = parseInt(filters.fp_allow);
+      filtered = filtered.filter(record => record.fp_allow === allowValue);
+    }
+    
+    // ==================== USER PERMISSION FILTERS ====================
+    if (filters.up_usid) {
+      filtered = filtered.filter(record => record.up_usid === filters.up_usid);
+    }
+    if (filters.up_opid) {
+      filtered = filtered.filter(record => 
+        record.up_opid?.toLowerCase().includes(filters.up_opid.toLowerCase())
+      );
+    }
+    if (filters.up_allow !== '' && filters.up_allow !== undefined) {
+      const allowValue = parseInt(filters.up_allow);
+      filtered = filtered.filter(record => record.up_allow === allowValue);
+    }
+    
+    // ==================== CUSTOMER FILTERS ====================
+    if (filters.cu_custno) {
+      filtered = filtered.filter(record => 
+        record.cu_custno?.toLowerCase().includes(filters.cu_custno.toLowerCase())
+      );
+    }
+    if (filters.cu_name) {
+      filtered = filtered.filter(record => 
+        record.cu_name?.toLowerCase().includes(filters.cu_name.toLowerCase())
+      );
+    }
+    if (filters.cu_email) {
+      filtered = filtered.filter(record => 
+        record.cu_email?.toLowerCase().includes(filters.cu_email.toLowerCase())
+      );
+    }
+    if (filters.cu_custtype) {
+      filtered = filtered.filter(record => 
+        record.cu_custtype?.toLowerCase().includes(filters.cu_custtype.toLowerCase())
+      );
+    }
+    if (filters.cu_status) {
+      filtered = filtered.filter(record => 
+        record.cu_status?.toLowerCase().includes(filters.cu_status.toLowerCase())
+      );
+    }
+    
+    // ==================== GENERAL FILTERS ====================
     // Filter by short name (LIKE) - works across different field names
     if (filters.shortName) {
       const searchTerm = filters.shortName.toLowerCase();
       filtered = filtered.filter(record => {
-        // Try different short name fields
-        const shortFields = ['ap_apshort', 'mo_moshort', 'op_opshort', 'fn_fnshort', 'us_usname', 'us_email'];
+        const shortFields = ['ap_apshort', 'mo_moshort', 'op_opshort', 'fn_fnshort', 'us_usname', 'us_email', 'cu_name'];
         return shortFields.some(field => 
           record[field]?.toLowerCase().includes(searchTerm)
         );
@@ -301,14 +463,6 @@ const DynamicAdminPanel = () => {
         const activeFields = ['ap_active', 'mo_active', 'op_active', 'fn_active', 'us_active', 'fp_active', 'up_active'];
         return activeFields.some(field => record[field] === activeValue);
       });
-    }
-    
-    // Filter by permission type (allow/deny)
-    if (filters.fp_allow !== '' && filters.fp_allow !== undefined) {
-      const allowValue = parseInt(filters.fp_allow);
-      filtered = filtered.filter(record => 
-        record.fp_allow === allowValue || record.up_allow === allowValue
-      );
     }
     
     setFilteredData(filtered);
@@ -485,29 +639,94 @@ const DynamicAdminPanel = () => {
 
   const handleInputChange = (e) => {
     const { name, value, type, checked } = e.target;
+    
+    let processedValue = value;
+    
+    // Auto-uppercase for fn_fnid field
+    if (name === 'fn_fnid') {
+      // Convert to uppercase and remove non-alphabetic characters
+      processedValue = value.toUpperCase().replace(/[^A-Z]/g, '').slice(0, 3);
+    }
+    
     setFormData(prev => ({
       ...prev,
-      [name]: type === 'checkbox' ? (checked ? 1 : 0) : value
+      [name]: type === 'checkbox' ? (checked ? 1 : 0) : processedValue
     }));
   };
 
   const handleFilterChange = (e) => {
     const { name, value } = e.target;
+    
+    // Clear existing timeout
+    if (filterTimeout) {
+      clearTimeout(filterTimeout);
+    }
+    
+    // Update filter immediately for UI responsiveness
     setFilters(prev => ({
       ...prev,
       [name]: value
     }));
+    
+    // Set new timeout for live search (500ms delay)
+    const newTimeout = setTimeout(() => {
+      // Filter will be applied automatically by useEffect
+      console.log('Filter applied:', name, value);
+    }, 500);
+    
+    setFilterTimeout(newTimeout);
   };
 
   const handleClearFilters = () => {
-    setFilters({ 
-      ap_apid: '', 
-      mo_apid: '', 
-      shortName: '', 
-      active: '', 
+    // Clear all filters
+    setFilters({
+      // Application filters
+      ap_apid: '',
+      ap_apshort: '',
+      // Module filters
+      mo_apid: '',
+      mo_moid: '',
+      mo_moshort: '',
+      mo_group: '',
+      // Operation filters
+      op_apid: '',
+      op_moid: '',
+      op_opid: '',
+      op_opshort: '',
+      // Role filters
+      fn_fnid: '',
+      fn_fnshort: '',
+      // User filters
+      us_usid: '',
+      us_usname: '',
+      us_email: '',
+      us_title: '',
+      // Role Permission filters
+      fp_fnid: '',
+      fp_opid: '',
       fp_allow: '',
-      up_allow: ''
+      // User Permission filters
+      up_usid: '',
+      up_opid: '',
+      up_allow: '',
+      // Customer filters
+      cu_custno: '',
+      cu_name: '',
+      cu_email: '',
+      cu_custtype: '',
+      cu_status: '',
+      // General filters
+      shortName: '',
+      active: ''
     });
+    
+    // Clear filter timeout
+    if (filterTimeout) {
+      clearTimeout(filterTimeout);
+    }
+    
+    // Reload full dataset
+    fetchData();
   };
 
   const handleNew = () => {
@@ -545,11 +764,37 @@ const DynamicAdminPanel = () => {
 
   const handleSave = async () => {
     try {
+      // Validate form data before saving
+      const validationErrors = validateFormData(formData, modules[activeModule].fields);
+      if (validationErrors.length > 0) {
+        showMessage('warning', 'Validation Failed', validationErrors.join('\n'));
+        return;
+      }
+
       const token = localStorage.getItem('token');
       const method = selectedRecord ? 'PUT' : 'POST';
-      const url = selectedRecord 
-        ? `http://localhost:5003${modules[activeModule].endpoint}/${selectedRecord[modules[activeModule].columns[0]]}`
-        : `http://localhost:5003${modules[activeModule].endpoint}`;
+      
+      // Build URL based on module type (handle composite keys)
+      let url = `http://localhost:5003${modules[activeModule].endpoint}`;
+      
+      if (selectedRecord) {
+        // Handle composite keys for different modules
+        if (activeModule === 'modules') {
+          url += `/${selectedRecord.mo_apid}/${selectedRecord.mo_moid}`;
+        } else if (activeModule === 'operations') {
+          url += `/${selectedRecord.op_apid}/${selectedRecord.op_moid}/${selectedRecord.op_opid}`;
+        } else if (activeModule === 'rolePermissions') {
+          url += `/${selectedRecord.fp_fnid}/${selectedRecord.fp_opid}`;
+        } else if (activeModule === 'userPermissions') {
+          url += `/${selectedRecord.up_usid}/${selectedRecord.up_opid}`;
+        } else {
+          // Single primary key (applications, roles, users, customers)
+          url += `/${selectedRecord[modules[activeModule].columns[0]]}`;
+        }
+      }
+
+      // Show loading message
+      showMessage('info', 'Saving...', 'Please wait while we save your changes', 2000);
 
       const response = await fetch(url, {
         method,
@@ -561,45 +806,110 @@ const DynamicAdminPanel = () => {
       });
 
       if (response.ok) {
-        alert('Record saved successfully');
-        fetchData();
+        const savedData = await response.json();
+        console.log('Saved successfully:', savedData);
+        
+        // Update the selected record and form data with the saved data immediately
+        setSelectedRecord(savedData);
+        setFormData(savedData);
+        
+        // Update audit fields immediately from saved data
+        const prefixes = ['ap_', 'mo_', 'op_', 'fn_', 'us_', 'fp_', 'up_', 'st_', 'tr_', 'co_', 'cu_'];
+        let edtm, eby, mdtm, mby, cdtm, cby;
+        
+        for (const prefix of prefixes) {
+          if (savedData[`${prefix}edtm`]) edtm = savedData[`${prefix}edtm`];
+          if (savedData[`${prefix}eby`]) eby = savedData[`${prefix}eby`];
+          if (savedData[`${prefix}mdtm`]) mdtm = savedData[`${prefix}mdtm`];
+          if (savedData[`${prefix}mby`]) mby = savedData[`${prefix}mby`];
+          if (savedData[`${prefix}cdtm`]) cdtm = savedData[`${prefix}cdtm`];
+          if (savedData[`${prefix}cby`]) cby = savedData[`${prefix}cby`];
+        }
+        
+        setAuditData({
+          enteredOn: edtm ? new Date(edtm).toLocaleString() : '',
+          enteredBy: eby || '',
+          modifiedOn: mdtm ? new Date(mdtm).toLocaleString() : '',
+          modifiedBy: mby || '',
+          closedOn: cdtm ? new Date(cdtm).toLocaleString() : '',
+          closedBy: cby || ''
+        });
+        
+        // Refresh the data list in background
+        await fetchData();
         setIsEditing(false);
+        
+        // Show success message
+        showMessage('success', 'Record Saved', 'The record was saved successfully');
       } else {
-        alert('Failed to save record');
+        const errorData = await response.json();
+        console.error('Save failed:', errorData);
+        
+        // Parse error and show user-friendly message
+        const { type, title, description } = parseError(null, errorData);
+        showMessage(type, title, description);
       }
     } catch (error) {
       console.error('Error saving record:', error);
-      alert('Error saving record');
+      
+      // Parse error and show user-friendly message
+      const { type, title, description } = parseError(error);
+      showMessage(type, title, description);
     }
   };
 
   const handleDelete = async () => {
     if (!selectedRecord) {
-      alert('Please select a record first');
+      showMessage('warning', 'No Selection', 'Please select a record to delete');
       return;
     }
 
     if (window.confirm('Are you sure you want to delete this record?')) {
       try {
         const token = localStorage.getItem('token');
-        const response = await fetch(
-          `http://localhost:5003${modules[activeModule].endpoint}/${selectedRecord[modules[activeModule].columns[0]]}`,
-          {
-            method: 'DELETE',
-            headers: { 'Authorization': `Bearer ${token}` }
-          }
-        );
+        
+        // Build URL based on module type (handle composite keys)
+        let url = `http://localhost:5003${modules[activeModule].endpoint}`;
+        
+        if (activeModule === 'modules') {
+          url += `/${selectedRecord.mo_apid}/${selectedRecord.mo_moid}`;
+        } else if (activeModule === 'operations') {
+          url += `/${selectedRecord.op_apid}/${selectedRecord.op_moid}/${selectedRecord.op_opid}`;
+        } else if (activeModule === 'rolePermissions') {
+          url += `/${selectedRecord.fp_fnid}/${selectedRecord.fp_opid}`;
+        } else if (activeModule === 'userPermissions') {
+          url += `/${selectedRecord.up_usid}/${selectedRecord.up_opid}`;
+        } else {
+          // Single primary key
+          url += `/${selectedRecord[modules[activeModule].columns[0]]}`;
+        }
+        
+        // Show loading message
+        showMessage('info', 'Deleting...', 'Please wait', 2000);
+        
+        const response = await fetch(url, {
+          method: 'DELETE',
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
 
         if (response.ok) {
-          alert('Record deleted successfully');
+          showMessage('success', 'Record Deleted', 'The record was deleted successfully');
           fetchData();
           handleNew();
         } else {
-          alert('Failed to delete record');
+          const errorData = await response.json();
+          console.error('Delete failed:', errorData);
+          
+          // Parse error and show user-friendly message
+          const { type, title, description } = parseError(null, errorData);
+          showMessage(type, title, description);
         }
       } catch (error) {
         console.error('Error deleting record:', error);
-        alert('Error deleting record');
+        
+        // Parse error and show user-friendly message
+        const { type, title, description } = parseError(error);
+        showMessage(type, title, description);
       }
     }
   };
@@ -929,6 +1239,9 @@ const DynamicAdminPanel = () => {
                           readOnly={field.readOnly && selectedRecord}
                           maxLength={field.maxLength}
                           step={field.step}
+                          pattern={field.pattern}
+                          title={field.title}
+                          style={field.name === 'fn_fnid' ? { textTransform: 'uppercase' } : {}}
                         />
                       )}
                     </div>
@@ -1025,66 +1338,388 @@ const DynamicAdminPanel = () => {
           </div>
         </div>
 
-        {/* Right Filter Panel */}
+        {/* Right Filter Panel - Enhanced with Module-Specific Filters */}
         <div className="erp-filter-panel">
-          <div className="erp-filter-header">Filter Criteria</div>
+          <div className="erp-filter-header">
+            Filter Criteria
+            {(filteredData.length !== data.length) && (
+              <span className="erp-filter-indicator">{filteredData.length}/{data.length}</span>
+            )}
+          </div>
           
-          {/* Dynamic filters based on module */}
-          {currentModule.filterFields?.includes('ap_apid') && (
-            <div className="erp-form-row">
-              <label className="erp-form-label">Application ID</label>
-              <input 
-                type="text" 
-                name="ap_apid"
-                className="erp-input"
-                value={filters.ap_apid || ''}
-                onChange={handleFilterChange}
-                placeholder="Search..."
-              />
-            </div>
+          {/* ==================== APPLICATION FILTERS ==================== */}
+          {activeModule === 'applications' && (
+            <>
+              <div className="erp-form-row">
+                <label className="erp-form-label">Application ID</label>
+                <input 
+                  type="text" 
+                  name="ap_apid"
+                  className={`erp-input ${filters.ap_apid ? 'has-value' : ''}`}
+                  value={filters.ap_apid || ''}
+                  onChange={handleFilterChange}
+                  placeholder="Search ID..."
+                />
+              </div>
+              <div className="erp-form-row">
+                <label className="erp-form-label">Short Name</label>
+                <input 
+                  type="text" 
+                  name="ap_apshort"
+                  className={`erp-input ${filters.ap_apshort ? 'has-value' : ''}`}
+                  value={filters.ap_apshort || ''}
+                  onChange={handleFilterChange}
+                  placeholder="Search name..."
+                />
+              </div>
+            </>
           )}
           
-          {currentModule.filterFields?.includes('mo_apid') && (
-            <div className="erp-form-row">
-              <label className="erp-form-label">Application</label>
-              <select 
-                name="mo_apid"
-                className="erp-input"
-                value={filters.mo_apid || ''}
-                onChange={handleFilterChange}
-              >
-                <option value="">All</option>
-                {dropdownData.applications.map(app => (
-                  <option key={app.ap_apid} value={app.ap_apid}>{app.ap_apid} - {app.ap_apshort}</option>
-                ))}
-              </select>
-            </div>
+          {/* ==================== MODULE FILTERS ==================== */}
+          {activeModule === 'modules' && (
+            <>
+              <div className="erp-form-row">
+                <label className="erp-form-label">Application</label>
+                <select 
+                  name="mo_apid"
+                  className={`erp-input ${filters.mo_apid ? 'has-value' : ''}`}
+                  value={filters.mo_apid || ''}
+                  onChange={handleFilterChange}
+                >
+                  <option value="">All Applications</option>
+                  {dropdownData.applications.map(app => (
+                    <option key={app.ap_apid} value={app.ap_apid}>{app.ap_apid} - {app.ap_apshort}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="erp-form-row">
+                <label className="erp-form-label">Module ID</label>
+                <input 
+                  type="text" 
+                  name="mo_moid"
+                  className={`erp-input ${filters.mo_moid ? 'has-value' : ''}`}
+                  value={filters.mo_moid || ''}
+                  onChange={handleFilterChange}
+                  placeholder="Search module ID..."
+                />
+              </div>
+              <div className="erp-form-row">
+                <label className="erp-form-label">Short Name</label>
+                <input 
+                  type="text" 
+                  name="mo_moshort"
+                  className={`erp-input ${filters.mo_moshort ? 'has-value' : ''}`}
+                  value={filters.mo_moshort || ''}
+                  onChange={handleFilterChange}
+                  placeholder="Search name..."
+                />
+              </div>
+              <div className="erp-form-row">
+                <label className="erp-form-label">Group</label>
+                <input 
+                  type="text" 
+                  name="mo_group"
+                  className={`erp-input ${filters.mo_group ? 'has-value' : ''}`}
+                  value={filters.mo_group || ''}
+                  onChange={handleFilterChange}
+                  placeholder="Search group..."
+                />
+              </div>
+            </>
           )}
           
-          {(currentModule.filterFields?.includes('shortName') || 
-            currentModule.filterFields?.includes('ap_apshort') ||
-            currentModule.filterFields?.includes('mo_moshort') ||
-            currentModule.filterFields?.includes('op_opshort') ||
-            currentModule.filterFields?.includes('fn_fnshort')) && (
-            <div className="erp-form-row">
-              <label className="erp-form-label">Short Name</label>
-              <input 
-                type="text" 
-                name="shortName"
-                className="erp-input"
-                value={filters.shortName || ''}
-                onChange={handleFilterChange}
-                placeholder="Type to search..."
-              />
-            </div>
+          {/* ==================== OPERATION FILTERS ==================== */}
+          {activeModule === 'operations' && (
+            <>
+              <div className="erp-form-row">
+                <label className="erp-form-label">Application</label>
+                <select 
+                  name="op_apid"
+                  className={`erp-input ${filters.op_apid ? 'has-value' : ''}`}
+                  value={filters.op_apid || ''}
+                  onChange={handleFilterChange}
+                >
+                  <option value="">All Applications</option>
+                  {dropdownData.applications.map(app => (
+                    <option key={app.ap_apid} value={app.ap_apid}>{app.ap_apid} - {app.ap_apshort}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="erp-form-row">
+                <label className="erp-form-label">Module</label>
+                <select 
+                  name="op_moid"
+                  className={`erp-input ${filters.op_moid ? 'has-value' : ''}`}
+                  value={filters.op_moid || ''}
+                  onChange={handleFilterChange}
+                >
+                  <option value="">All Modules</option>
+                  {dropdownData.modules
+                    .filter(mod => !filters.op_apid || mod.mo_apid === filters.op_apid)
+                    .map(mod => (
+                      <option key={mod.mo_moid} value={mod.mo_moid}>{mod.mo_moid} - {mod.mo_moshort}</option>
+                    ))}
+                </select>
+              </div>
+              <div className="erp-form-row">
+                <label className="erp-form-label">Operation ID</label>
+                <input 
+                  type="text" 
+                  name="op_opid"
+                  className={`erp-input ${filters.op_opid ? 'has-value' : ''}`}
+                  value={filters.op_opid || ''}
+                  onChange={handleFilterChange}
+                  placeholder="Search operation..."
+                />
+              </div>
+              <div className="erp-form-row">
+                <label className="erp-form-label">Short Name</label>
+                <input 
+                  type="text" 
+                  name="op_opshort"
+                  className={`erp-input ${filters.op_opshort ? 'has-value' : ''}`}
+                  value={filters.op_opshort || ''}
+                  onChange={handleFilterChange}
+                  placeholder="Search name..."
+                />
+              </div>
+            </>
           )}
           
+          {/* ==================== ROLE LIST FILTERS ==================== */}
+          {activeModule === 'roles' && (
+            <>
+              <div className="erp-form-row">
+                <label className="erp-form-label">Role ID</label>
+                <input 
+                  type="text" 
+                  name="fn_fnid"
+                  className={`erp-input ${filters.fn_fnid ? 'has-value' : ''}`}
+                  value={filters.fn_fnid || ''}
+                  onChange={handleFilterChange}
+                  placeholder="Search role ID..."
+                />
+              </div>
+              <div className="erp-form-row">
+                <label className="erp-form-label">Role Name</label>
+                <input 
+                  type="text" 
+                  name="fn_fnshort"
+                  className={`erp-input ${filters.fn_fnshort ? 'has-value' : ''}`}
+                  value={filters.fn_fnshort || ''}
+                  onChange={handleFilterChange}
+                  placeholder="Search name..."
+                />
+              </div>
+            </>
+          )}
+          
+          {/* ==================== USER LIST FILTERS ==================== */}
+          {activeModule === 'users' && (
+            <>
+              <div className="erp-form-row">
+                <label className="erp-form-label">User ID</label>
+                <input 
+                  type="text" 
+                  name="us_usid"
+                  className={`erp-input ${filters.us_usid ? 'has-value' : ''}`}
+                  value={filters.us_usid || ''}
+                  onChange={handleFilterChange}
+                  placeholder="Search user ID..."
+                />
+              </div>
+              <div className="erp-form-row">
+                <label className="erp-form-label">User Name</label>
+                <input 
+                  type="text" 
+                  name="us_usname"
+                  className={`erp-input ${filters.us_usname ? 'has-value' : ''}`}
+                  value={filters.us_usname || ''}
+                  onChange={handleFilterChange}
+                  placeholder="Search name..."
+                />
+              </div>
+              <div className="erp-form-row">
+                <label className="erp-form-label">Email</label>
+                <input 
+                  type="text" 
+                  name="us_email"
+                  className={`erp-input ${filters.us_email ? 'has-value' : ''}`}
+                  value={filters.us_email || ''}
+                  onChange={handleFilterChange}
+                  placeholder="Search email..."
+                />
+              </div>
+              <div className="erp-form-row">
+                <label className="erp-form-label">Title</label>
+                <input 
+                  type="text" 
+                  name="us_title"
+                  className={`erp-input ${filters.us_title ? 'has-value' : ''}`}
+                  value={filters.us_title || ''}
+                  onChange={handleFilterChange}
+                  placeholder="Search title..."
+                />
+              </div>
+            </>
+          )}
+          
+          {/* ==================== ROLE PERMISSION FILTERS ==================== */}
+          {activeModule === 'rolePermissions' && (
+            <>
+              <div className="erp-form-row">
+                <label className="erp-form-label">Role</label>
+                <select 
+                  name="fp_fnid"
+                  className={`erp-input ${filters.fp_fnid ? 'has-value' : ''}`}
+                  value={filters.fp_fnid || ''}
+                  onChange={handleFilterChange}
+                >
+                  <option value="">All Roles</option>
+                  {dropdownData.roles.map(role => (
+                    <option key={role.fn_fnid} value={role.fn_fnid}>{role.fn_fnid} - {role.fn_fnshort}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="erp-form-row">
+                <label className="erp-form-label">Operation ID</label>
+                <input 
+                  type="text" 
+                  name="fp_opid"
+                  className={`erp-input ${filters.fp_opid ? 'has-value' : ''}`}
+                  value={filters.fp_opid || ''}
+                  onChange={handleFilterChange}
+                  placeholder="Search operation..."
+                />
+              </div>
+              <div className="erp-form-row">
+                <label className="erp-form-label">Permission Type</label>
+                <select 
+                  name="fp_allow"
+                  className={`erp-input ${filters.fp_allow !== '' ? 'has-value' : ''}`}
+                  value={filters.fp_allow || ''}
+                  onChange={handleFilterChange}
+                >
+                  <option value="">All</option>
+                  <option value="1">Allow</option>
+                  <option value="0">Deny</option>
+                </select>
+              </div>
+            </>
+          )}
+          
+          {/* ==================== USER PERMISSION FILTERS ==================== */}
+          {activeModule === 'userPermissions' && (
+            <>
+              <div className="erp-form-row">
+                <label className="erp-form-label">User</label>
+                <select 
+                  name="up_usid"
+                  className={`erp-input ${filters.up_usid ? 'has-value' : ''}`}
+                  value={filters.up_usid || ''}
+                  onChange={handleFilterChange}
+                >
+                  <option value="">All Users</option>
+                  {dropdownData.users.map(user => (
+                    <option key={user.us_usid} value={user.us_usid}>{user.us_usid} - {user.us_usname}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="erp-form-row">
+                <label className="erp-form-label">Operation ID</label>
+                <input 
+                  type="text" 
+                  name="up_opid"
+                  className={`erp-input ${filters.up_opid ? 'has-value' : ''}`}
+                  value={filters.up_opid || ''}
+                  onChange={handleFilterChange}
+                  placeholder="Search operation..."
+                />
+              </div>
+              <div className="erp-form-row">
+                <label className="erp-form-label">Permission Type</label>
+                <select 
+                  name="up_allow"
+                  className={`erp-input ${filters.up_allow !== '' ? 'has-value' : ''}`}
+                  value={filters.up_allow || ''}
+                  onChange={handleFilterChange}
+                >
+                  <option value="">All</option>
+                  <option value="1">Allow</option>
+                  <option value="0">Deny</option>
+                </select>
+              </div>
+            </>
+          )}
+          
+          {/* ==================== CUSTOMER LIST FILTERS ==================== */}
+          {activeModule === 'customers' && (
+            <>
+              <div className="erp-form-row">
+                <label className="erp-form-label">Customer No</label>
+                <input 
+                  type="text" 
+                  name="cu_custno"
+                  className={`erp-input ${filters.cu_custno ? 'has-value' : ''}`}
+                  value={filters.cu_custno || ''}
+                  onChange={handleFilterChange}
+                  placeholder="Search customer no..."
+                />
+              </div>
+              <div className="erp-form-row">
+                <label className="erp-form-label">Customer Name</label>
+                <input 
+                  type="text" 
+                  name="cu_name"
+                  className={`erp-input ${filters.cu_name ? 'has-value' : ''}`}
+                  value={filters.cu_name || ''}
+                  onChange={handleFilterChange}
+                  placeholder="Search name..."
+                />
+              </div>
+              <div className="erp-form-row">
+                <label className="erp-form-label">Email</label>
+                <input 
+                  type="text" 
+                  name="cu_email"
+                  className={`erp-input ${filters.cu_email ? 'has-value' : ''}`}
+                  value={filters.cu_email || ''}
+                  onChange={handleFilterChange}
+                  placeholder="Search email..."
+                />
+              </div>
+              <div className="erp-form-row">
+                <label className="erp-form-label">Customer Type</label>
+                <input 
+                  type="text" 
+                  name="cu_custtype"
+                  className={`erp-input ${filters.cu_custtype ? 'has-value' : ''}`}
+                  value={filters.cu_custtype || ''}
+                  onChange={handleFilterChange}
+                  placeholder="Search type..."
+                />
+              </div>
+              <div className="erp-form-row">
+                <label className="erp-form-label">Status</label>
+                <input 
+                  type="text" 
+                  name="cu_status"
+                  className={`erp-input ${filters.cu_status ? 'has-value' : ''}`}
+                  value={filters.cu_status || ''}
+                  onChange={handleFilterChange}
+                  placeholder="Search status..."
+                />
+              </div>
+            </>
+          )}
+          
+          {/* ==================== COMMON FILTERS ==================== */}
           {currentModule.filterFields?.includes('active') && (
             <div className="erp-form-row">
               <label className="erp-form-label">Active Status</label>
               <select 
                 name="active"
-                className="erp-input"
+                className={`erp-input ${filters.active !== '' ? 'has-value' : ''}`}
                 value={filters.active || ''}
                 onChange={handleFilterChange}
               >
@@ -1095,27 +1730,12 @@ const DynamicAdminPanel = () => {
             </div>
           )}
           
-          {currentModule.filterFields?.includes('fp_allow') && (
-            <div className="erp-form-row">
-              <label className="erp-form-label">Permission Type</label>
-              <select 
-                name="fp_allow"
-                className="erp-input"
-                value={filters.fp_allow || ''}
-                onChange={handleFilterChange}
-              >
-                <option value="">All</option>
-                <option value="1">Allow</option>
-                <option value="0">Deny</option>
-              </select>
-            </div>
-          )}
-          
-          <div style={{ marginTop: '12px' }}>
+          <div style={{ marginTop: '12px', display: 'flex', gap: '4px' }}>
             <button 
               className="erp-button" 
-              style={{ width: '100%', marginBottom: '4px' }}
+              style={{ flex: 1 }}
               onClick={handleClearFilters}
+              title="Clear all filters and reload data"
             >
               Clear Filters
             </button>
