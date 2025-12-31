@@ -1,0 +1,37 @@
+
+> yatrasathi@1.0.0 start
+> node src/server.js
+
+[dotenv@17.2.3] injecting env (8) from .env -- tip: ✅ audit secrets and track compliance: https://dotenvx.com/ops
+[dotenv@17.2.3] injecting env (0) from .env -- tip: 🔐 prevent committing .env to code: https://dotenvx.com/precommit
+Environment variables loaded successfully
+🔧 Configuring MySQL database connections...
+  Main Database: yatrasathi
+  TVL Database: TVL_001
+  Host: localhost
+  User: root
+  Password: ✅ Configured
+Auth routes module loaded
+Auth routes registered
+Registering auth routes
+Auth routes registered
+🔌 Connecting to MySQL databases...
+✅ Main database connected successfully!
+   Connected to: yatrasathi@localhost
+✅ TVL database connected successfully!
+   Connected to: TVL_001@localhost
+🔄 Synchronizing database models...
+✅ All models synchronized successfully!
+Database connection established
+Server running on http://127.0.0.1:5003
+Server error: Error: listen EADDRINUSE: address already in use 127.0.0.1:5003
+    at Server.setupListenHandle [as _listen2] (node:net:1903:16)
+    at listenInCluster (node:net:1960:12)
+    at node:net:2166:7
+    at process.processTicksAndRejections (node:internal/process/task_queues:90:21) {
+  code: 'EADDRINUSE',
+  errno: -48,
+  syscall: 'listen',
+  address: '127.0.0.1',
+  port: 5003
+}

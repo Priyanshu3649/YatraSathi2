@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YatraSathi Demo Portals</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        
+        .header {
+            text-align: center;
+            color: white;
+            margin-bottom: 40px;
+        }
+        
+        .header h1 {
+            font-size: 48px;
+            font-weight: 700;
+            margin-bottom: 10px;
+        }
+        
+        .header p {
+            font-size: 18px;
+            opacity: 0.9;
+        }
+        
+        .portals-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 30px;
+            margin-bottom: 40px;
+        }
+        
+        .portal-card {
+            background: white;
+            border-radius: 16px;
+            padding: 30px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+        
+        .portal-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+        }
+        
+        .portal-header {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        
+        .portal-icon {
+            width: 60px;
+            height: 60px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            color: white;
+        }
+        
+        .employee-icon {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        
+        .customer-icon {
+            background: linear-gradient(135deg, #56ab2f 0%, #a8e6cf 100%);
+        }
+        
+        .portal-title {
+            flex: 1;
+        }
+        
+        .portal-title h2 {
+            color: #2c3e50;
+            font-size: 24px;
+            font-weight: 600;
+            margin-bottom: 5px;
+        }
+        
+        .portal-title p {
+            color: #7f8c8d;
+            font-size: 14px;
+        }
+        
+        .credentials {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        
+        .credentials h4 {
+            color: #2c3e50;
+            font-size: 16px;
+            margin-bottom: 15px;
+        }
+        
+        .credential-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 0;
+            border-bottom: 1px solid #e1e8ed;
+        }
+        
+        .credential-item:last-child {
+            border-bottom: none;
+        }
+        
+        .credential-label {
+            font-weight: 500;
+            color: #2c3e50;
+        }
+        
+        .credential-value {
+            font-family: monospace;
+            background: #e1e8ed;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            color: #2c3e50;
+        }
+        
+        .portal-button {
+            width: 100%;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 15px 20px;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-decoration: none;
+            display: inline-block;
+            text-align: center;
+        }
+        
+        .portal-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(102, 126, 234, 0.3);
+        }
+        
+        .customer-button {
+            background: linear-gradient(135deg, #56ab2f 0%, #a8e6cf 100%);
+        }
+        
+        .customer-button:hover {
+            box-shadow: 0 8px 25px rgba(86, 171, 47, 0.3);
+        }
+        
+        .info-section {
+            background: white;
+            border-radius: 16px;
+            padding: 30px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+            text-align: center;
+        }
+        
+        .info-section h3 {
+            color: #2c3e50;
+            font-size: 24px;
+            margin-bottom: 15px;
+        }
+        
+        .info-section p {
+            color: #7f8c8d;
+            font-size: 16px;
+            line-height: 1.6;
+        }
+        
+        .features {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-top: 20px;
+        }
+        
+        .feature {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 8px;
+            text-align: center;
+        }
+        
+        .feature i {
+            font-size: 32px;
+            color: #667eea;
+            margin-bottom: 10px;
+        }
+        
+        .feature h4 {
+            color: #2c3e50;
+            margin-bottom: 8px;
+        }
+        
+        .feature p {
+            color: #7f8c8d;
+            font-size: 14px;
+        }
+        
+        @media (max-width: 768px) {
+            .portals-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .header h1 {
+                font-size: 36px;
+            }
+        }
+    </style>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🚀 YatraSathi Demo Portals</h1>
+            <p>Experience different user roles and dashboards</p>
+        </div>
+        
+        <div class="portals-grid">
+            <!-- Employee Portal -->
+            <div class="portal-card">
+                <div class="portal-header">
+                    <div class="portal-icon employee-icon">
+                        <i class="fas fa-users-cog"></i>
+                    </div>
+                    <div class="portal-title">
+                        <h2>Employee Portal</h2>
+                        <p>Role-based dashboards for staff</p>
+                    </div>
+                </div>
+                
+                <div class="credentials">
+                    <h4>🔐 Demo Credentials (Password: demo123)</h4>
+                    <div class="credential-item">
+                        <span class="credential-label">Agent:</span>
+                        <span class="credential-value">rajesh.agent@yatrasathi.com</span>
+                    </div>
+                    <div class="credential-item">
+                        <span class="credential-label">Accounts:</span>
+                        <span class="credential-value">priya.accounts@yatrasathi.com</span>
+                    </div>
+                    <div class="credential-item">
+                        <span class="credential-label">HR:</span>
+                        <span class="credential-value">amit.hr@yatrasathi.com</span>
+                    </div>
+                    <div class="credential-item">
+                        <span class="credential-label">Support:</span>
+                        <span class="credential-value">sunita.support@yatrasathi.com</span>
+                    </div>
+                    <div class="credential-item">
+                        <span class="credential-label">Marketing:</span>
+                        <span class="credential-value">vikram.marketing@yatrasathi.com</span>
+                    </div>
+                    <div class="credential-item">
+                        <span class="credential-label">Management:</span>
+                        <span class="credential-value">deepak.manager@yatrasathi.com</span>
+                    </div>
+                </div>
+                
+                <a href="/auth/employee-login" class="portal-button">
+                    <i class="fas fa-sign-in-alt"></i>
+                    Access Employee Portal
+                </a>
+            </div>
+            
+            <!-- Customer Portal -->
+            <div class="portal-card">
+                <div class="portal-header">
+                    <div class="portal-icon customer-icon">
+                        <i class="fas fa-user-circle"></i>
+                    </div>
+                    <div class="portal-title">
+                        <h2>Customer Portal</h2>
+                        <p>Booking and travel management</p>
+                    </div>
+                </div>
+                
+                <div class="credentials">
+                    <h4>🔐 Demo Credentials (Password: demo123)</h4>
+                    <div class="credential-item">
+                        <span class="credential-label">Customer 1:</span>
+                        <span class="credential-value">arjun.mehta@gmail.com</span>
+                    </div>
+                    <div class="credential-item">
+                        <span class="credential-label">Customer 2:</span>
+                        <span class="credential-value">kavya.reddy@yahoo.com</span>
+                    </div>
+                    <div class="credential-item">
+                        <span class="credential-label">Customer 3:</span>
+                        <span class="credential-value">ravi.iyer@hotmail.com</span>
+                    </div>
+                </div>
+                
+                <a href="/auth/login" class="portal-button customer-button">
+                    <i class="fas fa-sign-in-alt"></i>
+                    Access Customer Portal
+                </a>
+            </div>
+        </div>
+        
+        <div class="info-section">
+            <h3>🎯 What You Can Explore</h3>
+            <p>Each portal demonstrates different aspects of the YatraSathi travel booking system with real data and functionality.</p>
+            
+            <div class="features">
+                <div class="feature">
+                    <i class="fas fa-chart-line"></i>
+                    <h4>Agent Dashboard</h4>
+                    <p>Booking management and performance metrics</p>
+                </div>
+                <div class="feature">
+                    <i class="fas fa-calculator"></i>
+                    <h4>Accounts Dashboard</h4>
+                    <p>Payment processing and financial reports</p>
+                </div>
+                <div class="feature">
+                    <i class="fas fa-users"></i>
+                    <h4>HR Dashboard</h4>
+                    <p>Employee roster and department analytics</p>
+                </div>
+                <div class="feature">
+                    <i class="fas fa-headset"></i>
+                    <h4>Support Dashboard</h4>
+                    <p>Customer inquiries and ticket management</p>
+                </div>
+                <div class="feature">
+                    <i class="fas fa-bullhorn"></i>
+                    <h4>Marketing Dashboard</h4>
+                    <p>Corporate clients and campaign analytics</p>
+                </div>
+                <div class="feature">
+                    <i class="fas fa-crown"></i>
+                    <h4>Management Dashboard</h4>
+                    <p>Executive overview and business intelligence</p>
+                </div>
+                <div class="feature">
+                    <i class="fas fa-plane"></i>
+                    <h4>Customer Booking</h4>
+                    <p>Multi-step booking form with validation</p>
+                </div>
+                <div class="feature">
+                    <i class="fas fa-history"></i>
+                    <h4>Booking History</h4>
+                    <p>Travel history and payment tracking</p>
+                </div>
+                <div class="feature">
+                    <i class="fas fa-cogs"></i>
+                    <h4>Admin Panel</h4>
+                    <p>Complete system administration and employee management</p>
+                </div>
+            </div>
+            
+            <div style="margin-top: 30px; text-align: center;">
+                <a href="/admin-dashboard" class="portal-button" style="display: inline-block; max-width: 300px;">
+                    <i class="fas fa-tools"></i>
+                    Access Admin Panel
+                </a>
+                <p style="margin-top: 10px; font-size: 14px; color: #7f8c8d;">
+                    Complete system administration including employee management, security settings, and master data
+                </p>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

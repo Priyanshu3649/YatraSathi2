@@ -3,6 +3,7 @@ const Company = require('./Company');
 const Role = require('./Role');
 const Permission = require('./Permission');
 const RolePermission = require('./RolePermission');
+const RolePermissionTVL = require('./RolePermissionTVL');
 const User = require('./User');
 const Login = require('./Login');
 const Employee = require('./Employee');
@@ -107,6 +108,7 @@ module.exports = {
   Role,
   Permission,
   RolePermission,
+  RolePermissionTVL,
   User,
   Login,
   Employee,

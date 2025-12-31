@@ -1,77 +1,41 @@
 const express = require('express');
 const {
-  getAllEmployees,
-  getEmployeeById,
-  createEmployee,
-  updateEmployee,
-  deleteEmployee,
-  getEmployeeBookings,
-  getCorporateCustomers
-} = require('../controllers/employeeController');
+  getAgentDashboard,
+  getAccountsDashboard,
+  getHRDashboard,
+  getCallCenterDashboard,
+  getMarketingDashboard,
+  getManagementDashboard
+} = require('../controllers/dashboardController');
+const { getAllEmployees } = require('../controllers/employeeController');
 const authMiddleware = require('../middleware/authMiddleware');
+const { departmentAccessControl, hasPermission, checkDepartmentAccess } = require('../middleware/departmentAccessControl');
 
 const router = express.Router();
 
-// Apply authentication middleware to all routes
+// Apply authentication and department access control to all routes
 router.use(authMiddleware);
+router.use(departmentAccessControl);
 
-// Admin-only routes
-router.get('/', async (req, res, next) => {
-  console.log('=== Employee Route Check ===');
-  console.log('req.user:', req.user ? req.user.toJSON() : 'No user');
-  console.log('req.user.us_usertype:', req.user?.us_usertype);
-  console.log('Checking if us_usertype === admin:', req.user?.us_usertype === 'admin');
-  
-  if (req.user.us_usertype !== 'admin') {
-    console.log('Access denied - user type is:', req.user.us_usertype);
-    return res.status(403).json({ message: 'Access denied. Admin access required.' });
-  }
-  console.log('Access granted - proceeding to getAllEmployees');
-  next();
-}, getAllEmployees);
+// Employee Management Routes
+router.get('/', getAllEmployees);
 
-router.get('/:id', async (req, res, next) => {
-  if (req.user.us_usertype !== 'admin') {
-    return res.status(403).json({ message: 'Access denied. Admin access required.' });
-  }
-  next();
-}, getEmployeeById);
+// Agent Dashboard Routes
+router.get('/agent/dashboard', hasPermission('BOOKING_MANAGEMENT'), getAgentDashboard);
 
-router.post('/', async (req, res, next) => {
-  if (req.user.us_usertype !== 'admin') {
-    return res.status(403).json({ message: 'Access denied. Admin access required.' });
-  }
-  next();
-}, createEmployee);
+// Accounts Dashboard Routes  
+router.get('/accounts/dashboard', hasPermission('PAYMENT_PROCESSING'), getAccountsDashboard);
 
-router.put('/:id', async (req, res, next) => {
-  if (req.user.us_usertype !== 'admin') {
-    return res.status(403).json({ message: 'Access denied. Admin access required.' });
-  }
-  next();
-}, updateEmployee);
+// HR Dashboard Routes
+router.get('/hr/dashboard', checkDepartmentAccess(['HR']), getHRDashboard);
 
-router.delete('/:id', async (req, res, next) => {
-  if (req.user.us_usertype !== 'admin') {
-    return res.status(403).json({ message: 'Access denied. Admin access required.' });
-  }
-  next();
-}, deleteEmployee);
+// Call Center Dashboard Routes
+router.get('/callcenter/dashboard', checkDepartmentAccess(['SUPPORT', 'CALLCENTER']), getCallCenterDashboard);
 
-// Employee routes
-router.get('/my/bookings', async (req, res, next) => {
-  if (req.user.us_usertype !== 'employee' && req.user.us_usertype !== 'admin') {
-    return res.status(403).json({ message: 'Access denied. Employee access required.' });
-  }
-  next();
-}, getEmployeeBookings);
+// Marketing Dashboard Routes
+router.get('/marketing/dashboard', checkDepartmentAccess(['MARKETING', 'SALES']), getMarketingDashboard);
 
-// Relationship manager routes
-router.get('/corporate-customers', async (req, res, next) => {
-  if (req.user.us_usertype !== 'employee' && req.user.us_usertype !== 'admin') {
-    return res.status(403).json({ message: 'Access denied. Employee access required.' });
-  }
-  next();
-}, getCorporateCustomers);
+// Management Dashboard Routes
+router.get('/management/dashboard', hasPermission('MANAGEMENT_OVERVIEW'), getManagementDashboard);
 
 module.exports = router;

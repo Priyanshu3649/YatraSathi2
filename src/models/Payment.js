@@ -66,12 +66,14 @@ const Payment = sequelize.define('ptPayment', {
 // Define associations
 Payment.belongsTo(Account, {
   foreignKey: 'pt_acid',
-  targetKey: 'ac_acid'
+  targetKey: 'ac_acid',
+  as: 'account'
 });
 
 Payment.belongsTo(Booking, {
   foreignKey: 'pt_bkid',
-  targetKey: 'bk_bkid'
+  targetKey: 'bk_bkid',
+  as: 'booking'
 });
 
 module.exports = Payment;

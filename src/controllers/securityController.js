@@ -7,6 +7,37 @@ const RolePermissionTVL = require('../models/RolePermissionTVL');
 const UserPermissionTVL = require('../models/UserPermissionTVL');
 const Customer = require('../models/Customer');
 const User = require('../models/User');
+const Employee = require('../models/Employee');
+
+// Parse database errors
+const parseDbError = (error) => {
+  console.error('Database error:', error);
+  
+  // MySQL error codes
+  if (error.code) {
+    switch (error.code) {
+      case 'ER_DUP_ENTRY':
+        return { status: 409, message: 'Duplicate entry found' };
+      case 'ER_NO_REFERENCED_ROW_2':
+      case 'ER_ROW_IS_REFERENCED_2':
+        return { status: 400, message: 'Foreign key constraint violation' };
+      case 'ER_DATA_TOO_LONG':
+        return { status: 400, message: 'Data too long for field' };
+      case 'ER_BAD_NULL_ERROR':
+        return { status: 400, message: 'Required field cannot be null' };
+      default:
+        return { status: 500, message: 'Database error occurred' };
+    }
+  }
+  
+  // Sequelize validation errors
+  if (error.name === 'SequelizeValidationError') {
+    return { status: 400, message: error.message };
+  }
+  
+  // Default error
+  return { status: 500, message: 'An unexpected database error occurred' };
+};
 
 // ==================== APPLICATION OPERATIONS ====================
 
@@ -945,6 +976,177 @@ const deleteUserPermission = async (req, res) => {
   }
 };
 
+
+// ==================== EMPLOYEE MANAGEMENT ====================
+
+// Get all employees with user and role information
+const getAllEmployees = async (req, res) => {
+  try {
+    const employees = await Employee.findAll({
+      include: [
+        {
+          model: User,
+          as: 'User',
+          attributes: ['us_usid', 'us_fname', 'us_lname', 'us_email', 'us_phone', 'us_aadhaar', 'us_pan', 'us_addr1', 'us_addr2', 'us_city', 'us_state', 'us_pin', 'us_roid', 'us_coid', 'us_active'],
+          include: [
+            {
+              model: RoleTVL,
+              attributes: ['fn_fnid', 'fn_fnshort', 'fn_fndesc'],
+              as: 'fnXfunction'
+            }
+          ]
+        },
+        {
+          model: Employee,
+          as: 'manager',
+          attributes: ['em_usid', 'em_empno'],
+          include: [{
+            model: User,
+            as: 'User',
+            attributes: ['us_usid', 'us_fname', 'us_lname']
+          }],
+          required: false
+        }
+      ],
+      order: [['edtm', 'DESC']]
+    });
+
+    const transformedEmployees = employees.map(emp => {
+      const user = emp.User || {};
+      const manager = emp.manager?.User;
+      
+      return {
+        em_usid: emp.em_usid,
+        em_empno: emp.em_empno,
+        em_designation: emp.em_designation,
+        em_dept: emp.em_dept,
+        em_salary: emp.em_salary,
+        em_joindt: emp.em_joindt,
+        em_manager: emp.em_manager,
+        em_status: emp.em_status,
+        us_usid: user.us_usid,
+        us_fname: user.us_fname,
+        us_lname: user.us_lname,
+        us_email: user.us_email,
+        us_phone: user.us_phone,
+        us_aadhaar: user.us_aadhaar,
+        us_pan: user.us_pan,
+        us_addr1: user.us_addr1,
+        us_addr2: user.us_addr2,
+        us_city: user.us_city,
+        us_state: user.us_state,
+        us_pin: user.us_pin,
+        us_roid: user.us_roid,
+        us_coid: user.us_coid,
+        us_active: user.us_active,
+        fullName: `${user.us_fname || ''} ${user.us_lname || ''}`.trim(),
+        roleName: user.fnXfunction?.fn_fnshort || user.us_roid || '',
+        managerName: manager ? `${manager.us_fname || ''} ${manager.us_lname || ''}`.trim() : '',
+        Role: user.fnXfunction,
+        edtm: emp.edtm,
+        eby: emp.eby,
+        mdtm: emp.mdtm,
+        mby: emp.mby,
+        cdtm: emp.cdtm,
+        cby: emp.cby
+      };
+    });
+
+    res.json(transformedEmployees);
+  } catch (error) {
+    console.error('Error fetching employees:', error);
+    const parsedError = parseDbError(error);
+    res.status(parsedError.status).json({ message: parsedError.message });
+  }
+};
+
+const createEmployee = async (req, res) => {
+  try {
+    const { us_usid, us_fname, us_lname, us_email, us_phone, us_aadhaar, us_pan, us_addr1, us_addr2, us_city, us_state, us_pin, us_roid, us_coid, em_empno, em_designation, em_dept, em_salary, em_joindt, em_manager, em_status, us_active, lg_active, temp_password } = req.body;
+    if (!us_usid || !us_fname || !us_email || !us_phone || !us_roid || !em_empno || !em_designation || !em_dept || !em_joindt) {
+      return res.status(400).json({ message: 'Missing required fields' });
+    }
+    const existingUser = await User.findOne({ where: { [require('sequelize').Op.or]: [{ us_usid }, { us_email }, { us_phone }] } });
+    if (existingUser) {
+      return res.status(409).json({ message: 'User ID, email, or phone already exists' });
+    }
+    const existingEmployee = await Employee.findOne({ where: { em_empno } });
+    if (existingEmployee) {
+      return res.status(409).json({ message: 'Employee number already exists' });
+    }
+    const userData = { us_usid, us_fname, us_lname: us_lname || '', us_email, us_phone, us_aadhaar: us_aadhaar || null, us_pan: us_pan || null, us_addr1: us_addr1 || null, us_addr2: us_addr2 || null, us_city: us_city || null, us_state: us_state || null, us_pin: us_pin || null, us_usertype: 'employee', us_roid, us_coid: us_coid || 'TRV', us_active: us_active !== undefined ? (us_active ? 1 : 0) : 1, eby: req.user?.us_usid || 'SYSTEM', mby: req.user?.us_usid || 'SYSTEM' };
+    const user = await User.create(userData);
+    const employeeData = { em_usid: us_usid, em_empno, em_designation, em_dept, em_salary: em_salary || null, em_joindt: new Date(em_joindt), em_manager: em_manager || null, em_status: em_status || 'ACTIVE', eby: req.user?.us_usid || 'SYSTEM', mby: req.user?.us_usid || 'SYSTEM' };
+    const employee = await Employee.create(employeeData);
+    const password = temp_password || 'employee123';
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(password, salt);
+    const loginData = { lg_usid: us_usid, lg_email: us_email, lg_passwd: hashedPassword, lg_salt: salt, lg_active: lg_active !== undefined ? (lg_active ? 1 : 0) : 1, eby: req.user?.us_usid || 'SYSTEM', mby: req.user?.us_usid || 'SYSTEM' };
+    await Login.create(loginData);
+    const createdEmployee = await Employee.findOne({ where: { em_usid: us_usid }, include: [{ model: User, include: [{ model: RoleTVL, attributes: ['fn_fnid', 'fn_fnshort', 'fn_fndesc'], as: 'Role' }] }] });
+    res.status(201).json(createdEmployee);
+  } catch (error) {
+    console.error('Error creating employee:', error);
+    const parsedError = parseDbError(error);
+    res.status(parsedError.status).json({ message: parsedError.message });
+  }
+};
+
+const updateEmployee = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { us_fname, us_lname, us_email, us_phone, us_aadhaar, us_pan, us_addr1, us_addr2, us_city, us_state, us_pin, us_roid, us_coid, em_empno, em_designation, em_dept, em_salary, em_joindt, em_manager, em_status, us_active, lg_active, temp_password } = req.body;
+    const employee = await Employee.findOne({ where: { em_usid: id }, include: [{ model: User }] });
+    if (!employee) {
+      return res.status(404).json({ message: 'Employee not found' });
+    }
+    const user = employee.User;
+    if (!user) {
+      return res.status(404).json({ message: 'User record not found for employee' });
+    }
+    const userUpdateData = { us_fname: us_fname || user.us_fname, us_lname: us_lname !== undefined ? us_lname : user.us_lname, us_email: us_email || user.us_email, us_phone: us_phone || user.us_phone, us_aadhaar: us_aadhaar !== undefined ? us_aadhaar : user.us_aadhaar, us_pan: us_pan !== undefined ? us_pan : user.us_pan, us_addr1: us_addr1 !== undefined ? us_addr1 : user.us_addr1, us_addr2: us_addr2 !== undefined ? us_addr2 : user.us_addr2, us_city: us_city !== undefined ? us_city : user.us_city, us_state: us_state !== undefined ? us_state : user.us_state, us_pin: us_pin !== undefined ? us_pin : user.us_pin, us_roid: us_roid || user.us_roid, us_coid: us_coid || user.us_coid, us_active: us_active !== undefined ? (us_active ? 1 : 0) : user.us_active, mby: req.user?.us_usid || 'SYSTEM', mdtm: new Date() };
+    await user.update(userUpdateData);
+    const employeeUpdateData = { em_empno: em_empno || employee.em_empno, em_designation: em_designation || employee.em_designation, em_dept: em_dept || employee.em_dept, em_salary: em_salary !== undefined ? em_salary : employee.em_salary, em_joindt: em_joindt ? new Date(em_joindt) : employee.em_joindt, em_manager: em_manager !== undefined ? em_manager : employee.em_manager, em_status: em_status || employee.em_status, mby: req.user?.us_usid || 'SYSTEM', mdtm: new Date() };
+    await employee.update(employeeUpdateData);
+    if (temp_password) {
+      const login = await Login.findOne({ where: { lg_usid: id } });
+      if (login) {
+        const salt = await bcrypt.genSalt(10);
+        const hashedPassword = await bcrypt.hash(temp_password, salt);
+        await login.update({ lg_passwd: hashedPassword, lg_salt: salt, lg_active: lg_active !== undefined ? (lg_active ? 1 : 0) : login.lg_active, mby: req.user?.us_usid || 'SYSTEM', mdtm: new Date() });
+      }
+    } else if (lg_active !== undefined) {
+      const login = await Login.findOne({ where: { lg_usid: id } });
+      if (login) {
+        await login.update({ lg_active: lg_active ? 1 : 0, mby: req.user?.us_usid || 'SYSTEM', mdtm: new Date() });
+      }
+    }
+    const updatedEmployee = await Employee.findOne({ where: { em_usid: id }, include: [{ model: User, include: [{ model: RoleTVL, attributes: ['fn_fnid', 'fn_fnshort', 'fn_fndesc'], as: 'Role' }] }] });
+    res.json(updatedEmployee);
+  } catch (error) {
+    console.error('Error updating employee:', error);
+    const parsedError = parseDbError(error);
+    res.status(parsedError.status).json({ message: parsedError.message });
+  }
+};
+
+const deleteEmployee = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const employee = await Employee.findOne({ where: { em_usid: id } });
+    if (!employee) {
+      return res.status(404).json({ message: 'Employee not found' });
+    }
+    await Login.destroy({ where: { lg_usid: id } });
+    await Employee.destroy({ where: { em_usid: id } });
+    await User.destroy({ where: { us_usid: id } });
+    res.json({ message: 'Employee deleted successfully' });
+  } catch (error) {
+    console.error('Error deleting employee:', error);
+    const parsedError = parseDbError(error);
+    res.status(parsedError.status).json({ message: parsedError.message });
+  }
+};
 module.exports = {
   // Applications
   getAllApplications,
@@ -981,6 +1183,12 @@ module.exports = {
   getAllCustomers,
   updateCustomer,
   deleteCustomer,
+  
+  // Employees
+  getAllEmployees,
+  createEmployee,
+  updateEmployee,
+  deleteEmployee,
   
   // Role Permissions
   getAllRolePermissions,

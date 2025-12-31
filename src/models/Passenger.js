@@ -85,7 +85,8 @@ const Passenger = sequelize.define('psPassenger', {
 // Define associations
 Passenger.belongsTo(Booking, {
   foreignKey: 'ps_bkid',
-  targetKey: 'bk_bkid'
+  targetKey: 'bk_bkid',
+  as: 'booking'
 });
 
 module.exports = Passenger;

@@ -71,4 +71,11 @@ const RolePermissionTVL = sequelizeTVL.define('fpXfuncperm', {
   timestamps: false
 });
 
+// Define associations
+RolePermissionTVL.belongsTo(require('./Role'), {
+  foreignKey: 'fp_fnid',
+  targetKey: 'fn_fnid',
+  as: 'Role'
+});
+
 module.exports = RolePermissionTVL;

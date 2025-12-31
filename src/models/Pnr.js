@@ -93,7 +93,8 @@ const Pnr = sequelize.define('pnPnr', {
 // Define associations
 Pnr.belongsTo(Booking, {
   foreignKey: 'pn_bkid',
-  targetKey: 'bk_bkid'
+  targetKey: 'bk_bkid',
+  as: 'booking'
 });
 
 Pnr.belongsTo(Train, {

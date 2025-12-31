@@ -125,7 +125,7 @@ const Payments = () => {
     
     try {
       // Make API call to refund payment
-      const response = await fetch(`http://localhost:5003/api/payments/${paymentId}/refund`, {
+      const response = await fetch(`http://127.0.0.1:5001/api/payments/${paymentId}/refund`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

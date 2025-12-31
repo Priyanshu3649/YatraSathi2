@@ -34,7 +34,7 @@ const Reports = () => {
       setLoading(true);
       setError('');
       
-      let url = `http://localhost:5003/api/reports/${activeTab.replace(/([A-Z])/g, '-$1').toLowerCase()}`;
+      let url = `http://127.0.0.1:5001/api/reports/${activeTab.replace(/([A-Z])/g, '-$1').toLowerCase()}`;
       
       // Add filters for booking report
       if (activeTab === 'bookings') {

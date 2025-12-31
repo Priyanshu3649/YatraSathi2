@@ -6,6 +6,8 @@ import { parseError, validateFormData } from '../utils/errorParser';
 import '../styles/vintage-erp-theme.css';
 import '../styles/dynamic-admin-panel.css';
 
+const API_BASE_URL = 'http://127.0.0.1:5003/api';
+
 const DynamicAdminPanel = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -246,6 +248,59 @@ const DynamicAdminPanel = () => {
       columnLabels: ['Customer No', 'Name', 'Email', 'Phone', 'Type', 'Company', 'Status', 'Registered On'],
       columnWidths: ['120px', '180px', '200px', '130px', '100px', '150px', '80px', '150px'],
       filterFields: ['cu_custno', 'cu_name', 'cu_email', 'cu_custtype', 'cu_status']
+    },
+    employees: {
+      name: 'Employee Management',
+      endpoint: '/api/security/employees',
+      fields: [
+        { name: 'us_usid', label: 'Employee ID', type: 'text', required: true, readOnly: false, maxLength: 15 },
+        { name: 'us_fname', label: 'First Name', type: 'text', required: true, maxLength: 50 },
+        { name: 'us_lname', label: 'Last Name', type: 'text', maxLength: 50 },
+        { name: 'us_email', label: 'Email', type: 'email', required: true, maxLength: 100 },
+        { name: 'us_phone', label: 'Phone', type: 'tel', required: true, maxLength: 15 },
+        { name: 'us_aadhaar', label: 'Aadhaar Number', type: 'text', maxLength: 12, pattern: '[0-9]{12}', title: 'Enter 12-digit Aadhaar number' },
+        { name: 'us_pan', label: 'PAN Number', type: 'text', maxLength: 10, pattern: '[A-Z]{5}[0-9]{4}[A-Z]{1}', title: 'Enter valid PAN number (e.g., ABCDE1234F)' },
+        { name: 'us_roid', label: 'Role', type: 'dropdown', required: true, source: 'roles', displayField: 'fn_fnshort', valueField: 'fn_fnid' },
+        { name: 'us_coid', label: 'Company', type: 'dropdown', required: true, source: 'company', displayField: 'co_coshort', valueField: 'co_coid', defaultValue: 'TRV' },
+        { name: 'em_empno', label: 'Employee Number', type: 'text', required: true, maxLength: 10 },
+        { name: 'em_designation', label: 'Designation', type: 'text', required: true, maxLength: 50 },
+        { name: 'em_dept', label: 'Department', type: 'select', required: true, options: [
+          { value: 'BOOKING', label: 'Booking' },
+          { value: 'ACCOUNTS', label: 'Accounts' },
+          { value: 'HR', label: 'Human Resources' },
+          { value: 'SUPPORT', label: 'Customer Support' },
+          { value: 'MARKETING', label: 'Marketing & Sales' },
+          { value: 'MANAGEMENT', label: 'Management' },
+          { value: 'IT', label: 'Information Technology' },
+          { value: 'OPERATIONS', label: 'Operations' }
+        ]},
+        { name: 'em_salary', label: 'Salary', type: 'number', step: '0.01', min: '0' },
+        { name: 'em_joindt', label: 'Join Date', type: 'date', required: true },
+        { name: 'em_manager', label: 'Manager', type: 'dropdown', source: 'employees', displayField: 'fullName', valueField: 'us_usid' },
+        { name: 'em_status', label: 'Employment Status', type: 'select', required: true, defaultValue: 'ACTIVE', options: [
+          { value: 'ACTIVE', label: 'Active' },
+          { value: 'INACTIVE', label: 'Inactive' },
+          { value: 'TERMINATED', label: 'Terminated' },
+          { value: 'RESIGNED', label: 'Resigned' }
+        ]},
+        { name: 'us_addr1', label: 'Address Line 1', type: 'text', maxLength: 100 },
+        { name: 'us_addr2', label: 'Address Line 2', type: 'text', maxLength: 100 },
+        { name: 'us_city', label: 'City', type: 'text', maxLength: 50 },
+        { name: 'us_state', label: 'State', type: 'text', maxLength: 50 },
+        { name: 'us_pin', label: 'PIN Code', type: 'text', maxLength: 10, pattern: '[0-9]{6}', title: 'Enter 6-digit PIN code' },
+        { name: 'us_active', label: 'User Active', type: 'checkbox', defaultValue: 1 },
+        { name: 'lg_active', label: 'Login Active', type: 'checkbox', defaultValue: 1 },
+        { name: 'temp_password', label: 'Temporary Password', type: 'password', maxLength: 50, placeholder: 'Leave blank to keep existing password' }
+      ],
+      columns: ['us_usid', 'fullName', 'us_email', 'us_phone', 'em_empno', 'em_designation', 'em_dept', 'roleName', 'em_status', 'us_active', 'edtm'],
+      columnLabels: ['Employee ID', 'Full Name', 'Email', 'Phone', 'Emp No', 'Designation', 'Department', 'Role', 'Status', 'Active', 'Created On'],
+      columnWidths: ['120px', '180px', '200px', '130px', '100px', '150px', '120px', '100px', '100px', '70px', '150px'],
+      filterFields: ['us_usid', 'fullName', 'us_email', 'em_empno', 'em_dept', 'roleName', 'em_status', 'active'],
+      computedFields: [
+        { name: 'fullName', label: 'Full Name', formula: (data) => `${data.us_fname || ''} ${data.us_lname || ''}`.trim() },
+        { name: 'roleName', label: 'Role Name', formula: (data) => data.Role?.fn_fnshort || data.us_roid || '' }
+      ],
+      specialFeatures: ['employeeCreation', 'roleAssignment', 'passwordReset']
     },
     // ==================== MASTER DATA MODULES ====================
     stations: {
@@ -544,11 +599,11 @@ const DynamicAdminPanel = () => {
     try {
       // Fetch all dropdown sources
       const [appsRes, modsRes, opsRes, rolesRes, usersRes] = await Promise.all([
-        fetch('http://localhost:5003/api/security/applications', { headers: { 'Authorization': `Bearer ${token}` } }),
-        fetch('http://localhost:5003/api/security/modules', { headers: { 'Authorization': `Bearer ${token}` } }),
-        fetch('http://localhost:5003/api/permissions', { headers: { 'Authorization': `Bearer ${token}` } }),
-        fetch('http://localhost:5003/api/permissions/roles', { headers: { 'Authorization': `Bearer ${token}` } }),
-        fetch('http://localhost:5003/api/security/users', { headers: { 'Authorization': `Bearer ${token}` } })
+        fetch(`${API_BASE_URL}/security/applications`, { headers: { 'Authorization': `Bearer ${token}` } }),
+        fetch(`${API_BASE_URL}/security/modules`, { headers: { 'Authorization': `Bearer ${token}` } }),
+        fetch(`${API_BASE_URL}/permissions`, { headers: { 'Authorization': `Bearer ${token}` } }),
+        fetch(`${API_BASE_URL}/permissions/roles`, { headers: { 'Authorization': `Bearer ${token}` } }),
+        fetch(`${API_BASE_URL}/security/users`, { headers: { 'Authorization': `Bearer ${token}` } })
       ]);
 
       const apps = appsRes.ok ? await appsRes.json() : [];
@@ -579,7 +634,7 @@ const DynamicAdminPanel = () => {
     setLoading(true);
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`http://localhost:5003${modules[activeModule].endpoint}`, {
+      const response = await fetch(`${API_BASE_URL}${modules[activeModule].endpoint}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       
@@ -775,7 +830,7 @@ const DynamicAdminPanel = () => {
       const method = selectedRecord ? 'PUT' : 'POST';
       
       // Build URL based on module type (handle composite keys)
-      let url = `http://localhost:5003${modules[activeModule].endpoint}`;
+      let url = `http://127.0.0.1:5001${modules[activeModule].endpoint}`;
       
       if (selectedRecord) {
         // Handle composite keys for different modules
@@ -869,7 +924,7 @@ const DynamicAdminPanel = () => {
         const token = localStorage.getItem('token');
         
         // Build URL based on module type (handle composite keys)
-        let url = `http://localhost:5003${modules[activeModule].endpoint}`;
+        let url = `http://127.0.0.1:5001${modules[activeModule].endpoint}`;
         
         if (activeModule === 'modules') {
           url += `/${selectedRecord.mo_apid}/${selectedRecord.mo_moid}`;
@@ -905,9 +960,6 @@ const DynamicAdminPanel = () => {
           showMessage(type, title, description);
         }
       } catch (error) {
-        console.error('Error deleting record:', error);
-        
-        // Parse error and show user-friendly message
         const { type, title, description } = parseError(error);
         showMessage(type, title, description);
       }
@@ -1107,6 +1159,12 @@ const DynamicAdminPanel = () => {
                   onClick={() => handleModuleChange('customers')}
                 >
                   Customer List
+                </div>
+                <div 
+                  className={`erp-nav-item sub-item ${activeModule === 'employees' ? 'active' : ''}`}
+                  onClick={() => handleModuleChange('employees')}
+                >
+                  Employee Management
                 </div>
               </>
             )}

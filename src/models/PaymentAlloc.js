@@ -46,12 +46,14 @@ const PaymentAlloc = sequelize.define('paPaymentAlloc', {
 // Define associations
 PaymentAlloc.belongsTo(Payment, {
   foreignKey: 'pa_ptid',
-  targetKey: 'pt_ptid'
+  targetKey: 'pt_ptid',
+  as: 'payment'
 });
 
 PaymentAlloc.belongsTo(Pnr, {
   foreignKey: 'pa_pnid',
-  targetKey: 'pn_pnid'
+  targetKey: 'pn_pnid',
+  as: 'pnr'
 });
 
 module.exports = PaymentAlloc;

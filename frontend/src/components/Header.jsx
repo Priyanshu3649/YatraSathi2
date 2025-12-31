@@ -49,7 +49,6 @@ const Header = () => {
                 )}
                 {user.us_usertype === 'admin' && (
                   <>
-                    <li><Link to="/employees" className={isActive('/employees') ? 'active' : ''}>Employees</Link></li>
                     <li><Link to="/admin-dashboard" className={isActive('/admin-dashboard') ? 'active' : ''}>Admin Panel</Link></li>
                   </>
                 )}

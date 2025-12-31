@@ -1,0 +1,431 @@
+import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import '../../styles/booking-form.css';
+
+const BookingForm = () => {
+  const [currentStep, setCurrentStep] = useState(1);
+  const [formData, setFormData] = useState({
+    from: '',
+    to: '',
+    journeyDate: '',
+    trainClass: 'SL',
+    berthPreference: 'NO_PREF',
+    passengers: [
+      { name: '', age: '', gender: 'M' }
+    ]
+  });
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const navigate = useNavigate();
+
+  const trainClasses = [
+    { value: 'SL', label: 'Sleeper (SL)' },
+    { value: '3A', label: '3rd AC (3A)' },
+    { value: '2A', label: '2nd AC (2A)' },
+    { value: '1A', label: '1st AC (1A)' },
+    { value: 'CC', label: 'Chair Car (CC)' }
+  ];
+
+  const berthPreferences = [
+    { value: 'NO_PREF', label: 'No Preference' },
+    { value: 'LOWER', label: 'Lower Berth' },
+    { value: 'MIDDLE', label: 'Middle Berth' },
+    { value: 'UPPER', label: 'Upper Berth' },
+    { value: 'SIDE_LOWER', label: 'Side Lower' },
+    { value: 'SIDE_UPPER', label: 'Side Upper' }
+  ];
+
+  const handleInputChange = (e) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({
+      ...prev,
+      [name]: value
+    }));
+  };
+
+  const handlePassengerChange = (index, field, value) => {
+    const updatedPassengers = [...formData.passengers];
+    updatedPassengers[index][field] = value;
+    setFormData(prev => ({
+      ...prev,
+      passengers: updatedPassengers
+    }));
+  };
+
+  const addPassenger = () => {
+    if (formData.passengers.length < 6) {
+      setFormData(prev => ({
+        ...prev,
+        passengers: [...prev.passengers, { name: '', age: '', gender: 'M' }]
+      }));
+    }
+  };
+
+  const removePassenger = (index) => {
+    if (formData.passengers.length > 1) {
+      const updatedPassengers = formData.passengers.filter((_, i) => i !== index);
+      setFormData(prev => ({
+        ...prev,
+        passengers: updatedPassengers
+      }));
+    }
+  };
+
+  const validateStep1 = () => {
+    if (!formData.from || !formData.to || !formData.journeyDate) {
+      setError('Please fill in all journey details');
+      return false;
+    }
+    
+    const journeyDate = new Date(formData.journeyDate);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    if (journeyDate < today) {
+      setError('Journey date cannot be in the past');
+      return false;
+    }
+    
+    if (formData.from === formData.to) {
+      setError('From and To stations cannot be the same');
+      return false;
+    }
+    
+    return true;
+  };
+
+  const validateStep2 = () => {
+    for (let i = 0; i < formData.passengers.length; i++) {
+      const passenger = formData.passengers[i];
+      if (!passenger.name || !passenger.age) {
+        setError(`Please fill in details for passenger ${i + 1}`);
+        return false;
+      }
+      
+      const age = parseInt(passenger.age);
+      if (isNaN(age) || age < 1 || age > 120) {
+        setError(`Please enter a valid age for passenger ${i + 1}`);
+        return false;
+      }
+    }
+    return true;
+  };
+
+  const nextStep = () => {
+    setError('');
+    
+    if (currentStep === 1 && !validateStep1()) {
+      return;
+    }
+    
+    if (currentStep === 2 && !validateStep2()) {
+      return;
+    }
+    
+    setCurrentStep(prev => prev + 1);
+  };
+
+  const prevStep = () => {
+    setCurrentStep(prev => prev - 1);
+  };
+
+  const submitBooking = async () => {
+    if (!validateStep2()) {
+      return;
+    }
+
+    setLoading(true);
+    setError('');
+
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch('http://127.0.0.1:5001/api/customer/bookings', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(formData)
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        navigate('/customer/bookings', {
+          state: { 
+            message: 'Booking created successfully! You will be contacted by our agent soon.',
+            bookingId: data.data.bookingId
+          }
+        });
+      } else {
+        setError(data.error?.message || 'Failed to create booking');
+      }
+    } catch (error) {
+      console.error('Booking submission error:', error);
+      setError('Network error. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const renderStep1 = () => (
+    <div className="booking-step">
+      <h3>Journey Details</h3>
+      
+      <div className="form-row">
+        <div className="form-group">
+          <label>From Station</label>
+          <input
+            type="text"
+            name="from"
+            value={formData.from}
+            onChange={handleInputChange}
+            placeholder="Enter departure station"
+            required
+          />
+        </div>
+        
+        <div className="form-group">
+          <label>To Station</label>
+          <input
+            type="text"
+            name="to"
+            value={formData.to}
+            onChange={handleInputChange}
+            placeholder="Enter destination station"
+            required
+          />
+        </div>
+      </div>
+
+      <div className="form-row">
+        <div className="form-group">
+          <label>Journey Date</label>
+          <input
+            type="date"
+            name="journeyDate"
+            value={formData.journeyDate}
+            onChange={handleInputChange}
+            min={new Date().toISOString().split('T')[0]}
+            required
+          />
+        </div>
+        
+        <div className="form-group">
+          <label>Class</label>
+          <select
+            name="trainClass"
+            value={formData.trainClass}
+            onChange={handleInputChange}
+          >
+            {trainClasses.map(cls => (
+              <option key={cls.value} value={cls.value}>
+                {cls.label}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      <div className="form-group">
+        <label>Berth Preference</label>
+        <select
+          name="berthPreference"
+          value={formData.berthPreference}
+          onChange={handleInputChange}
+        >
+          {berthPreferences.map(pref => (
+            <option key={pref.value} value={pref.value}>
+              {pref.label}
+            </option>
+          ))}
+        </select>
+      </div>
+    </div>
+  );
+
+  const renderStep2 = () => (
+    <div className="booking-step">
+      <h3>Passenger Details</h3>
+      
+      {formData.passengers.map((passenger, index) => (
+        <div key={index} className="passenger-card">
+          <div className="passenger-header">
+            <h4>Passenger {index + 1}</h4>
+            {formData.passengers.length > 1 && (
+              <button
+                type="button"
+                onClick={() => removePassenger(index)}
+                className="remove-passenger"
+              >
+                <i className="fas fa-times"></i>
+              </button>
+            )}
+          </div>
+          
+          <div className="form-row">
+            <div className="form-group">
+              <label>Full Name</label>
+              <input
+                type="text"
+                value={passenger.name}
+                onChange={(e) => handlePassengerChange(index, 'name', e.target.value)}
+                placeholder="Enter full name"
+                required
+              />
+            </div>
+            
+            <div className="form-group">
+              <label>Age</label>
+              <input
+                type="number"
+                value={passenger.age}
+                onChange={(e) => handlePassengerChange(index, 'age', e.target.value)}
+                placeholder="Age"
+                min="1"
+                max="120"
+                required
+              />
+            </div>
+            
+            <div className="form-group">
+              <label>Gender</label>
+              <select
+                value={passenger.gender}
+                onChange={(e) => handlePassengerChange(index, 'gender', e.target.value)}
+              >
+                <option value="M">Male</option>
+                <option value="F">Female</option>
+                <option value="O">Other</option>
+              </select>
+            </div>
+          </div>
+        </div>
+      ))}
+      
+      {formData.passengers.length < 6 && (
+        <button
+          type="button"
+          onClick={addPassenger}
+          className="add-passenger"
+        >
+          <i className="fas fa-plus"></i>
+          Add Passenger
+        </button>
+      )}
+    </div>
+  );
+
+  const renderStep3 = () => (
+    <div className="booking-step">
+      <h3>Review & Submit</h3>
+      
+      <div className="booking-summary">
+        <div className="summary-section">
+          <h4>Journey Details</h4>
+          <div className="summary-item">
+            <span>Route:</span>
+            <span>{formData.from} → {formData.to}</span>
+          </div>
+          <div className="summary-item">
+            <span>Date:</span>
+            <span>{new Date(formData.journeyDate).toLocaleDateString()}</span>
+          </div>
+          <div className="summary-item">
+            <span>Class:</span>
+            <span>{trainClasses.find(c => c.value === formData.trainClass)?.label}</span>
+          </div>
+          <div className="summary-item">
+            <span>Berth Preference:</span>
+            <span>{berthPreferences.find(b => b.value === formData.berthPreference)?.label}</span>
+          </div>
+        </div>
+        
+        <div className="summary-section">
+          <h4>Passengers ({formData.passengers.length})</h4>
+          {formData.passengers.map((passenger, index) => (
+            <div key={index} className="passenger-summary">
+              <span>{passenger.name}</span>
+              <span>{passenger.age} years, {passenger.gender === 'M' ? 'Male' : passenger.gender === 'F' ? 'Female' : 'Other'}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="booking-form-container">
+      <div className="booking-form-header">
+        <button onClick={() => navigate('/customer/dashboard')} className="back-btn">
+          <i className="fas fa-arrow-left"></i>
+          Back to Dashboard
+        </button>
+        <h1>New Booking</h1>
+      </div>
+
+      <div className="booking-form-card">
+        <div className="step-indicator">
+          <div className={`step ${currentStep >= 1 ? 'active' : ''}`}>
+            <span>1</span>
+            <label>Journey</label>
+          </div>
+          <div className={`step ${currentStep >= 2 ? 'active' : ''}`}>
+            <span>2</span>
+            <label>Passengers</label>
+          </div>
+          <div className={`step ${currentStep >= 3 ? 'active' : ''}`}>
+            <span>3</span>
+            <label>Review</label>
+          </div>
+        </div>
+
+        {error && (
+          <div className="error-message">
+            {error}
+          </div>
+        )}
+
+        <form onSubmit={(e) => e.preventDefault()}>
+          {currentStep === 1 && renderStep1()}
+          {currentStep === 2 && renderStep2()}
+          {currentStep === 3 && renderStep3()}
+
+          <div className="form-actions">
+            {currentStep > 1 && (
+              <button
+                type="button"
+                onClick={prevStep}
+                className="btn-outline"
+                disabled={loading}
+              >
+                Previous
+              </button>
+            )}
+            
+            {currentStep < 3 ? (
+              <button
+                type="button"
+                onClick={nextStep}
+                className="btn-primary"
+              >
+                Next
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={submitBooking}
+                className="btn-primary"
+                disabled={loading}
+              >
+                {loading ? 'Creating Booking...' : 'Submit Booking'}
+              </button>
+            )}
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+};
+
+export default BookingForm;

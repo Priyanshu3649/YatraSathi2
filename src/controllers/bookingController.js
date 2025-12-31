@@ -1,5 +1,6 @@
 const { Booking, User, Customer, Employee, Station } = require('../models');
 const { Sequelize } = require('sequelize');
+const { sequelize } = require('../models/baseModel');
 
 // Create a new booking request
 const createBooking = async (req, res) => {
@@ -209,7 +210,16 @@ const cancelBooking = async (req, res) => {
 // Delete booking (only for pending bookings)
 const deleteBooking = async (req, res) => {
   try {
-    const booking = await Booking.findByPk(req.params.id);
+    const { Passenger, Pnr, Account, Payment, PaymentAlloc } = require('../models');
+    
+    const bookingId = parseInt(req.params.id);
+    
+    const booking = await Booking.findByPk(bookingId);
+    
+    // Get related records separately to avoid potential association issues
+    const passengers = await Passenger.findAll({ where: { ps_bkid: bookingId } });
+    const pnr = await Pnr.findOne({ where: { pn_bkid: bookingId } });
+    const account = await Account.findOne({ where: { ac_bkid: bookingId } });
     
     if (!booking) {
       return res.status(404).json({ message: 'Booking not found' });
@@ -226,8 +236,59 @@ const deleteBooking = async (req, res) => {
       return res.status(400).json({ message: 'Only pending bookings can be deleted' });
     }
     
-    await booking.destroy();
-    res.json({ message: 'Booking deleted successfully' });
+    // Start a transaction to ensure data consistency
+    const transaction = await sequelize.transaction();
+    
+    try {
+      // Delete payment allocations related to this booking's PNRs
+      if (pnr && pnr.pn_pnid) {
+        await PaymentAlloc.destroy({
+          where: { pa_pnid: pnr.pn_pnid },
+          transaction: transaction
+        });
+      }
+      
+      // Delete payments related to this booking (both via account and directly via booking)
+      if (account && account.ac_acid) {
+        await Payment.destroy({
+          where: { pt_acid: account.ac_acid },
+          transaction: transaction
+        });
+      }
+      
+      // Also delete any payments that directly reference this booking
+      await Payment.destroy({
+        where: { pt_bkid: booking.bk_bkid },
+        transaction: transaction
+      });
+      
+      // Delete PNR records
+      if (pnr) {
+        await pnr.destroy({ transaction: transaction });
+      }
+      
+      // Delete passenger records
+      if (passengers && passengers.length > 0) {
+        await Passenger.destroy({
+          where: { ps_bkid: booking.bk_bkid },
+          transaction: transaction
+        });
+      }
+      
+      // Delete account record
+      if (account) {
+        await account.destroy({ transaction: transaction });
+      }
+      
+      // Finally, delete the booking
+      await booking.destroy({ transaction: transaction });
+      
+      await transaction.commit();
+      res.json({ message: 'Booking deleted successfully' });
+    } catch (err) {
+      await transaction.rollback();
+      throw err;
+    }
   } catch (error) {
     res.status(500).json({ message: error.message });
   }

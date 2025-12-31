@@ -81,12 +81,13 @@ const Employee = sequelize.define('emEmployee', {
 // Define associations
 Employee.belongsTo(User, {
   foreignKey: 'em_usid',
-  targetKey: 'us_usid'
+  targetKey: 'us_usid',
+  as: 'User'
 });
 
-Employee.belongsTo(User, {
+Employee.belongsTo(Employee, {
   foreignKey: 'em_manager',
-  targetKey: 'us_usid',
+  targetKey: 'em_usid',
   as: 'manager'
 });
 

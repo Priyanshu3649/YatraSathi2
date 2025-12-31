@@ -1,5 +1,5 @@
 const express = require('express');
-const { registerUser, loginUser, getUserProfile, requestPasswordReset, resetPassword, verifyEmail, logoutUser, getUserSessions, logoutAllDevices } = require('../controllers/authController');
+const { registerUser, loginUser, employeeLogin, getUserProfile, requestPasswordReset, resetPassword, verifyEmail, logoutUser, getUserSessions, logoutAllDevices } = require('../controllers/authController');
 const authMiddleware = require('../middleware/authMiddleware');
 
 console.log('Auth routes module loaded');
@@ -9,6 +9,7 @@ const router = express.Router();
 // Public routes
 router.post('/register', registerUser);
 router.post('/login', loginUser);
+router.post('/employee-login', employeeLogin);
 router.post('/request-password-reset', requestPasswordReset);
 router.post('/reset-password', resetPassword);
 router.get('/verify-email/:token', verifyEmail);

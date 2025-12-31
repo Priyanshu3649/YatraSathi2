@@ -1,4 +1,4 @@
-const { Login, User } = require('../models');
+const { Login, User, Employee } = require('../models');
 const { Sequelize } = require('sequelize');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
@@ -78,6 +78,110 @@ const registerUser = async (req, res) => {
     }
   } catch (error) {
     res.status(500).json({ message: error.message });
+  }
+};
+
+// Employee Login
+const employeeLogin = async (req, res) => {
+  try {
+    const { email, password } = req.body;
+
+    // Validate input
+    if (!email || !password) {
+      return res.status(400).json({ 
+        success: false, 
+        error: { code: 'VALIDATION_ERROR', message: 'Email and password are required' } 
+      });
+    }
+
+    // Find login by email
+    const login = await Login.findOne({ 
+      where: { lg_email: email, lg_active: 1 }
+    });
+
+    if (!login) {
+      return res.status(401).json({ 
+        success: false, 
+        error: { code: 'UNAUTHORIZED', message: 'Invalid email or password' } 
+      });
+    }
+
+    // Verify password
+    const isPasswordValid = await bcrypt.compare(password, login.lg_passwd);
+    if (!isPasswordValid) {
+      return res.status(401).json({ 
+        success: false, 
+        error: { code: 'UNAUTHORIZED', message: 'Invalid email or password' } 
+      });
+    }
+
+    // Get user details with employee info
+    const user = await User.findOne({
+      where: { 
+        us_usid: login.lg_usid, 
+        us_usertype: { [Sequelize.Op.in]: ['employee', 'admin'] }
+      },
+      include: [{
+        model: Employee,
+        attributes: ['em_empno', 'em_designation', 'em_dept', 'em_status'],
+        required: false // Make employee info optional for admin users
+      }]
+    });
+
+    if (!user) {
+      return res.status(401).json({ 
+        success: false, 
+        error: { code: 'UNAUTHORIZED', message: 'Employee or Admin account not found' } 
+      });
+    }
+
+    // Check if employee is active (only for employee accounts)
+    if (user.us_usertype === 'employee' && user.Employee && user.Employee.em_status !== 'ACTIVE') {
+      return res.status(403).json({ 
+        success: false, 
+        error: { code: 'EMPLOYEE_INACTIVE', message: 'Employee account is inactive' } 
+      });
+    }
+
+    // Create session for the employee
+    const session = await SessionService.createSession(user, req);
+    
+    // Generate JWT with user details
+    const token = jwt.sign(
+      { 
+        id: user.us_usid,
+        role: user.us_roid,
+        dept: user.Employee?.em_dept || 'ADMIN',
+        designation: user.Employee?.em_designation || 'Administrator',
+        userType: user.us_usertype
+      }, 
+      process.env.JWT_SECRET || 'default_secret',
+      { expiresIn: '8h' } // Shorter expiry for employees/admins
+    );
+
+    res.json({
+      success: true,
+      data: {
+        user: {
+          id: user.us_usid,
+          name: user.us_fname,
+          email: user.us_email,
+          role: user.us_roid,
+          department: user.Employee?.em_dept || 'ADMIN',
+          designation: user.Employee?.em_designation || 'Administrator',
+          employeeNumber: user.Employee?.em_empno || 'ADMIN001',
+          us_usertype: user.us_usertype
+        },
+        token,
+        sessionId: session.ss_ssid
+      }
+    });
+  } catch (error) {
+    console.error('Employee login error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: { code: 'SERVER_ERROR', message: 'Internal server error' } 
+    });
   }
 };
 
@@ -330,6 +434,7 @@ const logoutAllDevices = async (req, res) => {
 module.exports = {
   registerUser,
   loginUser,
+  employeeLogin,
   getUserProfile,
   requestPasswordReset,
   resetPassword,

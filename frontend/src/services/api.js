@@ -1,5 +1,5 @@
 // API service for making HTTP requests to the backend
-const API_BASE_URL = 'http://localhost:5003/api';
+const API_BASE_URL = 'http://127.0.0.1:5003/api';
 
 // Create headers for requests
 const getHeaders = (includeAuth = false) => {
@@ -31,6 +31,23 @@ export const authAPI = {
     
     if (!response.ok) {
       throw new Error(data.message || 'Login failed');
+    }
+    
+    return data;
+  },
+
+  // Employee Login
+  employeeLogin: async (email, password) => {
+    const response = await fetch(`${API_BASE_URL}/auth/employee-login`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify({ email, password })
+    });
+    
+    const data = await response.json();
+    
+    if (!response.ok) {
+      throw new Error(data.error?.message || 'Login failed');
     }
     
     return data;
@@ -103,6 +120,67 @@ export const dashboardAPI = {
       throw new Error(data.message || 'Failed to get admin stats');
     }
     
+    return data;
+  },
+
+  // Role-specific dashboards
+  getAgentDashboard: async () => {
+    const response = await fetch(`${API_BASE_URL}/employee/agent/dashboard`, {
+      method: 'GET',
+      headers: getHeaders(true)
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.message || 'Failed to get dashboard');
+    return data;
+  },
+
+  getAccountsDashboard: async () => {
+    const response = await fetch(`${API_BASE_URL}/employee/accounts/dashboard`, {
+      method: 'GET',
+      headers: getHeaders(true)
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.message || 'Failed to get dashboard');
+    return data;
+  },
+
+  getHRDashboard: async () => {
+    const response = await fetch(`${API_BASE_URL}/employee/hr/dashboard`, {
+      method: 'GET',
+      headers: getHeaders(true)
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.message || 'Failed to get dashboard');
+    return data;
+  },
+
+  getCallCenterDashboard: async () => {
+    const response = await fetch(`${API_BASE_URL}/employee/callcenter/dashboard`, {
+      method: 'GET',
+      headers: getHeaders(true)
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.message || 'Failed to get dashboard');
+    return data;
+  },
+
+  getMarketingDashboard: async () => {
+    const response = await fetch(`${API_BASE_URL}/employee/marketing/dashboard`, {
+      method: 'GET',
+      headers: getHeaders(true)
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.message || 'Failed to get dashboard');
+    return data;
+  },
+
+  getManagementDashboard: async () => {
+    const response = await fetch(`${API_BASE_URL}/employee/management/dashboard`, {
+      method: 'GET',
+      headers: getHeaders(true)
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.message || 'Failed to get dashboard');
     return data;
   },
   

@@ -90,19 +90,19 @@ const EmployeeManagement = () => {
   const handleEdit = (employee) => {
     setEditingEmployee(employee);
     setFormData({
-      name: employee.us_fname || '',
-      email: employee.us_email || '',
-      phone: employee.us_phone || '',
+      name: employee.user?.us_fname || '',
+      email: employee.user?.us_email || '',
+      phone: employee.user?.us_phone || '',
       password: 'employee123',
-      aadhaarNumber: employee.us_aadhaar || '',
-      department: employee.Employee?.em_dept || '',
-      designation: employee.Employee?.em_designation || '',
-      salary: employee.Employee?.em_salary || '',
-      joinDate: employee.Employee?.em_joindt ? employee.Employee.em_joindt.split('T')[0] : '',
-      address: employee.Employee?.em_address || '',
-      city: employee.Employee?.em_city || '',
-      state: employee.Employee?.em_state || '',
-      pincode: employee.Employee?.em_pincode || ''
+      aadhaarNumber: employee.user?.us_aadhaar || '',
+      department: employee.em_dept || '',
+      designation: employee.em_designation || '',
+      salary: employee.em_salary || '',
+      joinDate: employee.em_joindt ? employee.em_joindt.split('T')[0] : '',
+      address: employee.em_address || '',
+      city: employee.em_city || '',
+      state: employee.em_state || '',
+      pincode: employee.em_pincode || ''
     });
     setShowForm(true);
   };
@@ -386,25 +386,29 @@ const EmployeeManagement = () => {
                   <th>Designation</th>
                   <th>Salary</th>
                   <th>Join Date</th>
+                  <th>Manager</th>
+                  <th>Status</th>
                   <th>Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {employees.map(item => (
-                  <tr key={item.us_usid}>
-                    <td>{item.us_usid}</td>
-                    <td>{item.us_fname} {item.us_lname}</td>
-                    <td>{item.us_email}</td>
-                    <td>{item.us_phone}</td>
-                    <td>{item.Employee?.em_dept || ''}</td>
-                    <td>{item.Employee?.em_designation || ''}</td>
-                    <td>{item.Employee?.em_salary ? `₹${parseFloat(item.Employee.em_salary).toFixed(2)}` : ''}</td>
-                    <td>{item.Employee?.em_joindt ? new Date(item.Employee.em_joindt).toLocaleDateString() : ''}</td>
+                  <tr key={item.em_usid}>
+                    <td>{item.em_usid}</td>
+                    <td>{item.user?.us_fname} {item.user?.us_lname}</td>
+                    <td>{item.user?.us_email}</td>
+                    <td>{item.user?.us_phone}</td>
+                    <td>{item.em_dept || ''}</td>
+                    <td>{item.em_designation || ''}</td>
+                    <td>{item.em_salary ? `₹${parseFloat(item.em_salary).toFixed(2)}` : ''}</td>
+                    <td>{item.em_joindt ? new Date(item.em_joindt).toLocaleDateString() : ''}</td>
+                    <td>{item.manager?.em_empno || 'N/A'}</td>
+                    <td>{item.em_status || 'ACTIVE'}</td>
                     <td>
                       <button className="btn btn-secondary mr-1" onClick={() => handleEdit(item)}>
                         Edit
                       </button>
-                      <button className="btn btn-danger" onClick={() => handleDelete(item.us_usid)}>
+                      <button className="btn btn-danger" onClick={() => handleDelete(item.em_usid)}>
                         Delete
                       </button>
                     </td>

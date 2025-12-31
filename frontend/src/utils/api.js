@@ -1,6 +1,6 @@
 // API utility functions
 
-const API_BASE_URL = '/api';
+const API_BASE_URL = 'http://127.0.0.1:5001/api';
 
 // Generic API request function
 const apiRequest = async (endpoint, options = {}) => {

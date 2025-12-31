@@ -3,7 +3,7 @@ const { sequelize, BaseModel } = require('./baseModel');
 
 const Role = sequelize.define('fnXfunction', {
   fn_fnid: {
-    type: DataTypes.STRING(6),
+    type: DataTypes.STRING(3),
     primaryKey: true,
     allowNull: false,
     defaultValue: '',

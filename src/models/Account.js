@@ -61,7 +61,8 @@ const Account = sequelize.define('acAccount', {
 // Define associations
 Account.belongsTo(Booking, {
   foreignKey: 'ac_bkid',
-  targetKey: 'bk_bkid'
+  targetKey: 'bk_bkid',
+  as: 'booking'
 });
 
 Account.belongsTo(Customer, {

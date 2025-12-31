@@ -27,7 +27,7 @@ app.use(express.static('public'));
 // Routes
 app.get('/', (req, res) => {
   console.log('Root route called');
-  res.send('Welcome to YatraSathi API');
+  res.redirect('/demo-portals.html');
 });
 
 // Import routes
@@ -39,13 +39,13 @@ const permissionRoutes = require('./routes/permissionRoutes');
 const bookingRoutes = require('./routes/bookingRoutes');
 const paymentRoutes = require('./routes/paymentRoutes');
 const employeeRoutes = require('./routes/employeeRoutes');
+const employeeDashboardRoutes = require('./routes/employeeRoutes');
 const customerRoutes = require('./routes/customerRoutes');
 const auditRoutes = require('./routes/auditRoutes');
 const configRoutes = require('./routes/configRoutes');
 const notificationRoutes = require('./routes/notificationRoutes');
 const searchRoutes = require('./routes/searchRoutes');
 const statisticsRoutes = require('./routes/statisticsRoutes');
-const testRoutes = require('./routes/testRoutes');
 const stationRoutes = require('./routes/stationRoutes');
 const trainRoutes = require('./routes/trainRoutes');
 const companyRoutes = require('./routes/companyRoutes');
@@ -64,13 +64,14 @@ app.use('/api/permissions', permissionRoutes);
 app.use('/api/bookings', bookingRoutes);
 app.use('/api/payments', paymentRoutes);
 app.use('/api/employees', employeeRoutes);
+app.use('/api/employee', employeeDashboardRoutes); // Employee dashboard routes
 app.use('/api/customers', customerRoutes);
+app.use('/api/customer', customerRoutes); // Customer portal routes
 app.use('/api/audit', auditRoutes);
 app.use('/api/config', configRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/search', searchRoutes);
 app.use('/api/statistics', statisticsRoutes);
-app.use('/api/test', testRoutes);
 app.use('/api/stations', stationRoutes);
 app.use('/api/trains', trainRoutes);
 app.use('/api/company', companyRoutes);

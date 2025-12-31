@@ -42,6 +42,12 @@ router.get('/customers', securityController.getAllCustomers);
 router.put('/customers/:id', securityController.updateCustomer);
 router.delete('/customers/:id', securityController.deleteCustomer);
 
+// ==================== EMPLOYEE ROUTES ====================
+router.get('/employees', securityController.getAllEmployees);
+router.post('/employees', securityController.createEmployee);
+router.put('/employees/:id', securityController.updateEmployee);
+router.delete('/employees/:id', securityController.deleteEmployee);
+
 // ==================== ROLE PERMISSION ROUTES ====================
 router.get('/role-permissions', securityController.getAllRolePermissions);
 router.post('/role-permissions', securityController.createRolePermission);

@@ -8,7 +8,6 @@
     "setup-mysql": "node src/scripts/setup-mysql.js",
     "seed": "node src/scripts/seed.js",
     "reset-db": "node src/scripts/setup-mysql.js && node src/scripts/seed.js",
-    "test-models": "node src/scripts/testModels.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],

@@ -10,18 +10,25 @@ const getAllEmployees = async (req, res) => {
       return res.status(403).json({ message: 'Access denied' });
     }
     
-    const employees = await User.findAll({ 
-      where: { us_usertype: 'employee' },
-      include: [{
-        model: Employee,
-        required: false
-      }],
-      order: [['edtm', 'DESC']]
+    const employees = await Employee.findAll({ 
+      attributes: [
+        'em_usid', 'em_empno', 'em_designation', 'em_dept', 'em_salary', 
+        'em_joindt', 'em_status', 'em_manager', 'em_address', 'em_city', 
+        'em_state', 'em_pincode'
+      ], 
+      include: [ 
+        { 
+          model: User, 
+          attributes: ['us_fname', 'us_lname', 'us_email', 'us_phone', 'us_aadhaar'], 
+          as: 'user' 
+        }, 
+        { model: Employee, as: 'manager', attributes: ['em_empno', 'em_usid'] } 
+      ] 
     });
     
     res.json(employees);
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    res.status(500).json({ success: false, error: { code: 'SERVER_ERROR', message: error.message } });
   }
 };
 
