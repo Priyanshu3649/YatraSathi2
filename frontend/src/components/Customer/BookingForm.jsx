@@ -139,7 +139,7 @@ const BookingForm = () => {
 
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch('http://127.0.0.1:5001/api/customer/bookings', {
+      const response = await fetch('/api/customer/bookings', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,

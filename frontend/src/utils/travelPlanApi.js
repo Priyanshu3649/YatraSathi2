@@ -1,5 +1,5 @@
 // Travel Plan API utilities
-const API_BASE_URL = 'http://127.0.0.1:5001/api';
+const API_BASE_URL = '/api';
 
 const getHeaders = () => {
   const token = localStorage.getItem('token');

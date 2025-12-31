@@ -6,7 +6,7 @@ import { parseError, validateFormData } from '../utils/errorParser';
 import '../styles/vintage-erp-theme.css';
 import '../styles/dynamic-admin-panel.css';
 
-const API_BASE_URL = 'http://127.0.0.1:5003/api';
+const API_BASE_URL = '/api';
 
 const DynamicAdminPanel = () => {
   const { user } = useAuth();
@@ -104,7 +104,7 @@ const DynamicAdminPanel = () => {
     // ==================== SECURITY MODULES ====================
     applications: {
       name: 'Application',
-      endpoint: '/api/security/applications',
+      endpoint: '/security/applications',
       fields: [
         { name: 'ap_apid', label: 'Application ID', type: 'text', required: true, readOnly: false, maxLength: 4 },
         { name: 'ap_apshort', label: 'Short Name', type: 'text', required: true, maxLength: 30 },
@@ -119,7 +119,7 @@ const DynamicAdminPanel = () => {
     },
     modules: {
       name: 'Module',
-      endpoint: '/api/security/modules',
+      endpoint: '/security/modules',
       fields: [
         { name: 'mo_apid', label: 'Application ID', type: 'dropdown', required: true, source: 'applications', displayField: 'ap_apshort', valueField: 'ap_apid' },
         { name: 'mo_moid', label: 'Module ID', type: 'text', required: true, maxLength: 4 },
@@ -140,7 +140,7 @@ const DynamicAdminPanel = () => {
     },
     operations: {
       name: 'Operation',
-      endpoint: '/api/permissions',
+      endpoint: '/permissions',
       fields: [
         { name: 'op_apid', label: 'Application ID', type: 'dropdown', required: true, source: 'applications', displayField: 'ap_apshort', valueField: 'ap_apid' },
         { name: 'op_moid', label: 'Module ID', type: 'dropdown', required: true, source: 'modules', displayField: 'mo_moshort', valueField: 'mo_moid', cascadeFrom: 'op_apid' },
@@ -164,7 +164,7 @@ const DynamicAdminPanel = () => {
     },
     roles: {
       name: 'Role List',
-      endpoint: '/api/security/roles',
+      endpoint: '/security/roles',
       fields: [
         { name: 'fn_fnid', label: 'Function/Role ID', type: 'text', required: true, readOnly: false, maxLength: 3, pattern: '[A-Z]{1,3}', title: 'Only uppercase letters (A-Z), max 3 characters' },
         { name: 'fn_fnshort', label: 'Short Name', type: 'text', required: true, maxLength: 30 },
@@ -179,7 +179,7 @@ const DynamicAdminPanel = () => {
     },
     users: {
       name: 'User List',
-      endpoint: '/api/security/users',
+      endpoint: '/security/users',
       fields: [
         { name: 'us_usid', label: 'User ID', type: 'text', required: true, readOnly: false, maxLength: 15 },
         { name: 'us_email', label: 'Email', type: 'email', required: true, maxLength: 120 },
@@ -199,7 +199,7 @@ const DynamicAdminPanel = () => {
     },
     rolePermissions: {
       name: 'Role Permission',
-      endpoint: '/api/security/role-permissions',
+      endpoint: '/security/role-permissions',
       fields: [
         { name: 'fp_fnid', label: 'Function/Role', type: 'dropdown', required: true, source: 'roles', displayField: 'fn_fnshort', valueField: 'fn_fnid' },
         { name: 'fp_opid', label: 'Operation ID', type: 'dropdown', required: true, source: 'operations', displayField: 'op_opshort', valueField: 'fullOpId' },
@@ -215,7 +215,7 @@ const DynamicAdminPanel = () => {
     },
     userPermissions: {
       name: 'User Permission',
-      endpoint: '/api/security/user-permissions',
+      endpoint: '/security/user-permissions',
       fields: [
         { name: 'up_usid', label: 'User ID', type: 'dropdown', required: true, source: 'users', displayField: 'us_usname', valueField: 'us_usid' },
         { name: 'up_opid', label: 'Operation ID', type: 'dropdown', required: true, source: 'operations', displayField: 'op_opshort', valueField: 'fullOpId' },
@@ -231,7 +231,7 @@ const DynamicAdminPanel = () => {
     },
     customers: {
       name: 'Customer List',
-      endpoint: '/api/security/customers',
+      endpoint: '/security/customers',
       fields: [
         { name: 'cu_usid', label: 'User ID', type: 'text', required: true, readOnly: true },
         { name: 'cu_custno', label: 'Customer Number', type: 'text', required: true, readOnly: true },
@@ -251,7 +251,7 @@ const DynamicAdminPanel = () => {
     },
     employees: {
       name: 'Employee Management',
-      endpoint: '/api/security/employees',
+      endpoint: '/security/employees',
       fields: [
         { name: 'us_usid', label: 'Employee ID', type: 'text', required: true, readOnly: false, maxLength: 15 },
         { name: 'us_fname', label: 'First Name', type: 'text', required: true, maxLength: 50 },
@@ -305,7 +305,7 @@ const DynamicAdminPanel = () => {
     // ==================== MASTER DATA MODULES ====================
     stations: {
       name: 'Stations',
-      endpoint: '/api/stations',
+      endpoint: '/stations',
       fields: [
         { name: 'st_stid', label: 'Station ID', type: 'text', required: true, readOnly: true },
         { name: 'st_stcode', label: 'Station Code', type: 'text', required: true },
@@ -319,7 +319,7 @@ const DynamicAdminPanel = () => {
     },
     trains: {
       name: 'Trains',
-      endpoint: '/api/trains',
+      endpoint: '/trains',
       fields: [
         { name: 'tr_trid', label: 'Train ID', type: 'text', required: true, readOnly: true },
         { name: 'tr_trno', label: 'Train Number', type: 'text', required: true },
@@ -333,7 +333,7 @@ const DynamicAdminPanel = () => {
     },
     company: {
       name: 'Company',
-      endpoint: '/api/company',
+      endpoint: '/company',
       fields: [
         { name: 'co_coid', label: 'Company ID', type: 'text', required: true, readOnly: true },
         { name: 'co_coshort', label: 'Short Name', type: 'text', required: true },
@@ -599,11 +599,11 @@ const DynamicAdminPanel = () => {
     try {
       // Fetch all dropdown sources
       const [appsRes, modsRes, opsRes, rolesRes, usersRes] = await Promise.all([
-        fetch(`${API_BASE_URL}/security/applications`, { headers: { 'Authorization': `Bearer ${token}` } }),
-        fetch(`${API_BASE_URL}/security/modules`, { headers: { 'Authorization': `Bearer ${token}` } }),
-        fetch(`${API_BASE_URL}/permissions`, { headers: { 'Authorization': `Bearer ${token}` } }),
-        fetch(`${API_BASE_URL}/permissions/roles`, { headers: { 'Authorization': `Bearer ${token}` } }),
-        fetch(`${API_BASE_URL}/security/users`, { headers: { 'Authorization': `Bearer ${token}` } })
+        fetch(`${API_BASE_URL}security/applications`, { headers: { 'Authorization': `Bearer ${token}` } }),
+        fetch(`${API_BASE_URL}security/modules`, { headers: { 'Authorization': `Bearer ${token}` } }),
+        fetch(`${API_BASE_URL}permissions`, { headers: { 'Authorization': `Bearer ${token}` } }),
+        fetch(`${API_BASE_URL}permissions/roles`, { headers: { 'Authorization': `Bearer ${token}` } }),
+        fetch(`${API_BASE_URL}security/users`, { headers: { 'Authorization': `Bearer ${token}` } })
       ]);
 
       const apps = appsRes.ok ? await appsRes.json() : [];
@@ -830,7 +830,7 @@ const DynamicAdminPanel = () => {
       const method = selectedRecord ? 'PUT' : 'POST';
       
       // Build URL based on module type (handle composite keys)
-      let url = `http://127.0.0.1:5001${modules[activeModule].endpoint}`;
+      let url = `${API_BASE_URL}${modules[activeModule].endpoint}`;
       
       if (selectedRecord) {
         // Handle composite keys for different modules
@@ -924,7 +924,7 @@ const DynamicAdminPanel = () => {
         const token = localStorage.getItem('token');
         
         // Build URL based on module type (handle composite keys)
-        let url = `http://127.0.0.1:5001${modules[activeModule].endpoint}`;
+        let url = `${API_BASE_URL}${modules[activeModule].endpoint}`;
         
         if (activeModule === 'modules') {
           url += `/${selectedRecord.mo_apid}/${selectedRecord.mo_moid}`;

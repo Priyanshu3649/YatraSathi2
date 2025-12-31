@@ -15,7 +15,7 @@ const CustomerDashboard = () => {
   const fetchDashboardData = async () => {
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch('http://127.0.0.1:5001/api/customer/dashboard', {
+      const response = await fetch('/api/customer/dashboard', {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
