@@ -1,4 +1,4 @@
-const { Payment, Booking, Account, Employee, Sequelize } = require('../models');
+const { PaymentTVL: Payment, BookingTVL: Booking, AccountTVL: Account, EmployeeTVL: Employee, UserTVL: User, Sequelize } = require('../models');
 
 // Create a new payment
 const createPayment = async (req, res) => {
@@ -84,7 +84,16 @@ const refundPayment = async (req, res) => {
     
     // Find the original payment
     const originalPayment = await Payment.findByPk(id, {
-      include: [Account, Booking]
+      include: [
+        {
+          model: Account,
+          attributes: ['ac_acid', 'ac_bkid', 'ac_usid']
+        },
+        {
+          model: BookingTVL,
+          attributes: ['bk_bkid', 'bk_bkno', 'bk_fromst', 'bk_tost', 'bk_status']
+        }
+      ]
     });
     
     if (!originalPayment) {
@@ -149,7 +158,7 @@ const refundPayment = async (req, res) => {
     }
     
     // Update booking payment information
-    const booking = await Booking.findByPk(originalPayment.pt_bkid);
+    const booking = await BookingTVL.findByPk(originalPayment.pt_bkid);
     if (booking) {
       booking.bk_amount_paid = (booking.bk_amount_paid || 0) - refundAmount;
       booking.bk_amount_pending = (booking.bk_amount_pending || 0) + refundAmount;
@@ -179,13 +188,16 @@ const refundPayment = async (req, res) => {
 // Get all payments for a customer
 const getCustomerPayments = async (req, res) => {
   try {
+    // First get account IDs for the user
+    const userAccounts = await Account.findAll({ 
+      where: { ac_usid: req.user.us_usid },
+      attributes: ['ac_acid']
+    });
+    
+    const accountIds = userAccounts.map(acc => acc.ac_acid);
+    
     const payments = await Payment.findAll({ 
-      include: [{
-        model: Account,
-        where: {
-          ac_usid: req.user.us_usid
-        }
-      }],
+      where: { pt_acid: accountIds },
       order: [['edtm', 'DESC']]
     });
     
@@ -204,7 +216,6 @@ const getAllPayments = async (req, res) => {
     }
     
     const payments = await Payment.findAll({ 
-      include: [Account, Booking],
       order: [['edtm', 'DESC']] 
     });
     res.json(payments);
@@ -216,9 +227,7 @@ const getAllPayments = async (req, res) => {
 // Get payment by ID
 const getPaymentById = async (req, res) => {
   try {
-    const payment = await Payment.findByPk(req.params.id, {
-      include: [Account, Booking]
-    });
+    const payment = await Payment.findByPk(req.params.id);
     
     // Check if payment exists
     if (!payment) {
@@ -226,8 +235,9 @@ const getPaymentById = async (req, res) => {
     }
     
     // Check if user has permission to view this payment
+    const account = await Account.findByPk(payment.pt_acid);
     if (req.user.us_usertype !== 'admin' && 
-        payment.Account.ac_usid !== req.user.us_usid) {
+        account?.ac_usid !== req.user.us_usid) {
       return res.status(403).json({ message: 'Access denied' });
     }
     
@@ -248,7 +258,7 @@ const updatePayment = async (req, res) => {
     
     // Check permissions (admin and accounts team can update)
     if (req.user.us_usertype !== 'admin' && 
-        req.user.us_department !== 'accounts') {
+        req.user.us_dept !== 'accounts') {
       return res.status(403).json({ message: 'Access denied' });
     }
     
@@ -299,7 +309,7 @@ const getPaymentsByBookingId = async (req, res) => {
     const { bookingId } = req.params;
     
     // Verify booking exists and user has access
-    const booking = await Booking.findByPk(bookingId);
+    const booking = await BookingTVL.findByPk(bookingId);
     if (!booking) {
       return res.status(404).json({ message: 'Booking not found' });
     }

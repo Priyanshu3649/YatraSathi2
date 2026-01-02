@@ -1,4 +1,4 @@
-const { User, Employee, Role, RolePermission } = require('../models');
+const { User, Employee, Role, RolePermission, UserTVL, EmployeeTVL } = require('../models');
 
 /**
  * Department Access Control Middleware
@@ -13,16 +13,37 @@ const departmentAccessControl = async (req, res, next) => {
       });
     }
 
-    // Get user's role and department
-    const user = await User.findOne({
-      where: { us_usid: req.user.us_usid },
-      include: [
-        {
-          model: Employee,
-          attributes: ['em_dept', 'em_designation', 'em_status']
-        }
-      ]
-    });
+    // Check if this is a TVL user by ID prefix
+    const isTVLUser = req.user.us_usid.startsWith('ADM') || req.user.us_usid.startsWith('EMP') || 
+                      req.user.us_usid.startsWith('ACC') || req.user.us_usid.startsWith('CUS');
+
+    let user = null;
+    let employee = null;
+    
+    if (isTVLUser) {
+      // Get TVL user's role and department
+      user = await UserTVL.findByPk(req.user.us_usid);
+      
+      // Get employee details separately to avoid circular dependency
+      if (req.user.us_usid.startsWith('EMP') || req.user.us_usid.startsWith('ADM') || 
+          req.user.us_usid.startsWith('ACC')) {
+        employee = await EmployeeTVL.findByPk(req.user.us_usid);
+      }
+    } else {
+      // Get regular user's role and department
+      user = await User.findOne({
+        where: { us_usid: req.user.us_usid },
+        include: [
+          {
+            model: Employee,
+            attributes: ['em_dept', 'em_designation', 'em_status']
+          }
+        ]
+      });
+      
+      // Extract employee from the included data
+      employee = user?.Employee;
+    }
 
     if (!user) {
       return res.status(404).json({ 
@@ -32,7 +53,7 @@ const departmentAccessControl = async (req, res, next) => {
     }
 
     // Check if employee is active
-    if (user.Employee && user.Employee.em_status !== 'ACTIVE') {
+    if (employee && employee.em_status !== 'ACTIVE') {
       return res.status(403).json({ 
         success: false, 
         error: { code: 'EMPLOYEE_INACTIVE', message: 'Employee account is inactive' } 
@@ -40,26 +61,29 @@ const departmentAccessControl = async (req, res, next) => {
     }
 
     // Get role permissions
-    const permissions = await RolePermission.findAll({
-      where: { 
-        rp_roid: user.us_roid,
-        rp_active: 1 
-      },
-      include: [
-        {
-          model: Role,
-          attributes: ['fn_fnshort', 'fn_fndesc']
-        }
-      ]
-    });
+    let permissions = [];
+    if (!isTVLUser && user.us_roid) {
+      permissions = await RolePermission.findAll({
+        where: { 
+          rp_roid: user.us_roid,
+          rp_active: 1 
+        },
+        include: [
+          {
+            model: Role,
+            attributes: ['fn_fnshort', 'fn_fndesc']
+          }
+        ]
+      });
+    }
 
     // Attach user details and permissions to request
     req.userDetails = {
       userId: user.us_usid,
-      role: user.us_roid,
-      department: user.Employee?.em_dept,
-      designation: user.Employee?.em_designation,
-      status: user.Employee?.em_status,
+      role: user.us_roid || user.us_usertype,
+      department: employee?.em_dept,
+      designation: employee?.em_designation,
+      status: employee?.em_status,
       permissions: permissions.map(p => ({
         function: p.fnXfunction?.fn_fnshort,
         type: p.fnXfunction?.fn_fndesc,

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { paymentAPI, bookingAPI } from '../services/api';
+import '../styles/vintage-erp-theme.css';
 import '../styles/payments.css';
 
 const Payments = () => {
@@ -19,7 +20,7 @@ const Payments = () => {
     bankName: '',
     branch: '',
     chequeNumber: '',
-    paymentDate: '',
+    paymentDate: new Date().toISOString().split('T')[0], // Pre-fill with today's date
     remarks: ''
   });
   const [refundData, setRefundData] = useState({
@@ -109,7 +110,7 @@ const Payments = () => {
         bankName: '',
         branch: '',
         chequeNumber: '',
-        paymentDate: '',
+        paymentDate: new Date().toISOString().split('T')[0],
         remarks: ''
       });
       setShowForm(false);
@@ -124,24 +125,11 @@ const Payments = () => {
     e.preventDefault();
     
     try {
-      // Make API call to refund payment
-      const response = await fetch(`/api/payments/${paymentId}/refund`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        },
-        body: JSON.stringify({
-          refundAmount: parseFloat(refundData.refundAmount),
-          remarks: refundData.remarks
-        })
+      // Make API call to refund payment using the service
+      await paymentAPI.refundPayment(paymentId, {
+        refundAmount: parseFloat(refundData.refundAmount),
+        remarks: refundData.remarks
       });
-      
-      const data = await response.json();
-      
-      if (!response.ok) {
-        throw new Error(data.message || 'Failed to process refund');
-      }
       
       // Reset refund form and hide it
       setRefundData({ refundAmount: '', remarks: '' });
@@ -198,28 +186,18 @@ const Payments = () => {
   };
 
   if (loading) {
-    return <div className="payments panel">Loading payments...</div>;
+    return <div className="erp-container"><div className="erp-loading">Loading payments...</div></div>;
   }
 
   return (
-    <div className="payments panel">
-      <div className="payments-header panel-header">
-        <h2>Payments</h2>
-        <div className="header-actions">
-          <button className="btn btn-primary" onClick={() => setShowForm(!showForm)}>
-            {showForm ? 'Cancel' : 'Record Payment'}
-          </button>
-        </div>
-      </div>
-
-      {error && <div className="alert alert-error">{error}</div>}
-
+    <div className="erp-container">
+      {/* Left Form Panel */}
       {showForm && (
-        <div className="payment-form panel mb-3">
+        <div className="erp-form-section">
           <h3>Record Payment</h3>
-          <form onSubmit={onSubmit}>
+          <form onSubmit={onSubmit} className="erp-form">
             <div className="form-row">
-              <div className="form-group col-6">
+              <div className="form-group">
                 <label htmlFor="bookingId" className="form-label">Booking *</label>
                 <select
                   id="bookingId"
@@ -232,12 +210,12 @@ const Payments = () => {
                   <option value="">Select Booking</option>
                   {bookings.map(booking => (
                     <option key={booking.bk_bkid} value={booking.bk_bkid}>
-                      {booking.bk_bkid} - {booking.bk_fromstation} to {booking.bk_tostation}
+                      {booking.bk_bkid} - {booking.bk_fromstation || booking.bk_fromst} to {booking.bk_tostation || booking.bk_tost}
                     </option>
                   ))}
                 </select>
               </div>
-              <div className="form-group col-6">
+              <div className="form-group">
                 <label htmlFor="amount" className="form-label">Amount *</label>
                 <input
                   type="number"
@@ -253,7 +231,7 @@ const Payments = () => {
               </div>
             </div>
             <div className="form-row">
-              <div className="form-group col-6">
+              <div className="form-group">
                 <label htmlFor="mode" className="form-label">Payment Mode *</label>
                 <select
                   id="mode"
@@ -269,7 +247,7 @@ const Payments = () => {
                   <option value="BANK_TRANSFER">Bank Transfer</option>
                 </select>
               </div>
-              <div className="form-group col-6">
+              <div className="form-group">
                 <label htmlFor="paymentDate" className="form-label">Payment Date *</label>
                 <input
                   type="date"
@@ -300,7 +278,7 @@ const Payments = () => {
             {(formData.mode === 'CHEQUE' || formData.mode === 'BANK_TRANSFER') && (
               <>
                 <div className="form-row">
-                  <div className="form-group col-6">
+                  <div className="form-group">
                     <label htmlFor="bankName" className="form-label">Bank Name</label>
                     <input
                       type="text"
@@ -311,7 +289,7 @@ const Payments = () => {
                       className="form-control"
                     />
                   </div>
-                  <div className="form-group col-6">
+                  <div className="form-group">
                     <label htmlFor="branch" className="form-label">Branch</label>
                     <input
                       type="text"
@@ -353,16 +331,16 @@ const Payments = () => {
             
             <div className="form-group">
               <button type="submit" className="btn btn-primary">Record Payment</button>
-              <button type="button" className="btn ml-2" onClick={() => setShowForm(false)}>Cancel</button>
+              <button type="button" className="btn" onClick={() => setShowForm(false)}>Cancel</button>
             </div>
           </form>
         </div>
       )}
 
       {showRefundForm && (
-        <div className="refund-form panel mb-3">
+        <div className="erp-form-section">
           <h3>Process Refund</h3>
-          <form onSubmit={(e) => onRefundSubmit(e, showRefundForm)}>
+          <form onSubmit={(e) => onRefundSubmit(e, showRefundForm)} className="erp-form">
             <div className="form-group">
               <label htmlFor="refundAmount" className="form-label">Refund Amount *</label>
               <input
@@ -374,6 +352,7 @@ const Payments = () => {
                 required
                 step="0.01"
                 min="0"
+                max={payments.find(p => p.pt_ptid === showRefundForm)?.pt_amount}
                 className="form-control"
               />
             </div>
@@ -390,63 +369,77 @@ const Payments = () => {
             </div>
             <div className="form-group">
               <button type="submit" className="btn btn-primary">Process Refund</button>
-              <button type="button" className="btn ml-2" onClick={() => setShowRefundForm(null)}>Cancel</button>
+              <button type="button" className="btn" onClick={() => setShowRefundForm(null)}>Cancel</button>
             </div>
           </form>
         </div>
       )}
 
-      <div className="payments-list panel">
-        <h3>Payment List</h3>
-        {payments.length === 0 ? (
-          <p>No payments found.</p>
-        ) : (
-          <div className="table-responsive">
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>Payment ID</th>
-                  <th>Booking ID</th>
-                  <th>Amount</th>
-                  <th>Mode</th>
-                  <th>Date</th>
-                  <th>Status</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {payments.map((payment) => (
-                  <tr key={payment.pt_ptid} className={getStatusClass(payment.pt_status)}>
-                    <td>{payment.pt_ptid}</td>
-                    <td>{payment.pt_bkid}</td>
-                    <td>₹{parseFloat(payment.pt_amount).toFixed(2)}</td>
-                    <td>{getModeDisplay(payment.pt_mode)}</td>
-                    <td>{new Date(payment.pt_paymentdt).toLocaleDateString()}</td>
-                    <td>{payment.pt_status}</td>
-                    <td>
-                      {payment.pt_status === 'RECEIVED' && (
-                        <button 
-                          className="btn btn-primary mr-1" 
-                          onClick={() => handleRefundPayment(payment)}
-                        >
-                          Refund
-                        </button>
-                      )}
-                      {user && (user.us_usertype === 'admin' || user.us_usertype === 'employee') && (
-                        <button 
-                          className="btn btn-danger" 
-                          onClick={() => handleDeletePayment(payment.pt_ptid)}
-                        >
-                          Delete
-                        </button>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+      {/* Right Content Panel */}
+      <div className="erp-content-section">
+        <div className="erp-header">
+          <h2>Payments</h2>
+          <div className="header-actions">
+            <button className="btn btn-primary" onClick={() => setShowForm(!showForm)}>
+              {showForm ? 'Cancel' : 'Record Payment'}
+            </button>
           </div>
-        )}
+        </div>
+
+        {error && <div className="alert alert-error">{error}</div>}
+
+        <div className="erp-data-section">
+          <h3>Payment List</h3>
+          {payments.length === 0 ? (
+            <p>No payments found.</p>
+          ) : (
+            <div className="table-responsive">
+              <table className="erp-data-table">
+                <thead>
+                  <tr>
+                    <th>Payment ID</th>
+                    <th>Booking ID</th>
+                    <th>Amount</th>
+                    <th>Mode</th>
+                    <th>Date</th>
+                    <th>Status</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {payments.map((payment) => (
+                    <tr key={payment.pt_ptid} className={getStatusClass(payment.pt_status)}>
+                      <td>{payment.pt_ptid}</td>
+                      <td>{payment.pt_bkid}</td>
+                      <td>₹{parseFloat(payment.pt_amount).toFixed(2)}</td>
+                      <td>{getModeDisplay(payment.pt_mode)}</td>
+                      <td>{new Date(payment.pt_paydt || payment.pt_paymentdt).toLocaleDateString()}</td>
+                      <td>{payment.pt_status}</td>
+                      <td>
+                        {payment.pt_status === 'RECEIVED' && (
+                          <button 
+                            className="btn btn-primary mr-1" 
+                            onClick={() => handleRefundPayment(payment)}
+                          >
+                            Refund
+                          </button>
+                        )}
+                        {user && (user.us_usertype === 'admin' || user.us_usertype === 'employee') && (
+                          <button 
+                            className="btn btn-danger" 
+                            onClick={() => handleDeletePayment(payment.pt_ptid)}
+                          >
+                            Delete
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

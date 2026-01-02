@@ -1,35 +1,33 @@
-const User = require('../models/User');
-const Booking = require('../models/Booking');
-const Payment = require('../models/Payment');
-const CorporateCustomer = require('../models/CorporateCustomer');
+const { UserTVL: User, BookingTVL: Booking, PaymentTVL: Payment, CorporateCustomer, EmployeeTVL: Employee } = require('../models');
+const { Sequelize } = require('sequelize');
 
 // Get system statistics (admin only)
 const getSystemStats = async (req, res) => {
   try {
     // Only admin can get system statistics
-    if (req.user.userType !== 'admin') {
+    if (req.user.us_usertype !== 'admin') {
       return res.status(403).json({ message: 'Access denied' });
     }
     
     // Get counts
-    const totalUsers = await User.countDocuments();
-    const totalCustomers = await User.countDocuments({ userType: 'customer' });
-    const totalEmployees = await User.countDocuments({ userType: 'employee' });
-    const totalBookings = await Booking.countDocuments();
-    const totalPayments = await Payment.countDocuments();
-    const totalCorporateCustomers = await CorporateCustomer.countDocuments();
+    const totalUsers = await User.count();
+    const totalCustomers = await User.count({ where: { us_usertype: 'customer' } });
+    const totalEmployees = await User.count({ where: { us_usertype: 'employee' } });
+    const totalBookings = await Booking.count();
+    const totalPayments = await Payment.count();
+    const totalCorporateCustomers = await CorporateCustomer.count();
     
     // Get recent activity
-    const recentUsers = await User.find()
-      .sort({ createdAt: -1 })
-      .limit(5)
-      .select('name email userType createdAt');
+    const recentUsers = await User.findAll({
+      order: [['createdAt', 'DESC']],
+      limit: 5,
+      attributes: ['us_fname', 'us_email', 'us_usertype', 'createdAt']
+    });
     
-    const recentBookings = await Booking.find()
-      .sort({ createdAt: -1 })
-      .limit(5)
-      .populate('customerId', 'name')
-      .populate('employeeId', 'name');
+    const recentBookings = await Booking.findAll({
+      order: [['createdAt', 'DESC']],
+      limit: 5
+    });
     
     res.json({
       overview: {
@@ -54,65 +52,50 @@ const getSystemStats = async (req, res) => {
 const getBookingStats = async (req, res) => {
   try {
     // Build query based on user type
-    let query = {};
+    let whereClause = {};
     
-    if (req.user.userType === 'customer') {
-      query.customerId = req.user._id;
-    } else if (req.user.userType === 'employee') {
-      query.employeeId = req.user._id;
+    if (req.user.us_usertype === 'customer') {
+      whereClause.bk_cuid = req.user.us_usid; // Assuming customer ID is stored in bk_cuid
+    } else if (req.user.us_usertype === 'employee') {
+      whereClause.bk_euid = req.user.us_usid; // Assuming employee ID is stored in bk_euid
     }
     
     // Get counts by status
-    const statusCounts = await Booking.aggregate([
-      { $match: query },
-      {
-        $group: {
-          _id: '$status',
-          count: { $sum: 1 }
-        }
-      }
-    ]);
+    const statusCounts = await Booking.findAll({
+      attributes: ['bk_status', [Sequelize.fn('COUNT', Sequelize.col('bk_status')), 'count']],
+      group: ['bk_status'],
+      where: whereClause
+    });
     
     // Get bookings by date (last 30 days)
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
     
-    const bookingsByDate = await Booking.aggregate([
-      { 
-        $match: { 
-          ...query,
-          createdAt: { $gte: thirtyDaysAgo }
-        }
+    const bookingsByDate = await Booking.findAll({
+      attributes: [
+        [Sequelize.fn('DATE', Sequelize.col('bk_edtm')), 'date'],
+        [Sequelize.fn('COUNT', Sequelize.col('bk_bkid')), 'count']
+      ],
+      where: {
+        ...whereClause,
+        bk_edtm: { [Sequelize.Op.gte]: thirtyDaysAgo }
       },
-      {
-        $group: {
-          _id: {
-            $dateToString: {
-              format: '%Y-%m-%d',
-              date: '$createdAt'
-            }
-          },
-          count: { $sum: 1 }
-        }
-      },
-      { $sort: { _id: 1 } }
-    ]);
+      group: [Sequelize.fn('DATE', Sequelize.col('bk_edtm'))],
+      order: [[Sequelize.fn('DATE', Sequelize.col('bk_edtm')), 'ASC']]
+    });
     
     // Get popular routes
-    const popularRoutes = await Booking.aggregate([
-      { $match: query },
-      {
-        $group: {
-          _id: {
-            origin: '$origin',
-            destination: '$destination'
-          },
-          count: { $sum: 1 }
-        }
-      },
-      { $sort: { count: -1 } },
-      { $limit: 10 }
-    ]);
+    const popularRoutes = await Booking.findAll({
+      attributes: [
+        'bk_origin',
+        'bk_destination',
+        [Sequelize.fn('COUNT', Sequelize.col('bk_bkid')), 'count']
+      ],
+      where: whereClause,
+      group: ['bk_origin', 'bk_destination'],
+      order: [[Sequelize.fn('COUNT', Sequelize.col('bk_bkid')), 'DESC']],
+      limit: 10
+    });
     
     res.json({
       statusCounts,
@@ -128,62 +111,53 @@ const getBookingStats = async (req, res) => {
 const getFinancialStats = async (req, res) => {
   try {
     // Check permissions
-    if (req.user.userType !== 'admin' && req.user.department !== 'accounts') {
+    if (req.user.us_usertype !== 'admin' && req.user.department !== 'accounts') {
       return res.status(403).json({ message: 'Access denied' });
     }
     
     // Build query based on user type
-    let query = {};
+    let whereClause = {};
     
-    if (req.user.userType === 'employee' && req.user.department === 'accounts') {
+    if (req.user.us_usertype === 'employee' && req.user.department === 'accounts') {
       // Accounts team might have specific filters
       // For now, we'll allow access to all financial data
     }
     
     // Get payment statistics
-    const paymentStats = await Payment.aggregate([
-      { $match: query },
-      {
-        $group: {
-          _id: '$mode',
-          count: { $sum: 1 },
-          totalAmount: { $sum: '$amount' }
-        }
-      }
-    ]);
+    const paymentStats = await Payment.findAll({
+      attributes: [
+        'pm_mode',
+        [Sequelize.fn('COUNT', Sequelize.col('pm_pmid')), 'count'],
+        [Sequelize.fn('SUM', Sequelize.col('pm_amount')), 'totalAmount']
+      ],
+      group: ['pm_mode'],
+      where: whereClause
+    });
     
     // Get revenue by date (last 30 days)
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
     
-    const revenueByDate = await Payment.aggregate([
-      { 
-        $match: { 
-          ...query,
-          paymentDate: { $gte: thirtyDaysAgo }
-        }
+    const revenueByDate = await Payment.findAll({
+      attributes: [
+        [Sequelize.fn('DATE', Sequelize.col('pm_pddt')), 'date'],
+        [Sequelize.fn('SUM', Sequelize.col('pm_amount')), 'totalAmount']
+      ],
+      where: {
+        ...whereClause,
+        pm_pddt: { [Sequelize.Op.gte]: thirtyDaysAgo }
       },
-      {
-        $group: {
-          _id: {
-            $dateToString: {
-              format: '%Y-%m-%d',
-              date: '$paymentDate'
-            }
-          },
-          totalAmount: { $sum: '$amount' }
-        }
-      },
-      { $sort: { _id: 1 } }
-    ]);
+      group: [Sequelize.fn('DATE', Sequelize.col('pm_pddt'))],
+      order: [[Sequelize.fn('DATE', Sequelize.col('pm_pddt')), 'ASC']]
+    });
     
     // Get total financial summary
-    const payments = await Payment.find(query);
+    const payments = await Payment.findAll({ where: whereClause });
     let totalRevenue = 0;
     let totalPayments = payments.length;
     
     payments.forEach(payment => {
-      totalRevenue += payment.amount;
+      totalRevenue += parseFloat(payment.pm_amount || 0);
     });
     
     res.json({
@@ -203,34 +177,39 @@ const getFinancialStats = async (req, res) => {
 const getEmployeeStats = async (req, res) => {
   try {
     // Only admin and managers can get employee statistics
-    if (req.user.userType !== 'admin' && 
-        !(req.user.userType === 'employee' && req.user.department === 'management')) {
+    if (req.user.us_usertype !== 'admin' && 
+        !(req.user.us_usertype === 'employee' && req.user.department === 'management')) {
       return res.status(403).json({ message: 'Access denied' });
     }
     
     // Get all employees
-    const employees = await User.find({ userType: 'employee' });
+    const employees = await User.findAll({ 
+      where: { us_usertype: 'employee' },
+      include: [Employee] // Include employee details
+    });
     
     const employeeStats = [];
     
-    for (const employee of employees) {
+    for (const employeeUser of employees) {
       // Get employee's bookings
-      const bookings = await Booking.find({ employeeId: employee._id });
+      const bookings = await Booking.findAll({ 
+        where: { bk_euid: employeeUser.us_usid } // Assuming bk_euid is the employee ID field
+      });
       
       // Calculate statistics
       const totalBookings = bookings.length;
-      const confirmedBookings = bookings.filter(b => b.status === 'CONFIRMED').length;
+      const confirmedBookings = bookings.filter(b => b.bk_status === 'CONFIRMED').length;
       
       // Calculate revenue
       let totalRevenue = 0;
       bookings.forEach(booking => {
-        totalRevenue += booking.amountPaid || 0;
+        totalRevenue += parseFloat(booking.bk_amount || 0);
       });
       
       employeeStats.push({
-        employeeId: employee._id,
-        name: employee.name,
-        department: employee.department,
+        employeeId: employeeUser.us_usid,
+        name: employeeUser.us_fname,
+        department: employeeUser.employee?.em_dept || 'N/A',
         totalBookings,
         confirmedBookings,
         successRate: totalBookings > 0 ? (confirmedBookings / totalBookings * 100).toFixed(2) : 0,
@@ -251,24 +230,25 @@ const getEmployeeStats = async (req, res) => {
 const getCorporateStats = async (req, res) => {
   try {
     // Only admin and relationship managers can get corporate statistics
-    if (req.user.userType !== 'admin' && 
-        !(req.user.userType === 'employee' && req.user.department === 'relationship_manager')) {
+    if (req.user.us_usertype !== 'admin' && 
+        !(req.user.us_usertype === 'employee' && req.user.department === 'relationship_manager')) {
       return res.status(403).json({ message: 'Access denied' });
     }
     
     // Get all corporate customers
-    const corporateCustomers = await CorporateCustomer.find()
-      .populate('userId', 'name email phone');
+    const corporateCustomers = await CorporateCustomer.findAll();
     
     const corporateStats = [];
     
     for (const customer of corporateCustomers) {
       // Get customer's bookings
-      const bookings = await Booking.find({ 
-        $or: [
-          { customerId: customer.userId._id },
-          { corporateId: customer.userId._id }
-        ]
+      const bookings = await Booking.findAll({ 
+        where: {
+          [Sequelize.Op.or]: [
+            { bk_cuid: customer.cc_usid }, // Assuming bk_cuid is the customer ID field
+            { bk_corpid: customer.cc_usid } // Assuming bk_corpid is the corporate ID field
+          ]
+        }
       });
       
       // Calculate statistics
@@ -277,21 +257,21 @@ const getCorporateStats = async (req, res) => {
       let totalPending = 0;
       
       bookings.forEach(booking => {
-        totalBookings += booking.totalAmount || 0;
-        totalPaid += booking.amountPaid || 0;
+        totalBookings += parseFloat(booking.bk_amount || 0);
+        totalPaid += parseFloat(booking.bk_amount || 0); // Assuming the full amount is paid for corporate bookings
       });
       
       totalPending = totalBookings - totalPaid;
       
       corporateStats.push({
-        customerId: customer.userId._id,
-        companyName: customer.companyName,
-        contactPerson: customer.userId.name,
-        email: customer.userId.email,
-        phone: customer.userId.phone,
-        creditLimit: customer.creditLimit,
-        creditUsed: customer.creditUsed,
-        creditAvailable: customer.creditLimit - customer.creditUsed,
+        customerId: customer.cc_usid,
+        companyName: customer.cc_cmpname,
+        contactPerson: customer.cc_contper,
+        email: customer.cc_email,
+        phone: customer.cc_phone,
+        creditLimit: customer.cc_creditlim,
+        creditUsed: customer.cc_creditused,
+        creditAvailable: customer.cc_creditlim - customer.cc_creditused,
         totalBookings,
         totalPaid,
         totalPending

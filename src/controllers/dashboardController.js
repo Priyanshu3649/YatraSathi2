@@ -1,4 +1,4 @@
-const { User, Employee, Booking, Payment, Customer, CorporateCustomer, Account } = require('../models');
+const { UserTVL, EmployeeTVL, BookingTVL, PaymentTVL, Customer, CorporateCustomer, Account, User, Employee } = require('../models');
 const { Op } = require('sequelize');
 
 /**
@@ -7,58 +7,68 @@ const { Op } = require('sequelize');
 const getAdminDashboard = async (req, res) => {
   try {
     // Overall statistics
-    const totalBookings = await Booking.count();
-    const totalEmployees = await Employee.count();
+    const totalBookings = await BookingTVL.count();
+    const totalEmployees = await EmployeeTVL.count();
     const totalCustomers = await Customer.count();
-    const totalUsers = await User.count();
+    const totalUsers = await UserTVL.count();
     
     // Revenue and payment statistics
-    const totalRevenue = await Payment.sum('pt_amount', {
+    const totalRevenue = await PaymentTVL.sum('pt_amount', {
       where: { pt_status: 'PROCESSED' }
     });
     
     // Pending amount calculation
-    const pendingPayments = await Payment.sum('pt_amount', {
+    const pendingPayments = await PaymentTVL.sum('pt_amount', {
       where: { pt_status: 'PENDING' }
     });
     
     // Booking status statistics
-    const pendingBookings = await Booking.count({
+    const pendingBookings = await BookingTVL.count({
       where: { bk_status: 'PENDING' }
     });
     
-    const confirmedBookings = await Booking.count({
+    const confirmedBookings = await BookingTVL.count({
       where: { bk_status: 'CONFIRMED' }
     });
     
-    const cancelledBookings = await Booking.count({
+    const cancelledBookings = await BookingTVL.count({
       where: { bk_status: 'CANCELLED' }
     });
     
     // Employee performance (top 5 performing employees)
-    const employeePerformance = await Booking.findAll({
+    const employeeBookings = await BookingTVL.findAll({
       attributes: [
         'bk_agent',
-        [Booking.sequelize.fn('COUNT', Booking.sequelize.col('bk_bkid')), 'totalBookings'],
-        [Booking.sequelize.fn('SUM', Booking.sequelize.literal("CASE WHEN bk_status = 'CONFIRMED' THEN 1 ELSE 0 END")), 'confirmedBookings']
+        [BookingTVL.sequelize.fn('COUNT', BookingTVL.sequelize.col('bk_bkid')), 'totalBookings'],
+        [BookingTVL.sequelize.fn('SUM', BookingTVL.sequelize.literal("CASE WHEN bk_status = 'CONFIRMED' THEN 1 ELSE 0 END")), 'confirmedBookings']
       ],
       where: { bk_agent: { [Op.not]: null } },
       group: ['bk_agent'],
-      order: [[Booking.sequelize.fn('COUNT', Booking.sequelize.col('bk_bkid')), 'DESC']],
-      limit: 5,
-      include: [{
-        model: User,
-        as: 'agent',
-        attributes: ['us_fname', 'us_lname']
-      }]
+      order: [[BookingTVL.sequelize.fn('COUNT', BookingTVL.sequelize.col('bk_bkid')), 'DESC']],
+      limit: 5
     });
+    
+    // Get user details for each agent separately
+    const employeePerformance = [];
+    for (const booking of employeeBookings) {
+      if (booking.bk_agent) {
+        const user = await UserTVL.findByPk(booking.bk_agent, {
+          attributes: ['us_fname', 'us_lname']
+        });
+        
+        employeePerformance.push({
+          ...booking.toJSON(),
+          agent: user
+        });
+      }
+    }
     
     // Format employee performance data
     const formattedEmployeePerformance = employeePerformance.map(emp => ({
       name: `${emp.agent?.us_fname || 'N/A'} ${emp.agent?.us_lname || ''}`,
       department: 'N/A', // Would need to join with Employee table to get actual department
-      totalBookings: parseInt(emp.dataValues.totalBookings),
-      confirmedBookings: parseInt(emp.dataValues.confirmedBookings || 0),
+      totalBookings: parseInt(emp.totalBookings),
+      confirmedBookings: parseInt(emp.confirmedBookings || 0),
       revenueGenerated: 0 // Would need to calculate from related payments
     }));
     
@@ -96,13 +106,13 @@ const getEmployeeDashboard = async (req, res) => {
     const userId = req.user.us_usid;
 
     // Get employee bookings
-    const bookings = await Booking.findAll({
+    const bookings = await BookingTVL.findAll({
       where: { bk_euid: userId },
       order: [['edtm', 'DESC']],
       limit: 5
     });
 
-    const totalBookings = await Booking.count({
+    const totalBookings = await BookingTVL.count({
       where: { bk_euid: userId }
     });
 
@@ -132,13 +142,13 @@ const getCustomerDashboard = async (req, res) => {
     const userId = req.user.us_usid;
 
     // Get customer bookings
-    const bookings = await Booking.findAll({
+    const bookings = await BookingTVL.findAll({
       where: { bk_cuid: userId },
       order: [['edtm', 'DESC']],
       limit: 5
     });
 
-    const totalBookings = await Booking.count({
+    const totalBookings = await BookingTVL.count({
       where: { bk_cuid: userId }
     });
 
@@ -168,25 +178,25 @@ const getAgentDashboard = async (req, res) => {
     const userId = req.user.us_usid;
 
     // Get assigned bookings
-    const bookings = await Booking.findAll({
+    const bookings = await BookingTVL.findAll({
       where: { bk_euid: userId },
       order: [['edtm', 'DESC']],
       limit: 10
     });
 
     // Performance metrics
-    const totalBookings = await Booking.count({
+    const totalBookings = await BookingTVL.count({
       where: { bk_euid: userId }
     });
 
-    const confirmedBookings = await Booking.count({
+    const confirmedBookings = await BookingTVL.count({
       where: { 
         bk_euid: userId,
         bk_status: 'CONFIRMED'
       }
     });
 
-    const pendingBookings = await Booking.count({
+    const pendingBookings = await BookingTVL.count({
       where: { 
         bk_euid: userId,
         bk_status: 'PENDING'
@@ -198,7 +208,7 @@ const getAgentDashboard = async (req, res) => {
     thisMonth.setDate(1);
     thisMonth.setHours(0, 0, 0, 0);
 
-    const monthlyBookings = await Booking.count({
+    const monthlyBookings = await BookingTVL.count({
       where: { 
         bk_euid: userId,
         edtm: { [Op.gte]: thisMonth }
@@ -238,18 +248,18 @@ const getAgentDashboard = async (req, res) => {
 const getAccountsDashboard = async (req, res) => {
   try {
     // Pending payments
-    const pendingPayments = await Payment.findAll({
+    const pendingPayments = await PaymentTVL.findAll({
       where: { pt_status: 'PENDING' },
       order: [['edtm', 'DESC']],
       limit: 10
     });
 
     // Payment statistics
-    const totalPayments = await Payment.sum('pt_amount');
-    const pendingAmount = await Payment.sum('pt_amount', {
+    const totalPayments = await PaymentTVL.sum('pt_amount');
+    const pendingAmount = await PaymentTVL.sum('pt_amount', {
       where: { pt_status: 'PENDING' }
     });
-    const processedAmount = await Payment.sum('pt_amount', {
+    const processedAmount = await PaymentTVL.sum('pt_amount', {
       where: { pt_status: 'PROCESSED' }
     });
 
@@ -258,7 +268,7 @@ const getAccountsDashboard = async (req, res) => {
     thisMonth.setDate(1);
     thisMonth.setHours(0, 0, 0, 0);
 
-    const monthlyCollections = await Payment.sum('pt_amount', {
+    const monthlyCollections = await PaymentTVL.sum('pt_amount', {
       where: { 
         pt_status: 'PROCESSED',
         edtm: { [Op.gte]: thisMonth }
@@ -271,7 +281,7 @@ const getAccountsDashboard = async (req, res) => {
         pendingAmount: pendingAmount || 0,
         processedAmount: processedAmount || 0,
         monthlyCollections: monthlyCollections || 0,
-        pendingCount: await Payment.count({ where: { pt_status: 'PENDING' } })
+        pendingCount: await PaymentTVL.count({ where: { pt_status: 'PENDING' } })
       },
       pendingPayments,
       navigation: [
@@ -298,10 +308,10 @@ const getAccountsDashboard = async (req, res) => {
 const getHRDashboard = async (req, res) => {
   try {
     // Employee statistics by department
-    const employeesByDept = await Employee.findAll({
+    const employeesByDept = await EmployeeTVL.findAll({
       attributes: [
         'em_dept',
-        [Employee.sequelize.fn('COUNT', Employee.sequelize.col('em_usid')), 'count']
+        [EmployeeTVL.sequelize.fn('COUNT', EmployeeTVL.sequelize.col('em_usid')), 'count']
       ],
       where: { em_status: 'ACTIVE' },
       group: ['em_dept'],
@@ -312,13 +322,13 @@ const getHRDashboard = async (req, res) => {
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
-    const recentJoiners = await Employee.findAll({
+    const recentJoiners = await EmployeeTVL.findAll({
       where: { 
         em_joindt: { [Op.gte]: thirtyDaysAgo },
         em_status: 'ACTIVE'
       },
       include: [{
-        model: User,
+        model: UserTVL,
         as: 'User',
         attributes: ['us_fname', 'us_lname', 'us_email']
       }],
@@ -327,7 +337,7 @@ const getHRDashboard = async (req, res) => {
     });
 
     // Total employees
-    const totalEmployees = await Employee.count({
+    const totalEmployees = await EmployeeTVL.count({
       where: { em_status: 'ACTIVE' }
     });
 
@@ -362,7 +372,7 @@ const getHRDashboard = async (req, res) => {
 const getCallCenterDashboard = async (req, res) => {
   try {
     // Recent bookings for support
-    const recentBookings = await Booking.findAll({
+    const recentBookings = await BookingTVL.findAll({
       where: { 
         bk_status: { [Op.in]: ['PENDING', 'CONFIRMED'] }
       },
@@ -371,11 +381,11 @@ const getCallCenterDashboard = async (req, res) => {
     });
 
     // Support statistics
-    const totalInquiries = await Booking.count({
+    const totalInquiries = await BookingTVL.count({
       where: { bk_status: 'PENDING' }
     });
 
-    const resolvedToday = await Booking.count({
+    const resolvedToday = await BookingTVL.count({
       where: { 
         bk_status: 'CONFIRMED',
         mdtm: { [Op.gte]: new Date().setHours(0, 0, 0, 0) }
@@ -467,11 +477,11 @@ const getMarketingDashboard = async (req, res) => {
 const getManagementDashboard = async (req, res) => {
   try {
     // Overall statistics
-    const totalBookings = await Booking.count();
-    const totalRevenue = await Payment.sum('pt_amount', {
+    const totalBookings = await BookingTVL.count();
+    const totalRevenue = await PaymentTVL.sum('pt_amount', {
       where: { pt_status: 'PROCESSED' }
     });
-    const totalEmployees = await Employee.count({
+    const totalEmployees = await EmployeeTVL.count({
       where: { em_status: 'ACTIVE' }
     });
     const totalCustomers = await Customer.count();
@@ -481,11 +491,11 @@ const getManagementDashboard = async (req, res) => {
     thisMonth.setDate(1);
     thisMonth.setHours(0, 0, 0, 0);
 
-    const monthlyBookings = await Booking.count({
+    const monthlyBookings = await BookingTVL.count({
       where: { edtm: { [Op.gte]: thisMonth } }
     });
 
-    const monthlyRevenue = await Payment.sum('pt_amount', {
+    const monthlyRevenue = await PaymentTVL.sum('pt_amount', {
       where: { 
         pt_status: 'PROCESSED',
         edtm: { [Op.gte]: thisMonth }
@@ -493,20 +503,20 @@ const getManagementDashboard = async (req, res) => {
     });
 
     // Top performing agents
-    const topAgents = await Booking.findAll({
+    const topAgents = await BookingTVL.findAll({
       attributes: [
         'bk_euid',
-        [Booking.sequelize.fn('COUNT', Booking.sequelize.col('bk_bkid')), 'bookingCount']
+        [BookingTVL.sequelize.fn('COUNT', BookingTVL.sequelize.col('bk_bkid')), 'bookingCount']
       ],
       where: { 
         bk_status: 'CONFIRMED',
         edtm: { [Op.gte]: thisMonth }
       },
       group: ['bk_euid'],
-      order: [[Booking.sequelize.fn('COUNT', Booking.sequelize.col('bk_bkid')), 'DESC']],
+      order: [[BookingTVL.sequelize.fn('COUNT', BookingTVL.sequelize.col('bk_bkid')), 'DESC']],
       limit: 5,
       include: [{
-        model: User,
+        model: UserTVL,
         as: 'agent',
         attributes: ['us_fname', 'us_lname']
       }]

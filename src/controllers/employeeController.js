@@ -1,4 +1,4 @@
-const { User, Employee, Booking, CorporateCustomer, Login } = require('../models');
+const { UserTVL: User, EmployeeTVL: Employee, BookingTVL: Booking, CorporateCustomer, LoginTVL: Login } = require('../models');
 const { Op } = require('sequelize');
 const bcrypt = require('bcryptjs');
 
@@ -21,12 +21,29 @@ const getAllEmployees = async (req, res) => {
           model: User, 
           attributes: ['us_fname', 'us_lname', 'us_email', 'us_phone', 'us_aadhaar'], 
           as: 'user' 
-        }, 
-        { model: Employee, as: 'manager', attributes: ['em_empno', 'em_usid'] } 
+        }
       ] 
     });
     
-    res.json(employees);
+    // Get manager details separately for each employee
+    const employeesWithManagers = [];
+    for (const emp of employees) {
+      const employeeWithManager = emp.toJSON();
+      if (emp.em_manager) {
+        const manager = await Employee.findByPk(emp.em_manager, {
+          attributes: ['em_empno', 'em_usid'],
+          include: [{
+            model: User,
+            attributes: ['us_fname', 'us_lname'],
+            as: 'user'
+          }]
+        });
+        employeeWithManager.manager = manager;
+      }
+      employeesWithManagers.push(employeeWithManager);
+    }
+    
+    res.json(employeesWithManagers);
   } catch (error) {
     res.status(500).json({ success: false, error: { code: 'SERVER_ERROR', message: error.message } });
   }
@@ -118,8 +135,7 @@ const createEmployee = async (req, res) => {
     });
     
     // Create login credentials with default password
-    const bcrypt = require('bcryptjs');
-    const { Login } = require('../models');
+    // bcrypt is already imported at the top
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(password || 'employee123', salt);
     

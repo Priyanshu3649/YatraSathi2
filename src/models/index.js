@@ -22,6 +22,16 @@ const Session = require('./Session');
 const Audit = require('./Audit');
 const Config = require('./Config');
 const TravelPlan = require('./TravelPlan');
+const BookingTVL = require('./BookingTVL');
+const PaymentTVL = require('./PaymentTVL');
+const EmployeeTVL = require('./EmployeeTVL');
+const AccountTVL = require('./AccountTVL');
+const UserTVL = require('./UserTVL');
+const StationTVL = require('./StationTVL');
+const TrainTVL = require('./TrainTVL');
+const CustomerTVL = require('./CustomerTVL');
+const LoginTVL = require('./LoginTVL');
+const UserPermissionTVL = require('./UserPermissionTVL');
 
 // Set up associations
 // Company associations
@@ -126,5 +136,16 @@ module.exports = {
   Session,
   Audit,
   Config,
-  TravelPlan
+  TravelPlan,
+  EmployeeTVL,
+  AccountTVL,
+  UserTVL,
+  StationTVL,
+  TrainTVL,
+  CustomerTVL,
+  LoginTVL,
+  BookingTVL,
+  PaymentTVL,
+  UserPermissionTVL,
+  RolePermissionTVL
 };

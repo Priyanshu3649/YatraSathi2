@@ -1,4 +1,4 @@
-const { Booking, User, Customer, Employee, Station } = require('../models');
+const { BookingTVL, UserTVL, CustomerTVL: Customer, EmployeeTVL: Employee, StationTVL: Station } = require('../models');
 const { Sequelize } = require('sequelize');
 const { sequelize } = require('../models/baseModel');
 
@@ -19,7 +19,7 @@ const createBooking = async (req, res) => {
     const bookingNumber = `BK${Date.now()}${Math.floor(Math.random() * 1000)}`;
     
     // Create new booking
-    const booking = await Booking.create({
+    const booking = await BookingTVL.create({
       bk_bkno: bookingNumber,
       bk_usid: req.user.us_usid,
       bk_fromst: fromStation,
@@ -43,23 +43,21 @@ const createBooking = async (req, res) => {
 // Get all bookings for a customer
 const getCustomerBookings = async (req, res) => {
   try {
-    const bookings = await Booking.findAll({ 
+    const bookings = await BookingTVL.findAll({ 
       where: { bk_usid: req.user.us_usid },
-      order: [['bk_reqdt', 'DESC']],
-      include: [
-        {
-          model: Station,
-          as: 'fromStation',
-          attributes: ['st_stcode', 'st_stname', 'st_city']
-        },
-        {
-          model: Station,
-          as: 'toStation',
-          attributes: ['st_stcode', 'st_stname', 'st_city']
-        }
-      ]
+      order: [['bk_reqdt', 'DESC']]
     });
-    res.json(bookings);
+    
+    // Transform data to match frontend expectations
+    const transformedBookings = bookings.map(booking => ({
+      ...booking.toJSON(),
+      bk_fromstation: booking.bk_fromst,
+      bk_tostation: booking.bk_tost,
+      bk_travelldate: booking.bk_trvldt,
+      bk_travelclass: booking.bk_class
+    }));
+    
+    res.json(transformedBookings);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -68,27 +66,25 @@ const getCustomerBookings = async (req, res) => {
 // Get all bookings (admin only)
 const getAllBookings = async (req, res) => {
   try {
-    // Only admin can get all bookings
+    // Check if user is admin
     if (req.user.us_usertype !== 'admin') {
-      return res.status(403).json({ message: 'Access denied' });
+      return res.status(403).json({ message: 'Access denied. Admin only.' });
     }
     
-    const bookings = await Booking.findAll({ 
-      order: [['bk_reqdt', 'DESC']],
-      include: [
-        {
-          model: Station,
-          as: 'fromStation',
-          attributes: ['st_stcode', 'st_stname', 'st_city']
-        },
-        {
-          model: Station,
-          as: 'toStation',
-          attributes: ['st_stcode', 'st_stname', 'st_city']
-        }
-      ]
+    const bookings = await BookingTVL.findAll({
+      order: [['edtm', 'DESC']] // Use edtm for consistency
     });
-    res.json(bookings);
+    
+    // Transform data to match frontend expectations
+    const transformedBookings = bookings.map(booking => ({
+      ...booking.toJSON(),
+      bk_fromstation: booking.bk_fromst,
+      bk_tostation: booking.bk_tost,
+      bk_travelldate: booking.bk_trvldt,
+      bk_travelclass: booking.bk_class
+    }));
+    
+    res.json(transformedBookings);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -97,20 +93,7 @@ const getAllBookings = async (req, res) => {
 // Get booking by ID
 const getBookingById = async (req, res) => {
   try {
-    const booking = await Booking.findByPk(req.params.id, {
-      include: [
-        {
-          model: Station,
-          as: 'fromStation',
-          attributes: ['st_stcode', 'st_stname', 'st_city']
-        },
-        {
-          model: Station,
-          as: 'toStation',
-          attributes: ['st_stcode', 'st_stname', 'st_city']
-        }
-      ]
-    });
+    const booking = await BookingTVL.findByPk(req.params.id);
     
     // Check if booking exists
     if (!booking) {
@@ -124,42 +107,37 @@ const getBookingById = async (req, res) => {
       return res.status(403).json({ message: 'Access denied' });
     }
     
-    res.json(booking);
+    // Transform data to match frontend expectations
+    const transformedBooking = {
+      ...booking.toJSON(),
+      bk_fromstation: booking.bk_fromst,
+      bk_tostation: booking.bk_tost,
+      bk_travelldate: booking.bk_trvldt,
+      bk_travelclass: booking.bk_class
+    };
+    
+    res.json(transformedBooking);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
 };
 
-// Update booking (agent functionality)
+// Update booking
 const updateBooking = async (req, res) => {
   try {
-    const booking = await Booking.findByPk(req.params.id);
+    const booking = await BookingTVL.findByPk(req.params.id);
     
     if (!booking) {
       return res.status(404).json({ message: 'Booking not found' });
     }
     
-    // Check permissions
-    if (req.user.us_usertype !== 'admin' && 
-        req.user.us_usertype !== 'employee') {
+    // Check if user has permission to update this booking
+    if (req.user.us_usertype !== 'admin' && booking.bk_usid !== req.user.us_usid) {
       return res.status(403).json({ message: 'Access denied' });
     }
     
-    // Update booking fields
-    const {
-      status,
-      agentId,
-      remarks
-    } = req.body;
-    
-    // Update fields if provided
-    if (status) booking.bk_status = status;
-    if (agentId) booking.bk_agent = agentId;
-    if (remarks) booking.bk_remarks = remarks;
-    
-    booking.mby = req.user.us_usid;
-    const updatedBooking = await booking.save();
-    res.json(updatedBooking);
+    await booking.update(req.body);
+    res.json(booking);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -168,155 +146,88 @@ const updateBooking = async (req, res) => {
 // Cancel booking
 const cancelBooking = async (req, res) => {
   try {
-    const booking = await Booking.findByPk(req.params.id);
+    const booking = await BookingTVL.findByPk(req.params.id);
     
     if (!booking) {
       return res.status(404).json({ message: 'Booking not found' });
     }
     
-    // Check permissions
-    // Customer can cancel their own bookings
-    // Admin can cancel any booking
-    // Employee can cancel bookings they are assigned to
-    if (req.user.us_usertype !== 'admin' && 
-        booking.bk_usid !== req.user.us_usid &&
-        (booking.bk_agent && booking.bk_agent !== req.user.us_usid)) {
+    // Check if user has permission to cancel this booking
+    if (req.user.us_usertype !== 'admin' && booking.bk_usid !== req.user.us_usid) {
       return res.status(403).json({ message: 'Access denied' });
     }
     
-    // Check if booking can be cancelled
+    // Check if booking is already cancelled
     if (booking.bk_status === 'CANCELLED') {
       return res.status(400).json({ message: 'Booking is already cancelled' });
     }
     
-    if (booking.bk_status === 'CONFIRMED') {
-      return res.status(400).json({ message: 'Confirmed bookings cannot be cancelled through this system. Please contact customer support.' });
-    }
-    
-    // Update booking status to cancelled
-    booking.bk_status = 'CANCELLED';
-    booking.mby = req.user.us_usid;
-    
-    const updatedBooking = await booking.save();
-    res.json({ 
-      message: 'Booking cancelled successfully',
-      booking: updatedBooking 
+    await booking.update({ 
+      bk_status: 'CANCELLED',
+      mby: req.user.us_usid 
     });
+    
+    res.json(booking);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
 };
 
-// Delete booking (only for pending bookings)
+// Delete booking
 const deleteBooking = async (req, res) => {
   try {
-    const { Passenger, Pnr, Account, Payment, PaymentAlloc } = require('../models');
-    
-    const bookingId = parseInt(req.params.id);
-    
-    const booking = await Booking.findByPk(bookingId);
-    
-    // Get related records separately to avoid potential association issues
-    const passengers = await Passenger.findAll({ where: { ps_bkid: bookingId } });
-    const pnr = await Pnr.findOne({ where: { pn_bkid: bookingId } });
-    const account = await Account.findOne({ where: { ac_bkid: bookingId } });
+    const booking = await BookingTVL.findByPk(req.params.id);
     
     if (!booking) {
       return res.status(404).json({ message: 'Booking not found' });
     }
     
-    // Check permissions
-    if (req.user.us_usertype !== 'admin' && 
-        booking.bk_usid !== req.user.us_usid) {
-      return res.status(403).json({ message: 'Access denied' });
+    // Only admin can delete bookings
+    if (req.user.us_usertype !== 'admin') {
+      return res.status(403).json({ message: 'Access denied. Admin only.' });
     }
     
-    // Only allow deletion of pending bookings
-    if (booking.bk_status !== 'PENDING') {
-      return res.status(400).json({ message: 'Only pending bookings can be deleted' });
-    }
+    // First, delete related records in the account table that reference this booking
+    const Account = require('../models/AccountTVL');
+    await Account.destroy({ where: { ac_bkid: booking.bk_bkid } });
     
-    // Start a transaction to ensure data consistency
-    const transaction = await sequelize.transaction();
+    // Then delete the booking
+    await booking.destroy();
     
-    try {
-      // Delete payment allocations related to this booking's PNRs
-      if (pnr && pnr.pn_pnid) {
-        await PaymentAlloc.destroy({
-          where: { pa_pnid: pnr.pn_pnid },
-          transaction: transaction
-        });
-      }
-      
-      // Delete payments related to this booking (both via account and directly via booking)
-      if (account && account.ac_acid) {
-        await Payment.destroy({
-          where: { pt_acid: account.ac_acid },
-          transaction: transaction
-        });
-      }
-      
-      // Also delete any payments that directly reference this booking
-      await Payment.destroy({
-        where: { pt_bkid: booking.bk_bkid },
-        transaction: transaction
-      });
-      
-      // Delete PNR records
-      if (pnr) {
-        await pnr.destroy({ transaction: transaction });
-      }
-      
-      // Delete passenger records
-      if (passengers && passengers.length > 0) {
-        await Passenger.destroy({
-          where: { ps_bkid: booking.bk_bkid },
-          transaction: transaction
-        });
-      }
-      
-      // Delete account record
-      if (account) {
-        await account.destroy({ transaction: transaction });
-      }
-      
-      // Finally, delete the booking
-      await booking.destroy({ transaction: transaction });
-      
-      await transaction.commit();
-      res.json({ message: 'Booking deleted successfully' });
-    } catch (err) {
-      await transaction.rollback();
-      throw err;
-    }
+    res.json({ message: 'Booking deleted successfully' });
   } catch (error) {
+    // Handle foreign key constraint errors
+    if (error.name === 'SequelizeForeignKeyConstraintError') {
+      return res.status(400).json({ 
+        message: 'Cannot delete booking. Related records exist in other tables.' 
+      });
+    }
     res.status(500).json({ message: error.message });
   }
 };
 
-// Assign booking to employee (admin/manager functionality)
+// Assign booking to employee
 const assignBooking = async (req, res) => {
   try {
     const { bookingId, employeeId } = req.body;
     
-    // Verify employee exists and is of employee type
-    const employee = await User.findByPk(employeeId);
-    if (!employee || employee.us_usertype !== 'employee') {
-      return res.status(400).json({ message: 'Invalid employee' });
-    }
+    const booking = await BookingTVL.findByPk(bookingId);
     
-    const booking = await Booking.findByPk(bookingId);
     if (!booking) {
       return res.status(404).json({ message: 'Booking not found' });
     }
     
-    // Assign employee to booking
-    booking.bk_agent = employeeId;
-    booking.bk_status = 'APPROVED'; // Change status to approved when assigned
-    booking.mby = req.user.us_usid;
+    // Only admin can assign bookings
+    if (req.user.us_usertype !== 'admin') {
+      return res.status(403).json({ message: 'Access denied. Admin only.' });
+    }
     
-    const updatedBooking = await booking.save();
-    res.json(updatedBooking);
+    await booking.update({ 
+      bk_agent: employeeId,
+      mby: req.user.us_usid 
+    });
+    
+    res.json(booking);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -327,34 +238,32 @@ const getBookingsByStatus = async (req, res) => {
   try {
     const { status } = req.params;
     
-    let query = { where: { bk_status: status } };
+    let whereConditions = { bk_status: status };
     
-    // For employees, only get bookings assigned to them
+    // Apply user-specific filters
     if (req.user.us_usertype === 'employee') {
-      query.where.bk_agent = req.user.us_usid;
-    } 
-    // For customers, only get their own bookings
-    else if (req.user.us_usertype === 'customer') {
-      query.where.bk_usid = req.user.us_usid;
+      // Employees can only see their assigned bookings
+      whereConditions.bk_agent = req.user.us_usid;
+    } else if (req.user.us_usertype === 'customer') {
+      // Customers can only see their own bookings
+      whereConditions.bk_usid = req.user.us_usid;
     }
     
-    const bookings = await Booking.findAll({ 
-      ...query, 
-      order: [['bk_reqdt', 'DESC']],
-      include: [
-        {
-          model: Station,
-          as: 'fromStation',
-          attributes: ['st_stcode', 'st_stname', 'st_city']
-        },
-        {
-          model: Station,
-          as: 'toStation',
-          attributes: ['st_stcode', 'st_stname', 'st_city']
-        }
-      ]
+    const bookings = await BookingTVL.findAll({
+      where: whereConditions,
+      order: [['bk_reqdt', 'DESC']]
     });
-    res.json(bookings);
+    
+    // Transform data to match frontend expectations
+    const transformedBookings = bookings.map(booking => ({
+      ...booking.toJSON(),
+      bk_fromstation: booking.bk_fromst,
+      bk_tostation: booking.bk_tost,
+      bk_travelldate: booking.bk_trvldt,
+      bk_travelclass: booking.bk_class
+    }));
+    
+    res.json(transformedBookings);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -439,45 +348,24 @@ const searchBookings = async (req, res) => {
 
     // Build query
     const offset = (page - 1) * limit;
-    const { count, rows: bookings } = await Booking.findAndCountAll({
+    const { count, rows: bookings } = await BookingTVL.findAndCountAll({
       where: whereConditions,
       order: [[sortBy, sortOrder]],
       limit: parseInt(limit),
-      offset: parseInt(offset),
-      include: [
-        {
-          model: Station,
-          as: 'fromStation',
-          attributes: ['st_stcode', 'st_stname', 'st_city']
-        },
-        {
-          model: Station,
-          as: 'toStation',
-          attributes: ['st_stcode', 'st_stname', 'st_city']
-        },
-        {
-          model: User,
-          as: 'customer',
-          attributes: ['us_fname', 'us_lname', 'us_email'],
-          include: [{
-            model: Customer,
-            attributes: ['cu_custno', 'cu_custtype']
-          }]
-        },
-        {
-          model: User,
-          as: 'agent',
-          attributes: ['us_fname', 'us_lname', 'us_email'],
-          include: [{
-            model: Employee,
-            attributes: ['em_empno', 'em_designation']
-          }]
-        }
-      ]
+      offset: parseInt(offset)
     });
 
+    // Transform data to match frontend expectations
+    const transformedBookings = bookings.map(booking => ({
+      ...booking.toJSON(),
+      bk_fromstation: booking.bk_fromst,
+      bk_tostation: booking.bk_tost,
+      bk_travelldate: booking.bk_trvldt,
+      bk_travelclass: booking.bk_class
+    }));
+
     res.json({
-      bookings,
+      bookings: transformedBookings,
       totalPages: Math.ceil(count / limit),
       currentPage: parseInt(page),
       totalBookings: count

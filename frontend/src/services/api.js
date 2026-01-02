@@ -381,6 +381,22 @@ export const bookingAPI = {
     }
     
     return data;
+  },
+  
+  // Get bookings by status
+  getBookingsByStatus: async (status) => {
+    const response = await fetch(`${API_BASE_URL}/bookings/status/${status}`, {
+      method: 'GET',
+      headers: getHeaders(true)
+    });
+    
+    const data = await response.json();
+    
+    if (!response.ok) {
+      throw new Error(data.message || 'Failed to get bookings by status');
+    }
+    
+    return data;
   }
 };
 
@@ -414,6 +430,22 @@ export const paymentAPI = {
     
     if (!response.ok) {
       throw new Error(data.message || 'Failed to get payments');
+    }
+    
+    return data;
+  },
+  
+  // Get payments by booking ID
+  getPaymentsByBookingId: async (bookingId) => {
+    const response = await fetch(`${API_BASE_URL}/payments/booking/${bookingId}`, {
+      method: 'GET',
+      headers: getHeaders(true)
+    });
+    
+    const data = await response.json();
+    
+    if (!response.ok) {
+      throw new Error(data.message || 'Failed to get payments for booking');
     }
     
     return data;
@@ -479,6 +511,23 @@ export const paymentAPI = {
     
     if (!response.ok) {
       throw new Error(data.message || 'Failed to update payment');
+    }
+    
+    return data;
+  },
+  
+  // Process refund
+  refundPayment: async (id, refundData) => {
+    const response = await fetch(`${API_BASE_URL}/payments/${id}/refund`, {
+      method: 'POST',
+      headers: getHeaders(true),
+      body: JSON.stringify(refundData)
+    });
+    
+    const data = await response.json();
+    
+    if (!response.ok) {
+      throw new Error(data.message || 'Failed to process refund');
     }
     
     return data;

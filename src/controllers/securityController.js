@@ -5,9 +5,10 @@ const RoleTVL = require('../models/RoleTVL');
 const UserTVL = require('../models/UserTVL');
 const RolePermissionTVL = require('../models/RolePermissionTVL');
 const UserPermissionTVL = require('../models/UserPermissionTVL');
-const Customer = require('../models/Customer');
-const User = require('../models/User');
-const Employee = require('../models/Employee');
+const CustomerTVL = require('../models/CustomerTVL');
+const EmployeeTVL = require('../models/EmployeeTVL');
+const LoginTVL = require('../models/LoginTVL');
+const bcrypt = require('bcrypt');
 
 // Parse database errors
 const parseDbError = (error) => {
@@ -526,9 +527,9 @@ const getEffectivePermissions = async (req, res) => {
 // Get all customers
 const getAllCustomers = async (req, res) => {
   try {
-    const customers = await Customer.findAll({
+    const customers = await CustomerTVL.findAll({
       include: [{
-        model: User,
+        model: UserTVL,
         attributes: ['us_fname', 'us_lname', 'us_email', 'us_phone']
       }],
       order: [['cu_custno', 'ASC']],
@@ -808,7 +809,7 @@ const deleteUser = async (req, res) => {
 // Update customer
 const updateCustomer = async (req, res) => {
   try {
-    const customer = await Customer.findByPk(req.params.id);
+    const customer = await CustomerTVL.findByPk(req.params.id);
     
     if (!customer) {
       return res.status(404).json({ message: 'Customer not found' });
@@ -831,7 +832,7 @@ const updateCustomer = async (req, res) => {
 // Delete customer
 const deleteCustomer = async (req, res) => {
   try {
-    const customer = await Customer.findByPk(req.params.id);
+    const customer = await CustomerTVL.findByPk(req.params.id);
     
     if (!customer) {
       return res.status(404).json({ message: 'Customer not found' });
@@ -982,10 +983,10 @@ const deleteUserPermission = async (req, res) => {
 // Get all employees with user and role information
 const getAllEmployees = async (req, res) => {
   try {
-    const employees = await Employee.findAll({
+    const employees = await EmployeeTVL.findAll({
       include: [
         {
-          model: User,
+          model: UserTVL,
           as: 'User',
           attributes: ['us_usid', 'us_fname', 'us_lname', 'us_email', 'us_phone', 'us_aadhaar', 'us_pan', 'us_addr1', 'us_addr2', 'us_city', 'us_state', 'us_pin', 'us_roid', 'us_coid', 'us_active'],
           include: [
@@ -997,11 +998,11 @@ const getAllEmployees = async (req, res) => {
           ]
         },
         {
-          model: Employee,
+          model: EmployeeTVL,
           as: 'manager',
           attributes: ['em_usid', 'em_empno'],
           include: [{
-            model: User,
+            model: UserTVL,
             as: 'User',
             attributes: ['us_usid', 'us_fname', 'us_lname']
           }],
@@ -1066,24 +1067,24 @@ const createEmployee = async (req, res) => {
     if (!us_usid || !us_fname || !us_email || !us_phone || !us_roid || !em_empno || !em_designation || !em_dept || !em_joindt) {
       return res.status(400).json({ message: 'Missing required fields' });
     }
-    const existingUser = await User.findOne({ where: { [require('sequelize').Op.or]: [{ us_usid }, { us_email }, { us_phone }] } });
+    const existingUser = await UserTVL.findOne({ where: { [require('sequelize').Op.or]: [{ us_usid }, { us_email }, { us_phone }] } });
     if (existingUser) {
       return res.status(409).json({ message: 'User ID, email, or phone already exists' });
     }
-    const existingEmployee = await Employee.findOne({ where: { em_empno } });
+    const existingEmployee = await EmployeeTVL.findOne({ where: { em_empno } });
     if (existingEmployee) {
       return res.status(409).json({ message: 'Employee number already exists' });
     }
     const userData = { us_usid, us_fname, us_lname: us_lname || '', us_email, us_phone, us_aadhaar: us_aadhaar || null, us_pan: us_pan || null, us_addr1: us_addr1 || null, us_addr2: us_addr2 || null, us_city: us_city || null, us_state: us_state || null, us_pin: us_pin || null, us_usertype: 'employee', us_roid, us_coid: us_coid || 'TRV', us_active: us_active !== undefined ? (us_active ? 1 : 0) : 1, eby: req.user?.us_usid || 'SYSTEM', mby: req.user?.us_usid || 'SYSTEM' };
-    const user = await User.create(userData);
-    const employeeData = { em_usid: us_usid, em_empno, em_designation, em_dept, em_salary: em_salary || null, em_joindt: new Date(em_joindt), em_manager: em_manager || null, em_status: em_status || 'ACTIVE', eby: req.user?.us_usid || 'SYSTEM', mby: req.user?.us_usid || 'SYSTEM' };
-    const employee = await Employee.create(employeeData);
+    const user = await UserTVL.create(userData);
+    const employeeData = { em_usid: us_usid, em_empno, em_designation, em_dept, em_salary: em_salary || null, em_joindt: new Date(em_joindt), em_manager: em_manager || null, em_status: em_status || 'ACTIVE', eby: req.user?.us_usid || 'SYSTEM', mby: req.user?.us_usid || 'SYSTEM', edtm: new Date() };
+    const employee = await EmployeeTVL.create(employeeData);
     const password = temp_password || 'employee123';
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(password, salt);
     const loginData = { lg_usid: us_usid, lg_email: us_email, lg_passwd: hashedPassword, lg_salt: salt, lg_active: lg_active !== undefined ? (lg_active ? 1 : 0) : 1, eby: req.user?.us_usid || 'SYSTEM', mby: req.user?.us_usid || 'SYSTEM' };
-    await Login.create(loginData);
-    const createdEmployee = await Employee.findOne({ where: { em_usid: us_usid }, include: [{ model: User, include: [{ model: RoleTVL, attributes: ['fn_fnid', 'fn_fnshort', 'fn_fndesc'], as: 'Role' }] }] });
+    await LoginTVL.create(loginData);
+    const createdEmployee = await EmployeeTVL.findOne({ where: { em_usid: us_usid }, include: [{ model: UserTVL, include: [{ model: RoleTVL, attributes: ['fn_fnid', 'fn_fnshort', 'fn_fndesc'], as: 'Role' }] }] });
     res.status(201).json(createdEmployee);
   } catch (error) {
     console.error('Error creating employee:', error);
@@ -1096,7 +1097,7 @@ const updateEmployee = async (req, res) => {
   try {
     const { id } = req.params;
     const { us_fname, us_lname, us_email, us_phone, us_aadhaar, us_pan, us_addr1, us_addr2, us_city, us_state, us_pin, us_roid, us_coid, em_empno, em_designation, em_dept, em_salary, em_joindt, em_manager, em_status, us_active, lg_active, temp_password } = req.body;
-    const employee = await Employee.findOne({ where: { em_usid: id }, include: [{ model: User }] });
+    const employee = await EmployeeTVL.findOne({ where: { em_usid: id }, include: [{ model: UserTVL }] });
     if (!employee) {
       return res.status(404).json({ message: 'Employee not found' });
     }
@@ -1109,19 +1110,19 @@ const updateEmployee = async (req, res) => {
     const employeeUpdateData = { em_empno: em_empno || employee.em_empno, em_designation: em_designation || employee.em_designation, em_dept: em_dept || employee.em_dept, em_salary: em_salary !== undefined ? em_salary : employee.em_salary, em_joindt: em_joindt ? new Date(em_joindt) : employee.em_joindt, em_manager: em_manager !== undefined ? em_manager : employee.em_manager, em_status: em_status || employee.em_status, mby: req.user?.us_usid || 'SYSTEM', mdtm: new Date() };
     await employee.update(employeeUpdateData);
     if (temp_password) {
-      const login = await Login.findOne({ where: { lg_usid: id } });
+      const login = await LoginTVL.findOne({ where: { lg_usid: id } });
       if (login) {
         const salt = await bcrypt.genSalt(10);
         const hashedPassword = await bcrypt.hash(temp_password, salt);
         await login.update({ lg_passwd: hashedPassword, lg_salt: salt, lg_active: lg_active !== undefined ? (lg_active ? 1 : 0) : login.lg_active, mby: req.user?.us_usid || 'SYSTEM', mdtm: new Date() });
       }
     } else if (lg_active !== undefined) {
-      const login = await Login.findOne({ where: { lg_usid: id } });
+      const login = await LoginTVL.findOne({ where: { lg_usid: id } });
       if (login) {
         await login.update({ lg_active: lg_active ? 1 : 0, mby: req.user?.us_usid || 'SYSTEM', mdtm: new Date() });
       }
     }
-    const updatedEmployee = await Employee.findOne({ where: { em_usid: id }, include: [{ model: User, include: [{ model: RoleTVL, attributes: ['fn_fnid', 'fn_fnshort', 'fn_fndesc'], as: 'Role' }] }] });
+    const updatedEmployee = await EmployeeTVL.findOne({ where: { em_usid: id }, include: [{ model: UserTVL, include: [{ model: RoleTVL, attributes: ['fn_fnid', 'fn_fnshort', 'fn_fndesc'], as: 'Role' }] }] });
     res.json(updatedEmployee);
   } catch (error) {
     console.error('Error updating employee:', error);
@@ -1133,13 +1134,13 @@ const updateEmployee = async (req, res) => {
 const deleteEmployee = async (req, res) => {
   try {
     const { id } = req.params;
-    const employee = await Employee.findOne({ where: { em_usid: id } });
+    const employee = await EmployeeTVL.findOne({ where: { em_usid: id } });
     if (!employee) {
       return res.status(404).json({ message: 'Employee not found' });
     }
-    await Login.destroy({ where: { lg_usid: id } });
-    await Employee.destroy({ where: { em_usid: id } });
-    await User.destroy({ where: { us_usid: id } });
+    await LoginTVL.destroy({ where: { lg_usid: id } });
+    await EmployeeTVL.destroy({ where: { em_usid: id } });
+    await UserTVL.destroy({ where: { us_usid: id } });
     res.json({ message: 'Employee deleted successfully' });
   } catch (error) {
     console.error('Error deleting employee:', error);

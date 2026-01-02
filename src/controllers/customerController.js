@@ -1,4 +1,4 @@
-const { User, Customer, Booking, Payment, Account } = require('../models');
+const { UserTVL: User, CustomerTVL: Customer, BookingTVL: Booking, PaymentTVL: Payment, AccountTVL: Account, EmployeeTVL: Employee } = require('../models');
 const { Op } = require('sequelize');
 
 /**
@@ -277,10 +277,41 @@ const cancelBooking = async (req, res) => {
   }
 };
 
+/**
+ * Get all customers from cuXcustomer table
+ */
+const getAllCustomers = async (req, res) => {
+  try {
+    // Only admin can get all customers
+    if (req.user.us_usertype !== 'admin') {
+      return res.status(403).json({ message: 'Access denied' });
+    }
+    
+    const customers = await Customer.findAll({ 
+      attributes: [
+        'cu_cusid', 'cu_usid', 'cu_custno', 'cu_custtype', 'cu_creditlimit', 
+        'cu_creditdays', 'cu_discount', 'cu_active', 'cu_panno', 'cu_gstno'
+      ], 
+      include: [ 
+        { 
+          model: User, 
+          attributes: ['us_fname', 'us_lname', 'us_email', 'us_phone', 'us_aadhaar'], 
+          as: 'user' 
+        }
+      ] 
+    });
+    
+    res.json(customers);
+  } catch (error) {
+    res.status(500).json({ success: false, error: { code: 'SERVER_ERROR', message: error.message } });
+  }
+};
+
 module.exports = {
   getCustomerDashboard,
   createBooking,
   getCustomerBookings,
   getBookingDetails,
-  cancelBooking
+  cancelBooking,
+  getAllCustomers
 };

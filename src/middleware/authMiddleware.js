@@ -1,5 +1,5 @@
 const jwt = require('jsonwebtoken');
-const { User, Role } = require('../models');
+const { User, Role, UserTVL } = require('../models');
 
 const auth = async (req, res, next) => {
   try {
@@ -17,7 +17,20 @@ const auth = async (req, res, next) => {
     console.log('Decoded token:', decoded);
     
     console.log('Looking for user with ID:', decoded.id);
-    const user = await User.findByPk(decoded.id);
+    
+    // Check if this is a TVL user by ID prefix
+    const isTVLUser = decoded.id.startsWith('ADM') || decoded.id.startsWith('EMP') || 
+                      decoded.id.startsWith('ACC') || decoded.id.startsWith('CUS');
+    
+    let user = null;
+    if (isTVLUser) {
+      console.log('This is a TVL user, checking TVL database');
+      user = await UserTVL.findByPk(decoded.id);
+    } else {
+      console.log('This is a regular user, checking main database');
+      user = await User.findByPk(decoded.id);
+    }
+    
     console.log('User from database:', user ? user.toJSON() : 'User not found');
     
     if (!user) {
@@ -26,9 +39,13 @@ const auth = async (req, res, next) => {
     }
 
     // Get user's role information
-    if (user.us_roid) {
+    // For TVL users, they have us_usertype field instead of us_roid
+    if (!isTVLUser && user.us_roid) {
       const role = await Role.findByPk(user.us_roid);
       user.role = role;
+    } else if (isTVLUser && user.us_usertype) {
+      // For TVL users, set the role based on user type
+      user.role = { ro_name: user.us_usertype };
     }
 
     req.user = user;

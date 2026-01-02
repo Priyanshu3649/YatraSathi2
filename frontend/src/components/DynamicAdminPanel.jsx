@@ -599,11 +599,11 @@ const DynamicAdminPanel = () => {
     try {
       // Fetch all dropdown sources
       const [appsRes, modsRes, opsRes, rolesRes, usersRes] = await Promise.all([
-        fetch(`${API_BASE_URL}security/applications`, { headers: { 'Authorization': `Bearer ${token}` } }),
-        fetch(`${API_BASE_URL}security/modules`, { headers: { 'Authorization': `Bearer ${token}` } }),
-        fetch(`${API_BASE_URL}permissions`, { headers: { 'Authorization': `Bearer ${token}` } }),
-        fetch(`${API_BASE_URL}permissions/roles`, { headers: { 'Authorization': `Bearer ${token}` } }),
-        fetch(`${API_BASE_URL}security/users`, { headers: { 'Authorization': `Bearer ${token}` } })
+        fetch(`${API_BASE_URL}/security/applications`, { headers: { 'Authorization': `Bearer ${token}` } }),
+        fetch(`${API_BASE_URL}/security/modules`, { headers: { 'Authorization': `Bearer ${token}` } }),
+        fetch(`${API_BASE_URL}/permissions`, { headers: { 'Authorization': `Bearer ${token}` } }),
+        fetch(`${API_BASE_URL}/permissions/roles`, { headers: { 'Authorization': `Bearer ${token}` } }),
+        fetch(`${API_BASE_URL}/security/users`, { headers: { 'Authorization': `Bearer ${token}` } })
       ]);
 
       const apps = appsRes.ok ? await appsRes.json() : [];
@@ -1273,7 +1273,7 @@ const DynamicAdminPanel = () => {
                         >
                           <option value="">Select...</option>
                           {field.options.map(opt => (
-                            <option key={opt} value={opt}>{opt}</option>
+                            <option key={opt.value} value={opt.value}>{opt.label}</option>
                           ))}
                         </select>
                       ) : field.type === 'textarea' ? (

@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { Train, Station } = require('../models');
+const { TrainTVL: Train, StationTVL: Station } = require('../models');
 const authenticate = require('../middleware/authMiddleware');
 
 // Get all trains
