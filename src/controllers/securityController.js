@@ -6,38 +6,123 @@ const UserTVL = require('../models/UserTVL');
 const RolePermissionTVL = require('../models/RolePermissionTVL');
 const UserPermissionTVL = require('../models/UserPermissionTVL');
 const CustomerTVL = require('../models/CustomerTVL');
+const Employee = require('../models/Employee');
 const EmployeeTVL = require('../models/EmployeeTVL');
-const LoginTVL = require('../models/LoginTVL');
-const bcrypt = require('bcrypt');
+const Role = require('../models/Role'); // Add the regular Role model
+const Login = require('../models/Login');
+const bcrypt = require('bcryptjs');
 
-// Parse database errors
+// Helper function to parse database errors into user-friendly messages
 const parseDbError = (error) => {
-  console.error('Database error:', error);
+  console.error('=== DATABASE ERROR DEBUG ===');
+  console.error('Error name:', error.name);
+  console.error('Error code:', error.code);
+  console.error('Error message:', error.message);
+  console.error('Error fields:', error.fields);
+  console.error('Error parent:', error.parent);
+  console.error('===========================');
   
-  // MySQL error codes
-  if (error.code) {
-    switch (error.code) {
-      case 'ER_DUP_ENTRY':
-        return { status: 409, message: 'Duplicate entry found' };
-      case 'ER_NO_REFERENCED_ROW_2':
-      case 'ER_ROW_IS_REFERENCED_2':
-        return { status: 400, message: 'Foreign key constraint violation' };
-      case 'ER_DATA_TOO_LONG':
-        return { status: 400, message: 'Data too long for field' };
-      case 'ER_BAD_NULL_ERROR':
-        return { status: 400, message: 'Required field cannot be null' };
-      default:
-        return { status: 500, message: 'Database error occurred' };
+  // Duplicate entry error (MySQL 1062)
+  if (error.name === 'SequelizeUniqueConstraintError' || 
+      error.code === 'ER_DUP_ENTRY' ||
+      error.parent?.code === 'ER_DUP_ENTRY' ||
+      error.message?.includes('Duplicate entry')) {
+    
+    // Try to extract field and value from error
+    let field = 'key';
+    let value = '';
+    
+    if (error.fields) {
+      field = Object.keys(error.fields)[0];
+      value = error.fields[field];
+    } else if (error.parent?.sqlMessage) {
+      // Parse from SQL message: "Duplicate entry 'ADM' for key 'PRIMARY'"
+      const match = error.parent.sqlMessage.match(/Duplicate entry '([^']+)' for key '([^']+)'/i);
+      if (match) {
+        value = match[1];
+        field = match[2] === 'PRIMARY' ? 'ID' : match[2];
+      }
     }
+    
+    return {
+      status: 409,
+      message: `Duplicate entry: A record with ${field} = '${value}' already exists.`,
+      code: 1062
+    };
   }
   
-  // Sequelize validation errors
+  // Foreign key constraint error - insert/update (MySQL 1452)
+  if (error.name === 'SequelizeForeignKeyConstraintError' || error.code === 'ER_NO_REFERENCED_ROW_2') {
+    return {
+      status: 400,
+      message: 'Foreign key constraint failed: Referenced record does not exist.',
+      code: 1452
+    };
+  }
+  
+  // Cannot delete due to foreign key (MySQL 1451)
+  if (error.code === 'ER_ROW_IS_REFERENCED_2') {
+    return {
+      status: 409,
+      message: 'Cannot delete: This record is referenced by other records.',
+      code: 1451
+    };
+  }
+  
+  // Validation error
   if (error.name === 'SequelizeValidationError') {
-    return { status: 400, message: error.message };
+    const messages = error.errors.map(e => e.message).join(', ');
+    return {
+      status: 400,
+      message: `Validation error: ${messages}`,
+      code: 'VALIDATION_ERROR'
+    };
+  }
+  
+  // Data too long (MySQL 1406)
+  if (error.code === 'ER_DATA_TOO_LONG') {
+    const field = error.message.match(/for column '([^']+)'/)?.[1] || 'field';
+    return {
+      status: 400,
+      message: `Data too long for column '${field}': One or more fields exceed maximum length.`,
+      code: 1406
+    };
+  }
+  
+  // Required field missing (MySQL 1048)
+  if (error.name === 'SequelizeDatabaseError' && error.message.includes('cannot be null')) {
+    const field = error.message.match(/'([^']+)'/)?.[1] || 'field';
+    return {
+      status: 400,
+      message: `Required field missing: '${field}' cannot be empty.`,
+      code: 1048
+    };
+  }
+  
+  // Table doesn't exist (MySQL 1146)
+  if (error.code === 'ER_NO_SUCH_TABLE') {
+    return {
+      status: 500,
+      message: "Table doesn't exist: The requested data table does not exist.",
+      code: 1146
+    };
+  }
+  
+  // Unknown column (MySQL 1054)
+  if (error.code === 'ER_BAD_FIELD_ERROR') {
+    return {
+      status: 400,
+      message: 'Unknown column: Invalid field detected.',
+      code: 1054
+    };
   }
   
   // Default error
-  return { status: 500, message: 'An unexpected database error occurred' };
+  return {
+    status: 500,
+    message: error.message || 'An unexpected error occurred.',
+    code: error.code || 'UNKNOWN_ERROR'
+  };
 };
 
 // ==================== APPLICATION OPERATIONS ====================
@@ -52,8 +137,7 @@ const getAllApplications = async (req, res) => {
     res.json(applications);
   } catch (error) {
     console.error('Error fetching applications:', error);
-    const { status, message } = parseDbError(error);
-    res.status(status).json({ message });
+    res.status(500).json({ message: error.message });
   }
 };
 
@@ -74,7 +158,6 @@ const createApplication = async (req, res) => {
     
     res.status(201).json(application);
   } catch (error) {
-    console.error('Error creating application:', error);
     const { status, message } = parseDbError(error);
     res.status(status).json({ message });
   }
@@ -126,8 +209,7 @@ const updateApplication = async (req, res) => {
     res.json(application);
   } catch (error) {
     console.error('Error updating application:', error);
-    const { status, message } = parseDbError(error);
-    res.status(status).json({ message });
+    res.status(500).json({ message: error.message });
   }
 };
 
@@ -143,8 +225,7 @@ const deleteApplication = async (req, res) => {
     res.json({ message: 'Application deleted successfully' });
   } catch (error) {
     console.error('Error deleting application:', error);
-    const { status, message } = parseDbError(error);
-    res.status(status).json({ message });
+    res.status(500).json({ message: error.message });
   }
 };
 
@@ -160,8 +241,7 @@ const getAllModules = async (req, res) => {
     res.json(modules);
   } catch (error) {
     console.error('Error fetching modules:', error);
-    const { status, message } = parseDbError(error);
-    res.status(status).json({ message });
+    res.status(500).json({ message: error.message });
   }
 };
 
@@ -179,8 +259,7 @@ const getModulesByApplication = async (req, res) => {
     res.json(modules);
   } catch (error) {
     console.error('Error fetching modules by application:', error);
-    const { status, message } = parseDbError(error);
-    res.status(status).json({ message });
+    res.status(500).json({ message: error.message });
   }
 };
 
@@ -211,8 +290,7 @@ const createModule = async (req, res) => {
     res.status(201).json(module);
   } catch (error) {
     console.error('Error creating module:', error);
-    const { status, message } = parseDbError(error);
-    res.status(status).json({ message });
+    res.status(500).json({ message: error.message });
   }
 };
 
@@ -256,8 +334,7 @@ const updateModule = async (req, res) => {
     res.json(module);
   } catch (error) {
     console.error('Error updating module:', error);
-    const { status, message } = parseDbError(error);
-    res.status(status).json({ message });
+    res.status(500).json({ message: error.message });
   }
 };
 
@@ -277,8 +354,7 @@ const deleteModule = async (req, res) => {
     res.json({ message: 'Module deleted successfully' });
   } catch (error) {
     console.error('Error deleting module:', error);
-    const { status, message } = parseDbError(error);
-    res.status(status).json({ message });
+    res.status(500).json({ message: error.message });
   }
 };
 
@@ -294,8 +370,7 @@ const getAllUsers = async (req, res) => {
     res.json(users);
   } catch (error) {
     console.error('Error fetching users:', error);
-    const { status, message } = parseDbError(error);
-    res.status(status).json({ message });
+    res.status(500).json({ message: error.message });
   }
 };
 
@@ -325,8 +400,7 @@ const createUser = async (req, res) => {
     res.status(201).json(user);
   } catch (error) {
     console.error('Error creating user:', error);
-    const { status, message } = parseDbError(error);
-    res.status(status).json({ message });
+    res.status(500).json({ message: error.message });
   }
 };
 
@@ -361,8 +435,7 @@ const getAllRolePermissions = async (req, res) => {
     res.json(enhanced);
   } catch (error) {
     console.error('Error fetching role permissions:', error);
-    const { status, message } = parseDbError(error);
-    res.status(status).json({ message });
+    res.status(500).json({ message: error.message });
   }
 };
 
@@ -384,8 +457,7 @@ const createRolePermission = async (req, res) => {
     res.status(201).json(rolePermission);
   } catch (error) {
     console.error('Error creating role permission:', error);
-    const { status, message } = parseDbError(error);
-    res.status(status).json({ message });
+    res.status(500).json({ message: error.message });
   }
 };
 
@@ -410,8 +482,7 @@ const bulkAssignRolePermissions = async (req, res) => {
     res.status(201).json(result);
   } catch (error) {
     console.error('Error bulk assigning role permissions:', error);
-    const { status, message } = parseDbError(error);
-    res.status(status).json({ message });
+    res.status(500).json({ message: error.message });
   }
 };
 
@@ -446,8 +517,7 @@ const getAllUserPermissions = async (req, res) => {
     res.json(enhanced);
   } catch (error) {
     console.error('Error fetching user permissions:', error);
-    const { status, message } = parseDbError(error);
-    res.status(status).json({ message });
+    res.status(500).json({ message: error.message });
   }
 };
 
@@ -469,8 +539,7 @@ const createUserPermission = async (req, res) => {
     res.status(201).json(userPermission);
   } catch (error) {
     console.error('Error creating user permission:', error);
-    const { status, message } = parseDbError(error);
-    res.status(status).json({ message });
+    res.status(500).json({ message: error.message });
   }
 };
 
@@ -517,8 +586,7 @@ const getEffectivePermissions = async (req, res) => {
     res.json(permissions);
   } catch (error) {
     console.error('Error getting effective permissions:', error);
-    const { status, message } = parseDbError(error);
-    res.status(status).json({ message });
+    res.status(500).json({ message: error.message });
   }
 };
 
@@ -530,7 +598,8 @@ const getAllCustomers = async (req, res) => {
     const customers = await CustomerTVL.findAll({
       include: [{
         model: UserTVL,
-        attributes: ['us_fname', 'us_lname', 'us_email', 'us_phone']
+        as: 'user',
+        attributes: ['us_fname', 'us_lname', 'us_email', 'us_phone', 'us_roid', 'us_active']
       }],
       order: [['cu_custno', 'ASC']],
       raw: false
@@ -544,24 +613,24 @@ const getAllCustomers = async (req, res) => {
         cu_custno: custData.cu_custno,
         cu_custtype: custData.cu_custtype,
         cu_company: custData.cu_company,
-        cu_email: custData.usUser?.us_email || '',
-        cu_phone: custData.usUser?.us_phone || '',
-        cu_name: custData.usUser ? `${custData.usUser.us_fname} ${custData.usUser.us_lname}` : '',
+        cu_email: custData.user?.us_email || '',
+        cu_phone: custData.user?.us_phone || '',
+        cu_name: custData.user ? `${custData.user.us_fname || ''} ${custData.user.us_lname || ''}`.trim() : 'N/A',
         cu_gst: custData.cu_gst,
         cu_creditlmt: custData.cu_creditlmt,
         cu_status: custData.cu_status,
         edtm: custData.edtm,
         eby: custData.eby,
         mdtm: custData.mdtm,
-        mby: custData.mby
+        mby: custData.mby,
+        fullName: custData.user ? `${custData.user.us_fname || ''} ${custData.user.us_lname || ''}`.trim() : 'N/A'
       };
     });
     
     res.json(formattedCustomers);
   } catch (error) {
     console.error('Error fetching customers:', error);
-    const { status, message } = parseDbError(error);
-    res.status(status).json({ message });
+    res.status(500).json({ message: error.message });
   }
 };
 
@@ -575,8 +644,7 @@ const getAllOperations = async (req, res) => {
     res.json(operations);
   } catch (error) {
     console.error('Error fetching operations:', error);
-    const { status, message } = parseDbError(error);
-    res.status(status).json({ message });
+    res.status(500).json({ message: error.message });
   }
 };
 
@@ -591,8 +659,7 @@ const createOperation = async (req, res) => {
     res.status(201).json(operation);
   } catch (error) {
     console.error('Error creating operation:', error);
-    const { status, message } = parseDbError(error);
-    res.status(status).json({ message });
+    res.status(500).json({ message: error.message });
   }
 };
 
@@ -633,8 +700,7 @@ const updateOperation = async (req, res) => {
     res.json(operation);
   } catch (error) {
     console.error('Error updating operation:', error);
-    const { status, message } = parseDbError(error);
-    res.status(status).json({ message });
+    res.status(500).json({ message: error.message });
   }
 };
 
@@ -653,8 +719,7 @@ const deleteOperation = async (req, res) => {
     res.json({ message: 'Operation deleted successfully' });
   } catch (error) {
     console.error('Error deleting operation:', error);
-    const { status, message } = parseDbError(error);
-    res.status(status).json({ message });
+    res.status(500).json({ message: error.message });
   }
 };
 
@@ -669,8 +734,7 @@ const getAllRoles = async (req, res) => {
     res.json(roles);
   } catch (error) {
     console.error('Error fetching roles:', error);
-    const { status, message } = parseDbError(error);
-    res.status(status).json({ message });
+    res.status(500).json({ message: error.message });
   }
 };
 
@@ -685,8 +749,7 @@ const createRole = async (req, res) => {
     res.status(201).json(role);
   } catch (error) {
     console.error('Error creating role:', error);
-    const { status, message } = parseDbError(error);
-    res.status(status).json({ message });
+    res.status(500).json({ message: error.message });
   }
 };
 
@@ -704,17 +767,14 @@ const updateRole = async (req, res) => {
       fn_mdtm: new Date()
     };
     
-    // Convert active to integer
     if ('fn_active' in req.body) {
       updateData.fn_active = parseInt(req.body.fn_active) || 0;
     }
     
-    // If active status is being set to 0 (inactive), set closed fields
     if (updateData.fn_active === 0) {
       updateData.fn_cby = req.user?.us_usid || 'SYSTEM';
       updateData.fn_cdtm = new Date();
     } else if (updateData.fn_active === 1) {
-      // If reactivating, clear closed fields
       updateData.fn_cby = null;
       updateData.fn_cdtm = null;
     }
@@ -724,8 +784,7 @@ const updateRole = async (req, res) => {
     res.json(role);
   } catch (error) {
     console.error('Error updating role:', error);
-    const { status, message } = parseDbError(error);
-    res.status(status).json({ message });
+    res.status(500).json({ message: error.message });
   }
 };
 
@@ -741,8 +800,7 @@ const deleteRole = async (req, res) => {
     res.json({ message: 'Role deleted successfully' });
   } catch (error) {
     console.error('Error deleting role:', error);
-    const { status, message } = parseDbError(error);
-    res.status(status).json({ message });
+    res.status(500).json({ message: error.message });
   }
 };
 
@@ -783,8 +841,7 @@ const updateUser = async (req, res) => {
     res.json(user);
   } catch (error) {
     console.error('Error updating user:', error);
-    const { status, message } = parseDbError(error);
-    res.status(status).json({ message });
+    res.status(500).json({ message: error.message });
   }
 };
 
@@ -801,15 +858,14 @@ const deleteUser = async (req, res) => {
     res.json({ message: 'User deleted successfully' });
   } catch (error) {
     console.error('Error deleting user:', error);
-    const { status, message } = parseDbError(error);
-    res.status(status).json({ message });
+    res.status(500).json({ message: error.message });
   }
 };
 
 // Update customer
 const updateCustomer = async (req, res) => {
   try {
-    const customer = await CustomerTVL.findByPk(req.params.id);
+    const customer = await Customer.findByPk(req.params.id);
     
     if (!customer) {
       return res.status(404).json({ message: 'Customer not found' });
@@ -824,15 +880,14 @@ const updateCustomer = async (req, res) => {
     res.json(customer);
   } catch (error) {
     console.error('Error updating customer:', error);
-    const { status, message } = parseDbError(error);
-    res.status(status).json({ message });
+    res.status(500).json({ message: error.message });
   }
 };
 
 // Delete customer
 const deleteCustomer = async (req, res) => {
   try {
-    const customer = await CustomerTVL.findByPk(req.params.id);
+    const customer = await Customer.findByPk(req.params.id);
     
     if (!customer) {
       return res.status(404).json({ message: 'Customer not found' });
@@ -842,8 +897,7 @@ const deleteCustomer = async (req, res) => {
     res.json({ message: 'Customer deleted successfully' });
   } catch (error) {
     console.error('Error deleting customer:', error);
-    const { status, message } = parseDbError(error);
-    res.status(status).json({ message });
+    res.status(500).json({ message: error.message });
   }
 };
 
@@ -886,8 +940,7 @@ const updateRolePermission = async (req, res) => {
     res.json(permission);
   } catch (error) {
     console.error('Error updating role permission:', error);
-    const { status, message } = parseDbError(error);
-    res.status(status).json({ message });
+    res.status(500).json({ message: error.message });
   }
 };
 
@@ -907,8 +960,7 @@ const deleteRolePermission = async (req, res) => {
     res.json({ message: 'Role permission deleted successfully' });
   } catch (error) {
     console.error('Error deleting role permission:', error);
-    const { status, message } = parseDbError(error);
-    res.status(status).json({ message });
+    res.status(500).json({ message: error.message });
   }
 };
 
@@ -951,8 +1003,7 @@ const updateUserPermission = async (req, res) => {
     res.json(permission);
   } catch (error) {
     console.error('Error updating user permission:', error);
-    const { status, message } = parseDbError(error);
-    res.status(status).json({ message });
+    res.status(500).json({ message: error.message });
   }
 };
 
@@ -972,52 +1023,47 @@ const deleteUserPermission = async (req, res) => {
     res.json({ message: 'User permission deleted successfully' });
   } catch (error) {
     console.error('Error deleting user permission:', error);
-    const { status, message } = parseDbError(error);
-    res.status(status).json({ message });
+    res.status(500).json({ message: error.message });
   }
 };
 
-
 // ==================== EMPLOYEE MANAGEMENT ====================
 
-// Get all employees with user and role information
+// Get all employees with minimal user information (simplified)
 const getAllEmployees = async (req, res) => {
   try {
+    // Ensure core association exists
+    if (!EmployeeTVL.associations.user) {
+      EmployeeTVL.belongsTo(UserTVL, { foreignKey: 'em_usid', targetKey: 'us_usid', as: 'user' });
+    }
+
     const employees = await EmployeeTVL.findAll({
+      attributes: [
+        'em_usid', 'em_empno', 'em_designation', 'em_dept', 'em_salary',
+        'em_joindt', 'em_status', 'em_manager', 'em_address', 'em_city',
+        'em_state', 'em_pincode', 'edtm', 'eby', 'mdtm', 'mby', 'cdtm', 'cby'
+      ],
       include: [
         {
           model: UserTVL,
-          as: 'User',
-          attributes: ['us_usid', 'us_fname', 'us_lname', 'us_email', 'us_phone', 'us_aadhaar', 'us_pan', 'us_addr1', 'us_addr2', 'us_city', 'us_state', 'us_pin', 'us_roid', 'us_coid', 'us_active'],
-          include: [
-            {
-              model: RoleTVL,
-              attributes: ['fn_fnid', 'fn_fnshort', 'fn_fndesc'],
-              as: 'fnXfunction'
-            }
-          ]
-        },
-        {
-          model: EmployeeTVL,
-          as: 'manager',
-          attributes: ['em_usid', 'em_empno'],
-          include: [{
-            model: UserTVL,
-            as: 'User',
-            attributes: ['us_usid', 'us_fname', 'us_lname']
-          }],
-          required: false
+          as: 'user',
+          attributes: ['us_usid', 'us_fname', 'us_lname', 'us_email', 'us_phone', 'us_roid', 'us_active', 'us_addr1', 'us_city', 'us_state', 'us_pin']
         }
       ],
       order: [['edtm', 'DESC']]
     });
 
     const transformedEmployees = employees.map(emp => {
-      const user = emp.User || {};
-      const manager = emp.manager?.User;
-      
+      const user = emp.user || {};
       return {
-        em_usid: emp.em_usid,
+        // Top-level fields aligned to DynamicAdminPanel expectations
+        us_usid: user.us_usid,
+        us_fname: user.us_fname,
+        us_lname: user.us_lname,
+        us_email: user.us_email,
+        us_phone: user.us_phone,
+        us_roid: user.us_roid,
+        us_active: user.us_active,
         em_empno: emp.em_empno,
         em_designation: emp.em_designation,
         em_dept: emp.em_dept,
@@ -1025,66 +1071,155 @@ const getAllEmployees = async (req, res) => {
         em_joindt: emp.em_joindt,
         em_manager: emp.em_manager,
         em_status: emp.em_status,
-        us_usid: user.us_usid,
-        us_fname: user.us_fname,
-        us_lname: user.us_lname,
-        us_email: user.us_email,
-        us_phone: user.us_phone,
-        us_aadhaar: user.us_aadhaar,
-        us_pan: user.us_pan,
-        us_addr1: user.us_addr1,
-        us_addr2: user.us_addr2,
-        us_city: user.us_city,
-        us_state: user.us_state,
-        us_pin: user.us_pin,
-        us_roid: user.us_roid,
-        us_coid: user.us_coid,
-        us_active: user.us_active,
-        fullName: `${user.us_fname || ''} ${user.us_lname || ''}`.trim(),
-        roleName: user.fnXfunction?.fn_fnshort || user.us_roid || '',
-        managerName: manager ? `${manager.us_fname || ''} ${manager.us_lname || ''}`.trim() : '',
-        Role: user.fnXfunction,
+        // Computed fields for frontend
+        fullName: user.us_fname && user.us_lname ? `${user.us_fname} ${user.us_lname}`.trim() : user.us_fname || user.us_lname || 'N/A',
         edtm: emp.edtm,
         eby: emp.eby,
         mdtm: emp.mdtm,
         mby: emp.mby,
         cdtm: emp.cdtm,
-        cby: emp.cby
+        cby: emp.cby,
+        // Optional address fields if present
+        us_addr1: user.us_addr1,
+        us_addr2: user.us_addr2, // Will be undefined for TVL model (doesn't exist)
+        us_city: user.us_city,
+        us_state: user.us_state,
+        us_pin: user.us_pin
       };
     });
 
     res.json(transformedEmployees);
   } catch (error) {
     console.error('Error fetching employees:', error);
-    const parsedError = parseDbError(error);
-    res.status(parsedError.status).json({ message: parsedError.message });
+    const getErrorDetails = (err) => {
+      if (!err) return 'Unknown error';
+      return {
+        name: err.name,
+        message: err.message,
+        sql: err.sql,
+        stack: err.stack
+      };
+    };
+    res.status(500).json({
+      message: error.message,
+      details: getErrorDetails(error)
+    });
   }
 };
 
+
+// Create new employee
 const createEmployee = async (req, res) => {
   try {
-    const { us_usid, us_fname, us_lname, us_email, us_phone, us_aadhaar, us_pan, us_addr1, us_addr2, us_city, us_state, us_pin, us_roid, us_coid, em_empno, em_designation, em_dept, em_salary, em_joindt, em_manager, em_status, us_active, lg_active, temp_password } = req.body;
+    const {
+      us_usid, us_fname, us_lname, us_email, us_phone, us_aadhaar, us_pan,
+      us_addr1, us_addr2, us_city, us_state, us_pin, us_roid, us_coid,
+      em_empno, em_designation, em_dept, em_salary, em_joindt, em_manager, em_status,
+      us_active, lg_active, temp_password
+    } = req.body;
+
+    // Validate required fields
     if (!us_usid || !us_fname || !us_email || !us_phone || !us_roid || !em_empno || !em_designation || !em_dept || !em_joindt) {
       return res.status(400).json({ message: 'Missing required fields' });
     }
-    const existingUser = await UserTVL.findOne({ where: { [require('sequelize').Op.or]: [{ us_usid }, { us_email }, { us_phone }] } });
+
+    // Check if user ID, email, phone, or employee number already exists
+    const existingUser = await User.findOne({
+      where: {
+        [require('sequelize').Op.or]: [
+          { us_usid },
+          { us_email },
+          { us_phone }
+        ]
+      }
+    });
+
     if (existingUser) {
       return res.status(409).json({ message: 'User ID, email, or phone already exists' });
     }
-    const existingEmployee = await EmployeeTVL.findOne({ where: { em_empno } });
+
+    const existingEmployee = await Employee.findOne({
+      where: { em_empno }
+    });
+
     if (existingEmployee) {
       return res.status(409).json({ message: 'Employee number already exists' });
     }
-    const userData = { us_usid, us_fname, us_lname: us_lname || '', us_email, us_phone, us_aadhaar: us_aadhaar || null, us_pan: us_pan || null, us_addr1: us_addr1 || null, us_addr2: us_addr2 || null, us_city: us_city || null, us_state: us_state || null, us_pin: us_pin || null, us_usertype: 'employee', us_roid, us_coid: us_coid || 'TRV', us_active: us_active !== undefined ? (us_active ? 1 : 0) : 1, eby: req.user?.us_usid || 'SYSTEM', mby: req.user?.us_usid || 'SYSTEM' };
-    const user = await UserTVL.create(userData);
-    const employeeData = { em_usid: us_usid, em_empno, em_designation, em_dept, em_salary: em_salary || null, em_joindt: new Date(em_joindt), em_manager: em_manager || null, em_status: em_status || 'ACTIVE', eby: req.user?.us_usid || 'SYSTEM', mby: req.user?.us_usid || 'SYSTEM', edtm: new Date() };
-    const employee = await EmployeeTVL.create(employeeData);
+
+    // Create user record
+    const userData = {
+      us_usid,
+      us_fname,
+      us_lname: us_lname || '',
+      us_email,
+      us_phone,
+      us_aadhaar: us_aadhaar || null,
+      us_pan: us_pan || null,
+      us_addr1: us_addr1 || null,
+      us_addr2: us_addr2 || null,
+      us_city: us_city || null,
+      us_state: us_state || null,
+      us_pin: us_pin || null,
+      us_usertype: 'employee',
+      us_roid,
+      us_coid: us_coid || 'TRV',
+      us_active: us_active !== undefined ? (us_active ? 1 : 0) : 1,
+      eby: req.user?.us_usid || 'SYSTEM',
+      mby: req.user?.us_usid || 'SYSTEM'
+    };
+
+    const user = await User.create(userData);
+
+    // Create employee record
+    const employeeData = {
+      em_usid: us_usid,
+      em_empno,
+      em_designation,
+      em_dept,
+      em_salary: em_salary || null,
+      em_joindt: new Date(em_joindt),
+      em_manager: em_manager || null,
+      em_status: em_status || 'ACTIVE',
+      eby: req.user?.us_usid || 'SYSTEM',
+      mby: req.user?.us_usid || 'SYSTEM'
+    };
+
+    const employee = await Employee.create(employeeData);
+
+    // Create login credentials
     const password = temp_password || 'employee123';
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(password, salt);
-    const loginData = { lg_usid: us_usid, lg_email: us_email, lg_passwd: hashedPassword, lg_salt: salt, lg_active: lg_active !== undefined ? (lg_active ? 1 : 0) : 1, eby: req.user?.us_usid || 'SYSTEM', mby: req.user?.us_usid || 'SYSTEM' };
-    await LoginTVL.create(loginData);
-    const createdEmployee = await EmployeeTVL.findOne({ where: { em_usid: us_usid }, include: [{ model: UserTVL, include: [{ model: RoleTVL, attributes: ['fn_fnid', 'fn_fnshort', 'fn_fndesc'], as: 'Role' }] }] });
+
+    const loginData = {
+      lg_usid: us_usid,
+      lg_email: us_email,
+      lg_passwd: hashedPassword,
+      lg_salt: salt,
+      lg_active: lg_active !== undefined ? (lg_active ? 1 : 0) : 1,
+      eby: req.user?.us_usid || 'SYSTEM',
+      mby: req.user?.us_usid || 'SYSTEM'
+    };
+
+    await Login.create(loginData);
+
+    // Return the created employee with user data
+    const createdEmployee = await Employee.findOne({
+      where: { em_usid: us_usid },
+      include: [
+        {
+          model: User,
+          include: [
+            {
+              model: RoleTVL,
+              attributes: ['fn_fnid', 'fn_fnshort', 'fn_fndesc'],
+              as: 'Role'
+            }
+          ]
+        }
+      ]
+    });
+
     res.status(201).json(createdEmployee);
   } catch (error) {
     console.error('Error creating employee:', error);
@@ -1093,36 +1228,112 @@ const createEmployee = async (req, res) => {
   }
 };
 
+// Update employee
 const updateEmployee = async (req, res) => {
   try {
     const { id } = req.params;
-    const { us_fname, us_lname, us_email, us_phone, us_aadhaar, us_pan, us_addr1, us_addr2, us_city, us_state, us_pin, us_roid, us_coid, em_empno, em_designation, em_dept, em_salary, em_joindt, em_manager, em_status, us_active, lg_active, temp_password } = req.body;
-    const employee = await EmployeeTVL.findOne({ where: { em_usid: id }, include: [{ model: UserTVL }] });
+    const {
+      us_fname, us_lname, us_email, us_phone, us_aadhaar, us_pan,
+      us_addr1, us_addr2, us_city, us_state, us_pin, us_roid, us_coid,
+      em_empno, em_designation, em_dept, em_salary, em_joindt, em_manager, em_status,
+      us_active, lg_active, temp_password
+    } = req.body;
+
+    // Find employee and user
+    const employee = await Employee.findOne({
+      where: { em_usid: id },
+      include: [{ model: User }]
+    });
+
     if (!employee) {
       return res.status(404).json({ message: 'Employee not found' });
     }
+
     const user = employee.User;
     if (!user) {
       return res.status(404).json({ message: 'User record not found for employee' });
     }
-    const userUpdateData = { us_fname: us_fname || user.us_fname, us_lname: us_lname !== undefined ? us_lname : user.us_lname, us_email: us_email || user.us_email, us_phone: us_phone || user.us_phone, us_aadhaar: us_aadhaar !== undefined ? us_aadhaar : user.us_aadhaar, us_pan: us_pan !== undefined ? us_pan : user.us_pan, us_addr1: us_addr1 !== undefined ? us_addr1 : user.us_addr1, us_addr2: us_addr2 !== undefined ? us_addr2 : user.us_addr2, us_city: us_city !== undefined ? us_city : user.us_city, us_state: us_state !== undefined ? us_state : user.us_state, us_pin: us_pin !== undefined ? us_pin : user.us_pin, us_roid: us_roid || user.us_roid, us_coid: us_coid || user.us_coid, us_active: us_active !== undefined ? (us_active ? 1 : 0) : user.us_active, mby: req.user?.us_usid || 'SYSTEM', mdtm: new Date() };
+
+    // Update user data
+    const userUpdateData = {
+      us_fname: us_fname || user.us_fname,
+      us_lname: us_lname !== undefined ? us_lname : user.us_lname,
+      us_email: us_email || user.us_email,
+      us_phone: us_phone || user.us_phone,
+      us_aadhaar: us_aadhaar !== undefined ? us_aadhaar : user.us_aadhaar,
+      us_pan: us_pan !== undefined ? us_pan : user.us_pan,
+      us_addr1: us_addr1 !== undefined ? us_addr1 : user.us_addr1,
+      us_addr2: us_addr2 !== undefined ? us_addr2 : user.us_addr2,
+      us_city: us_city !== undefined ? us_city : user.us_city,
+      us_state: us_state !== undefined ? us_state : user.us_state,
+      us_pin: us_pin !== undefined ? us_pin : user.us_pin,
+      us_roid: us_roid || user.us_roid,
+      us_coid: us_coid || user.us_coid,
+      us_active: us_active !== undefined ? (us_active ? 1 : 0) : user.us_active,
+      mby: req.user?.us_usid || 'SYSTEM',
+      mdtm: new Date()
+    };
+
     await user.update(userUpdateData);
-    const employeeUpdateData = { em_empno: em_empno || employee.em_empno, em_designation: em_designation || employee.em_designation, em_dept: em_dept || employee.em_dept, em_salary: em_salary !== undefined ? em_salary : employee.em_salary, em_joindt: em_joindt ? new Date(em_joindt) : employee.em_joindt, em_manager: em_manager !== undefined ? em_manager : employee.em_manager, em_status: em_status || employee.em_status, mby: req.user?.us_usid || 'SYSTEM', mdtm: new Date() };
+
+    // Update employee data
+    const employeeUpdateData = {
+      em_empno: em_empno || employee.em_empno,
+      em_designation: em_designation || employee.em_designation,
+      em_dept: em_dept || employee.em_dept,
+      em_salary: em_salary !== undefined ? em_salary : employee.em_salary,
+      em_joindt: em_joindt ? new Date(em_joindt) : employee.em_joindt,
+      em_manager: em_manager !== undefined ? em_manager : employee.em_manager,
+      em_status: em_status || employee.em_status,
+      mby: req.user?.us_usid || 'SYSTEM',
+      mdtm: new Date()
+    };
+
     await employee.update(employeeUpdateData);
+
+    // Update login if password is provided
     if (temp_password) {
-      const login = await LoginTVL.findOne({ where: { lg_usid: id } });
+      const login = await Login.findOne({ where: { lg_usid: id } });
       if (login) {
         const salt = await bcrypt.genSalt(10);
         const hashedPassword = await bcrypt.hash(temp_password, salt);
-        await login.update({ lg_passwd: hashedPassword, lg_salt: salt, lg_active: lg_active !== undefined ? (lg_active ? 1 : 0) : login.lg_active, mby: req.user?.us_usid || 'SYSTEM', mdtm: new Date() });
+        
+        await login.update({
+          lg_passwd: hashedPassword,
+          lg_salt: salt,
+          lg_active: lg_active !== undefined ? (lg_active ? 1 : 0) : login.lg_active,
+          mby: req.user?.us_usid || 'SYSTEM',
+          mdtm: new Date()
+        });
       }
     } else if (lg_active !== undefined) {
-      const login = await LoginTVL.findOne({ where: { lg_usid: id } });
+      const login = await Login.findOne({ where: { lg_usid: id } });
       if (login) {
-        await login.update({ lg_active: lg_active ? 1 : 0, mby: req.user?.us_usid || 'SYSTEM', mdtm: new Date() });
+        await login.update({
+          lg_active: lg_active ? 1 : 0,
+          mby: req.user?.us_usid || 'SYSTEM',
+          mdtm: new Date()
+        });
       }
     }
-    const updatedEmployee = await EmployeeTVL.findOne({ where: { em_usid: id }, include: [{ model: UserTVL, include: [{ model: RoleTVL, attributes: ['fn_fnid', 'fn_fnshort', 'fn_fndesc'], as: 'Role' }] }] });
+
+    // Return updated employee
+    const updatedEmployee = await Employee.findOne({
+      where: { em_usid: id },
+      include: [
+        {
+          model: User,
+          include: [
+            {
+              model: RoleTVL,
+              attributes: ['fn_fnid', 'fn_fnshort', 'fn_fndesc'],
+              as: 'Role'
+            }
+          ]
+        }
+      ]
+    });
+
     res.json(updatedEmployee);
   } catch (error) {
     console.error('Error updating employee:', error);
@@ -1131,16 +1342,27 @@ const updateEmployee = async (req, res) => {
   }
 };
 
+// Delete employee
 const deleteEmployee = async (req, res) => {
   try {
     const { id } = req.params;
-    const employee = await EmployeeTVL.findOne({ where: { em_usid: id } });
+
+    // Find employee
+    const employee = await Employee.findOne({ where: { em_usid: id } });
     if (!employee) {
       return res.status(404).json({ message: 'Employee not found' });
     }
-    await LoginTVL.destroy({ where: { lg_usid: id } });
-    await EmployeeTVL.destroy({ where: { em_usid: id } });
-    await UserTVL.destroy({ where: { us_usid: id } });
+
+    // Delete in proper order (respecting foreign key constraints)
+    // 1. Delete login
+    await Login.destroy({ where: { lg_usid: id } });
+    
+    // 2. Delete employee
+    await Employee.destroy({ where: { em_usid: id } });
+    
+    // 3. Delete user
+    await User.destroy({ where: { us_usid: id } });
+
     res.json({ message: 'Employee deleted successfully' });
   } catch (error) {
     console.error('Error deleting employee:', error);
@@ -1148,6 +1370,271 @@ const deleteEmployee = async (req, res) => {
     res.status(parsedError.status).json({ message: parsedError.message });
   }
 };
+
+/*
+// Create new employee
+const createEmployee = async (req, res) => {
+  try {
+    const {
+      us_usid, us_fname, us_lname, us_email, us_phone, us_aadhaar, us_pan,
+      us_addr1, us_addr2, us_city, us_state, us_pin, us_roid, us_coid,
+      em_empno, em_designation, em_dept, em_salary, em_joindt, em_manager, em_status,
+      us_active, lg_active, temp_password
+    } = req.body;
+
+    // Validate required fields
+    if (!us_usid || !us_fname || !us_email || !us_phone || !us_roid || !em_empno || !em_designation || !em_dept || !em_joindt) {
+      return res.status(400).json({ message: 'Missing required fields' });
+    }
+
+    // Check if user ID, email, phone, or employee number already exists
+    const existingUser = await User.findOne({
+      where: {
+        [require('sequelize').Op.or]: [
+          { us_usid },
+          { us_email },
+          { us_phone }
+        ]
+      }
+    });
+
+    if (existingUser) {
+      return res.status(409).json({ message: 'User ID, email, or phone already exists' });
+    }
+
+    const existingEmployee = await Employee.findOne({
+      where: { em_empno }
+    });
+
+    if (existingEmployee) {
+      return res.status(409).json({ message: 'Employee number already exists' });
+    }
+
+    // Create user record
+    const userData = {
+      us_usid,
+      us_fname,
+      us_lname: us_lname || '',
+      us_email,
+      us_phone,
+      us_aadhaar: us_aadhaar || null,
+      us_pan: us_pan || null,
+      us_addr1: us_addr1 || null,
+      us_addr2: us_addr2 || null,
+      us_city: us_city || null,
+      us_state: us_state || null,
+      us_pin: us_pin || null,
+      us_usertype: 'employee',
+      us_roid,
+      us_coid: us_coid || 'TRV',
+      us_active: us_active !== undefined ? (us_active ? 1 : 0) : 1,
+      eby: req.user?.us_usid || 'SYSTEM',
+      mby: req.user?.us_usid || 'SYSTEM'
+    };
+
+    const user = await User.create(userData);
+
+    // Create employee record
+    const employeeData = {
+      em_usid: us_usid,
+      em_empno,
+      em_designation,
+      em_dept,
+      em_salary: em_salary || null,
+      em_joindt: new Date(em_joindt),
+      em_manager: em_manager || null,
+      em_status: em_status || 'ACTIVE',
+      eby: req.user?.us_usid || 'SYSTEM',
+      mby: req.user?.us_usid || 'SYSTEM'
+    };
+
+    const employee = await Employee.create(employeeData);
+
+    // Create login credentials
+    const password = temp_password || 'employee123';
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(password, salt);
+
+    const loginData = {
+      lg_usid: us_usid,
+      lg_email: us_email,
+      lg_passwd: hashedPassword,
+      lg_salt: salt,
+      lg_active: lg_active !== undefined ? (lg_active ? 1 : 0) : 1,
+      eby: req.user?.us_usid || 'SYSTEM',
+      mby: req.user?.us_usid || 'SYSTEM'
+    };
+
+    await Login.create(loginData);
+
+    // Return the created employee with user data
+    const createdEmployee = await Employee.findOne({
+      where: { em_usid: us_usid },
+      include: [
+        {
+          model: User,
+          include: [
+            {
+              model: RoleTVL,
+              attributes: ['fn_fnid', 'fn_fnshort', 'fn_fndesc'],
+              as: 'Role'
+            }
+          ]
+        }
+      ]
+    });
+
+    res.status(201).json(createdEmployee);
+  } catch (error) {
+    console.error('Error creating employee:', error);
+    const parsedError = parseDbError(error);
+    res.status(parsedError.status).json({ message: parsedError.message });
+  }
+};
+
+// Update employee
+const updateEmployee = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const {
+      us_fname, us_lname, us_email, us_phone, us_aadhaar, us_pan,
+      us_addr1, us_addr2, us_city, us_state, us_pin, us_roid, us_coid,
+      em_empno, em_designation, em_dept, em_salary, em_joindt, em_manager, em_status,
+      us_active, lg_active, temp_password
+    } = req.body;
+
+    // Find employee and user
+    const employee = await Employee.findOne({
+      where: { em_usid: id },
+      include: [{ model: User }]
+    });
+
+    if (!employee) {
+      return res.status(404).json({ message: 'Employee not found' });
+    }
+
+    const user = employee.User;
+    if (!user) {
+      return res.status(404).json({ message: 'User record not found for employee' });
+    }
+
+    // Update user data
+    const userUpdateData = {
+      us_fname: us_fname || user.us_fname,
+      us_lname: us_lname !== undefined ? us_lname : user.us_lname,
+      us_email: us_email || user.us_email,
+      us_phone: us_phone || user.us_phone,
+      us_aadhaar: us_aadhaar !== undefined ? us_aadhaar : user.us_aadhaar,
+      us_pan: us_pan !== undefined ? us_pan : user.us_pan,
+      us_addr1: us_addr1 !== undefined ? us_addr1 : user.us_addr1,
+      us_addr2: us_addr2 !== undefined ? us_addr2 : user.us_addr2,
+      us_city: us_city !== undefined ? us_city : user.us_city,
+      us_state: us_state !== undefined ? us_state : user.us_state,
+      us_pin: us_pin !== undefined ? us_pin : user.us_pin,
+      us_roid: us_roid || user.us_roid,
+      us_coid: us_coid || user.us_coid,
+      us_active: us_active !== undefined ? (us_active ? 1 : 0) : user.us_active,
+      mby: req.user?.us_usid || 'SYSTEM',
+      mdtm: new Date()
+    };
+
+    await user.update(userUpdateData);
+
+    // Update employee data
+    const employeeUpdateData = {
+      em_empno: em_empno || employee.em_empno,
+      em_designation: em_designation || employee.em_designation,
+      em_dept: em_dept || employee.em_dept,
+      em_salary: em_salary !== undefined ? em_salary : employee.em_salary,
+      em_joindt: em_joindt ? new Date(em_joindt) : employee.em_joindt,
+      em_manager: em_manager !== undefined ? em_manager : employee.em_manager,
+      em_status: em_status || employee.em_status,
+      mby: req.user?.us_usid || 'SYSTEM',
+      mdtm: new Date()
+    };
+
+    await employee.update(employeeUpdateData);
+
+    // Update login if password is provided
+    if (temp_password) {
+      const login = await Login.findOne({ where: { lg_usid: id } });
+      if (login) {
+        const salt = await bcrypt.genSalt(10);
+        const hashedPassword = await bcrypt.hash(temp_password, salt);
+        
+        await login.update({
+          lg_passwd: hashedPassword,
+          lg_salt: salt,
+          lg_active: lg_active !== undefined ? (lg_active ? 1 : 0) : login.lg_active,
+          mby: req.user?.us_usid || 'SYSTEM',
+          mdtm: new Date()
+        });
+      }
+    } else if (lg_active !== undefined) {
+      const login = await Login.findOne({ where: { lg_usid: id } });
+      if (login) {
+        await login.update({
+          lg_active: lg_active ? 1 : 0,
+          mby: req.user?.us_usid || 'SYSTEM',
+          mdtm: new Date()
+        });
+      }
+    }
+
+    // Return updated employee
+    const updatedEmployee = await Employee.findOne({
+      where: { em_usid: id },
+      include: [
+        {
+          model: User,
+          include: [
+            {
+              model: RoleTVL,
+              attributes: ['fn_fnid', 'fn_fnshort', 'fn_fndesc'],
+              as: 'Role'
+            }
+          ]
+        }
+      ]
+    });
+
+    res.json(updatedEmployee);
+  } catch (error) {
+    console.error('Error updating employee:', error);
+    const parsedError = parseDbError(error);
+    res.status(parsedError.status).json({ message: parsedError.message });
+  }
+};
+
+// Delete employee
+const deleteEmployee = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Find employee
+    const employee = await Employee.findOne({ where: { em_usid: id } });
+    if (!employee) {
+      return res.status(404).json({ message: 'Employee not found' });
+    }
+
+    // Delete in proper order (respecting foreign key constraints)
+    // 1. Delete login
+    await Login.destroy({ where: { lg_usid: id } });
+    
+    // 2. Delete employee
+    await Employee.destroy({ where: { em_usid: id } });
+    
+    // 3. Delete user
+    await User.destroy({ where: { us_usid: id } });
+
+    res.json({ message: 'Employee deleted successfully' });
+  } catch (error) {
+    console.error('Error deleting employee:', error);
+    const parsedError = parseDbError(error);
+    res.status(parsedError.status).json({ message: parsedError.message });
+  }
+};
+*/
 module.exports = {
   // Applications
   getAllApplications,

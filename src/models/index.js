@@ -1,9 +1,11 @@
 // Export all models
+console.log('Loading models/index.js...');
 const Company = require('./Company');
 const Role = require('./Role');
 const Permission = require('./Permission');
 const RolePermission = require('./RolePermission');
 const RolePermissionTVL = require('./RolePermissionTVL');
+const RoleTVL = require('./RoleTVL');
 const User = require('./User');
 const Login = require('./Login');
 const Employee = require('./Employee');
@@ -32,6 +34,7 @@ const TrainTVL = require('./TrainTVL');
 const CustomerTVL = require('./CustomerTVL');
 const LoginTVL = require('./LoginTVL');
 const UserPermissionTVL = require('./UserPermissionTVL');
+const Ledger = require('./Ledger');
 
 // Set up associations
 // Company associations
@@ -94,6 +97,7 @@ Passenger.belongsTo(Booking, { foreignKey: 'ps_bkid', targetKey: 'bk_bkid' });
 Pnr.belongsTo(Booking, { foreignKey: 'pn_bkid', targetKey: 'bk_bkid' });
 Pnr.belongsTo(Train, { foreignKey: 'pn_trid', targetKey: 'tr_trid' });
 Pnr.hasMany(PaymentAlloc, { foreignKey: 'pa_pnid', sourceKey: 'pn_pnid' });
+Pnr.hasMany(Ledger, { foreignKey: 'lg_pnid', sourceKey: 'pn_pnid' });
 
 // Account associations
 Account.belongsTo(Booking, { foreignKey: 'ac_bkid', targetKey: 'bk_bkid' });
@@ -109,9 +113,28 @@ Payment.hasMany(PaymentAlloc, { foreignKey: 'pa_ptid', sourceKey: 'pt_ptid' });
 PaymentAlloc.belongsTo(Payment, { foreignKey: 'pa_ptid', targetKey: 'pt_ptid' });
 PaymentAlloc.belongsTo(Pnr, { foreignKey: 'pa_pnid', targetKey: 'pn_pnid' });
 
+// Ledger associations
+Ledger.belongsTo(Payment, { foreignKey: 'lg_ptid', targetKey: 'pt_ptid' });
+Ledger.belongsTo(Pnr, { foreignKey: 'lg_pnid', targetKey: 'pn_pnid' });
+Ledger.belongsTo(Account, { foreignKey: 'lg_acid', targetKey: 'ac_acid' });
+
 // Session associations
 Session.belongsTo(User, { foreignKey: 'ss_usid', targetKey: 'us_usid' });
 Session.belongsTo(Company, { foreignKey: 'ss_coid', targetKey: 'co_coid' });
+
+// TVL Associations
+// CustomerTVL associations
+// CustomerTVL association with UserTVL is defined in CustomerTVL.js
+
+// EmployeeTVL associations
+// EmployeeTVL association with UserTVL is defined in EmployeeTVL.js
+EmployeeTVL.belongsTo(EmployeeTVL, { foreignKey: 'em_manager', targetKey: 'em_usid', as: 'manager' });
+
+// UserTVL associations
+UserTVL.belongsTo(RoleTVL, { foreignKey: 'us_roid', targetKey: 'fn_fnid', as: 'fnXfunction' });
+
+// TrainTVL associations
+TrainTVL.associate({ StationTVL });
 
 module.exports = {
   Company,
@@ -119,6 +142,7 @@ module.exports = {
   Permission,
   RolePermission,
   RolePermissionTVL,
+  RoleTVL,
   User,
   Login,
   Employee,
@@ -147,5 +171,6 @@ module.exports = {
   BookingTVL,
   PaymentTVL,
   UserPermissionTVL,
-  RolePermissionTVL
+  RolePermissionTVL,
+  Ledger
 };

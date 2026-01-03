@@ -26,6 +26,22 @@ const PaymentAlloc = sequelize.define('paPaymentAlloc', {
     allowNull: false,
     comment: 'Allocated Amount'
   },
+  pa_alloctn_date: {
+    type: DataTypes.DATE,
+    defaultValue: DataTypes.NOW,
+    allowNull: false,
+    comment: 'Allocation Date'
+  },
+  pa_alloctn_type: {
+    type: DataTypes.STRING(10),
+    defaultValue: 'MANUAL',
+    comment: 'Allocation Type (AUTO | MANUAL)'
+  },
+  pa_remarks: {
+    type: DataTypes.TEXT,
+    allowNull: true,
+    comment: 'Allocation Remarks'
+  },
   // Audit fields (only edtm and eby as per schema)
   edtm: {
     type: DataTypes.DATE,

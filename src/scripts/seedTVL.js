@@ -1,6 +1,6 @@
 const { sequelizeTVL } = require('../../config/db');
 const { 
-  UserTVL, EmployeeTVL, BookingTVL, PaymentTVL, AccountTVL, Customer, StationTVL, LoginTVL, CustomerTVL
+  UserTVL, EmployeeTVL, BookingTVL, PaymentTVL, AccountTVL, Customer, StationTVL, LoginTVL, CustomerTVL, RoleTVL
 } = require('../models');
 const bcrypt = require('bcryptjs');
 
@@ -16,6 +16,7 @@ async function seedTVLDatabase() {
     
     // Sync TVL models (create tables if they don't exist)
     console.log('Syncing TVL models...');
+    await RoleTVL.sync({ alter: true });
     await UserTVL.sync({ alter: true });
     await EmployeeTVL.sync({ alter: true });
     await CustomerTVL.sync({ force: true }); // Force sync to recreate table with correct primary key
@@ -35,7 +36,16 @@ async function seedTVLDatabase() {
     await EmployeeTVL.destroy({ where: {}, force: true });
     await LoginTVL.destroy({ where: {}, force: true });
     await UserTVL.destroy({ where: {}, force: true });
+    await RoleTVL.destroy({ where: {}, force: true });
     console.log('✅ Existing TVL data cleared');
+
+    // Create roles
+    console.log('Creating roles in TVL...');
+    await RoleTVL.bulkCreate([
+      { fn_fnid: 'ADM', fn_fnshort: 'Admin', fn_fndesc: 'Administrator' },
+      { fn_fnid: 'AGT', fn_fnshort: 'Agent', fn_fndesc: 'Booking Agent' },
+      { fn_fnid: 'EMP', fn_fnshort: 'Employee', fn_fndesc: 'Employee' }
+    ]);
 
     // Create sample admin user in TVL
     console.log('Creating sample admin user in TVL...');

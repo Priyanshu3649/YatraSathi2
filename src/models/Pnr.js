@@ -77,6 +77,26 @@ const Pnr = sequelize.define('pnPnr', {
     defaultValue: 0,
     comment: 'Total Amount'
   },
+  pn_paidamt: {
+    type: DataTypes.DECIMAL(12, 2),
+    defaultValue: 0,
+    comment: 'Paid Amount'
+  },
+  pn_pendingamt: {
+    type: DataTypes.DECIMAL(12, 2),
+    defaultValue: 0,
+    comment: 'Pending Amount'
+  },
+  pn_payment_status: {
+    type: DataTypes.STRING(15),
+    defaultValue: 'UNPAID',
+    comment: 'Payment Status (UNPAID | PARTIAL | PAID)'
+  },
+  pn_closed_flag: {
+    type: DataTypes.STRING(1),
+    defaultValue: 'N',
+    comment: 'Closed Flag (Y/N)'
+  },
   // Audit fields
   ...BaseModel
 }, {

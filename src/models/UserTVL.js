@@ -156,17 +156,7 @@ const UserTVL = sequelizeTVL.define('usXuser', {
     defaultValue: 0,
     comment: 'Application Administrator'
   },
-  us_security: {
-    type: DataTypes.TINYINT,
-    allowNull: false,
-    defaultValue: 0,
-    comment: 'Security Administrator'
-  },
-  us_limit: {
-    type: DataTypes.DECIMAL(18, 2),
-    allowNull: true,
-    comment: 'Authorization Limit'
-  },
+
   us_cdtm: {
     type: DataTypes.DATE,
     allowNull: true,

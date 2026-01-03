@@ -113,4 +113,21 @@ const TrainTVL = sequelizeTVL.define('trXtrain', {
   timestamps: false
 });
 
+// Define associations
+TrainTVL.associate = function(models) {
+  // Association for 'from' station
+  TrainTVL.belongsTo(models.StationTVL, {
+    foreignKey: 'tr_fromst',
+    targetKey: 'st_stcode',
+    as: 'fromStation'
+  });
+  
+  // Association for 'to' station
+  TrainTVL.belongsTo(models.StationTVL, {
+    foreignKey: 'tr_tost',
+    targetKey: 'st_stcode',
+    as: 'toStation'
+  });
+};
+
 module.exports = TrainTVL;

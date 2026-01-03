@@ -40,10 +40,11 @@ const Header = () => {
                   <li className="dropdown">
                     <span className={isActive('/reports') ? 'active' : ''}>Reports ▼</span>
                     <ul className="dropdown-menu">
-                      <li><Link to="/reports/booking">Booking Reports</Link></li>
-                      <li><Link to="/reports/customer">Customer Analytics</Link></li>
-                      <li><Link to="/reports/employee">Employee Performance</Link></li>
-                      <li><Link to="/reports/revenue">Revenue Reports</Link></li>
+                      <li><Link to="/reports?tab=bookings">Booking Reports</Link></li>
+                      <li><Link to="/reports?tab=customerAnalytics">Customer Analytics</Link></li>
+                      <li><Link to="/reports?tab=employeePerformance">Employee Performance</Link></li>
+                      <li><Link to="/reports?tab=financial">Financial Reports</Link></li>
+                      <li><Link to="/reports?tab=corporateCustomers">Corporate Customers</Link></li>
                     </ul>
                   </li>
                 )}

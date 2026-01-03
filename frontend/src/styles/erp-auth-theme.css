@@ -1,0 +1,471 @@
+/* ERP Authentication Theme - Based on Reference Design */
+
+/* CSS Variables for Exact Color Reproduction */
+:root {
+  /* Primary Colors from Reference */
+  --erp-auth-bg-main: #f5f5f0;           /* Light beige background */
+  --erp-auth-bg-secondary: #e8e8e0;      /* Secondary background */
+  --erp-auth-bg-panel: #ffffff;          /* White panel background */
+  --erp-auth-bg-form: #f8f8f8;           /* Form background */
+  
+  /* Blue Accent Colors */
+  --erp-auth-blue-primary: #4169E1;      /* Primary blue (Royal Blue) */
+  --erp-auth-blue-secondary: #5a7fdd;    /* Secondary blue */
+  --erp-auth-blue-light: #e8f4ff;        /* Light blue background */
+  --erp-auth-blue-dark: #2d4a9d;         /* Dark blue borders */
+  
+  /* Text Colors */
+  --erp-auth-text-primary: #000000;      /* Primary text */
+  --erp-auth-text-secondary: #666666;    /* Secondary text */
+  --erp-auth-text-muted: #999999;        /* Muted text */
+  --erp-auth-text-white: #ffffff;        /* White text */
+  
+  /* Border Colors */
+  --erp-auth-border-light: #cccccc;      /* Light borders */
+  --erp-auth-border-medium: #999999;     /* Medium borders */
+  --erp-auth-border-dark: #666666;       /* Dark borders */
+  
+  /* Status Colors */
+  --erp-auth-success: #008000;           /* Success green */
+  --erp-auth-error: #cc0000;             /* Error red */
+  --erp-auth-warning: #ff8800;           /* Warning orange */
+  
+  /* Shadow Colors */
+  --erp-auth-shadow-light: rgba(0, 0, 0, 0.1);
+  --erp-auth-shadow-medium: rgba(0, 0, 0, 0.2);
+  --erp-auth-shadow-dark: rgba(0, 0, 0, 0.3);
+}
+
+/* Global Reset for Auth Components */
+.erp-auth-container * {
+  box-sizing: border-box;
+  border-radius: 0 !important; /* Remove all rounded corners */
+  box-shadow: none !important; /* Remove default shadows */
+}
+
+/* Main Authentication Container */
+.erp-auth-container {
+  min-height: 100vh;
+  background: var(--erp-auth-bg-main);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+/* Authentication Card */
+.erp-auth-card {
+  background: var(--erp-auth-bg-panel);
+  border: 2px solid var(--erp-auth-border-light);
+  box-shadow: 4px 4px 8px var(--erp-auth-shadow-medium);
+  width: 100%;
+  max-width: 420px;
+  min-height: 480px;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Title Bar */
+.erp-auth-title-bar {
+  background: linear-gradient(180deg, #0997ff 0%, #0053ee 50%, #0050ee 50%, #06f 100%);
+  color: var(--erp-auth-text-white);
+  padding: 3px 8px;
+  display: flex;
+  align-items: center;
+  font-weight: bold;
+  font-size: 11px;
+  border-bottom: 1px solid var(--erp-auth-border-medium);
+}
+
+.erp-auth-system-icon {
+  width: 16px;
+  height: 16px;
+  margin-right: 5px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+}
+
+.erp-auth-title-text {
+  flex: 1;
+  font-size: 11px;
+  letter-spacing: 0.5px;
+}
+
+.erp-auth-close-button {
+  width: 16px;
+  height: 16px;
+  background: #e81123;
+  border: none;
+  color: var(--erp-auth-text-white);
+  font-size: 10px;
+  font-weight: bold;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.erp-auth-close-button:hover {
+  background: #f1707a;
+}
+
+/* Menu Bar */
+.erp-auth-menu-bar {
+  background: #ece9d8;
+  border-bottom: 1px solid #919b9c;
+  display: flex;
+  padding: 2px 0;
+}
+
+.erp-auth-menu-item {
+  padding: 3px 8px;
+  cursor: pointer;
+  font-size: 11px;
+  color: var(--erp-auth-text-primary);
+}
+
+.erp-auth-menu-item:hover {
+  background: var(--erp-auth-blue-primary);
+  color: var(--erp-auth-text-white);
+}
+
+/* Main Content Area */
+.erp-auth-content {
+  flex: 1;
+  background: var(--erp-auth-bg-secondary);
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Header Section */
+.erp-auth-header {
+  text-align: center;
+  margin-bottom: 25px;
+  padding: 15px;
+  background: var(--erp-auth-bg-panel);
+  border: 1px solid var(--erp-auth-border-light);
+}
+
+.erp-auth-header h2 {
+  color: var(--erp-auth-text-primary);
+  margin: 0 0 8px 0;
+  font-size: 16px;
+  font-weight: bold;
+}
+
+.erp-auth-header p {
+  color: var(--erp-auth-text-secondary);
+  font-size: 11px;
+  margin: 0;
+}
+
+/* Logo Section */
+.erp-auth-logo {
+  text-align: center;
+  margin-bottom: 20px;
+  padding: 10px;
+}
+
+.erp-auth-logo-icon {
+  width: 48px;
+  height: 48px;
+  background: var(--erp-auth-blue-primary);
+  color: var(--erp-auth-text-white);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+  font-weight: bold;
+  border: 2px solid var(--erp-auth-border-medium);
+}
+
+/* Form Panel */
+.erp-auth-form-panel {
+  background: var(--erp-auth-bg-panel);
+  border: 1px solid var(--erp-auth-border-light);
+  padding: 20px;
+  flex: 1;
+}
+
+.erp-auth-form-header {
+  background: var(--erp-auth-blue-primary);
+  color: var(--erp-auth-text-white);
+  padding: 6px 12px;
+  margin: -20px -20px 15px -20px;
+  font-weight: bold;
+  font-size: 12px;
+}
+
+/* Form Styling */
+.erp-auth-form {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+.erp-auth-form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.erp-auth-form-label {
+  color: var(--erp-auth-text-primary);
+  font-weight: normal;
+  font-size: 11px;
+  text-align: left;
+}
+
+.erp-auth-form-label.required::after {
+  content: ' *';
+  color: var(--erp-auth-error);
+}
+
+/* Input Field Styling - Cream Background */
+.erp-auth-form-input {
+  background: #fffef5; /* Cream background like reference */
+  border: 1px solid var(--erp-auth-border-light);
+  padding: 6px 8px;
+  font-size: 12px;
+  font-family: 'Segoe UI', Tahoma, sans-serif;
+  color: var(--erp-auth-text-primary);
+  min-height: 24px;
+}
+
+.erp-auth-form-input:focus {
+  outline: 1px solid var(--erp-auth-blue-primary);
+  border-color: var(--erp-auth-blue-primary);
+}
+
+.erp-auth-form-input:disabled {
+  background: #f0f0f0;
+  color: var(--erp-auth-text-muted);
+  cursor: not-allowed;
+}
+
+.erp-auth-form-input::placeholder {
+  color: var(--erp-auth-text-muted);
+  font-style: italic;
+}
+
+/* Button Styling - Classic Gradient */
+.erp-auth-button {
+  background: linear-gradient(to bottom, #f8f8f8, #e0e0e0);
+  border: 1px solid var(--erp-auth-border-medium);
+  padding: 6px 16px;
+  font-size: 11px;
+  color: var(--erp-auth-text-primary);
+  cursor: pointer;
+  font-family: 'Segoe UI', Tahoma, sans-serif;
+  min-height: 28px;
+  font-weight: normal;
+}
+
+.erp-auth-button:hover:not(:disabled) {
+  background: linear-gradient(to bottom, #fff, #e8e8e8);
+}
+
+.erp-auth-button:active {
+  background: #d0d0d0;
+  box-shadow: inset 0 1px 3px var(--erp-auth-shadow-medium) !important;
+}
+
+.erp-auth-button:disabled {
+  background: #f0f0f0;
+  color: var(--erp-auth-text-muted);
+  cursor: not-allowed;
+  border-color: var(--erp-auth-border-light);
+}
+
+/* Primary Button */
+.erp-auth-button-primary {
+  background: linear-gradient(to bottom, var(--erp-auth-blue-secondary), var(--erp-auth-blue-primary));
+  color: var(--erp-auth-text-white);
+  border-color: var(--erp-auth-blue-dark);
+  font-weight: bold;
+}
+
+.erp-auth-button-primary:hover:not(:disabled) {
+  background: linear-gradient(to bottom, #6a8fed, #5179f1);
+}
+
+/* Message Styling */
+.erp-auth-message {
+  padding: 8px 12px;
+  margin-bottom: 15px;
+  border: 1px solid;
+  font-size: 11px;
+}
+
+.erp-auth-error-message {
+  background: #ffd4d4;
+  border-color: var(--erp-auth-error);
+  color: var(--erp-auth-error);
+}
+
+.erp-auth-success-message {
+  background: #d4f4dd;
+  border-color: var(--erp-auth-success);
+  color: var(--erp-auth-success);
+}
+
+.erp-auth-warning-message {
+  background: #fff4ce;
+  border-color: var(--erp-auth-warning);
+  color: var(--erp-auth-warning);
+}
+
+/* Footer Section */
+.erp-auth-footer {
+  margin-top: 20px;
+  padding-top: 15px;
+  border-top: 1px solid var(--erp-auth-border-light);
+  text-align: center;
+}
+
+.erp-auth-footer p {
+  margin: 6px 0;
+  font-size: 11px;
+  color: var(--erp-auth-text-secondary);
+}
+
+.erp-auth-footer a {
+  color: var(--erp-auth-blue-primary);
+  text-decoration: none;
+  font-weight: normal;
+}
+
+.erp-auth-footer a:hover {
+  text-decoration: underline;
+}
+
+/* Status Bar */
+.erp-auth-status-bar {
+  background: #ece9d8;
+  border-top: 1px solid #fff;
+  padding: 2px 5px;
+  display: flex;
+  gap: 8px;
+  font-size: 11px;
+  align-items: center;
+  min-height: 22px;
+}
+
+.erp-auth-status-item {
+  padding: 1px 6px;
+  border: 1px solid;
+  border-color: #808080 #fff #fff #808080;
+  background: var(--erp-auth-bg-secondary);
+}
+
+.erp-auth-status-panel {
+  margin-left: auto;
+  padding: 1px 6px;
+  border: 1px solid;
+  border-color: #808080 #fff #fff #808080;
+  background: var(--erp-auth-bg-secondary);
+  font-weight: bold;
+}
+
+/* Loading State */
+.erp-auth-loading {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.erp-auth-loading::before {
+  content: '';
+  width: 12px;
+  height: 12px;
+  border: 2px solid var(--erp-auth-border-light);
+  border-top-color: var(--erp-auth-blue-primary);
+  border-radius: 50%;
+  animation: erp-auth-spin 1s linear infinite;
+}
+
+@keyframes erp-auth-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .erp-auth-container {
+    padding: 10px;
+  }
+  
+  .erp-auth-card {
+    max-width: 100%;
+    min-height: auto;
+  }
+  
+  .erp-auth-content {
+    padding: 15px;
+  }
+  
+  .erp-auth-form-panel {
+    padding: 15px;
+  }
+  
+  .erp-auth-form-header {
+    margin: -15px -15px 10px -15px;
+  }
+}
+
+@media (max-width: 480px) {
+  .erp-auth-container {
+    padding: 5px;
+  }
+  
+  .erp-auth-content {
+    padding: 10px;
+  }
+  
+  .erp-auth-form-panel {
+    padding: 10px;
+  }
+  
+  .erp-auth-form-header {
+    margin: -10px -10px 8px -10px;
+  }
+  
+  .erp-auth-header h2 {
+    font-size: 14px;
+  }
+}
+
+/* High Contrast Mode Support */
+@media (prefers-contrast: high) {
+  :root {
+    --erp-auth-border-light: #000000;
+    --erp-auth-border-medium: #000000;
+    --erp-auth-text-secondary: #000000;
+  }
+}
+
+/* Print Styles */
+@media print {
+  .erp-auth-container {
+    background: white;
+    box-shadow: none;
+  }
+  
+  .erp-auth-card {
+    border: 2px solid #000;
+    box-shadow: none;
+  }
+  
+  .erp-auth-button {
+    border: 2px solid #000;
+    background: white;
+    color: #000;
+  }
+}

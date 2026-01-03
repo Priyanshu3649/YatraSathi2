@@ -6,7 +6,7 @@ const {
   generateBookingReport,
   generateTravelPlanReport,
   downloadReport,
-  generateCustomerAnalyticsReport
+  generateCustomerAnalytics
 } = require('../controllers/reportController');
 const authMiddleware = require('../middleware/authMiddleware');
 
@@ -42,7 +42,7 @@ router.get('/customer-analytics', async (req, res, next) => {
     return res.status(403).json({ message: 'Access denied. Admin access required.' });
   }
   next();
-}, generateCustomerAnalyticsReport);
+}, generateCustomerAnalytics);
 
 // Employee and Admin reports
 router.get('/bookings', async (req, res, next) => {

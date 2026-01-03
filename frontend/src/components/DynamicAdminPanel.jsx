@@ -1361,7 +1361,7 @@ const DynamicAdminPanel = () => {
                             className={isSelected ? 'selected' : ''}
                             onClick={() => handleRecordSelect(record)}
                           >
-                            <td><input type="checkbox" checked={isSelected} onChange={() => {}} /></td>
+                            <td><input type="checkbox" checked={!!isSelected} onChange={() => {}} /></td>
                             {currentModule.columns.map((col, colIdx) => {
                               let value = record[col];
                               

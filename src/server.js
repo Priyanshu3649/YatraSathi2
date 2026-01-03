@@ -1,3 +1,4 @@
+console.log('Starting server.js...');
 const express = require('express');
 const cors = require('cors');
 const dotenv = require('dotenv');
@@ -30,10 +31,14 @@ app.get('/', (req, res) => {
   res.redirect('/demo-portals.html');
 });
 
+// Import models to ensure associations are initialized
+require('./models');
+
 // Import routes
 const authRoutes = require('./routes/authRoutes');
 const travelPlanRoutes = require('./routes/travelPlanRoutes');
 const reportRoutes = require('./routes/reportRoutes');
+const debugRoutes = require('./routes/debugRoutes');
 const dashboardRoutes = require('./routes/dashboardRoutes');
 const permissionRoutes = require('./routes/permissionRoutes');
 const bookingRoutes = require('./routes/bookingRoutes');
@@ -59,6 +64,7 @@ app.use('/api/security', securityRoutes);
 console.log('Auth routes registered');
 app.use('/api/travel-plans', travelPlanRoutes);
 app.use('/api/reports', reportRoutes);
+app.use('/api/debug', debugRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/permissions', permissionRoutes);
 app.use('/api/bookings', bookingRoutes);

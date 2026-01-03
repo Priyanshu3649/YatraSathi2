@@ -89,6 +89,7 @@ const connectDB = async () => {
     // Sync all models without altering existing tables
     console.log('🔄 Synchronizing database models...');
     await sequelize.sync({ alter: false });
+    await sequelizeTVL.sync({ alter: false });
     console.log('✅ All models synchronized successfully!');
     
     return sequelize;

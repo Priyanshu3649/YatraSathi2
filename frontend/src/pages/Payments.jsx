@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { paymentAPI, bookingAPI } from '../services/api';
 import '../styles/vintage-erp-theme.css';
-import '../styles/payments.css';
+import '../styles/classic-enterprise-global.css';
 
 const Payments = () => {
   const { user } = useAuth();
@@ -186,260 +186,307 @@ const Payments = () => {
   };
 
   if (loading) {
-    return <div className="erp-container"><div className="erp-loading">Loading payments...</div></div>;
+    return (
+      <div className="erp-admin-container">
+        <div className="erp-loading">Loading payments...</div>
+      </div>
+    );
   }
 
   return (
-    <div className="erp-container">
-      {/* Left Form Panel */}
-      {showForm && (
-        <div className="erp-form-section">
-          <h3>Record Payment</h3>
-          <form onSubmit={onSubmit} className="erp-form">
-            <div className="form-row">
-              <div className="form-group">
-                <label htmlFor="bookingId" className="form-label">Booking *</label>
-                <select
-                  id="bookingId"
-                  name="bookingId"
-                  value={formData.bookingId}
-                  onChange={onChange}
-                  required
-                  className="form-control"
-                >
-                  <option value="">Select Booking</option>
-                  {bookings.map(booking => (
-                    <option key={booking.bk_bkid} value={booking.bk_bkid}>
-                      {booking.bk_bkid} - {booking.bk_fromstation || booking.bk_fromst} to {booking.bk_tostation || booking.bk_tost}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="form-group">
-                <label htmlFor="amount" className="form-label">Amount *</label>
-                <input
-                  type="number"
-                  id="amount"
-                  name="amount"
-                  value={formData.amount}
-                  onChange={onChange}
-                  required
-                  step="0.01"
-                  min="0"
-                  className="form-control"
-                />
-              </div>
-            </div>
-            <div className="form-row">
-              <div className="form-group">
-                <label htmlFor="mode" className="form-label">Payment Mode *</label>
-                <select
-                  id="mode"
-                  name="mode"
-                  value={formData.mode}
-                  onChange={onChange}
-                  required
-                  className="form-control"
-                >
-                  <option value="CASH">Cash</option>
-                  <option value="ONLINE">Online</option>
-                  <option value="CHEQUE">Cheque</option>
-                  <option value="BANK_TRANSFER">Bank Transfer</option>
-                </select>
-              </div>
-              <div className="form-group">
-                <label htmlFor="paymentDate" className="form-label">Payment Date *</label>
-                <input
-                  type="date"
-                  id="paymentDate"
-                  name="paymentDate"
-                  value={formData.paymentDate}
-                  onChange={onChange}
-                  required
-                  className="form-control"
-                />
-              </div>
-            </div>
-            
-            {formData.mode === 'ONLINE' && (
-              <div className="form-group">
-                <label htmlFor="transactionId" className="form-label">Transaction ID</label>
-                <input
-                  type="text"
-                  id="transactionId"
-                  name="transactionId"
-                  value={formData.transactionId}
-                  onChange={onChange}
-                  className="form-control"
-                />
-              </div>
-            )}
-            
-            {(formData.mode === 'CHEQUE' || formData.mode === 'BANK_TRANSFER') && (
-              <>
-                <div className="form-row">
-                  <div className="form-group">
-                    <label htmlFor="bankName" className="form-label">Bank Name</label>
-                    <input
-                      type="text"
-                      id="bankName"
-                      name="bankName"
-                      value={formData.bankName}
-                      onChange={onChange}
-                      className="form-control"
-                    />
-                  </div>
-                  <div className="form-group">
-                    <label htmlFor="branch" className="form-label">Branch</label>
-                    <input
-                      type="text"
-                      id="branch"
-                      name="branch"
-                      value={formData.branch}
-                      onChange={onChange}
-                      className="form-control"
-                    />
-                  </div>
-                </div>
-                {formData.mode === 'CHEQUE' && (
-                  <div className="form-group">
-                    <label htmlFor="chequeNumber" className="form-label">Cheque Number</label>
-                    <input
-                      type="text"
-                      id="chequeNumber"
-                      name="chequeNumber"
-                      value={formData.chequeNumber}
-                      onChange={onChange}
-                      className="form-control"
-                    />
-                  </div>
-                )}
-              </>
-            )}
-            
-            <div className="form-group">
-              <label htmlFor="remarks" className="form-label">Remarks</label>
-              <textarea
-                id="remarks"
-                name="remarks"
-                value={formData.remarks}
-                onChange={onChange}
-                className="form-control"
-                rows="3"
-              ></textarea>
-            </div>
-            
-            <div className="form-group">
-              <button type="submit" className="btn btn-primary">Record Payment</button>
-              <button type="button" className="btn" onClick={() => setShowForm(false)}>Cancel</button>
-            </div>
-          </form>
-        </div>
-      )}
+    <div className="erp-admin-container">
+      {/* Title Bar */}
+      <div className="title-bar">
+        <div className="system-menu">⚡</div>
+        <div className="title-text">Payment Management System</div>
+        <div className="close-button">×</div>
+      </div>
 
-      {showRefundForm && (
-        <div className="erp-form-section">
-          <h3>Process Refund</h3>
-          <form onSubmit={(e) => onRefundSubmit(e, showRefundForm)} className="erp-form">
-            <div className="form-group">
-              <label htmlFor="refundAmount" className="form-label">Refund Amount *</label>
-              <input
-                type="number"
-                id="refundAmount"
-                name="refundAmount"
-                value={refundData.refundAmount}
-                onChange={onRefundChange}
-                required
-                step="0.01"
-                min="0"
-                max={payments.find(p => p.pt_ptid === showRefundForm)?.pt_amount}
-                className="form-control"
-              />
-            </div>
-            <div className="form-group">
-              <label htmlFor="remarks" className="form-label">Remarks</label>
-              <textarea
-                id="remarks"
-                name="remarks"
-                value={refundData.remarks}
-                onChange={onRefundChange}
-                className="form-control"
-                rows="3"
-              ></textarea>
-            </div>
-            <div className="form-group">
-              <button type="submit" className="btn btn-primary">Process Refund</button>
-              <button type="button" className="btn" onClick={() => setShowRefundForm(null)}>Cancel</button>
-            </div>
-          </form>
-        </div>
-      )}
+      {/* Menu Bar */}
+      <div className="menu-bar">
+        <div className="menu-item">File</div>
+        <div className="menu-item">Edit</div>
+        <div className="menu-item">View</div>
+        <div className="menu-item">Tools</div>
+        <div className="menu-item">Help</div>
+      </div>
 
-      {/* Right Content Panel */}
-      <div className="erp-content-section">
-        <div className="erp-header">
-          <h2>Payments</h2>
-          <div className="header-actions">
-            <button className="btn btn-primary" onClick={() => setShowForm(!showForm)}>
-              {showForm ? 'Cancel' : 'Record Payment'}
-            </button>
+      {/* Toolbar */}
+      <div className="toolbar">
+        <button className="tool-button" onClick={() => setShowForm(!showForm)}>
+          {showForm ? 'Cancel' : 'New'}
+        </button>
+        <div className="tool-separator"></div>
+        <button className="tool-button" onClick={fetchPayments}>Refresh</button>
+        <div className="tool-separator"></div>
+        <button className="tool-button">Export</button>
+        <button className="tool-button">Print</button>
+      </div>
+
+      {/* Main Content */}
+      <div className="main-content">
+        {/* Left Form Panel */}
+        <div className="nav-panel">
+          <div className="nav-header">Payment Actions</div>
+          <div className={`nav-item ${showForm ? 'active' : ''}`} onClick={() => setShowForm(!showForm)}>
+            {showForm ? 'Cancel Form' : 'Record Payment'}
           </div>
-        </div>
-
-        {error && <div className="alert alert-error">{error}</div>}
-
-        <div className="erp-data-section">
-          <h3>Payment List</h3>
-          {payments.length === 0 ? (
-            <p>No payments found.</p>
-          ) : (
-            <div className="table-responsive">
-              <table className="erp-data-table">
-                <thead>
-                  <tr>
-                    <th>Payment ID</th>
-                    <th>Booking ID</th>
-                    <th>Amount</th>
-                    <th>Mode</th>
-                    <th>Date</th>
-                    <th>Status</th>
-                    <th>Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {payments.map((payment) => (
-                    <tr key={payment.pt_ptid} className={getStatusClass(payment.pt_status)}>
-                      <td>{payment.pt_ptid}</td>
-                      <td>{payment.pt_bkid}</td>
-                      <td>₹{parseFloat(payment.pt_amount).toFixed(2)}</td>
-                      <td>{getModeDisplay(payment.pt_mode)}</td>
-                      <td>{new Date(payment.pt_paydt || payment.pt_paymentdt).toLocaleDateString()}</td>
-                      <td>{payment.pt_status}</td>
-                      <td>
-                        {payment.pt_status === 'RECEIVED' && (
-                          <button 
-                            className="btn btn-primary mr-1" 
-                            onClick={() => handleRefundPayment(payment)}
-                          >
-                            Refund
-                          </button>
-                        )}
-                        {user && (user.us_usertype === 'admin' || user.us_usertype === 'employee') && (
-                          <button 
-                            className="btn btn-danger" 
-                            onClick={() => handleDeletePayment(payment.pt_ptid)}
-                          >
-                            Delete
-                          </button>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+          <div className="nav-item" onClick={fetchPayments}>Refresh List</div>
+          <div className="nav-item">Export Data</div>
+          <div className="nav-item">Print Report</div>
+          {showRefundForm && (
+            <div className="nav-item active">Process Refund</div>
           )}
         </div>
+
+        {/* Work Area */}
+        <div className="work-area">
+          {/* Form Panel */}
+          {showForm && (
+            <div className="form-panel">
+              <div className="panel-header">Record New Payment</div>
+              <form onSubmit={onSubmit} className="erp-form">
+                <div className="form-grid">
+                  <label htmlFor="bookingId" className="form-label required">Booking</label>
+                  <select
+                    id="bookingId"
+                    name="bookingId"
+                    value={formData.bookingId}
+                    onChange={onChange}
+                    required
+                    className="form-input"
+                  >
+                    <option value="">Select Booking</option>
+                    {bookings.map(booking => (
+                      <option key={booking.bk_bkid} value={booking.bk_bkid}>
+                        {booking.bk_bkid} - {booking.bk_fromstation || booking.bk_fromst} to {booking.bk_tostation || booking.bk_tost}
+                      </option>
+                    ))}
+                  </select>
+
+                  <label htmlFor="amount" className="form-label required">Amount</label>
+                  <input
+                    type="number"
+                    id="amount"
+                    name="amount"
+                    value={formData.amount}
+                    onChange={onChange}
+                    required
+                    step="0.01"
+                    min="0"
+                    className="form-input"
+                  />
+
+                  <label htmlFor="mode" className="form-label required">Payment Mode</label>
+                  <select
+                    id="mode"
+                    name="mode"
+                    value={formData.mode}
+                    onChange={onChange}
+                    required
+                    className="form-input"
+                  >
+                    <option value="CASH">Cash</option>
+                    <option value="ONLINE">Online</option>
+                    <option value="CHEQUE">Cheque</option>
+                    <option value="BANK_TRANSFER">Bank Transfer</option>
+                  </select>
+
+                  <label htmlFor="paymentDate" className="form-label required">Payment Date</label>
+                  <input
+                    type="date"
+                    id="paymentDate"
+                    name="paymentDate"
+                    value={formData.paymentDate}
+                    onChange={onChange}
+                    required
+                    className="form-input"
+                  />
+
+                  {formData.mode === 'ONLINE' && (
+                    <>
+                      <label htmlFor="transactionId" className="form-label">Transaction ID</label>
+                      <input
+                        type="text"
+                        id="transactionId"
+                        name="transactionId"
+                        value={formData.transactionId}
+                        onChange={onChange}
+                        className="form-input"
+                      />
+                    </>
+                  )}
+
+                  {(formData.mode === 'CHEQUE' || formData.mode === 'BANK_TRANSFER') && (
+                    <>
+                      <label htmlFor="bankName" className="form-label">Bank Name</label>
+                      <input
+                        type="text"
+                        id="bankName"
+                        name="bankName"
+                        value={formData.bankName}
+                        onChange={onChange}
+                        className="form-input"
+                      />
+
+                      <label htmlFor="branch" className="form-label">Branch</label>
+                      <input
+                        type="text"
+                        id="branch"
+                        name="branch"
+                        value={formData.branch}
+                        onChange={onChange}
+                        className="form-input"
+                      />
+
+                      {formData.mode === 'CHEQUE' && (
+                        <>
+                          <label htmlFor="chequeNumber" className="form-label">Cheque Number</label>
+                          <input
+                            type="text"
+                            id="chequeNumber"
+                            name="chequeNumber"
+                            value={formData.chequeNumber}
+                            onChange={onChange}
+                            className="form-input"
+                          />
+                        </>
+                      )}
+                    </>
+                  )}
+
+                  <label htmlFor="remarks" className="form-label">Remarks</label>
+                  <textarea
+                    id="remarks"
+                    name="remarks"
+                    value={formData.remarks}
+                    onChange={onChange}
+                    className="form-input"
+                    rows="3"
+                  ></textarea>
+                </div>
+
+                <div className="form-actions">
+                  <button type="submit" className="tool-button">Save Payment</button>
+                  <button type="button" className="tool-button" onClick={() => setShowForm(false)}>Cancel</button>
+                </div>
+              </form>
+            </div>
+          )}
+
+          {/* Refund Form Panel */}
+          {showRefundForm && (
+            <div className="form-panel">
+              <div className="panel-header">Process Refund</div>
+              <form onSubmit={(e) => onRefundSubmit(e, showRefundForm)} className="erp-form">
+                <div className="form-grid">
+                  <label htmlFor="refundAmount" className="form-label required">Refund Amount</label>
+                  <input
+                    type="number"
+                    id="refundAmount"
+                    name="refundAmount"
+                    value={refundData.refundAmount}
+                    onChange={onRefundChange}
+                    required
+                    step="0.01"
+                    min="0"
+                    max={payments.find(p => p.pt_ptid === showRefundForm)?.pt_amount}
+                    className="form-input"
+                  />
+
+                  <label htmlFor="remarks" className="form-label">Remarks</label>
+                  <textarea
+                    id="remarks"
+                    name="remarks"
+                    value={refundData.remarks}
+                    onChange={onRefundChange}
+                    className="form-input"
+                    rows="3"
+                  ></textarea>
+                </div>
+
+                <div className="form-actions">
+                  <button type="submit" className="tool-button">Process Refund</button>
+                  <button type="button" className="tool-button" onClick={() => setShowRefundForm(null)}>Cancel</button>
+                </div>
+              </form>
+            </div>
+          )}
+
+          {/* Grid Panel */}
+          <div className="grid-panel">
+            <div className="panel-header">Payment Records</div>
+            
+            {error && <div className="alert alert-error">{error}</div>}
+
+            <div className="grid-toolbar">
+              <input
+                type="text"
+                placeholder="Search payments..."
+                className="filter-input"
+              />
+              <button className="tool-button">Filter</button>
+              <button className="tool-button">Clear</button>
+            </div>
+
+            <div className="grid-container">
+              {payments.length === 0 ? (
+                <p>No payments found.</p>
+              ) : (
+                <table className="grid-table">
+                  <thead>
+                    <tr>
+                      <th>Payment ID</th>
+                      <th>Booking ID</th>
+                      <th>Amount</th>
+                      <th>Mode</th>
+                      <th>Date</th>
+                      <th>Status</th>
+                      <th>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {payments.map((payment) => (
+                      <tr key={payment.pt_ptid} className={getStatusClass(payment.pt_status)}>
+                        <td>{payment.pt_ptid}</td>
+                        <td>{payment.pt_bkid}</td>
+                        <td>₹{parseFloat(payment.pt_amount).toFixed(2)}</td>
+                        <td>{getModeDisplay(payment.pt_mode)}</td>
+                        <td>{new Date(payment.pt_paydt || payment.pt_paymentdt).toLocaleDateString()}</td>
+                        <td>{payment.pt_status}</td>
+                        <td>
+                          {payment.pt_status === 'RECEIVED' && (
+                            <button 
+                              className="tool-button" 
+                              onClick={() => handleRefundPayment(payment)}
+                            >
+                              Refund
+                            </button>
+                          )}
+                          {user && (user.us_usertype === 'admin' || user.us_usertype === 'employee') && (
+                            <button 
+                              className="tool-button" 
+                              onClick={() => handleDeletePayment(payment.pt_ptid)}
+                            >
+                              Delete
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Status Bar */}
+      <div className="status-bar">
+        <div className="status-item">Records: {payments.length}</div>
+        <div className="status-item">User: {user?.us_name || 'Unknown'}</div>
+        <div className="status-panel">Ready</div>
       </div>
     </div>
   );
