@@ -7,17 +7,12 @@ const PaymentTVL = sequelizeTVL.define('ptXpayment', {
     primaryKey: true,
     autoIncrement: true,
     allowNull: false,
-    comment: 'Payment ID'
+    comment: 'Payment ID (Primary Key)'
   },
-  pt_acid: {
-    type: DataTypes.BIGINT,
+  pt_custid: {
+    type: DataTypes.STRING(15),
     allowNull: false,
-    comment: 'Account ID'
-  },
-  pt_bkid: {
-    type: DataTypes.BIGINT,
-    allowNull: true,
-    comment: 'Booking ID'
+    comment: 'Customer ID (User ID)'
   },
   pt_amount: {
     type: DataTypes.DECIMAL(12, 2),
@@ -39,11 +34,6 @@ const PaymentTVL = sequelizeTVL.define('ptXpayment', {
     allowNull: false,
     comment: 'Payment Date'
   },
-  pt_rcvdt: {
-    type: DataTypes.DATE,
-    allowNull: true,
-    comment: 'Received Date'
-  },
   pt_status: {
     type: DataTypes.STRING(15),
     defaultValue: 'RECEIVED',
@@ -54,6 +44,7 @@ const PaymentTVL = sequelizeTVL.define('ptXpayment', {
     allowNull: true,
     comment: 'Remarks'
   },
+
   // Audit fields
   edtm: {
     type: DataTypes.DATE,

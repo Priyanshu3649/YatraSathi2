@@ -3,6 +3,11 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { travelPlanApi } from '../utils/travelPlanApi';
 import '../styles/travelPlans.css';
+import '../styles/vintage-erp-theme.css';
+import '../styles/classic-enterprise-global.css';
+import '../styles/vintage-admin-panel.css';
+import '../styles/dynamic-admin-panel.css';
+import '../styles/vintage-erp-global.css';
 
 const EditTravelPlan = () => {
   const { id } = useParams();

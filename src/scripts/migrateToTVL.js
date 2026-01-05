@@ -197,6 +197,7 @@ async function migrateToTVL() {
             pt_refno: payment.pt_refno,
             pt_paydt: payment.pt_paydt,
             pt_rcvdt: payment.pt_rcvdt,
+            pt_rcvby: payment.pt_rcvby,
             pt_status: payment.pt_status,
             pt_remarks: payment.pt_remarks,
             edtm: payment.edtm,

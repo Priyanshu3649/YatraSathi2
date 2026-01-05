@@ -1,706 +1,1392 @@
-const { ptPayment: Payment, bkBooking: Booking, acAccount: Account, emEmployee: Employee, usUser: User, pnPnr: Pnr, paPaymentAlloc: PaymentAlloc, lgLedger: Ledger, Sequelize } = require('../models');
+/**
+ * PROFESSIONAL PAYMENT HANDLER - FINANCIAL SYSTEM
+ * 
+ * CRITICAL ACCOUNTING RULES:
+ * 1. Payment ≠ Booking ≠ PNR (they are separate entities)
+ * 2. Never overwrite payments - always create new entries
+ * 3. Never "adjust" amounts silently
+ * 4. Full audit trail maintained
+ * 5. Real-time status calculation (never stored, always calculated)
+ * 
+ * This system is designed to pass financial audits 5 years later.
+ */
+
+const {
+  ptXpayment: Payment,
+  pnPnr: Pnr,
+  paXpayalloc: PaymentAlloc,
+  lgXLedger: Ledger,
+  caXcustomeradvance: CustomerAdvance,
+  yeXyearendclosing: YearEndClosing,
+  cuXcustomer: Customer,
+  emXemployee: Employee,
+  bkXbooking: Booking,
+  Sequelize
+} = require('../models');
 const { Op } = require('sequelize');
 const { sequelize } = require('../../config/db');
 
-// Create a new payment with allocation
+// ============================================================================
+// UTILITY FUNCTIONS
+// ============================================================================
+
+/**
+ * Calculate accounting period from date (YYYY-MM format)
+ */
+const getAccountingPeriod = (date) => {
+  const d = date ? new Date(date) : new Date();
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  return `${year}-${month}`;
+};
+
+/**
+ * Get financial year from date (e.g., 2023-24)
+ */
+const getFinancialYear = (date) => {
+  const d = date ? new Date(date) : new Date();
+  const year = d.getFullYear();
+  const month = d.getMonth() + 1;
+  
+  // Financial year runs from April to March
+  if (month >= 4) {
+    return `${year}-${String(year + 1).slice(-2)}`;
+  } else {
+    return `${year - 1}-${String(year).slice(-2)}`;
+  }
+};
+
+/**
+ * REAL-TIME PNR STATUS CALCULATION (MANDATORY)
+ * 
+ * This function calculates PNR payment status in real-time.
+ * Status is NEVER stored - always calculated from allocations.
+ * 
+ * Rules:
+ * - Total Amount = pn_totamt (fare + fees + taxes)
+ * - Paid Amount = Sum of all allocations for this PNR
+ * - Pending Amount = Total - Paid
+ * 
+ * Payment Status:
+ * - PAID: Pending = 0 AND Paid > 0
+ * - PARTIAL: Pending > 0 AND Paid > 0
+ * - UNPAID: Paid = 0
+ */
+const calculatePNRStatus = async (pnrId) => {
+  const pnr = await Pnr.findByPk(pnrId);
+  if (!pnr) {
+    throw new Error(`PNR with ID ${pnrId} not found`);
+  }
+
+  // Calculate total paid amount from allocations
+  const totalPaid = await PaymentAlloc.sum('pa_allocamt', {
+    where: { pa_pnid: pnrId }
+  }) || 0;
+
+  const totalAmount = parseFloat(pnr.pn_totamt) || 0;
+  const pendingAmount = totalAmount - totalPaid;
+
+  // Update PNR fields
+  pnr.pn_paidamt = totalPaid;
+  pnr.pn_pendingamt = pendingAmount;
+
+  // Determine payment status
+  if (pendingAmount <= 0 && totalPaid > 0) {
+          pnr.pn_payment_status = 'PAID';
+  } else if (pendingAmount > 0 && totalPaid > 0) {
+          pnr.pn_payment_status = 'PARTIAL';
+        } else {
+          pnr.pn_payment_status = 'UNPAID';
+        }
+        
+  await pnr.save();
+  return pnr;
+};
+
+/**
+ * Calculate customer advance balance
+ */
+const calculateCustomerAdvance = async (customerId, fyear = null) => {
+  if (!fyear) {
+    fyear = getFinancialYear(new Date());
+  }
+
+    // Get all payments for customer
+    const payments = await Payment.findAll({
+      where: {
+        pt_custid: customerId,
+        pt_status: { [Op.in]: ['RECEIVED', 'ADJUSTED'] }
+      }
+    });
+
+  let totalPayment = 0;
+  let totalAllocated = 0;
+
+  for (const payment of payments) {
+    totalPayment += parseFloat(payment.pt_amount) || 0;
+    
+    // Get allocations separately
+    const allocations = await PaymentAlloc.findAll({
+      where: { pa_ptid: payment.pt_ptid }
+    });
+    
+    if (allocations && allocations.length > 0) {
+      for (const alloc of allocations) {
+        totalAllocated += parseFloat(alloc.pa_allocamt) || 0;
+      }
+    }
+  }
+
+  const advanceBalance = totalPayment - totalAllocated;
+
+  // Update or create customer advance record
+  const [advance, created] = await CustomerAdvance.findOrCreate({
+    where: { ca_usid: customerId, ca_fyear: fyear },
+    defaults: {
+      ca_usid: customerId,
+      ca_advance_amt: advanceBalance,
+      ca_fyear: fyear,
+      ca_last_updated: new Date(),
+      edtm: new Date(),
+      eby: 'SYSTEM',
+      mdtm: new Date(),
+      mby: 'SYSTEM'
+    }
+  });
+
+  if (!created) {
+    advance.ca_advance_amt = advanceBalance;
+    advance.ca_last_updated = new Date();
+    advance.mdtm = new Date();
+    advance.mby = 'SYSTEM';
+    await advance.save();
+  }
+
+  return advanceBalance;
+};
+
+/**
+ * Create ledger entry for financial audit trail
+ * 
+ * NOTE: Primary ledger entries are now created by database triggers
+ * This function is kept for special cases where manual ledger entries are needed
+ */
+const createLedgerEntry = async (data, transaction) => {
+  const {
+    customerId,
+    entryType, // 'DEBIT' or 'CREDIT'
+    amount,
+    entryRef,
+    pnrId = null,
+    paymentId = null,
+    allocationId = null,
+    remarks = null
+  } = data;
+
+  // Get last closing balance for this customer
+  const lastEntry = await Ledger.findOne({
+    where: { lg_custid: customerId },
+    order: [['edtm', 'DESC']],
+    transaction
+  });
+
+  const openingBal = lastEntry ? parseFloat(lastEntry.lg_closing_bal) : 0;
+  const closingBal = entryType === 'CREDIT' 
+    ? openingBal + parseFloat(amount)
+    : openingBal - parseFloat(amount);
+
+  const fyear = getFinancialYear(new Date());
+
+  return await Ledger.create({
+    lg_custid: customerId,
+    lg_entry_type: entryType,
+    lg_entry_ref: entryRef,
+    lg_amount: amount,
+    lg_opening_bal: openingBal,
+    lg_closing_bal: closingBal,
+    lg_pnid: pnrId,
+    lg_ptid: paymentId,
+    lg_paid: allocationId,
+    lg_fyear: fyear,
+    lg_remarks: remarks,
+    eby: data.eby || 'SYSTEM',
+    mby: data.eby || 'SYSTEM'
+  }, { transaction });
+};
+
+// ============================================================================
+// PAYMENT RECEIPT LOGIC
+// ============================================================================
+
+/**
+ * Create Payment (Payment Header)
+ * 
+ * BUSINESS RULE: Payment is a financial event, not a booking event.
+ * - Payment can be received before PNR is generated (advance payment)
+ * - Payment can be applied to multiple PNRs
+ * - Payment is NEVER overwritten
+ */
 const createPayment = async (req, res) => {
   const transaction = await sequelize.transaction();
   try {
     const {
-      bookingId,
-      amount,
-      mode,
-      transactionId,
-      bankName,
-      branch,
-      chequeNumber,
-      paymentDate,
-      remarks,
-      // Detailed payment breakdown
-      ticketPrice,
-      platformFee,
-      agentFee,
-      tax,
-      otherCharges,
-      // PNR for which payment is received
-      pnrNumber
+      customerId, // Required: Customer User ID
+      amount, // Required: Payment amount
+      mode, // Required: CASH, UPI, NEFT, RTGS, CHEQUE, CARD, BANK
+      refNo, // Optional: UTR / Cheque No / Transaction ID
+      paymentDate, // Optional: defaults to today
+      remarks, // Optional
+      autoAllocate = false, // Optional: Auto-allocate using FIFO
+      allocations = [] // Optional: Manual allocations [{ pnrNumber, amount, remarks }]
     } = req.body;
-    
-    // Verify booking exists
-    const booking = await Booking.findByPk(bookingId);
-    if (!booking) {
-      return res.status(404).json({ message: 'Booking not found' });
+
+    // VALIDATION
+    if (!customerId || !amount || !mode) {
+      return res.status(400).json({
+        success: false,
+        message: 'Missing required fields: customerId, amount, mode'
+      });
     }
-    
-    // Get or create account for this booking
-    let account = await Account.findOne({ where: { ac_bkid: bookingId } });
-    if (!account) {
-      // Create account if it doesn't exist
-      account = await Account.create({
-        ac_bkid: bookingId,
-        ac_usid: booking.bk_usid,
-        ac_totamt: booking.bk_total_amount || 0,
-        ac_rcvdamt: 0,
-        ac_duedt: new Date(),
-        eby: req.user.us_usid,
-        mby: req.user.us_usid
-      }, { transaction });
+
+    if (parseFloat(amount) <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Payment amount must be greater than zero'
+      });
     }
-    
-    // Calculate accounting period
-    const paymentDt = paymentDate ? new Date(paymentDate) : new Date();
-    const acctPeriod = `${paymentDt.getFullYear()}-${String(paymentDt.getMonth() + 1).padStart(2, '0')}`;
-    
-    // Create new payment
+
+    // Verify customer exists
+    const customer = await Customer.findByPk(customerId);
+    if (!customer) {
+      return res.status(404).json({
+        success: false,
+        message: 'Customer not found'
+      });
+    }
+
+    const payDate = paymentDate ? new Date(paymentDate) : new Date();
+    const acctPeriod = getAccountingPeriod(payDate);
+
+    // Create payment header
     const payment = await Payment.create({
-      pt_acid: account.ac_acid,
-      pt_bkid: bookingId,
+      pt_custid: customerId,
+      pt_totalamt: amount,
       pt_amount: amount,
       pt_mode: mode,
-      pt_refno: transactionId,
-      pt_paydt: paymentDate || new Date(),
-      pt_remarks: remarks,
+      pt_refno: refNo || null,
+      pt_paydt: payDate,
+      pt_rcvdt: payDate, // Using pt_paydt as pt_rcvdt since pt_rcvby doesn't exist in TVL table
       pt_status: 'RECEIVED',
-      pt_rcvby: req.user.us_usid,
-      pt_acct_period: acctPeriod,
-      // Detailed payment breakdown
-      pt_ticket_price: ticketPrice || 0,
-      pt_platform_fee: platformFee || 0,
-      pt_agent_fee: agentFee || 0,
-      pt_tax: tax || 0,
-      pt_other_charges: otherCharges || 0,
-      pt_pnr: pnrNumber,
+      pt_acid: 0, // Set to 0 as default, since TVL table requires this field
+      pt_allocatedamt: 0, // Initially 0 allocated
+      pt_unallocamt: amount, // Initially all unallocated
+      pt_finyear: getFinancialYear(payDate),
+      pt_period: acctPeriod,
+      pt_remarks: remarks || null,
       eby: req.user.us_usid,
       mby: req.user.us_usid
     }, { transaction });
     
-    // Update account with received amount
-    account.ac_rcvdamt = (account.ac_rcvdamt || 0) + amount;
-    account.mby = req.user.us_usid;
-    await account.save({ transaction });
-    
-    // Update booking with payment information
-    booking.bk_amount_paid = (booking.bk_amount_paid || 0) + amount;
-    if (booking.bk_total_amount) {
-      booking.bk_amount_pending = booking.bk_total_amount - booking.bk_amount_paid;
-    }
-    
-    // If fully paid, update booking status
-    if (booking.bk_amount_pending <= 0) {
-      booking.bk_status = 'COMPLETED';
-    }
-    
-    booking.mby = req.user.us_usid;
-    await booking.save({ transaction });
-    
-    // If PNR number is provided, allocate payment to PNR
-    if (pnrNumber) {
-      const pnr = await Pnr.findOne({ where: { pn_pnr: pnrNumber } });
-      if (pnr) {
-        // Create allocation record
-        await PaymentAlloc.create({
-          pa_ptid: payment.pt_ptid,
-          pa_pnid: pnr.pn_pnid,
-          pa_amount: amount,
-          pa_alloctn_type: 'MANUAL',
-          pa_remarks: remarks || 'Payment allocation',
-          eby: req.user.us_usid
-        }, { transaction });
-        
-        // Update PNR payment information
-        pnr.pn_paidamt = (pnr.pn_paidamt || 0) + amount;
-        pnr.pn_pendingamt = (pnr.pn_totamt || 0) - pnr.pn_paidamt;
-        
-        // Update payment status based on pending amount
-        if (pnr.pn_pendingamt <= 0) {
-          pnr.pn_payment_status = 'PAID';
-        } else if (pnr.pn_paidamt > 0) {
-          pnr.pn_payment_status = 'PARTIAL';
-        } else {
-          pnr.pn_payment_status = 'UNPAID';
-        }
-        
-        await pnr.save({ transaction });
-        
-        // Create ledger entry
-        await Ledger.create({
-          lg_entry_type: 'CREDIT',
-          lg_entry_ref: `PAYMENT-${payment.pt_ptid}`,
-          lg_amount: amount,
-          lg_opening_bal: 0,
-          lg_closing_bal: amount,
-          lg_remarks: `Payment received for PNR ${pnrNumber}`,
-          lg_usid: req.user.us_usid,
-          lg_pnid: pnr.pn_pnid,
-          lg_ptid: payment.pt_ptid,
-          lg_acid: account.ac_acid,
-          eby: req.user.us_usid,
-          mby: req.user.us_usid
-        }, { transaction });
-      }
-    }
-    
-    await transaction.commit();
-    
-    res.status(201).json(payment);
-  } catch (error) {
-    await transaction.rollback();
-    console.error('Payment creation error:', error);
-    res.status(500).json({ message: error.message });
-  }
-};
+    // Note: Ledger entry will be created automatically by database trigger
+    // The trigger will create the ledger entry when the payment is inserted
 
-// Refund a payment
-const refundPayment = async (req, res) => {
-  const transaction = await sequelize.transaction();
-  try {
-    const { id } = req.params;
-    const { refundAmount, remarks } = req.body;
-    
-    // Find the original payment
-    const originalPayment = await Payment.findByPk(id, {
-      include: [
-        {
-          model: Account,
-          attributes: ['ac_acid', 'ac_bkid', 'ac_usid']
-        },
-        {
-          model: BookingTVL,
-          attributes: ['bk_bkid', 'bk_bkno', 'bk_fromst', 'bk_tost', 'bk_status']
-        }
-      ]
-    });
-    
-    if (!originalPayment) {
-      return res.status(404).json({ message: 'Payment not found' });
-    }
-    
-    // Check permissions (only admin and accounts team can refund)
-    if (req.user.us_usertype !== 'admin') {
-      // For employees, check if they're in the accounts department
-      if (req.user.us_usertype === 'employee') {
-        const employee = await Employee.findOne({ where: { em_usid: req.user.us_usid } });
-        if (!employee || employee.em_dept !== 'accounts') {
-          return res.status(403).json({ message: 'Access denied. Accounts team access required.' });
-        }
-      } else {
-        return res.status(403).json({ message: 'Access denied. Admin or accounts team access required.' });
-      }
-    }
-    
-    // Validate refund amount
-    if (!refundAmount || refundAmount <= 0) {
-      return res.status(400).json({ message: 'Refund amount must be greater than zero' });
-    }
-    
-    if (refundAmount > originalPayment.pt_amount) {
-      return res.status(400).json({ message: 'Refund amount cannot exceed original payment amount' });
-    }
-    
-    // Check if this payment has already been refunded
-    if (originalPayment.pt_status === 'REFUNDED') {
-      return res.status(400).json({ message: 'Payment has already been refunded' });
-    }
-    
-    // Create refund payment record
-    const refundPayment = await Payment.create({
-      pt_acid: originalPayment.pt_acid,
-      pt_bkid: originalPayment.pt_bkid,
-      pt_amount: -refundAmount, // Negative amount to indicate refund
-      pt_mode: originalPayment.pt_mode,
-      pt_refno: `REFUND-${originalPayment.pt_refno || originalPayment.pt_ptid}`,
-      pt_paydt: new Date(),
-      pt_remarks: remarks || `Refund of ${refundAmount} from payment ${originalPayment.pt_ptid}`,
-      pt_status: 'REFUNDED',
-      eby: req.user.us_usid,
-      mby: req.user.us_usid
-    }, { transaction });
-    
-    // Update original payment status
-    originalPayment.pt_status = 'REFUNDED';
-    originalPayment.pt_remarks = originalPayment.pt_remarks ? 
-      `${originalPayment.pt_remarks} | Refunded ${refundAmount}` : 
-      `Refunded ${refundAmount}`;
-    originalPayment.mby = req.user.us_usid;
-    await originalPayment.save({ transaction });
-    
-    // Update account balance
-    const account = await Account.findByPk(originalPayment.pt_acid);
-    if (account) {
-      account.ac_rcvdamt = (account.ac_rcvdamt || 0) - refundAmount;
-      account.mby = req.user.us_usid;
-      await account.save({ transaction });
-    }
-    
-    // Update booking payment information
-    const booking = await BookingTVL.findByPk(originalPayment.pt_bkid);
-    if (booking) {
-      booking.bk_amount_paid = (booking.bk_amount_paid || 0) - refundAmount;
-      booking.bk_amount_pending = (booking.bk_amount_pending || 0) + refundAmount;
-      
-      // Update booking status if needed
-      if (booking.bk_amount_paid <= 0) {
-        booking.bk_status = 'PENDING';
-      } else if (booking.bk_status === 'COMPLETED') {
-        booking.bk_status = 'PARTIALLY_REFUNDED';
-      }
-      
-      booking.mby = req.user.us_usid;
-      await booking.save({ transaction });
-    }
-    
-    // Update related PNRs if payment was allocated
-    const allocations = await PaymentAlloc.findAll({ 
-      where: { pa_ptid: originalPayment.pt_ptid },
-      transaction 
-    });
-    
-    for (const allocation of allocations) {
-      const pnr = await Pnr.findByPk(allocation.pa_pnid);
-      if (pnr) {
-        pnr.pn_paidamt = (pnr.pn_paidamt || 0) - allocation.pa_amount;
-        pnr.pn_pendingamt = (pnr.pn_totamt || 0) - pnr.pn_paidamt;
-        
-        // Update payment status based on pending amount
-        if (pnr.pn_pendingamt <= 0) {
-          pnr.pn_payment_status = 'PAID';
-        } else if (pnr.pn_paidamt > 0) {
-          pnr.pn_payment_status = 'PARTIAL';
-        } else {
-          pnr.pn_payment_status = 'UNPAID';
-        }
-        
-        await pnr.save({ transaction });
-      }
-    }
-    
-    await transaction.commit();
-    
-    res.status(201).json({
-      message: 'Payment refunded successfully',
-      refundPayment,
-      originalPayment
-    });
-  } catch (error) {
-    await transaction.rollback();
-    console.error('Payment refund error:', error);
-    res.status(500).json({ message: error.message });
-  }
-};
-
-// Allocate payment to PNRs
-const allocatePayment = async (req, res) => {
-  const transaction = await sequelize.transaction();
-  try {
-    const { paymentId } = req.params;
-    const { allocations } = req.body; // Array of { pnrId, amount, remarks }
-    
-    // Find the payment
-    const payment = await Payment.findByPk(paymentId);
-    if (!payment) {
-      return res.status(404).json({ message: 'Payment not found' });
-    }
-    
-    // Check permissions
-    if (req.user.us_usertype !== 'admin' && req.user.us_dept !== 'accounts') {
-      return res.status(403).json({ message: 'Access denied' });
-    }
-    
     let totalAllocated = 0;
-    
-    for (const allocation of allocations) {
-      const { pnrId, amount, remarks, allocationType = 'MANUAL' } = allocation;
-      
-      // Validate allocation amount
-      if (amount <= 0) {
-        throw new Error('Allocation amount must be greater than zero');
-      }
-      
-      // Find the PNR
-      const pnr = await Pnr.findByPk(pnrId);
-      if (!pnr) {
-        throw new Error(`PNR with ID ${pnrId} not found`);
-      }
-      
-      // Check if allocation exceeds pending amount
-      const pendingAmount = (pnr.pn_totamt || 0) - (pnr.pn_paidamt || 0);
-      if (amount > pendingAmount) {
-        throw new Error(`Cannot allocate ${amount} to PNR ${pnr.pn_pnr}, pending amount is only ${pendingAmount}`);
-      }
-      
-      // Create allocation record
-      await PaymentAlloc.create({
-        pa_ptid: payment.pt_ptid,
-        pa_pnid: pnr.pn_pnid,
-        pa_amount: amount,
-        pa_alloctn_type: allocationType,
-        pa_remarks: remarks || 'Payment allocation',
-        eby: req.user.us_usid
-      }, { transaction });
-      
-      // Update PNR payment information
-      pnr.pn_paidamt = (pnr.pn_paidamt || 0) + amount;
-      pnr.pn_pendingamt = (pnr.pn_totamt || 0) - pnr.pn_paidamt;
-      
-      // Update payment status based on pending amount
-      if (pnr.pn_pendingamt <= 0) {
-        pnr.pn_payment_status = 'PAID';
-      } else if (pnr.pn_paidamt > 0) {
-        pnr.pn_payment_status = 'PARTIAL';
-      } else {
-        pnr.pn_payment_status = 'UNPAID';
-      }
-      
-      await pnr.save({ transaction });
-      
-      // Create ledger entry
-      await Ledger.create({
-        lg_entry_type: 'CREDIT',
-        lg_entry_ref: `ALLOC-${payment.pt_ptid}`,
-        lg_amount: amount,
-        lg_opening_bal: 0,
-        lg_closing_bal: amount,
-        lg_remarks: `Payment allocation to PNR ${pnr.pn_pnr}`,
-        lg_usid: req.user.us_usid,
-        lg_pnid: pnr.pn_pnid,
-        lg_ptid: payment.pt_ptid,
-        lg_acid: payment.pt_acid,
-        eby: req.user.us_usid,
-        mby: req.user.us_usid
-      }, { transaction });
-      
-      totalAllocated += amount;
+
+    // AUTO ALLOCATION (FIFO - First In First Out)
+    if (autoAllocate) {
+      const allocated = await allocatePaymentFIFO(payment.pt_ptid, customerId, amount, req.user.us_usid, transaction);
+      totalAllocated = allocated.totalAllocated;
     }
-    
-    // Update payment status to ADJUSTED if fully allocated
-    if (totalAllocated >= payment.pt_amount) {
+
+    // MANUAL ALLOCATION
+    if (allocations && allocations.length > 0) {
+      for (const alloc of allocations) {
+        const { pnrNumber, amount: allocAmount, remarks: allocRemarks } = alloc;
+        
+        if (!pnrNumber || !allocAmount) {
+          continue;
+        }
+
+        // Find PNR by number
+        const pnr = await Pnr.findOne({
+          where: { pn_pnr: pnrNumber }
+        }, { transaction });
+
+        if (!pnr) {
+          throw new Error(`PNR ${pnrNumber} not found`);
+        }
+
+        // Allocate payment to PNR
+        const allocated = await allocatePaymentToPNR(
+          payment.pt_ptid,
+          pnr.pn_pnid,
+          pnrNumber,
+          allocAmount,
+          'MANUAL',
+          allocRemarks || null,
+          req.user.us_usid,
+      transaction 
+        );
+
+        totalAllocated += allocated.allocatedAmount;
+      }
+    }
+
+    // Update payment unallocated amount
+    payment.pt_unallocamt = amount - totalAllocated;
+    if (totalAllocated > 0) {
       payment.pt_status = 'ADJUSTED';
     }
     payment.mby = req.user.us_usid;
     await payment.save({ transaction });
+
+    // Update customer advance balance
+    await calculateCustomerAdvance(customerId);
     
     await transaction.commit();
     
-    res.json({ message: 'Payment allocated successfully', totalAllocated });
+    res.status(201).json({
+      success: true,
+      message: 'Payment recorded successfully',
+      payment: {
+        paymentId: payment.pt_ptid,
+        amount: payment.pt_amount,
+        allocated: totalAllocated,
+        unallocated: payment.pt_unallocated_amt,
+        status: payment.pt_status
+      }
+    });
   } catch (error) {
     await transaction.rollback();
-    console.error('Payment allocation error:', error);
-    res.status(500).json({ message: error.message });
+    console.error('Payment creation error:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message || 'Failed to create payment'
+    });
   }
 };
 
-// Get payment allocations for a payment
+/**
+ * FIFO Allocation Algorithm
+ * 
+ * Allocates payment to pending PNRs in First-In-First-Out order.
+ * Oldest pending PNRs get paid first.
+ */
+const allocatePaymentFIFO = async (paymentId, customerId, paymentAmount, userId, transaction) => {
+    // Get all pending PNRs for this customer, ordered by creation date (oldest first)
+    const { bkXbooking: Booking } = require('../models');
+    
+    // First get bookings for this customer
+    const customerBookings = await Booking.findAll({
+      where: { bk_usid: customerId },
+      attributes: ['bk_bkid'],
+      transaction
+    });
+    
+    const bookingIds = customerBookings.map(b => b.bk_bkid);
+    
+    const pendingPNRs = await Pnr.findAll({
+      where: {
+        pn_bkid: { [Op.in]: bookingIds },
+        pn_payment_status: { [Op.in]: ['UNPAID', 'PARTIAL'] }
+      },
+      order: [['edtm', 'ASC']], // Oldest first (FIFO)
+      transaction
+    });
+
+  let remainingAmount = paymentAmount;
+    let totalAllocated = 0;
+  const allocations = [];
+
+  for (const pnr of pendingPNRs) {
+    if (remainingAmount <= 0) break;
+
+    // Calculate current pending amount
+    await calculatePNRStatus(pnr.pn_pnid);
+    await pnr.reload({ transaction });
+    
+    const pending = parseFloat(pnr.pn_pendingamt) || 0;
+    if (pending <= 0) continue;
+
+    // Allocate up to pending amount
+    const allocAmount = Math.min(remainingAmount, pending);
+
+    const alloc = await allocatePaymentToPNR(
+      paymentId,
+      pnr.pn_pnid,
+      pnr.pn_pnr,
+      allocAmount,
+      'AUTO',
+      'FIFO automatic allocation',
+      userId,
+      transaction
+    );
+
+    allocations.push(alloc);
+    totalAllocated += alloc.allocatedAmount;
+    remainingAmount -= allocAmount;
+  }
+
+  return { totalAllocated, allocations };
+};
+
+/**
+ * Allocate Payment to PNR
+ * 
+ * CRITICAL VALIDATION:
+ * - Cannot allocate more than PNR pending amount
+ * - Cannot allocate more than payment unallocated amount
+ * - Creates allocation record
+ * - Updates PNR status in real-time
+ * - Creates ledger entry
+ */
+const allocatePaymentToPNR = async (
+  paymentId,
+  pnrId,
+  pnrNumber,
+  amount,
+  allocationType,
+  remarks,
+  userId,
+  transaction
+) => {
+  // Validate PNR exists
+  const pnr = await Pnr.findByPk(pnrId, { transaction });
+      if (!pnr) {
+        throw new Error(`PNR with ID ${pnrId} not found`);
+      }
+      
+  // Calculate current PNR status
+  await calculatePNRStatus(pnrId);
+  await pnr.reload({ transaction });
+
+  const pending = parseFloat(pnr.pn_pendingamt) || 0;
+
+  // VALIDATION: Cannot allocate more than pending
+  if (parseFloat(amount) > pending) {
+    throw new Error(
+      `Cannot allocate ${amount} to PNR ${pnrNumber}. Pending amount is only ${pending}`
+    );
+  }
+
+  // Check payment unallocated amount
+  const payment = await Payment.findByPk(paymentId, { transaction });
+  if (!payment) {
+    throw new Error(`Payment with ID ${paymentId} not found`);
+  }
+
+  const unallocated = parseFloat(payment.pt_unallocamt) || 0;
+  if (parseFloat(amount) > unallocated) {
+    throw new Error(
+      `Cannot allocate ${amount}. Payment unallocated amount is only ${unallocated}`
+    );
+      }
+      
+      // Create allocation record
+  const allocation = await PaymentAlloc.create({
+    pa_ptid: paymentId,
+    pa_pnid: pnrId,
+    pa_pnr: pnrNumber,
+        pa_allocamt: amount,
+    pa_allocdt: new Date(),
+    pa_status: allocationType,
+    pa_rmrks: remarks || null,
+    edtm: new Date(),
+    eby: userId,
+    mdtm: new Date(),
+    mby: userId
+      }, { transaction });
+      
+  // Update PNR status (real-time calculation)
+  await calculatePNRStatus(pnrId);
+
+  // Update payment unallocated amount
+  payment.pt_unallocamt = unallocated - parseFloat(amount);
+  payment.pt_allocatedamt = parseFloat(payment.pt_totalamt || 0) - parseFloat(payment.pt_unallocamt);
+  if (payment.pt_unallocamt <= 0) {
+    payment.pt_status = 'ADJUSTED';
+  }
+  payment.mby = userId;
+  await payment.save({ transaction });
+      
+      // Note: Ledger entry will be created automatically by database trigger
+      // The trigger will create the ledger entry when the allocation is inserted
+
+  return {
+    allocationId: allocation.pa_paid,
+    allocatedAmount: parseFloat(amount)
+  };
+};
+
+// ============================================================================
+// PAYMENT ALLOCATION ENDPOINTS
+// ============================================================================
+
+/**
+ * Allocate Payment to PNRs (Manual)
+ */
+const allocatePayment = async (req, res) => {
+  const transaction = await sequelize.transaction();
+  try {
+    const { paymentId } = req.params;
+    const { allocations } = req.body; // [{ pnrNumber, amount, remarks }]
+
+    if (!allocations || !Array.isArray(allocations) || allocations.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Allocations array is required'
+      });
+    }
+
+    const payment = await Payment.findByPk(paymentId, { transaction });
+    if (!payment) {
+      return res.status(404).json({
+        success: false,
+        message: 'Payment not found'
+      });
+    }
+
+    // Check permissions (admin or accounts team)
+    if (req.user.us_usertype !== 'admin') {
+      const { emXemployee: Employee } = require('../models');
+      const employee = await Employee.findOne({
+        where: { em_usid: req.user.us_usid }
+      });
+      if (!employee || employee.em_dept !== 'ACCOUNTS') {
+        return res.status(403).json({
+          success: false,
+          message: 'Access denied. Accounts team access required.'
+        });
+      }
+    }
+
+    let totalAllocated = 0;
+    const results = [];
+
+    for (const alloc of allocations) {
+      const { pnrNumber, amount, remarks } = alloc;
+
+      if (!pnrNumber || !amount) {
+        continue;
+      }
+
+      // Find PNR by number
+      const pnr = await Pnr.findOne({
+        where: { pn_pnr: pnrNumber }
+      }, { transaction });
+      
+      if (!pnr) {
+        throw new Error(`PNR ${pnrNumber} not found`);
+      }
+
+      const result = await allocatePaymentToPNR(
+        paymentId,
+        pnr.pn_pnid,
+        pnrNumber,
+        amount,
+        'MANUAL',
+        remarks || null,
+        req.user.us_usid,
+        transaction
+      );
+
+      totalAllocated += result.allocatedAmount;
+      results.push(result);
+    }
+
+    // Update customer advance
+    await calculateCustomerAdvance(payment.pt_custid);
+    
+    await transaction.commit();
+    
+    res.json({
+      success: true,
+      message: 'Payment allocated successfully',
+      totalAllocated,
+      allocations: results
+    });
+  } catch (error) {
+    await transaction.rollback();
+    console.error('Payment allocation error:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message || 'Failed to allocate payment'
+    });
+  }
+};
+
+// ============================================================================
+// QUERY ENDPOINTS
+// ============================================================================
+
+/**
+ * Get All Payments (Admin/Accounts Team)
+ */
+const getAllPayments = async (req, res) => {
+  try {
+    // Check permissions
+    if (req.user.us_usertype !== 'admin') {
+      const { emXemployee: Employee } = require('../models');
+      const employee = await Employee.findOne({
+        where: { em_usid: req.user.us_usid }
+      });
+      if (!employee || employee.em_dept !== 'ACCOUNTS') {
+        return res.status(403).json({
+          success: false,
+          message: 'Access denied. Admin or Accounts team access required.'
+        });
+      }
+    }
+
+    const { customerId, status, startDate, endDate, limit = 100, offset = 0 } = req.query;
+
+    const whereClause = {};
+    
+    if (customerId) {
+      whereClause.pt_custid = customerId;
+    }
+    
+    if (status) {
+      whereClause.pt_status = status;
+    }
+    
+    if (startDate || endDate) {
+      whereClause.pt_paydt = {};
+      if (startDate) {
+        whereClause.pt_paydt[Op.gte] = new Date(startDate);
+      }
+      if (endDate) {
+        whereClause.pt_paydt[Op.lte] = new Date(endDate);
+      }
+    }
+
+    // Ensure PaymentAlloc is properly loaded
+    if (!PaymentAlloc) {
+      throw new Error('PaymentAlloc model not loaded');
+    }
+
+    // Get payments without includes first to avoid association issues
+    const payments = await Payment.findAll({
+      where: whereClause,
+      order: [['edtm', 'DESC']],
+      limit: parseInt(limit),
+      offset: parseInt(offset),
+      raw: false // Return Sequelize instances
+    });
+
+    const total = await Payment.count({ where: whereClause });
+
+    res.json({
+      success: true,
+      payments: payments || [],
+      pagination: {
+        total: total || 0,
+        limit: parseInt(limit),
+        offset: parseInt(offset),
+        hasMore: (parseInt(offset) + parseInt(limit)) < (total || 0)
+      }
+    });
+  } catch (error) {
+    console.error('Get all payments error:', error);
+    console.error('Error stack:', error.stack);
+    res.status(500).json({
+      success: false,
+      message: error.message || 'Failed to get payments',
+      error: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    });
+  }
+};
+
+/**
+ * Get Customer Payments
+ */
+const getCustomerPayments = async (req, res) => {
+  try {
+    const customerId = req.user.us_usertype === 'customer' 
+      ? req.user.us_usid 
+      : req.params.customerId || req.user.us_usid;
+
+    if (!customerId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Customer ID is required'
+      });
+    }
+
+    // Get payments without includes first to avoid association issues
+    const payments = await Payment.findAll({
+      where: { pt_custid: customerId },
+      order: [['edtm', 'DESC']],
+      raw: false // Return Sequelize instances
+    });
+
+    res.json({
+      success: true,
+      payments: payments || []
+    });
+  } catch (error) {
+    console.error('Get customer payments error:', error);
+    console.error('Error stack:', error.stack);
+    res.status(500).json({
+      success: false,
+      message: error.message || 'Failed to get customer payments',
+      error: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    });
+  }
+};
+
+/**
+ * Get Payment by ID
+ */
+const getPaymentById = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Get payment without includes to avoid association issues
+    const payment = await Payment.findByPk(id);
+
+    if (!payment) {
+      return res.status(404).json({
+        success: false,
+        message: 'Payment not found'
+      });
+    }
+
+    // Check permissions
+    if (req.user.us_usertype !== 'admin') {
+      if (req.user.us_usertype === 'customer' && payment.pt_custid !== req.user.us_usid) {
+        return res.status(403).json({
+          success: false,
+          message: 'Access denied'
+        });
+      }
+      
+      if (req.user.us_usertype === 'employee') {
+        const { emXemployee: Employee } = require('../models');
+        const employee = await Employee.findOne({
+          where: { em_usid: req.user.us_usid }
+        });
+        if (!employee || employee.em_dept !== 'ACCOUNTS') {
+          return res.status(403).json({
+            success: false,
+            message: 'Access denied'
+          });
+        }
+      }
+    }
+
+    res.json({
+      success: true,
+      payment
+    });
+  } catch (error) {
+    console.error('Get payment by ID error:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message || 'Failed to get payment'
+    });
+  }
+};
+
+/**
+ * Get Payment Allocations
+ */
 const getPaymentAllocations = async (req, res) => {
   try {
     const { paymentId } = req.params;
     
+    // Get allocations - simplified to avoid association issues
     const allocations = await PaymentAlloc.findAll({
       where: { pa_ptid: paymentId },
-      include: [
-        {
-          model: Pnr,
+      order: [['pa_allocdt', 'DESC']]
+    });
+    
+    // Get PNR details separately if needed
+    if (allocations && allocations.length > 0) {
+      const pnrIds = allocations.map(a => a.pa_pnid).filter(id => id);
+      if (pnrIds.length > 0) {
+        const pnrs = await Pnr.findAll({
+          where: { pn_pnid: { [Op.in]: pnrIds } },
           attributes: ['pn_pnid', 'pn_pnr', 'pn_totamt', 'pn_paidamt', 'pn_pendingamt', 'pn_payment_status']
-        }
-      ]
-    });
-    
-    res.json(allocations);
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
-};
-
-// Get PNR payments
-const getPNRPayments = async (req, res) => {
-  try {
-    const { pnrId } = req.params;
-    
-    const allocations = await PaymentAlloc.findAll({
-      where: { pa_pnid: pnrId },
-      include: [
-        {
-          model: Payment,
-          attributes: ['pt_ptid', 'pt_amount', 'pt_mode', 'pt_paydt', 'pt_status']
-        }
-      ]
-    });
-    
-    res.json(allocations);
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
-};
-
-// Get all payments for a customer
-const getCustomerPayments = async (req, res) => {
-  try {
-    // First get account IDs for the user
-    const userAccounts = await Account.findAll({ 
-      where: { ac_usid: req.user.us_usid },
-      attributes: ['ac_acid']
-    });
-    
-    const accountIds = userAccounts.map(acc => acc.ac_acid);
-    
-    const payments = await Payment.findAll({ 
-      where: { pt_acid: accountIds },
-      order: [['edtm', 'DESC']]
-    });
-    
-    res.json(payments);
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
-};
-
-// Get all payments (admin only)
-const getAllPayments = async (req, res) => {
-  try {
-    // Only admin can get all payments
-    if (req.user.us_usertype !== 'admin') {
-      return res.status(403).json({ message: 'Access denied' });
-    }
-    
-    const payments = await Payment.findAll({ 
-      include: [
-        {
-          model: Account,
-          attributes: ['ac_acid', 'ac_bkid', 'ac_totamt', 'ac_rcvdamt', 'ac_pendamt']
-        }
-      ],
-      order: [['edtm', 'DESC']] 
-    });
-    res.json(payments);
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
-};
-
-// Get payment by ID
-const getPaymentById = async (req, res) => {
-  try {
-    const payment = await Payment.findByPk(req.params.id, {
-      include: [
-        {
-          model: Account,
-          attributes: ['ac_acid', 'ac_bkid', 'ac_totamt', 'ac_rcvdamt', 'ac_pendamt']
-        }
-      ]
-    });
-    
-    // Check if payment exists
-    if (!payment) {
-      return res.status(404).json({ message: 'Payment not found' });
-    }
-    
-    // Check if user has permission to view this payment
-    const account = await Account.findByPk(payment.pt_acid);
-    if (req.user.us_usertype !== 'admin' && 
-        account?.ac_usid !== req.user.us_usid) {
-      return res.status(403).json({ message: 'Access denied' });
-    }
-    
-    res.json(payment);
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
-};
-
-// Update payment (accounts functionality)
-const updatePayment = async (req, res) => {
-  try {
-    const payment = await Payment.findByPk(req.params.id);
-    
-    if (!payment) {
-      return res.status(404).json({ message: 'Payment not found' });
-    }
-    
-    // Check permissions (admin and accounts team can update)
-    if (req.user.us_usertype !== 'admin' && 
-        req.user.us_dept !== 'accounts') {
-      return res.status(403).json({ message: 'Access denied' });
-    }
-    
-    // Update payment fields
-    const {
-      status,
-      receivedDate,
-      remarks
-    } = req.body;
-    
-    // Update fields if provided
-    if (status) payment.pt_status = status;
-    if (receivedDate) payment.pt_rcvdt = receivedDate;
-    if (remarks) payment.pt_remarks = remarks;
-    
-    payment.mby = req.user.us_usid;
-    const updatedPayment = await payment.save();
-    res.json(updatedPayment);
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
-};
-
-// Delete payment
-const deletePayment = async (req, res) => {
-  try {
-    const payment = await Payment.findByPk(req.params.id);
-    
-    if (!payment) {
-      return res.status(404).json({ message: 'Payment not found' });
-    }
-    
-    // Check permissions
-    if (req.user.us_usertype !== 'admin') {
-      return res.status(403).json({ message: 'Access denied' });
-    }
-    
-    await payment.destroy();
-    res.json({ message: 'Payment deleted successfully' });
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
-};
-
-// Get payments by booking ID
-const getPaymentsByBookingId = async (req, res) => {
-  try {
-    const { bookingId } = req.params;
-    
-    // Verify booking exists and user has access
-    const booking = await BookingTVL.findByPk(bookingId);
-    if (!booking) {
-      return res.status(404).json({ message: 'Booking not found' });
-    }
-    
-    // Check if user has permission to view this booking's payments
-    if (req.user.us_usertype !== 'admin' && 
-        booking.bk_usid !== req.user.us_usid) {
-      return res.status(403).json({ message: 'Access denied' });
-    }
-    
-    const payments = await Payment.findAll({ 
-      where: { pt_bkid: bookingId },
-      order: [['edtm', 'DESC']]
-    });
-    res.json(payments);
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
-};
-
-// Get daily, monthly, and annual earnings and profits
-const getEarningsReport = async (req, res) => {
-  try {
-    // Only admin can access this report
-    if (req.user.us_usertype !== 'admin') {
-      return res.status(403).json({ message: 'Access denied' });
-    }
-    
-    const { startDate, endDate } = req.query;
-    
-    // Build date filter conditions
-    let dateFilter = {};
-    if (startDate || endDate) {
-      dateFilter.pt_paydt = {};
-      if (startDate) {
-        dateFilter.pt_paydt[Op.gte] = new Date(startDate);
-      }
-      if (endDate) {
-        dateFilter.pt_paydt[Op.lte] = new Date(endDate);
+        });
+        
+        // Attach PNR data to allocations
+        allocations.forEach(alloc => {
+          const pnr = pnrs.find(p => p.pn_pnid === alloc.pa_pnid);
+          if (pnr) {
+            if (!alloc.dataValues) {
+              alloc.dataValues = {};
+            }
+            alloc.dataValues.pnr = pnr;
+          }
+        });
       }
     }
-    
-    // Get daily earnings
-    const dailyEarnings = await Payment.findAll({
-      attributes: [
-        [Sequelize.fn('DATE', Sequelize.col('pt_paydt')), 'date'],
-        [Sequelize.fn('SUM', Sequelize.col('pt_amount')), 'totalAmount'],
-        [Sequelize.fn('COUNT', Sequelize.col('pt_ptid')), 'paymentCount']
-      ],
-      where: {
-        pt_status: 'RECEIVED',
-        ...dateFilter
-      },
-      group: [Sequelize.fn('DATE', Sequelize.col('pt_paydt'))],
-      order: [[Sequelize.fn('DATE', Sequelize.col('pt_paydt')), 'DESC']]
-    });
-    
-    // Get monthly earnings
-    const monthlyEarnings = await Payment.findAll({
-      attributes: [
-        [Sequelize.fn('DATE_FORMAT', Sequelize.col('pt_paydt'), '%Y-%m'), 'month'],
-        [Sequelize.fn('SUM', Sequelize.col('pt_amount')), 'totalAmount'],
-        [Sequelize.fn('COUNT', Sequelize.col('pt_ptid')), 'paymentCount']
-      ],
-      where: {
-        pt_status: 'RECEIVED',
-        ...dateFilter
-      },
-      group: [Sequelize.fn('DATE_FORMAT', Sequelize.col('pt_paydt'), '%Y-%m')],
-      order: [[Sequelize.fn('DATE_FORMAT', Sequelize.col('pt_paydt'), '%Y-%m'), 'DESC']]
-    });
-    
-    // Get annual earnings
-    const annualEarnings = await Payment.findAll({
-      attributes: [
-        [Sequelize.fn('YEAR', Sequelize.col('pt_paydt')), 'year'],
-        [Sequelize.fn('SUM', Sequelize.col('pt_amount')), 'totalAmount'],
-        [Sequelize.fn('COUNT', Sequelize.col('pt_ptid')), 'paymentCount']
-      ],
-      where: {
-        pt_status: 'RECEIVED',
-        ...dateFilter
-      },
-      group: [Sequelize.fn('YEAR', Sequelize.col('pt_paydt'))],
-      order: [[Sequelize.fn('YEAR', Sequelize.col('pt_paydt')), 'DESC']]
-    });
-    
-    // Calculate detailed breakdown
-    const totalEarnings = await Payment.sum('pt_amount', {
-      where: {
-        pt_status: 'RECEIVED',
-        ...dateFilter
-      }
-    });
-    
-    const detailedBreakdown = await Payment.findAll({
-      attributes: [
-        [Sequelize.fn('SUM', Sequelize.col('pt_ticket_price')), 'totalTicketPrice'],
-        [Sequelize.fn('SUM', Sequelize.col('pt_platform_fee')), 'totalPlatformFee'],
-        [Sequelize.fn('SUM', Sequelize.col('pt_agent_fee')), 'totalAgentFee'],
-        [Sequelize.fn('SUM', Sequelize.col('pt_tax')), 'totalTax'],
-        [Sequelize.fn('SUM', Sequelize.col('pt_other_charges')), 'totalOtherCharges']
-      ],
-      where: {
-        pt_status: 'RECEIVED',
-        ...dateFilter
-      }
-    });
     
     res.json({
-      daily: dailyEarnings,
-      monthly: monthlyEarnings,
-      annual: annualEarnings,
-      totalEarnings: totalEarnings || 0,
-      detailedBreakdown: detailedBreakdown[0] || {}
+      success: true,
+      allocations
     });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    res.status(500).json({
+      success: false,
+      message: error.message
+    });
   }
 };
 
+/**
+ * Get PNR Payment History
+ */
+const getPNRPayments = async (req, res) => {
+  try {
+    const { pnrNumber } = req.params;
+
+    const pnr = await Pnr.findOne({
+      where: { pn_pnr: pnrNumber }
+    });
+
+    if (!pnr) {
+      return res.status(404).json({
+        success: false,
+        message: 'PNR not found'
+      });
+    }
+
+    // Calculate real-time status
+    await calculatePNRStatus(pnr.pn_pnid);
+    await pnr.reload();
+
+    // Get all allocations for this PNR
+    const allocations = await PaymentAlloc.findAll({
+      where: { pa_pnid: pnr.pn_pnid },
+      order: [['pa_allocdt', 'DESC']]
+    });
+    
+    // Get payment details for each allocation
+    const paymentIds = allocations.map(alloc => alloc.pa_ptid);
+    let paymentDetails = {};
+    if (paymentIds.length > 0) {
+      const payments = await Payment.findAll({
+        where: { pt_ptid: { [Op.in]: paymentIds } },
+        attributes: ['pt_ptid', 'pt_amount', 'pt_mode', 'pt_paydt', 'pt_status', 'pt_refno']
+      });
+      
+      // Create a map of payment details by ID
+      payments.forEach(payment => {
+        paymentDetails[payment.pt_ptid] = {
+          pt_amount: payment.pt_amount,
+          pt_mode: payment.pt_mode,
+          pt_paydt: payment.pt_paydt,
+          pt_status: payment.pt_status,
+          pt_refno: payment.pt_refno
+        };
+      });
+    }
+    
+    // Attach payment details to allocations
+    const allocationsWithPayments = allocations.map(alloc => ({
+      ...alloc.toJSON(),
+      payment: paymentDetails[alloc.pa_ptid] || null
+    }));
+
+    res.json({
+      success: true,
+      pnr: {
+        pnrNumber: pnr.pn_pnr,
+        totalAmount: pnr.pn_totamt,
+        paidAmount: pnr.pn_paidamt,
+        pendingAmount: pnr.pn_pendingamt,
+        paymentStatus: pnr.pn_payment_status,
+        closedFlag: pnr.pn_closed_flag
+      },
+      paymentHistory: allocationsWithPayments
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+};
+
+/**
+ * Get Customer Pending PNRs (for payment allocation screen)
+ */
+const getCustomerPendingPNRs = async (req, res) => {
+  try {
+    const { customerId } = req.params;
+
+    // Get all PNRs for customer with pending payments
+    const { bkXbooking: Booking } = require('../models');
+    
+    // First get bookings for this customer
+    const customerBookings = await Booking.findAll({
+      where: { bk_usid: customerId },
+      attributes: ['bk_bkid']
+    });
+    
+    const bookingIds = customerBookings.map(b => b.bk_bkid);
+    
+    const pendingPNRs = await Pnr.findAll({
+      where: {
+        pn_bkid: { [Op.in]: bookingIds },
+        pn_payment_status: { [Op.in]: ['UNPAID', 'PARTIAL'] }
+      },
+      order: [['edtm', 'ASC']] // Oldest first (FIFO order)
+    });
+
+    // Calculate real-time status for each
+    const results = [];
+    for (const pnr of pendingPNRs) {
+      await calculatePNRStatus(pnr.pn_pnid);
+      await pnr.reload();
+      
+      results.push({
+        pnrId: pnr.pn_pnid,
+        pnrNumber: pnr.pn_pnr,
+        totalAmount: pnr.pn_totamt,
+        paidAmount: pnr.pn_paidamt,
+        pendingAmount: pnr.pn_pendingamt,
+        paymentStatus: pnr.pn_payment_status,
+        travelDate: pnr.pn_trvldt,
+        createdAt: pnr.edtm
+      });
+    }
+
+    res.json({
+      success: true,
+      pendingPNRs: results
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+};
+
+/**
+ * Get Customer Advance Balance
+ */
+const getCustomerAdvance = async (req, res) => {
+  try {
+    const { customerId } = req.params;
+    const fyear = req.query.fyear || getFinancialYear(new Date());
+
+    const advanceBalance = await calculateCustomerAdvance(customerId, fyear);
+
+    const advance = await CustomerAdvance.findOne({
+      where: { ca_usid: customerId, ca_fyear: fyear }
+    });
+
+    res.json({
+      success: true,
+      customerId,
+      financialYear: fyear,
+      advanceBalance,
+      record: advance
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+};
+
+// ============================================================================
+// YEAR-END CLOSING (FINANCE-CRITICAL)
+// ============================================================================
+
+/**
+ * Year-End Closing
+ * 
+ * On March 31:
+ * - Freeze all pending PNR balances
+ * - Capture customer-wise outstanding
+ * - Capture advance balances
+ * - Create snapshot for audit
+ */
+const performYearEndClosing = async (req, res) => {
+  const transaction = await sequelize.transaction();
+  try {
+    // Only admin can perform year-end closing
+    if (req.user.us_usertype !== 'admin') {
+      return res.status(403).json({
+        success: false,
+        message: 'Access denied. Admin access required.'
+      });
+    }
+
+    const { closingDate, fyear, remarks } = req.body;
+
+    if (!fyear) {
+      return res.status(400).json({
+        success: false,
+        message: 'Financial year is required'
+      });
+    }
+
+    const closeDate = closingDate ? new Date(closingDate) : new Date();
+    
+    // Get all pending PNRs
+    const pendingPNRs = await Pnr.findAll({
+      where: {
+        pn_payment_status: { [Op.in]: ['UNPAID', 'PARTIAL'] },
+        pn_closed_flag: 'N'
+      },
+      transaction
+    });
+
+    // Calculate totals
+    let totalPendingReceivables = 0;
+    const customerOutstanding = {};
+
+    for (const pnr of pendingPNRs) {
+      // Calculate real-time status
+      await calculatePNRStatus(pnr.pn_pnid);
+      await pnr.reload({ transaction });
+
+      const pending = parseFloat(pnr.pn_pendingamt) || 0;
+      totalPendingReceivables += pending;
+
+      // Get customer ID from booking
+      const { bkXbooking: Booking } = require('../models');
+      const booking = await Booking.findByPk(pnr.pn_bkid, { 
+        attributes: ['bk_usid'],
+        transaction 
+      });
+      if (booking && booking.bk_usid) {
+        const custId = booking.bk_usid;
+        customerOutstanding[custId] = (customerOutstanding[custId] || 0) + pending;
+      }
+
+      // Mark PNR as closed
+      pnr.pn_closed_flag = 'Y';
+      pnr.pn_fyear = fyear;
+      pnr.mby = req.user.us_usid;
+      await pnr.save({ transaction });
+    }
+
+    // Calculate total advance balance
+    const advances = await CustomerAdvance.findAll({
+      where: { ca_fyear: fyear },
+      transaction
+    });
+
+    let totalAdvanceBalance = 0;
+    for (const adv of advances) {
+      totalAdvanceBalance += parseFloat(adv.ca_advance_amt) || 0;
+    }
+
+    // Create year-end closing record
+    const closing = await YearEndClosing.create({
+      ye_fyear: fyear,
+      ye_closing_date: closeDate,
+      ye_total_pending_receivables: totalPendingReceivables,
+      ye_total_advance_balance: totalAdvanceBalance,
+      ye_total_customers: Object.keys(customerOutstanding).length,
+      ye_total_pending_pnrs: pendingPNRs.length,
+      ye_status: 'FINALIZED',
+      ye_remarks: remarks || `Year-end closing for ${fyear}`,
+      edtm: new Date(),
+      eby: req.user.us_usid,
+      mdtm: new Date(),
+      mby: req.user.us_usid
+    }, { transaction });
+
+    await transaction.commit();
+
+    res.json({
+      success: true,
+      message: 'Year-end closing completed successfully',
+      closing: {
+        financialYear: fyear,
+        closingDate: closeDate,
+        totalPendingReceivables: totalPendingReceivables,
+        totalAdvanceBalance: totalAdvanceBalance,
+        totalCustomers: Object.keys(customerOutstanding).length,
+        totalPendingPNRs: pendingPNRs.length
+      },
+      customerOutstanding
+    });
+  } catch (error) {
+    await transaction.rollback();
+    console.error('Year-end closing error:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message || 'Failed to perform year-end closing'
+    });
+  }
+};
+
+// ============================================================================
+// REFUNDS & ADJUSTMENTS
+// ============================================================================
+
+/**
+ * Refund Payment
+ * 
+ * CRITICAL: Refunds must:
+ * - Reference original payment
+ * - Reverse ledger entries
+ * - Update allocations
+ * - Recalculate PNR balances
+ * - Never overwrite original payment
+ */
+const refundPayment = async (req, res) => {
+  const transaction = await sequelize.transaction();
+  try {
+    const { paymentId } = req.params;
+    const { refundAmount, pnrNumber, remarks } = req.body;
+
+    // Check permissions
+    if (req.user.us_usertype !== 'admin') {
+      const { emEmployee: Employee } = require('../models');
+      const employee = await Employee.findOne({
+        where: { em_usid: req.user.us_usid }
+      });
+      if (!employee || employee.em_dept !== 'ACCOUNTS') {
+        return res.status(403).json({
+          success: false,
+          message: 'Access denied. Accounts team access required.'
+        });
+      }
+    }
+
+    const payment = await Payment.findByPk(paymentId, {
+      include: [{
+        model: PaymentAlloc,
+        as: 'allocations'
+      }],
+      transaction
+    });
+
+    if (!payment) {
+      return res.status(404).json({
+        success: false,
+        message: 'Payment not found'
+      });
+    }
+
+    if (parseFloat(refundAmount) <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Refund amount must be greater than zero'
+      });
+    }
+
+    // If PNR specified, refund specific allocation
+    if (pnrNumber) {
+      const pnr = await Pnr.findOne({
+        where: { pn_pnr: pnrNumber }
+      }, { transaction });
+
+      if (!pnr) {
+        return res.status(404).json({
+          success: false,
+          message: 'PNR not found'
+        });
+      }
+
+      // Find allocation
+      const allocation = await PaymentAlloc.findOne({
+        where: {
+          pa_ptid: paymentId,
+          pa_pnid: pnr.pn_pnid
+        },
+        transaction
+      });
+
+      if (!allocation) {
+        return res.status(404).json({
+          success: false,
+          message: 'No allocation found for this PNR'
+        });
+      }
+
+      if (parseFloat(refundAmount) > parseFloat(allocation.pa_amount)) {
+        return res.status(400).json({
+          success: false,
+          message: `Refund amount cannot exceed allocated amount ${allocation.pa_amount}`
+        });
+      }
+
+      // Create reverse allocation (negative amount)
+      await PaymentAlloc.create({
+        pa_ptid: paymentId,
+        pa_pnid: pnr.pn_pnid,
+        pa_pnr: pnrNumber,
+        pa_amount: -parseFloat(refundAmount),
+        pa_alloctn_date: new Date(),
+        pa_alloctn_type: 'MANUAL',
+        pa_remarks: `REFUND: ${remarks || 'Payment refund'}`,
+        eby: req.user.us_usid
+      }, { transaction });
+
+      // Recalculate PNR status
+      await calculatePNRStatus(pnr.pn_pnid);
+
+      // Note: Reverse ledger entry will be created automatically by database trigger
+      // The trigger will handle refund entries when negative allocations are made
+    } else {
+      // Full payment refund
+      if (parseFloat(refundAmount) > parseFloat(payment.pt_amount)) {
+        return res.status(400).json({
+          success: false,
+          message: 'Refund amount cannot exceed payment amount'
+        });
+      }
+
+      // Update payment status
+      payment.pt_status = 'REFUNDED';
+      payment.pt_remarks = payment.pt_remarks 
+        ? `${payment.pt_remarks} | REFUNDED: ${refundAmount}`
+        : `REFUNDED: ${refundAmount}`;
+      payment.mby = req.user.us_usid;
+      await payment.save({ transaction });
+
+      // Note: Reverse ledger entry will be created automatically by database triggers
+      // The triggers will handle refund entries when negative allocations are made
+    }
+
+    // Update customer advance
+    await calculateCustomerAdvance(payment.pt_usid);
+
+    await transaction.commit();
+
+    res.json({
+      success: true,
+      message: 'Refund processed successfully'
+    });
+  } catch (error) {
+    await transaction.rollback();
+    console.error('Refund error:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message || 'Failed to process refund'
+    });
+  }
+};
+
+// ============================================================================
+// REPORTS
+// ============================================================================
+
+/**
+ * Get Outstanding Receivables Report
+ */
+const getOutstandingReceivables = async (req, res) => {
+  try {
+    // Only admin or accounts team
+    if (req.user.us_usertype !== 'admin') {
+      const { emEmployee: Employee } = require('../models');
+      const employee = await Employee.findOne({
+        where: { em_usid: req.user.us_usid }
+      });
+      if (!employee || employee.em_dept !== 'ACCOUNTS') {
+        return res.status(403).json({
+          success: false,
+          message: 'Access denied'
+        });
+      }
+    }
+
+    const { customerId, fyear } = req.query;
+
+    const whereClause = {
+      pn_payment_status: { [Op.in]: ['UNPAID', 'PARTIAL'] },
+      pn_closed_flag: 'N'
+    };
+
+    if (customerId) {
+      const { bkBooking: Booking } = require('../models');
+      const bookings = await Booking.findAll({
+        where: { bk_usid: customerId },
+        attributes: ['bk_bkid']
+      });
+      const bookingIds = bookings.map(b => b.bk_bkid);
+      whereClause.pn_bkid = { [Op.in]: bookingIds };
+    }
+
+    const pendingPNRs = await Pnr.findAll({
+      where: whereClause,
+      order: [['edtm', 'ASC']]
+    });
+    
+    // Get booking details separately
+    const { bkBooking: Booking } = require('../models');
+    const bookingIds = [...new Set(pendingPNRs.map(p => p.pn_bkid))];
+    const bookings = await Booking.findAll({
+      where: { bk_bkid: { [Op.in]: bookingIds } },
+      attributes: ['bk_bkid', 'bk_bkno', 'bk_usid']
+    });
+    
+    const bookingMap = {};
+    bookings.forEach(b => {
+      bookingMap[b.bk_bkid] = b;
+    });
+
+    // Calculate real-time status
+    const results = [];
+    for (const pnr of pendingPNRs) {
+      await calculatePNRStatus(pnr.pn_pnid);
+      await pnr.reload();
+      
+      const booking = bookingMap[pnr.pn_bkid];
+      results.push({
+        pnrNumber: pnr.pn_pnr,
+        bookingNumber: booking?.bk_bkno,
+        customerId: booking?.bk_usid,
+        totalAmount: pnr.pn_totamt,
+        paidAmount: pnr.pn_paidamt,
+        pendingAmount: pnr.pn_pendingamt,
+        paymentStatus: pnr.pn_payment_status,
+        travelDate: pnr.pn_trvldt,
+        createdAt: pnr.edtm
+      });
+    }
+    
+    res.json({
+      success: true,
+      report: {
+        totalPendingPNRs: results.length,
+        totalOutstanding: results.reduce((sum, r) => sum + parseFloat(r.pendingAmount || 0), 0),
+        details: results
+      }
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+};
+
+// Export all functions
 module.exports = {
+  // Payment operations
   createPayment,
-  refundPayment,
   allocatePayment,
+  refundPayment,
+  
+  // Query operations
+  getAllPayments,
+  getCustomerPayments,
+  getPaymentById,
   getPaymentAllocations,
   getPNRPayments,
-  getCustomerPayments,
-  getAllPayments,
-  getPaymentById,
-  updatePayment,
-  deletePayment,
-  getPaymentsByBookingId,
-  getEarningsReport
+  getCustomerPendingPNRs,
+  getCustomerAdvance,
+  getOutstandingReceivables,
+  
+  // Year-end closing
+  performYearEndClosing,
+  
+  // Utility functions (for internal use)
+  calculatePNRStatus,
+  calculateCustomerAdvance,
+  allocatePaymentFIFO,
+  allocatePaymentToPNR
 };

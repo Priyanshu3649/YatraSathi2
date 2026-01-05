@@ -20,6 +20,7 @@ const Pnr = require('./Pnr');
 const Account = require('./Account');
 const Payment = require('./Payment');
 const PaymentAlloc = require('./PaymentAlloc');
+const PaymentAllocTVL = require('./PaymentAllocTVL');
 const Session = require('./Session');
 const Audit = require('./Audit');
 const Config = require('./Config');
@@ -35,6 +36,10 @@ const CustomerTVL = require('./CustomerTVL');
 const LoginTVL = require('./LoginTVL');
 const UserPermissionTVL = require('./UserPermissionTVL');
 const Ledger = require('./Ledger');
+const CustomerAdvance = require('./CustomerAdvance');
+const CustomerAdvanceTVL = require('./CustomerAdvanceTVL');
+const YearEndClosing = require('./YearEndClosing');
+const YearEndClosingTVL = require('./YearEndClosingTVL');
 
 // Set up associations
 // Company associations
@@ -94,24 +99,68 @@ Booking.hasOne(Account, { foreignKey: 'ac_bkid', sourceKey: 'bk_bkid' });
 Passenger.belongsTo(Booking, { foreignKey: 'ps_bkid', targetKey: 'bk_bkid' });
 
 // Pnr associations
-Pnr.belongsTo(Booking, { foreignKey: 'pn_bkid', targetKey: 'bk_bkid' });
-Pnr.belongsTo(Train, { foreignKey: 'pn_trid', targetKey: 'tr_trid' });
-Pnr.hasMany(PaymentAlloc, { foreignKey: 'pa_pnid', sourceKey: 'pn_pnid' });
-Pnr.hasMany(Ledger, { foreignKey: 'lg_pnid', sourceKey: 'pn_pnid' });
+Pnr.belongsTo(Booking, { 
+  foreignKey: 'pn_bkid', 
+  targetKey: 'bk_bkid',
+  as: 'pnrBooking'
+});
+Pnr.belongsTo(Train, { 
+  foreignKey: 'pn_trid', 
+  targetKey: 'tr_trid',
+  as: 'pnrTrain'
+});
+Pnr.hasMany(PaymentAlloc, { 
+  foreignKey: 'pa_pnid', 
+  sourceKey: 'pn_pnid',
+  as: 'allocations'
+});
+Pnr.hasMany(Ledger, { 
+  foreignKey: 'lg_pnid', 
+  sourceKey: 'pn_pnid'
+});
 
 // Account associations
-Account.belongsTo(Booking, { foreignKey: 'ac_bkid', targetKey: 'bk_bkid' });
-Account.belongsTo(Customer, { foreignKey: 'ac_usid', targetKey: 'cu_usid' });
-Account.hasMany(Payment, { foreignKey: 'pt_acid', sourceKey: 'ac_acid' });
+Account.belongsTo(Booking, { 
+  foreignKey: 'ac_bkid', 
+  targetKey: 'bk_bkid',
+  as: 'accountBooking'
+});
+Account.belongsTo(Customer, { 
+  foreignKey: 'ac_usid', 
+  targetKey: 'cu_usid',
+  as: 'accountCustomer'
+});
+Account.hasMany(Payment, { 
+  foreignKey: 'pt_acid', 
+  sourceKey: 'ac_acid',
+  as: 'accountPayments'
+});
 
 // Payment associations
-Payment.belongsTo(Account, { foreignKey: 'pt_acid', targetKey: 'ac_acid' });
-Payment.belongsTo(Booking, { foreignKey: 'pt_bkid', targetKey: 'bk_bkid' });
-Payment.hasMany(PaymentAlloc, { foreignKey: 'pa_ptid', sourceKey: 'pt_ptid' });
+Payment.belongsTo(Account, { 
+  foreignKey: 'pt_acid', 
+  targetKey: 'ac_acid',
+  as: 'paymentAccount',
+  required: false
+});
+Payment.belongsTo(Booking, { 
+  foreignKey: 'pt_bkid', 
+  targetKey: 'bk_bkid',
+  as: 'paymentBooking',
+  required: false
+});
 
-// PaymentAlloc associations
-PaymentAlloc.belongsTo(Payment, { foreignKey: 'pa_ptid', targetKey: 'pt_ptid' });
-PaymentAlloc.belongsTo(Pnr, { foreignKey: 'pa_pnid', targetKey: 'pn_pnid' });
+// PaymentAlloc associations (already defined in PaymentAlloc.js, but ensure they're set)
+PaymentAlloc.belongsTo(Payment, { 
+  foreignKey: 'pa_ptid', 
+  targetKey: 'pt_ptid',
+  as: 'payment'
+});
+PaymentAlloc.belongsTo(Pnr, { 
+  foreignKey: 'pa_pnid', 
+  targetKey: 'pn_pnid',
+  as: 'pnr'
+});
 
 // Ledger associations
 Ledger.belongsTo(Payment, { foreignKey: 'lg_ptid', targetKey: 'pt_ptid' });
@@ -157,6 +206,11 @@ module.exports = {
   Account,
   Payment,
   PaymentAlloc,
+  // Export with table name alias for consistency
+  ptXpayment: PaymentTVL,
+  paXpayalloc: PaymentAllocTVL,
+  ptPayment: Payment,
+  paPaymentAlloc: PaymentAlloc,
   Session,
   Audit,
   Config,
@@ -172,5 +226,9 @@ module.exports = {
   PaymentTVL,
   UserPermissionTVL,
   RolePermissionTVL,
-  Ledger
+  Ledger,
+  CustomerAdvance,
+  CustomerAdvanceTVL,
+  YearEndClosing,
+  YearEndClosingTVL
 };

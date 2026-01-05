@@ -3,6 +3,18 @@ import { useAuth } from '../contexts/AuthContext';
 import { paymentAPI, bookingAPI } from '../services/api';
 import '../styles/vintage-erp-theme.css';
 import '../styles/classic-enterprise-global.css';
+import '../styles/vintage-admin-panel.css';
+import '../styles/dynamic-admin-panel.css';
+import '../styles/vintage-erp-global.css';
+
+// Import payment components
+import PaymentCreationForm from '../components/Payment/PaymentCreationForm';
+import PaymentAllocationInterface from '../components/Payment/PaymentAllocationInterface';
+import PaymentList from '../components/Payment/PaymentList';
+import PaymentDetails from '../components/Payment/PaymentDetails';
+import CustomerPaymentHistory from '../components/Payment/CustomerPaymentHistory';
+import CustomerPendingPNRs from '../components/Payment/CustomerPendingPNRs';
+import RefundForm from '../components/Payment/RefundForm';
 
 const Payments = () => {
   const { user } = useAuth();
@@ -12,67 +24,101 @@ const Payments = () => {
   const [error, setError] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [showRefundForm, setShowRefundForm] = useState(null); // For refund form
+  const [activeView, setActiveView] = useState('list'); // 'list', 'allocation', 'history', 'pendingPNRs'
   const [formData, setFormData] = useState({
-    bookingId: '',
+    customerId: user?.us_usertype === 'customer' ? user.us_usid : '', // Pre-fill for customers
     amount: '',
-    mode: 'ONLINE',
-    transactionId: '',
-    bankName: '',
-    branch: '',
-    chequeNumber: '',
+    mode: 'CASH',
+    refNo: '', // Reference number (UTR / Cheque / Txn ID)
     paymentDate: new Date().toISOString().split('T')[0], // Pre-fill with today's date
-    remarks: ''
+    remarks: '',
+    autoAllocate: false // Auto-allocate using FIFO
   });
+  const [customers, setCustomers] = useState([]);
+  const [pendingPNRs, setPendingPNRs] = useState([]);
   const [refundData, setRefundData] = useState({
     refundAmount: '',
     remarks: ''
   });
 
-  // Fetch payments and bookings when component mounts
+  // Fetch payments, customers, and pending PNRs when component mounts
   useEffect(() => {
     fetchPayments();
     if (user && (user.us_usertype === 'admin' || user.us_usertype === 'employee')) {
-      fetchAllBookings();
-    } else {
-      fetchCustomerBookings();
+      fetchCustomers();
+    }
+    if (formData.customerId) {
+      fetchPendingPNRs(formData.customerId);
     }
   }, [user]);
+
+  // Fetch pending PNRs when customer changes
+  useEffect(() => {
+    if (formData.customerId) {
+      fetchPendingPNRs(formData.customerId);
+    } else {
+      setPendingPNRs([]);
+    }
+  }, [formData.customerId]);
 
   const fetchPayments = async () => {
     try {
       setLoading(true);
-      let data;
+      let response;
       
       if (user && user.us_usertype === 'admin') {
-        data = await paymentAPI.getAllPayments();
+        response = await paymentAPI.getAllPayments();
       } else {
-        data = await paymentAPI.getMyPayments();
+        response = await paymentAPI.getMyPayments();
       }
       
-      setPayments(data);
+      // Handle new API response format { success: true, payments: [...] }
+      const paymentsData = response.payments || response || [];
+      setPayments(Array.isArray(paymentsData) ? paymentsData : []);
       setError('');
     } catch (err) {
       setError(err.message || 'Failed to fetch payments');
+      setPayments([]);
     } finally {
       setLoading(false);
     }
   };
 
-  const fetchCustomerBookings = async () => {
+  const fetchCustomers = async () => {
     try {
-      const data = await bookingAPI.getMyBookings();
-      setBookings(data);
+      // Use customer API if available, otherwise fetch from bookings
+      const response = await fetch('/api/customers', {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setCustomers(Array.isArray(data) ? data : (data.customers || []));
+      }
     } catch (err) {
-      console.error('Failed to fetch bookings:', err);
+      console.error('Failed to fetch customers:', err);
     }
   };
 
-  const fetchAllBookings = async () => {
+  const fetchPendingPNRs = async (customerId) => {
     try {
-      const data = await bookingAPI.getAllBookings();
-      setBookings(data);
+      const response = await fetch(`/api/payments/customer/${customerId}/pending-pnrs`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setPendingPNRs(data.pendingPNRs || []);
+      }
     } catch (err) {
-      console.error('Failed to fetch bookings:', err);
+      console.error('Failed to fetch pending PNRs:', err);
+      setPendingPNRs([]);
     }
   };
 
@@ -88,34 +134,37 @@ const Payments = () => {
     e.preventDefault();
     
     try {
+      // Build payment data according to new API structure
       const paymentData = {
-        bookingId: parseInt(formData.bookingId),
+        customerId: formData.customerId || user.us_usid, // Use current user if customer
         amount: parseFloat(formData.amount),
         mode: formData.mode,
-        transactionId: formData.transactionId,
-        bankName: formData.bankName,
-        branch: formData.branch,
-        chequeNumber: formData.chequeNumber,
+        refNo: formData.refNo || null, // Reference number (UTR / Cheque / Txn ID)
         paymentDate: formData.paymentDate,
-        remarks: formData.remarks
+        remarks: formData.remarks || null,
+        autoAllocate: formData.autoAllocate // Auto-allocate using FIFO
       };
       
-      await paymentAPI.createPayment(paymentData);
-      // Reset form and hide it
-      setFormData({ 
-        bookingId: '',
-        amount: '',
-        mode: 'ONLINE',
-        transactionId: '',
-        bankName: '',
-        branch: '',
-        chequeNumber: '',
-        paymentDate: new Date().toISOString().split('T')[0],
-        remarks: ''
-      });
-      setShowForm(false);
-      // Refresh payments list
-      fetchPayments();
+      const response = await paymentAPI.createPayment(paymentData);
+      
+      if (response.success) {
+        // Reset form and hide it
+        setFormData({ 
+          customerId: user?.us_usertype === 'customer' ? user.us_usid : '',
+          amount: '',
+          mode: 'CASH',
+          refNo: '',
+          paymentDate: new Date().toISOString().split('T')[0],
+          remarks: '',
+          autoAllocate: false
+        });
+        setShowForm(false);
+        setError('');
+        // Refresh payments list
+        fetchPayments();
+      } else {
+        setError(response.message || 'Failed to record payment');
+      }
     } catch (error) {
       setError(error.message || 'Failed to record payment');
     }
@@ -155,11 +204,13 @@ const Payments = () => {
 
   const handleRefundPayment = (payment) => {
     // Set the maximum refund amount to the original payment amount
+    const paymentId = payment.pt_ptid || payment.id;
+    const amount = payment.pt_amount || payment.amount;
     setRefundData({
-      refundAmount: payment.pt_amount,
-      remarks: `Refund for payment ${payment.pt_ptid}`
+      refundAmount: amount,
+      remarks: `Refund for payment ${paymentId}`
     });
-    setShowRefundForm(payment.pt_ptid);
+    setShowRefundForm(paymentId);
   };
 
   const getStatusClass = (status) => {
@@ -213,8 +264,8 @@ const Payments = () => {
 
       {/* Toolbar */}
       <div className="toolbar">
-        <button className="tool-button" onClick={() => setShowForm(!showForm)}>
-          {showForm ? 'Cancel' : 'New'}
+        <button className="tool-button" onClick={() => setActiveView('create')}>
+          New Payment
         </button>
         <div className="tool-separator"></div>
         <button className="tool-button" onClick={fetchPayments}>Refresh</button>
@@ -225,265 +276,103 @@ const Payments = () => {
 
       {/* Main Content */}
       <div className="main-content">
-        {/* Left Form Panel */}
+        {/* Left Navigation Panel */}
         <div className="nav-panel">
-          <div className="nav-header">Payment Actions</div>
-          <div className={`nav-item ${showForm ? 'active' : ''}`} onClick={() => setShowForm(!showForm)}>
-            {showForm ? 'Cancel Form' : 'Record Payment'}
+          <div className="nav-header">Payment Management</div>
+          <div className={`nav-item ${activeView === 'list' ? 'active' : ''}`} onClick={() => setActiveView('list')}>
+            Payment List
           </div>
-          <div className="nav-item" onClick={fetchPayments}>Refresh List</div>
+          <div className={`nav-item ${activeView === 'create' ? 'active' : ''}`} onClick={() => setActiveView('create')}>
+            Record Payment
+          </div>
+          <div className={`nav-item ${activeView === 'allocation' ? 'active' : ''}`} onClick={() => setActiveView('allocation')}>
+            Allocate Payments
+          </div>
+          <div className={`nav-item ${activeView === 'history' ? 'active' : ''}`} onClick={() => setActiveView('history')}>
+            Customer History
+          </div>
+          <div className={`nav-item ${activeView === 'pending' ? 'active' : ''}`} onClick={() => setActiveView('pending')}>
+            Pending PNRs
+          </div>
+          <div className="nav-item" onClick={fetchPayments}>Refresh</div>
           <div className="nav-item">Export Data</div>
           <div className="nav-item">Print Report</div>
-          {showRefundForm && (
-            <div className="nav-item active">Process Refund</div>
-          )}
         </div>
 
         {/* Work Area */}
         <div className="work-area">
-          {/* Form Panel */}
-          {showForm && (
+          {/* Render different views based on activeView state */}
+          {activeView === 'create' && (
             <div className="form-panel">
               <div className="panel-header">Record New Payment</div>
-              <form onSubmit={onSubmit} className="erp-form">
-                <div className="form-grid">
-                  <label htmlFor="bookingId" className="form-label required">Booking</label>
-                  <select
-                    id="bookingId"
-                    name="bookingId"
-                    value={formData.bookingId}
-                    onChange={onChange}
-                    required
-                    className="form-input"
-                  >
-                    <option value="">Select Booking</option>
-                    {bookings.map(booking => (
-                      <option key={booking.bk_bkid} value={booking.bk_bkid}>
-                        {booking.bk_bkid} - {booking.bk_fromstation || booking.bk_fromst} to {booking.bk_tostation || booking.bk_tost}
-                      </option>
-                    ))}
-                  </select>
-
-                  <label htmlFor="amount" className="form-label required">Amount</label>
-                  <input
-                    type="number"
-                    id="amount"
-                    name="amount"
-                    value={formData.amount}
-                    onChange={onChange}
-                    required
-                    step="0.01"
-                    min="0"
-                    className="form-input"
-                  />
-
-                  <label htmlFor="mode" className="form-label required">Payment Mode</label>
-                  <select
-                    id="mode"
-                    name="mode"
-                    value={formData.mode}
-                    onChange={onChange}
-                    required
-                    className="form-input"
-                  >
-                    <option value="CASH">Cash</option>
-                    <option value="ONLINE">Online</option>
-                    <option value="CHEQUE">Cheque</option>
-                    <option value="BANK_TRANSFER">Bank Transfer</option>
-                  </select>
-
-                  <label htmlFor="paymentDate" className="form-label required">Payment Date</label>
-                  <input
-                    type="date"
-                    id="paymentDate"
-                    name="paymentDate"
-                    value={formData.paymentDate}
-                    onChange={onChange}
-                    required
-                    className="form-input"
-                  />
-
-                  {formData.mode === 'ONLINE' && (
-                    <>
-                      <label htmlFor="transactionId" className="form-label">Transaction ID</label>
-                      <input
-                        type="text"
-                        id="transactionId"
-                        name="transactionId"
-                        value={formData.transactionId}
-                        onChange={onChange}
-                        className="form-input"
-                      />
-                    </>
-                  )}
-
-                  {(formData.mode === 'CHEQUE' || formData.mode === 'BANK_TRANSFER') && (
-                    <>
-                      <label htmlFor="bankName" className="form-label">Bank Name</label>
-                      <input
-                        type="text"
-                        id="bankName"
-                        name="bankName"
-                        value={formData.bankName}
-                        onChange={onChange}
-                        className="form-input"
-                      />
-
-                      <label htmlFor="branch" className="form-label">Branch</label>
-                      <input
-                        type="text"
-                        id="branch"
-                        name="branch"
-                        value={formData.branch}
-                        onChange={onChange}
-                        className="form-input"
-                      />
-
-                      {formData.mode === 'CHEQUE' && (
-                        <>
-                          <label htmlFor="chequeNumber" className="form-label">Cheque Number</label>
-                          <input
-                            type="text"
-                            id="chequeNumber"
-                            name="chequeNumber"
-                            value={formData.chequeNumber}
-                            onChange={onChange}
-                            className="form-input"
-                          />
-                        </>
-                      )}
-                    </>
-                  )}
-
-                  <label htmlFor="remarks" className="form-label">Remarks</label>
-                  <textarea
-                    id="remarks"
-                    name="remarks"
-                    value={formData.remarks}
-                    onChange={onChange}
-                    className="form-input"
-                    rows="3"
-                  ></textarea>
-                </div>
-
-                <div className="form-actions">
-                  <button type="submit" className="tool-button">Save Payment</button>
-                  <button type="button" className="tool-button" onClick={() => setShowForm(false)}>Cancel</button>
-                </div>
-              </form>
-            </div>
-          )}
-
-          {/* Refund Form Panel */}
-          {showRefundForm && (
-            <div className="form-panel">
-              <div className="panel-header">Process Refund</div>
-              <form onSubmit={(e) => onRefundSubmit(e, showRefundForm)} className="erp-form">
-                <div className="form-grid">
-                  <label htmlFor="refundAmount" className="form-label required">Refund Amount</label>
-                  <input
-                    type="number"
-                    id="refundAmount"
-                    name="refundAmount"
-                    value={refundData.refundAmount}
-                    onChange={onRefundChange}
-                    required
-                    step="0.01"
-                    min="0"
-                    max={payments.find(p => p.pt_ptid === showRefundForm)?.pt_amount}
-                    className="form-input"
-                  />
-
-                  <label htmlFor="remarks" className="form-label">Remarks</label>
-                  <textarea
-                    id="remarks"
-                    name="remarks"
-                    value={refundData.remarks}
-                    onChange={onRefundChange}
-                    className="form-input"
-                    rows="3"
-                  ></textarea>
-                </div>
-
-                <div className="form-actions">
-                  <button type="submit" className="tool-button">Process Refund</button>
-                  <button type="button" className="tool-button" onClick={() => setShowRefundForm(null)}>Cancel</button>
-                </div>
-              </form>
-            </div>
-          )}
-
-          {/* Grid Panel */}
-          <div className="grid-panel">
-            <div className="panel-header">Payment Records</div>
-            
-            {error && <div className="alert alert-error">{error}</div>}
-
-            <div className="grid-toolbar">
-              <input
-                type="text"
-                placeholder="Search payments..."
-                className="filter-input"
+              <PaymentCreationForm
+                onCancel={() => setActiveView('list')}
+                onSuccess={() => {
+                  setActiveView('list');
+                  fetchPayments();
+                }}
               />
-              <button className="tool-button">Filter</button>
-              <button className="tool-button">Clear</button>
             </div>
+          )}
 
-            <div className="grid-container">
-              {payments.length === 0 ? (
-                <p>No payments found.</p>
-              ) : (
-                <table className="grid-table">
-                  <thead>
-                    <tr>
-                      <th>Payment ID</th>
-                      <th>Booking ID</th>
-                      <th>Amount</th>
-                      <th>Mode</th>
-                      <th>Date</th>
-                      <th>Status</th>
-                      <th>Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {payments.map((payment) => (
-                      <tr key={payment.pt_ptid} className={getStatusClass(payment.pt_status)}>
-                        <td>{payment.pt_ptid}</td>
-                        <td>{payment.pt_bkid}</td>
-                        <td>₹{parseFloat(payment.pt_amount).toFixed(2)}</td>
-                        <td>{getModeDisplay(payment.pt_mode)}</td>
-                        <td>{new Date(payment.pt_paydt || payment.pt_paymentdt).toLocaleDateString()}</td>
-                        <td>{payment.pt_status}</td>
-                        <td>
-                          {payment.pt_status === 'RECEIVED' && (
-                            <button 
-                              className="tool-button" 
-                              onClick={() => handleRefundPayment(payment)}
-                            >
-                              Refund
-                            </button>
-                          )}
-                          {user && (user.us_usertype === 'admin' || user.us_usertype === 'employee') && (
-                            <button 
-                              className="tool-button" 
-                              onClick={() => handleDeletePayment(payment.pt_ptid)}
-                            >
-                              Delete
-                            </button>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
+          {activeView === 'allocation' && (
+            <div className="form-panel">
+              <div className="panel-header">Payment Allocation Interface</div>
+              <PaymentAllocationInterface
+                onAllocationComplete={() => {
+                  fetchPayments();
+                }}
+              />
             </div>
-          </div>
+          )}
+
+          {activeView === 'history' && (
+            <div className="grid-panel">
+              <div className="panel-header">Customer Payment History</div>
+              <CustomerPaymentHistory />
+            </div>
+          )}
+
+          {activeView === 'pending' && (
+            <div className="grid-panel">
+              <div className="panel-header">Customer Pending PNRs</div>
+              <CustomerPendingPNRs />
+            </div>
+          )}
+
+          {activeView === 'list' && (
+            <div className="grid-panel">
+              <div className="panel-header">Payment Records</div>
+              
+              {error && <div className="alert alert-error">{error}</div>}
+
+              <div className="grid-toolbar">
+                <input
+                  type="text"
+                  placeholder="Search payments..."
+                  className="filter-input"
+                />
+                <button className="tool-button">Filter</button>
+                <button className="tool-button">Clear</button>
+              </div>
+
+              <div className="grid-container">
+                <PaymentList
+                  payments={payments}
+                  loading={loading}
+                  onRefund={handleRefundPayment}
+                  onDelete={handleDeletePayment}
+                  user={user}
+                />
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
       {/* Status Bar */}
       <div className="status-bar">
+        <div className="status-item">View: {activeView}</div>
         <div className="status-item">Records: {payments.length}</div>
         <div className="status-item">User: {user?.us_name || 'Unknown'}</div>
         <div className="status-panel">Ready</div>

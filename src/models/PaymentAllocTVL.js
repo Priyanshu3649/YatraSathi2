@@ -1,18 +1,16 @@
 const { DataTypes } = require('sequelize');
-const { sequelize, BaseModel } = require('./baseModel');
-const Payment = require('./Payment');
-const Pnr = require('./Pnr');
+const { sequelizeTVL } = require('../../config/db');
 
 /**
- * Payment Allocation Table (CRITICAL)
+ * Payment Allocation Table (TVL Version)
  * 
- * This table links payments to PNRs.
+ * This table links payments to PNRs in the TVL database.
  * Each row = how much of a payment went to which PNR.
  * 
  * NON-NEGOTIABLE: This table is the source of truth for payment allocation.
  * Never delete allocations - only create new ones for adjustments.
  */
-const PaymentAlloc = sequelize.define('paPaymentAlloc', {
+const PaymentAllocTVL = sequelizeTVL.define('paXpayalloc', {
   pa_paid: {
     type: DataTypes.BIGINT,
     primaryKey: true,
@@ -23,36 +21,35 @@ const PaymentAlloc = sequelize.define('paPaymentAlloc', {
   pa_ptid: {
     type: DataTypes.BIGINT,
     allowNull: false,
-    comment: 'Payment ID (Foreign Key to ptPayment)'
+    comment: 'Payment ID (Foreign Key to ptXpayment)'
   },
   pa_pnid: {
     type: DataTypes.BIGINT,
     allowNull: false,
-    comment: 'PNR ID (Foreign Key to pnPnr)'
+    comment: 'PNR ID (Foreign Key to pnXpnr)'
   },
   pa_pnr: {
     type: DataTypes.STRING(15),
-    allowNull: false,
+    allowNull: true, // May not be required in TVL version
     comment: 'PNR Number (for quick reference and validation)'
   },
-  pa_amount: {
-    type: DataTypes.DECIMAL(15, 2),
+  pa_allocamt: {
+    type: DataTypes.DECIMAL(12, 2),
     allowNull: false,
     comment: 'Allocated Amount (must be <= PNR pending amount)'
   },
-  pa_alloctn_date: {
+  pa_allocdt: {
     type: DataTypes.DATE,
-    defaultValue: DataTypes.NOW,
     allowNull: false,
     comment: 'Allocation Date'
   },
-  pa_alloctn_type: {
-    type: DataTypes.STRING(10),
-    defaultValue: 'MANUAL',
+  pa_status: {
+    type: DataTypes.STRING(15),
+    defaultValue: 'ACTIVE',
     allowNull: false,
-    comment: 'Allocation Type: AUTO (FIFO) | MANUAL (user selected)'
+    comment: 'Allocation Status'
   },
-  pa_remarks: {
+  pa_rmrks: {
     type: DataTypes.TEXT,
     allowNull: true,
     comment: 'Allocation Remarks'
@@ -68,19 +65,28 @@ const PaymentAlloc = sequelize.define('paPaymentAlloc', {
     type: DataTypes.STRING(15),
     allowNull: false,
     comment: 'Entered By (User ID who made the allocation)'
+  },
+  mdtm: {
+    type: DataTypes.DATE,
+    defaultValue: DataTypes.NOW,
+    allowNull: false,
+    onUpdate: DataTypes.NOW,
+    comment: 'Modification Date Time'
+  },
+  mby: {
+    type: DataTypes.STRING(15),
+    allowNull: true,
+    comment: 'Modified By'
   }
 }, {
-  tableName: 'paPaymentAlloc',
+  tableName: 'paXpayalloc',
   timestamps: false,
   indexes: [
-    { fields: ['pa_ptid'] },
-    { fields: ['pa_pnid'] },
-    { fields: ['pa_pnr'] },
-    { fields: ['pa_alloctn_date'] }
+    { fields: ['pa_ptid'], name: 'idx_pa_ptid' },
+    { fields: ['pa_pnid'], name: 'idx_pa_pnid' },
+    { fields: ['pa_pnr'], name: 'idx_pa_pnr' },
+    { fields: ['pa_allocdt'], name: 'idx_pa_allocdt' }
   ]
 });
 
-// Define associations (minimal to avoid circular dependencies)
-// Full associations are set up in models/index.js
-
-module.exports = PaymentAlloc;
+module.exports = PaymentAllocTVL;

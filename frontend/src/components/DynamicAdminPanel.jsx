@@ -73,6 +73,9 @@ const DynamicAdminPanel = () => {
     active: ''
   });
   
+  // Inline filter state for grid filtering
+  const [inlineFilters, setInlineFilters] = useState({});
+  
   // Filter timeout for live search
   const [filterTimeout, setFilterTimeout] = useState(null);
   
@@ -520,9 +523,35 @@ const DynamicAdminPanel = () => {
       });
     }
     
+    // ==================== INLINE GRID FILTERS ====================
+    Object.entries(inlineFilters).forEach(([column, value]) => {
+      if (value !== undefined && value !== '') {
+        // Handle boolean/checkbox fields
+        if (column.includes('active') || column.includes('admin') || column.includes('security') || 
+            column.includes('allow') || column.includes('ready') || column.includes('secure')) {
+          const booleanValue = value === '1' ? 1 : 0;
+          filtered = filtered.filter(record => record[column] === booleanValue);
+        }
+        // Handle date fields
+        else if (column.includes('edtm') || column.includes('mdtm') || column.includes('cdtm') || column.includes('paydt')) {
+          filtered = filtered.filter(record => {
+            const recordDate = record[column] ? new Date(record[column]).toISOString().split('T')[0] : null;
+            const filterDate = new Date(value).toISOString().split('T')[0];
+            return recordDate === filterDate;
+          });
+        }
+        // Handle text fields with partial match
+        else {
+          filtered = filtered.filter(record => 
+            record[column]?.toString().toLowerCase().includes(value.toLowerCase())
+          );
+        }
+      }
+    });
+    
     setFilteredData(filtered);
     setCurrentPage(1); // Reset to first page when filtering
-  }, [filters, data]);
+  }, [filters, data, inlineFilters]);
 
   // Auto-select first record when data changes (only on initial load or module change)
   useEffect(() => {
@@ -592,6 +621,9 @@ const DynamicAdminPanel = () => {
       fp_allow: '',
       up_allow: ''
     });
+    
+    // Reset inline filters when module changes
+    setInlineFilters({});
   }, [activeModule]);
 
   const fetchDropdownData = async () => {
@@ -731,7 +763,14 @@ const DynamicAdminPanel = () => {
     
     setFilterTimeout(newTimeout);
   };
-
+  
+  const handleInlineFilterChange = (column, value) => {
+    setInlineFilters(prev => ({
+      ...prev,
+      [column]: value
+    }));
+  };
+  
   const handleClearFilters = () => {
     // Clear all filters
     setFilters({
@@ -774,6 +813,9 @@ const DynamicAdminPanel = () => {
       shortName: '',
       active: ''
     });
+    
+    // Clear inline filters
+    setInlineFilters({});
     
     // Clear filter timeout
     if (filterTimeout) {
@@ -1347,6 +1389,54 @@ const DynamicAdminPanel = () => {
                       {currentModule.columnLabels.map((label, idx) => (
                         <th key={idx} style={{ width: currentModule.columnWidths?.[idx] }}>{label}</th>
                       ))}
+                    </tr>
+                    {/* Inline Filter Row */}
+                    <tr className="inline-filter-row">
+                      <td></td>
+                      {currentModule.columns.map((col, idx) => {
+                        // Determine input type based on column characteristics
+                        let inputType = 'text';
+                        if (col.includes('active') || col.includes('admin') || col.includes('security') || 
+                            col.includes('allow') || col.includes('ready') || col.includes('secure')) {
+                          inputType = 'select';
+                        } else if (col.includes('edtm') || col.includes('mdtm') || col.includes('cdtm') || col.includes('paydt')) {
+                          inputType = 'date';
+                        }
+                        
+                        return (
+                          <td key={`filter-${idx}`}>
+                            {inputType === 'select' ? (
+                              <select
+                                className="inline-filter-input"
+                                value={inlineFilters[col] || ''}
+                                onChange={(e) => handleInlineFilterChange(col, e.target.value)}
+                                style={{ width: '100%', padding: '2px', fontSize: '12px', backgroundColor: '#f0f0f0' }}
+                              >
+                                <option value="">All</option>
+                                <option value="1">Active</option>
+                                <option value="0">Inactive</option>
+                              </select>
+                            ) : inputType === 'date' ? (
+                              <input
+                                type="date"
+                                className="inline-filter-input"
+                                value={inlineFilters[col] || ''}
+                                onChange={(e) => handleInlineFilterChange(col, e.target.value)}
+                                style={{ width: '100%', padding: '2px', fontSize: '12px', backgroundColor: '#f0f0f0' }}
+                              />
+                            ) : (
+                              <input
+                                type="text"
+                                className="inline-filter-input"
+                                value={inlineFilters[col] || ''}
+                                onChange={(e) => handleInlineFilterChange(col, e.target.value)}
+                                placeholder={`Filter ${currentModule.columnLabels[idx] || col}...`}
+                                style={{ width: '100%', padding: '2px', fontSize: '12px', backgroundColor: '#f0f0f0' }}
+                              />
+                            )}
+                          </td>
+                        );
+                      })}
                     </tr>
                   </thead>
                   <tbody>

@@ -3,6 +3,14 @@ import { useAuth } from '../contexts/AuthContext';
 import { useLocation, useSearchParams } from 'react-router-dom';
 import '../styles/vintage-erp-theme.css';
 import '../styles/classic-enterprise-global.css';
+import '../styles/vintage-admin-panel.css';
+import '../styles/dynamic-admin-panel.css';
+import '../styles/vintage-erp-global.css';
+
+// Import payment report components
+import OutstandingReceivablesReport from '../components/Payment/OutstandingReceivablesReport';
+import CustomerAdvanceReport from '../components/Payment/CustomerAdvanceReport';
+import PaymentAllocationSummary from '../components/Payment/PaymentAllocationSummary';
 
 const Reports = () => {
   const { user } = useAuth();
@@ -12,7 +20,7 @@ const Reports = () => {
   // Get initial tab from URL parameters or default to 'bookings'
   const getInitialTab = () => {
     const tabParam = searchParams.get('tab');
-    if (tabParam && ['bookings', 'employeePerformance', 'financial', 'customerAnalytics', 'corporateCustomers'].includes(tabParam)) {
+    if (tabParam && ['bookings', 'employeePerformance', 'financial', 'customerAnalytics', 'corporateCustomers', 'paymentReceivables', 'paymentAdvances', 'paymentAllocation'].includes(tabParam)) {
       return tabParam;
     }
     return 'bookings';
@@ -24,7 +32,10 @@ const Reports = () => {
     employeePerformance: [],
     financial: null,
     corporateCustomers: [],
-    customerAnalytics: null
+    customerAnalytics: null,
+    paymentReceivables: [],
+    paymentAdvances: [],
+    paymentAllocation: []
   });
   const [filters, setFilters] = useState({
     startDate: '',
@@ -39,7 +50,7 @@ const Reports = () => {
   // Update activeTab when URL parameters change
   useEffect(() => {
     const tabParam = searchParams.get('tab');
-    if (tabParam && ['bookings', 'employeePerformance', 'financial', 'customerAnalytics', 'corporateCustomers'].includes(tabParam)) {
+    if (tabParam && ['bookings', 'employeePerformance', 'financial', 'customerAnalytics', 'corporateCustomers', 'paymentReceivables', 'paymentAdvances', 'paymentAllocation'].includes(tabParam)) {
       setActiveTab(tabParam);
     }
   }, [searchParams]);
@@ -55,6 +66,16 @@ const Reports = () => {
     try {
       setLoading(true);
       setError('');
+      
+      // For payment reports, we'll just set a flag to show the components
+      if (['paymentReceivables', 'paymentAdvances', 'paymentAllocation'].includes(activeTab)) {
+        // Set an empty array or object to trigger component rendering
+        setReports(prev => ({
+          ...prev,
+          [activeTab]: []
+        }));
+        return;
+      }
       
       let url = `/api/reports/${activeTab.replace(/([A-Z])/g, '-$1').toLowerCase()}`;
       
@@ -224,6 +245,24 @@ const Reports = () => {
               >
                 Corporate Customers
               </div>
+              <div 
+                className={`nav-item ${activeTab === 'paymentReceivables' ? 'active' : ''}`}
+                onClick={() => handleTabChange('paymentReceivables')}
+              >
+                Outstanding Receivables
+              </div>
+              <div 
+                className={`nav-item ${activeTab === 'paymentAdvances' ? 'active' : ''}`}
+                onClick={() => handleTabChange('paymentAdvances')}
+              >
+                Customer Advances
+              </div>
+              <div 
+                className={`nav-item ${activeTab === 'paymentAllocation' ? 'active' : ''}`}
+                onClick={() => handleTabChange('paymentAllocation')}
+              >
+                Payment Allocation
+              </div>
             </>
           )}
         </div>
@@ -320,6 +359,9 @@ const Reports = () => {
               {activeTab === 'financial' && 'Financial Summary Data'}
               {activeTab === 'customerAnalytics' && 'Customer Analytics Data'}
               {activeTab === 'corporateCustomers' && 'Corporate Customer Data'}
+              {activeTab === 'paymentReceivables' && 'Outstanding Receivables Report'}
+              {activeTab === 'paymentAdvances' && 'Customer Advance Report'}
+              {activeTab === 'paymentAllocation' && 'Payment Allocation Summary'}
             </div>
 
             <div className="grid-container">
@@ -570,6 +612,21 @@ const Reports = () => {
                     </table>
                   )}
                 </>
+              )}
+              
+              {/* Payment Receivables Report */}
+              {activeTab === 'paymentReceivables' && user && user.us_usertype === 'admin' && (
+                <OutstandingReceivablesReport />
+              )}
+              
+              {/* Customer Advance Report */}
+              {activeTab === 'paymentAdvances' && user && user.us_usertype === 'admin' && (
+                <CustomerAdvanceReport />
+              )}
+              
+              {/* Payment Allocation Summary */}
+              {activeTab === 'paymentAllocation' && user && user.us_usertype === 'admin' && (
+                <PaymentAllocationSummary />
               )}
             </div>
           </div>

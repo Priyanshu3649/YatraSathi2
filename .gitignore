@@ -1,0 +1,16 @@
+# Ignore node_modules folder
+node_modules/
+
+# Ignore logs
+*.log
+
+# Ignore OS files
+.DS_Store
+
+# Ignore build or dist folders if any
+dist/
+build/
+
+# Ignore temporary files
+*.tmp
+node_modules

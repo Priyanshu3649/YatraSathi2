@@ -402,12 +402,21 @@ export const bookingAPI = {
 
 // Payment API calls
 export const paymentAPI = {
-  // Create a new payment
+  // Create a new payment (updated to match new backend API)
   createPayment: async (paymentData) => {
     const response = await fetch(`${API_BASE_URL}/payments`, {
       method: 'POST',
       headers: getHeaders(true),
-      body: JSON.stringify(paymentData)
+      body: JSON.stringify({
+        customerId: paymentData.customerId,
+        amount: paymentData.amount,
+        mode: paymentData.mode,
+        refNo: paymentData.refNo || paymentData.transactionId || null,
+        paymentDate: paymentData.paymentDate,
+        remarks: paymentData.remarks || null,
+        autoAllocate: paymentData.autoAllocate || false,
+        allocations: paymentData.allocations || []
+      })
     });
     
     const data = await response.json();
@@ -452,8 +461,13 @@ export const paymentAPI = {
   },
   
   // Get all payments (admin only)
-  getAllPayments: async () => {
-    const response = await fetch(`${API_BASE_URL}/payments`, {
+  getAllPayments: async (params = {}) => {
+    const queryParams = new URLSearchParams(params).toString();
+    const url = queryParams 
+      ? `${API_BASE_URL}/payments?${queryParams}`
+      : `${API_BASE_URL}/payments`;
+    
+    const response = await fetch(url, {
       method: 'GET',
       headers: getHeaders(true)
     });
@@ -483,9 +497,9 @@ export const paymentAPI = {
     return data;
   },
   
-  // Get payments by booking ID
-  getPaymentsByBookingId: async (bookingId) => {
-    const response = await fetch(`${API_BASE_URL}/payments/booking/${bookingId}`, {
+  // Get customer payments
+  getCustomerPayments: async (customerId) => {
+    const response = await fetch(`${API_BASE_URL}/payments/customer/${customerId}`, {
       method: 'GET',
       headers: getHeaders(true)
     });
@@ -493,7 +507,89 @@ export const paymentAPI = {
     const data = await response.json();
     
     if (!response.ok) {
-      throw new Error(data.message || 'Failed to get payments for booking');
+      throw new Error(data.message || 'Failed to get customer payments');
+    }
+    
+    return data;
+  },
+  
+  // Get payment allocations
+  getPaymentAllocations: async (paymentId) => {
+    const response = await fetch(`${API_BASE_URL}/payments/${paymentId}/allocations`, {
+      method: 'GET',
+      headers: getHeaders(true)
+    });
+    
+    const data = await response.json();
+    
+    if (!response.ok) {
+      throw new Error(data.message || 'Failed to get payment allocations');
+    }
+    
+    return data;
+  },
+  
+  // Allocate payment to PNRs
+  allocatePayment: async (paymentId, allocationData) => {
+    const response = await fetch(`${API_BASE_URL}/payments/${paymentId}/allocate`, {
+      method: 'POST',
+      headers: getHeaders(true),
+      body: JSON.stringify(allocationData)
+    });
+    
+    const data = await response.json();
+    
+    if (!response.ok) {
+      throw new Error(data.message || 'Failed to allocate payment');
+    }
+    
+    return data;
+  },
+  
+  // Get PNR payment history
+  getPNRPayments: async (pnrNumber) => {
+    const response = await fetch(`${API_BASE_URL}/payments/pnr/${pnrNumber}`, {
+      method: 'GET',
+      headers: getHeaders(true)
+    });
+    
+    const data = await response.json();
+    
+    if (!response.ok) {
+      throw new Error(data.message || 'Failed to get PNR payment history');
+    }
+    
+    return data;
+  },
+  
+  // Get customer pending PNRs
+  getCustomerPendingPNRs: async (customerId) => {
+    const response = await fetch(`${API_BASE_URL}/payments/customer/${customerId}/pending-pnrs`, {
+      method: 'GET',
+      headers: getHeaders(true)
+    });
+    
+    const data = await response.json();
+    
+    if (!response.ok) {
+      throw new Error(data.message || 'Failed to get customer pending PNRs');
+    }
+    
+    return data;
+  },
+  
+  // Get customer advance balance
+  getCustomerAdvance: async (customerId, fyear = null) => {
+    const params = fyear ? `?fyear=${fyear}` : '';
+    const response = await fetch(`${API_BASE_URL}/payments/customer/${customerId}/advance${params}`, {
+      method: 'GET',
+      headers: getHeaders(true)
+    });
+    
+    const data = await response.json();
+    
+    if (!response.ok) {
+      throw new Error(data.message || 'Failed to get customer advance');
     }
     
     return data;
@@ -516,12 +612,16 @@ export const paymentAPI = {
     return data;
   },
   
-  // Process refund
-  refundPayment: async (id, refundData) => {
-    const response = await fetch(`${API_BASE_URL}/payments/${id}/refund`, {
+  // Process refund (updated to match new backend API)
+  refundPayment: async (paymentId, refundData) => {
+    const response = await fetch(`${API_BASE_URL}/payments/${paymentId}/refund`, {
       method: 'POST',
       headers: getHeaders(true),
-      body: JSON.stringify(refundData)
+      body: JSON.stringify({
+        refundAmount: refundData.refundAmount,
+        pnrNumber: refundData.pnrNumber,
+        remarks: refundData.remarks || null
+      })
     });
     
     const data = await response.json();

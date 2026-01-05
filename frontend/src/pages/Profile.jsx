@@ -1,6 +1,9 @@
 import React, { useState } from 'react';
 import '../styles/vintage-erp-theme.css';
 import '../styles/classic-enterprise-global.css';
+import '../styles/vintage-admin-panel.css';
+import '../styles/dynamic-admin-panel.css';
+import '../styles/vintage-erp-global.css';
 
 const Profile = () => {
   const [profile, setProfile] = useState({

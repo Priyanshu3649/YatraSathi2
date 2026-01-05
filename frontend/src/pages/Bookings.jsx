@@ -3,6 +3,9 @@ import { useAuth } from '../contexts/AuthContext';
 import { bookingAPI } from '../services/api';
 import '../styles/vintage-erp-theme.css';
 import '../styles/classic-enterprise-global.css';
+import '../styles/vintage-admin-panel.css';
+import '../styles/dynamic-admin-panel.css';
+import '../styles/vintage-erp-global.css';
 
 const Bookings = () => {
   const { user } = useAuth();

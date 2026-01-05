@@ -2,6 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { employeeAPI, authAPI } from '../services/api';
 import '../styles/layout.css';
+import '../styles/vintage-erp-theme.css';
+import '../styles/classic-enterprise-global.css';
+import '../styles/vintage-admin-panel.css';
+import '../styles/dynamic-admin-panel.css';
+import '../styles/vintage-erp-global.css';
 
 const EmployeeManagement = () => {
   const { user } = useAuth();

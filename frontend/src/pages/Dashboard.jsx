@@ -2,6 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { dashboardAPI } from '../services/api';
 import '../styles/dashboard.css';
+import '../styles/vintage-erp-theme.css';
+import '../styles/classic-enterprise-global.css';
+import '../styles/vintage-admin-panel.css';
+import '../styles/dynamic-admin-panel.css';
+import '../styles/vintage-erp-global.css';
 
 const Dashboard = () => {
   const { user } = useAuth();

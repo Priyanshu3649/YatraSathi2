@@ -172,6 +172,31 @@ body {
   font-size: 11px;
 }
 
+/* Inline Filter Row */
+.inline-filter-row {
+  background-color: var(--erp-bg-light);
+}
+
+.inline-filter-row td {
+  padding: 2px 4px !important;
+  border: 1px solid #ddd;
+}
+
+.inline-filter-input {
+  width: 100%;
+  padding: 2px 4px;
+  font-size: 11px;
+  font-family: 'Segoe UI', Tahoma, sans-serif;
+  border: 1px solid var(--erp-border);
+  background-color: #f0f0f0;
+  color: var(--erp-text);
+}
+
+.inline-filter-input:focus {
+  outline: 1px solid var(--erp-blue-dark);
+  border-color: var(--erp-blue-dark);
+}
+
 /* Toolbar */
 .erp-toolbar {
   background: var(--erp-bg-light);

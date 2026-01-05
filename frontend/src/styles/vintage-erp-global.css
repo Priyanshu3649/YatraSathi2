@@ -1,0 +1,359 @@
+/* ============================================================================
+   VINTAGE ERP GLOBAL STYLES - Apply to ALL Pages
+   Classic Windows XP/2000 Enterprise Application Look
+   ============================================================================ */
+
+/* Import base vintage theme variables */
+@import './vintage-erp-theme.css';
+@import './classic-enterprise-global.css';
+
+/* Global Vintage ERP Container - Applied to all pages */
+.vintage-erp-page,
+.erp-admin-container,
+.vintage-admin-panel {
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif !important;
+  font-size: 12px !important;
+  line-height: 1.4 !important;
+  background: #f5f5f5 !important;
+  color: #000000 !important;
+  min-height: 100vh;
+  width: 100%;
+}
+
+/* Title Bar - Classic Windows Style */
+.title-bar {
+  background: #0a246a !important; /* Classic Windows title bar blue */
+  color: #ffffff !important;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  padding: 0 4px;
+  border-bottom: 1px solid #000000;
+  user-select: none;
+  font-weight: bold;
+  font-size: 11px;
+}
+
+.title-text {
+  flex-grow: 1;
+  text-align: center;
+  color: #ffffff !important;
+}
+
+/* Menu Bar */
+.menu-bar {
+  background: #ece9d8 !important;
+  border-bottom: 1px solid #aca899;
+  display: flex;
+  padding: 0;
+  height: 22px;
+}
+
+.menu-item {
+  padding: 2px 12px;
+  cursor: pointer;
+  font-size: 11px;
+  border-right: 1px solid #aca899;
+  color: #000000 !important;
+}
+
+.menu-item:hover {
+  background: #d0d0c8 !important;
+}
+
+/* Toolbar */
+.toolbar {
+  background: #f0f0f0 !important;
+  border-bottom: 1px solid #cccccc;
+  padding: 4px 8px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 30px;
+}
+
+.tool-button {
+  background: linear-gradient(to bottom, #f8f8f8, #e0e0e0) !important;
+  border: 1px solid #999 !important;
+  padding: 4px 12px !important;
+  font-size: 11px !important;
+  color: #000 !important;
+  cursor: pointer;
+  min-height: 22px;
+  font-family: 'Segoe UI', Tahoma, sans-serif !important;
+}
+
+.tool-button:hover {
+  background: linear-gradient(to bottom, #fff, #e8e8e8) !important;
+}
+
+.tool-button:active {
+  background: #d0d0d0 !important;
+  box-shadow: inset 0 1px 3px rgba(0,0,0,0.2) !important;
+}
+
+.tool-separator {
+  width: 1px;
+  height: 20px;
+  background: #cccccc;
+  margin: 0 4px;
+}
+
+/* Main Content Area */
+.main-content {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+  background: #f5f5f5;
+}
+
+/* Navigation Panel (Left Sidebar) */
+.nav-panel,
+.nav-sidebar {
+  width: 200px;
+  background: #f5f5f0 !important;
+  border-right: 1px solid #cccccc;
+  overflow-y: auto;
+  padding: 0;
+}
+
+.nav-header {
+  background: #4169E1 !important;
+  color: white !important;
+  padding: 6px 12px;
+  font-weight: bold;
+  font-size: 12px;
+  border-bottom: 1px solid #999;
+}
+
+.nav-item {
+  padding: 6px 20px;
+  cursor: pointer;
+  font-size: 12px;
+  border-bottom: 1px solid #e8e8e8;
+  color: #000 !important;
+}
+
+.nav-item:hover {
+  background: #d0d0c8 !important;
+}
+
+.nav-item.active {
+  background: #4169E1 !important;
+  color: white !important;
+}
+
+/* Work Area */
+.work-area {
+  flex: 1;
+  overflow-y: auto;
+  padding: 10px;
+  background: #f5f5f5;
+}
+
+/* Form Panel */
+.form-panel {
+  background: #e8f4f8 !important;
+  border: 1px solid #cccccc;
+  margin-bottom: 10px;
+}
+
+.panel-header {
+  background: #4169E1 !important;
+  color: white !important;
+  padding: 6px 12px;
+  font-weight: bold;
+  font-size: 12px;
+  border-bottom: 1px solid #999;
+}
+
+/* Grid Panel */
+.grid-panel {
+  background: #f0f8ff !important;
+  border: 1px solid #cccccc;
+}
+
+.grid-toolbar {
+  background: #f0f0f0;
+  padding: 4px 8px;
+  border-bottom: 1px solid #cccccc;
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.filter-input {
+  background: #fffef5 !important;
+  border: 1px solid #cccccc !important;
+  padding: 3px 6px !important;
+  font-size: 12px !important;
+  flex: 1;
+}
+
+/* Grid Table */
+.grid-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11px;
+  border: 1px solid #cccccc;
+}
+
+.grid-table thead {
+  background: #4169E1 !important;
+  color: white !important;
+}
+
+.grid-table th {
+  padding: 4px 8px;
+  text-align: left;
+  border: 1px solid #999;
+  font-weight: bold;
+  font-size: 11px;
+  color: white !important;
+}
+
+.grid-table tbody tr {
+  border: 1px solid #ddd;
+}
+
+.grid-table tbody tr:nth-child(even) {
+  background: #f9f9f9 !important;
+}
+
+.grid-table tbody tr:hover {
+  background: #e8f4ff !important;
+}
+
+.grid-table td {
+  padding: 4px 8px;
+  border: 1px solid #ddd;
+  font-size: 11px;
+}
+
+/* Form Styles */
+.erp-form {
+  padding: 10px;
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: 150px 1fr;
+  gap: 8px;
+  align-items: center;
+}
+
+.form-label {
+  font-size: 11px;
+  font-weight: normal;
+  text-align: right;
+  color: #000;
+}
+
+.form-label.required::after {
+  content: ' *';
+  color: red;
+}
+
+.form-input {
+  background: #fffef5 !important;
+  border: 1px solid #cccccc !important;
+  padding: 3px 6px !important;
+  font-size: 12px !important;
+  width: 100%;
+}
+
+.form-input:focus {
+  outline: 1px solid #4169E1 !important;
+  border-color: #4169E1 !important;
+}
+
+.form-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid #cccccc;
+}
+
+/* Status Bar */
+.status-bar {
+  background: #f0f0f0 !important;
+  border-top: 1px solid #cccccc;
+  padding: 4px 8px;
+  font-size: 11px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  height: 22px;
+}
+
+.status-item {
+  color: #000;
+}
+
+.status-panel {
+  color: #000;
+  font-weight: bold;
+}
+
+/* Alerts */
+.alert {
+  border: 1px solid !important;
+  padding: 8px 12px !important;
+  margin-bottom: 10px !important;
+  font-size: 11px;
+}
+
+.alert-error {
+  background: #ffd4d4 !important;
+  border-color: #800000 !important;
+  color: #800000 !important;
+}
+
+.alert-success {
+  background: #d4f4dd !important;
+  border-color: #008000 !important;
+  color: #008000 !important;
+}
+
+/* Status Classes */
+.status-received {
+  background: #d4f4dd !important;
+}
+
+.status-pending {
+  background: #fff4ce !important;
+}
+
+.status-refunded {
+  background: #ffd4d4 !important;
+}
+
+/* Loading */
+.erp-loading {
+  padding: 20px;
+  text-align: center;
+  color: #000;
+  font-size: 12px;
+}
+
+/* Grid Container */
+.grid-container {
+  overflow-x: auto;
+  max-height: calc(100vh - 300px);
+}
+
+/* Remove all rounded corners and shadows globally */
+* {
+  border-radius: 0 !important;
+  box-shadow: none !important;
+}
+
+/* Ensure all pages use vintage ERP styling */
+body {
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif !important;
+  font-size: 12px !important;
+  background: #f5f5f5 !important;
+  color: #000000 !important;
+}
+

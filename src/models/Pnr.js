@@ -78,24 +78,33 @@ const Pnr = sequelize.define('pnPnr', {
     comment: 'Total Amount'
   },
   pn_paidamt: {
-    type: DataTypes.DECIMAL(12, 2),
+    type: DataTypes.DECIMAL(15, 2),
     defaultValue: 0,
-    comment: 'Paid Amount'
+    allowNull: false,
+    comment: 'Paid Amount (calculated from allocations - DO NOT UPDATE MANUALLY)'
   },
   pn_pendingamt: {
-    type: DataTypes.DECIMAL(12, 2),
+    type: DataTypes.DECIMAL(15, 2),
     defaultValue: 0,
-    comment: 'Pending Amount'
+    allowNull: false,
+    comment: 'Pending Amount (pn_totamt - pn_paidamt - calculated real-time)'
   },
   pn_payment_status: {
     type: DataTypes.STRING(15),
     defaultValue: 'UNPAID',
-    comment: 'Payment Status (UNPAID | PARTIAL | PAID)'
+    allowNull: false,
+    comment: 'Payment Status: UNPAID | PARTIAL | PAID (calculated automatically)'
   },
   pn_closed_flag: {
     type: DataTypes.STRING(1),
     defaultValue: 'N',
-    comment: 'Closed Flag (Y/N)'
+    allowNull: false,
+    comment: 'Closed Flag: Y (closed) | N (open) - for year-end closing'
+  },
+  pn_fyear: {
+    type: DataTypes.STRING(10),
+    allowNull: true,
+    comment: 'Financial Year (for year-end closing)'
   },
   // Audit fields
   ...BaseModel
@@ -110,13 +119,8 @@ const Pnr = sequelize.define('pnPnr', {
   ]
 });
 
-// Define associations
-Pnr.belongsTo(Booking, {
-  foreignKey: 'pn_bkid',
-  targetKey: 'bk_bkid',
-  as: 'booking'
-});
-
+// Define associations (minimal to avoid circular dependencies)
+// Full associations are set up in models/index.js
 Pnr.belongsTo(Train, {
   foreignKey: 'pn_trid',
   targetKey: 'tr_trid'
