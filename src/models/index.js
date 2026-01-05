@@ -40,6 +40,7 @@ const CustomerAdvance = require('./CustomerAdvance');
 const CustomerAdvanceTVL = require('./CustomerAdvanceTVL');
 const YearEndClosing = require('./YearEndClosing');
 const YearEndClosingTVL = require('./YearEndClosingTVL');
+const BillTVL = require('./BillTVL');
 
 // Set up associations
 // Company associations
@@ -211,6 +212,8 @@ module.exports = {
   paXpayalloc: PaymentAllocTVL,
   ptPayment: Payment,
   paPaymentAlloc: PaymentAlloc,
+  billXbill: BillTVL,
+  BillTVL,
   Session,
   Audit,
   Config,

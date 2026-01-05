@@ -36,6 +36,7 @@ const Header = () => {
                 <li><Link to="/bookings" className={isActive('/bookings') ? 'active' : ''}>Bookings</Link></li>
                 <li><Link to="/travel-plans" className={isActive('/travel-plans') ? 'active' : ''}>Travel Plans</Link></li>
                 <li><Link to="/payments" className={isActive('/payments') ? 'active' : ''}>Payments</Link></li>
+                <li><Link to="/billing" className={isActive('/billing') ? 'active' : ''}>Billing</Link></li>
                 {(user.us_usertype === 'admin' || user.us_usertype === 'employee') && (
                   <li className="dropdown">
                     <span className={isActive('/reports') ? 'active' : ''}>Reports ▼</span>

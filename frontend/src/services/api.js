@@ -833,11 +833,193 @@ export const employeeAPI = {
   }
 };
 
+// Billing API calls
+export const billingAPI = {
+  // Create a new bill
+  createBill: async (billData) => {
+    const response = await fetch(`${API_BASE_URL}/billing`, {
+      method: 'POST',
+      headers: getHeaders(true),
+      body: JSON.stringify(billData)
+    });
+    
+    const data = await response.json();
+    
+    if (!response.ok) {
+      throw new Error(data.message || 'Failed to create bill');
+    }
+    
+    return data;
+  },
+  
+  // Get all bills for current user
+  getMyBills: async () => {
+    const response = await fetch(`${API_BASE_URL}/billing/my-bills`, {
+      method: 'GET',
+      headers: getHeaders(true)
+    });
+    
+    const data = await response.json();
+    
+    if (!response.ok) {
+      throw new Error(data.message || 'Failed to get bills');
+    }
+    
+    return data;
+  },
+  
+  // Get all bills (admin only)
+  getAllBills: async () => {
+    const response = await fetch(`${API_BASE_URL}/billing`, {
+      method: 'GET',
+      headers: getHeaders(true)
+    });
+    
+    const data = await response.json();
+    
+    if (!response.ok) {
+      throw new Error(data.message || 'Failed to get all bills');
+    }
+    
+    return data;
+  },
+  
+  // Get bill by ID
+  getBillById: async (id) => {
+    const response = await fetch(`${API_BASE_URL}/billing/${id}`, {
+      method: 'GET',
+      headers: getHeaders(true)
+    });
+    
+    const data = await response.json();
+    
+    if (!response.ok) {
+      throw new Error(data.message || 'Failed to get bill');
+    }
+    
+    return data;
+  },
+  
+  // Update bill
+  updateBill: async (id, billData) => {
+    const response = await fetch(`${API_BASE_URL}/billing/${id}`, {
+      method: 'PUT',
+      headers: getHeaders(true),
+      body: JSON.stringify(billData)
+    });
+    
+    const data = await response.json();
+    
+    if (!response.ok) {
+      throw new Error(data.message || 'Failed to update bill');
+    }
+    
+    return data;
+  },
+  
+  // Finalize bill
+  finalizeBill: async (id) => {
+    const response = await fetch(`${API_BASE_URL}/billing/${id}/finalize`, {
+      method: 'PUT',
+      headers: getHeaders(true)
+    });
+    
+    const data = await response.json();
+    
+    if (!response.ok) {
+      throw new Error(data.message || 'Failed to finalize bill');
+    }
+    
+    return data;
+  },
+  
+  // Delete bill
+  deleteBill: async (id) => {
+    const response = await fetch(`${API_BASE_URL}/billing/${id}`, {
+      method: 'DELETE',
+      headers: getHeaders(true)
+    });
+    
+    const data = await response.json();
+    
+    if (!response.ok) {
+      throw new Error(data.message || 'Failed to delete bill');
+    }
+    
+    return data;
+  },
+  
+  // Export bill as PDF
+  exportBill: async (id) => {
+    const response = await fetch(`${API_BASE_URL}/billing/${id}/export`, {
+      method: 'GET',
+      headers: getHeaders(true)
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.message || 'Failed to export bill');
+    }
+    
+    return response.blob();
+  },
+  
+  // Get customer ledger
+  getCustomerLedger: async (customerId) => {
+    const response = await fetch(`${API_BASE_URL}/billing/customer/${customerId}/ledger`, {
+      method: 'GET',
+      headers: getHeaders(true)
+    });
+    
+    const data = await response.json();
+    
+    if (!response.ok) {
+      throw new Error(data.message || 'Failed to get customer ledger');
+    }
+    
+    return data;
+  },
+  
+  // Get customer balance
+  getCustomerBalance: async (customerId) => {
+    const response = await fetch(`${API_BASE_URL}/billing/customer/${customerId}/balance`, {
+      method: 'GET',
+      headers: getHeaders(true)
+    });
+    
+    const data = await response.json();
+    
+    if (!response.ok) {
+      throw new Error(data.message || 'Failed to get customer balance');
+    }
+    
+    return data;
+  },
+  
+  // Search bills
+  searchBills: async (searchParams) => {
+    const queryParams = new URLSearchParams(searchParams).toString();
+    const response = await fetch(`${API_BASE_URL}/billing/search?${queryParams}`, {
+      method: 'GET',
+      headers: getHeaders(true)
+    });
+    
+    const data = await response.json();
+    
+    if (!response.ok) {
+      throw new Error(data.message || 'Failed to search bills');
+    }
+    
+    return data;
+  }
+};
+
 export default {
   authAPI,
   dashboardAPI,
   bookingAPI,
   paymentAPI,
   reportAPI,
-  employeeAPI
+  employeeAPI,
+  billingAPI
 };

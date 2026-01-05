@@ -36,6 +36,7 @@ import Reports from './pages/Reports';
 import TravelPlans from './pages/TravelPlans';
 import TravelPlanDetail from './pages/TravelPlanDetail';
 import EditTravelPlan from './pages/EditTravelPlan';
+import Billing from './pages/Billing';
 
 function App() {
   return (
@@ -76,6 +77,7 @@ function App() {
                     <Route path="/travel-plans/:id" element={<TravelPlanDetail />} />
                     <Route path="/travel-plans/edit/:id" element={<EditTravelPlan />} />
                     <Route path="/travel-plans/new" element={<EditTravelPlan />} />
+                    <Route path="/billing" element={<Billing />} />
                     <Route path="/profile" element={<Profile />} />
                     <Route path="/admin-dashboard" element={<DynamicAdminPanel />} />
                   </Routes>

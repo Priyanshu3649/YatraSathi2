@@ -56,6 +56,7 @@ const trainRoutes = require('./routes/trainRoutes');
 const companyRoutes = require('./routes/companyRoutes');
 const userRoutes = require('./routes/userRoutes');
 const securityRoutes = require('./routes/securityRoutes');
+const billingRoutes = require('./routes/billingRoutes');
 
 // Use routes
 console.log('Registering auth routes');
@@ -82,6 +83,7 @@ app.use('/api/stations', stationRoutes);
 app.use('/api/trains', trainRoutes);
 app.use('/api/company', companyRoutes);
 app.use('/api/users', userRoutes);
+app.use('/api/billing', billingRoutes);
 
 // 404 handler
 app.use(notFound);

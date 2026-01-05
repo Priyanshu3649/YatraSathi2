@@ -401,6 +401,23 @@ body {
   width: 16px;
 }
 
+/* Status Classes for Bills */
+.status-draft {
+  background-color: #fff3cd;
+}
+
+.status-final {
+  background-color: #d1ecf1;
+}
+
+.status-paid {
+  background-color: #d4edda;
+}
+
+.status-partial {
+  background-color: #f8d7da;
+}
+
 /* Modal Dialog */
 .erp-modal-overlay {
   position: fixed;
