@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { bookingAPI, customerAPI } from '../services/api';
 import '../styles/vintage-erp-theme.css';
@@ -63,6 +63,63 @@ const Bookings = () => {
   // Filter state for inline grid filtering
   const [inlineFilters, setInlineFilters] = useState({});
   
+  // Debounce function
+  const debounce = (func, delay) => {
+    let timeoutId;
+    return (...args) => {
+      clearTimeout(timeoutId);
+      timeoutId = setTimeout(() => func.apply(null, args), delay);
+    };
+  };
+  
+  // Fetch customer lookup
+  const fetchCustomerLookup = async (searchTerm) => {
+    // Don't search if the term is empty after trimming
+    if (!searchTerm || searchTerm.trim().length === 0) {
+      setCustomerLookup([]);
+      setShowCustomerDropdown(false);
+      return;
+    }
+    
+    try {
+      // Call the customer API to search for customers
+      const customers = await customerAPI.searchCustomers(searchTerm.trim());
+      
+      // Format the results
+      const formattedResults = Array.isArray(customers?.data) ? 
+        customers.data.map(customer => ({
+          id: customer.id || customer.cu_usid || customer.customerId || customer.cu_custno || '',
+          name: customer.name || customer.customerName || customer.cu_name || customer.cu_custname || '',
+          display: `${customer.id || customer.cu_usid || customer.customerId || customer.cu_custno || ''} - ${customer.name || customer.customerName || customer.cu_name || customer.cu_custname || ''}`
+        })) : [];
+      
+      setCustomerLookup(formattedResults);
+      setShowCustomerDropdown(formattedResults.length > 0); // Only show dropdown if there are results
+    } catch (error) {
+      console.error('Error fetching customer lookup:', error);
+      setCustomerLookup([]);
+      setShowCustomerDropdown(false);
+      // Don't re-throw to avoid blocking UI
+    }
+  };
+  
+  // Debounced customer search
+  const debouncedCustomerSearch = useCallback(debounce(fetchCustomerLookup, 300), []);
+  
+  // Fetch customer name by ID (only called after selection)
+  const fetchCustomerNameById = async (customerId) => {
+    try {
+      const customer = await customerAPI.getCustomerById(customerId);
+      const customerName = customer.data?.name || customer.data?.customerName || customer.data?.cu_name || customer.data?.cu_custname || '';
+      setFormData(prev => ({
+        ...prev,
+        customerName: customerName
+      }));
+    } catch (error) {
+      console.error('Error fetching customer by ID:', error);
+    }
+  };
+  
   // Fetch bookings when component mounts
   useEffect(() => {
     fetchBookings();
@@ -118,13 +175,9 @@ const Bookings = () => {
       }));
       
       // Fetch customer suggestions if search term is long enough
-      if (value.length >= 3) {
-        fetchCustomerLookup(value);
+      if (value.trim().length >= 1) { // Changed from 3 to 1 to allow single character search
+        debouncedCustomerSearch(value.trim());
       } else {
-        // If we have a valid customer ID, fetch the customer name
-        if (value.length > 0) {
-          fetchCustomerNameById(value);
-        }
         setCustomerLookup([]);
         setShowCustomerDropdown(false);
       }
@@ -138,8 +191,8 @@ const Bookings = () => {
       }));
       
       // Fetch customer suggestions if search term is long enough
-      if (value.length >= 3) {
-        fetchCustomerLookupByName(value);
+      if (value.trim().length >= 1) { // Changed from 3 to 1 to allow single character search
+        debouncedCustomerSearch(value.trim()); // Use the same function for both name and ID
       } else {
         setCustomerLookup([]);
         setShowCustomerDropdown(false);
@@ -154,122 +207,21 @@ const Bookings = () => {
     }
   };
   
-  // Fetch customer lookup
-  const fetchCustomerLookup = async (searchTerm) => {
-    try {
-      // Call the customer API to search for customers
-      const customers = await customerAPI.searchCustomers(searchTerm);
-      
-      // Format the results
-      const formattedResults = Array.isArray(customers) ? 
-        customers.map(customer => ({
-          id: customer.id || customer.cu_usid || customer.cu_custno || '',
-          name: customer.name || customer.cu_name || customer.cu_custname || '',
-          display: `${customer.id || customer.cu_usid || customer.cu_custno || ''} - ${customer.name || customer.cu_name || customer.cu_custname || ''} `
-        })) : [];
-      
-      setCustomerLookup(formattedResults);
-      setShowCustomerDropdown(true);
-    } catch (error) {
-      console.error('Error fetching customer lookup:', error);
-      setCustomerLookup([]);
-      setShowCustomerDropdown(false);
-    }
-  };
-  
   // Handle customer selection from dropdown
   const handleCustomerSelect = (customer) => {
     setFormData(prev => ({
       ...prev,
       customerId: customer.id,
-      customerName: customer.name || customer.display?.split(' - ')[1] || '',
+      customerName: customer.name || customer.display?.split(' - ')[1] || ''
     }));
     setCustomerLookup([]);
     setShowCustomerDropdown(false);
-  };
-  
-  // Handle customer name change
-  const handleCustomerNameChange = async (e) => {
-    const value = e.target.value;
-    setFormData(prev => ({
-      ...prev,
-      customerName: value,
-      customerId: value ? '' : prev.customerId // Clear customer ID if name is being entered
-    }));
     
-    // Fetch customer suggestions if search term is long enough
-    if (value.length >= 3) {
-      try {
-        await fetchCustomerLookupByName(value);
-      } catch (error) {
-        // Silently handle the error to prevent console spam
-        console.log('Customer lookup by name failed:', error.message);
-        setCustomerLookup([]);
-        setShowCustomerDropdown(false);
-      }
-    } else {
-      setCustomerLookup([]);
-      setShowCustomerDropdown(false);
-    }
+    // Also fetch detailed customer info to populate any additional fields
+    fetchCustomerNameById(customer.id);
   };
   
-  // Fetch customer lookup by name
-  const fetchCustomerLookupByName = async (searchTerm) => {
-    try {
-      // Call the customer API to search for customers by name
-      const customers = await customerAPI.searchCustomers(searchTerm);
-      
-      // Format the results
-      const formattedResults = Array.isArray(customers) ? 
-        customers.map(customer => ({
-          id: customer.id || customer.cu_usid || customer.cu_custno || '',
-          name: customer.name || customer.cu_name || customer.cu_custname || '',
-          display: `${customer.id || customer.cu_usid || customer.cu_custno || ''} - ${customer.name || customer.cu_name || customer.cu_custname || ''} `
-        })) : [];
-      
-      setCustomerLookup(formattedResults);
-      setShowCustomerDropdown(true);
-    } catch (error) {
-      console.error('Error fetching customer lookup by name:', error);
-      setCustomerLookup([]);
-      setShowCustomerDropdown(false);
-      throw error; // Re-throw to be caught by the calling function
-    }
-  };
-  
-  // Fetch customer name by ID
-  const fetchCustomerNameById = async (customerId) => {
-    try {
-      const customer = await customerAPI.getCustomerById(customerId);
-      const customerName = customer.name || customer.cu_name || customer.cu_custname || '';
-      setFormData(prev => ({
-        ...prev,
-        customerName: customerName
-      }));
-    } catch (error) {
-      console.error('Error fetching customer by ID:', error);
-    }
-  };
-  
-  // Fetch customer ID by name
-  const fetchCustomerIdByName = async (customerName) => {
-    try {
-      const customers = await customerAPI.searchCustomers(customerName);
-      const customer = Array.isArray(customers) && customers.find(c => 
-        (c.name && c.name.toLowerCase().includes(customerName.toLowerCase())) ||
-        (c.cu_name && c.cu_name.toLowerCase().includes(customerName.toLowerCase())) ||
-        (c.cu_custname && c.cu_custname.toLowerCase().includes(customerName.toLowerCase()))
-      );
-      if (customer) {
-        setFormData(prev => ({
-          ...prev,
-          customerId: customer.id || customer.cu_usid || customer.cu_custno || ''
-        }));
-      }
-    } catch (error) {
-      console.error('Error searching customers by name:', error);
-    }
-  };
+
 
   const handleInlineFilterChange = (column, value) => {
     setInlineFilters(prev => ({
@@ -326,12 +278,29 @@ const Bookings = () => {
         ...formData,
         passengerList,
         totalPassengers: passengerList.filter(p => p.name.trim() !== '').length,
+        // Map fields to match backend expectations
+        customerId: formData.customerId,
+        customerName: formData.customerName,
+        fromStation: formData.fromStation,
+        toStation: formData.toStation,
+        travelDate: formData.travelDate,
+        travelClass: formData.travelClass,
+        berthPreference: formData.berthPreference,
+        remarks: formData.remarks,
+        status: formData.status,
         createdOn: formData.createdOn || new Date().toISOString(),
-        createdBy: formData.createdBy || user?.us_name || 'system'
+        createdBy: formData.createdBy || user?.us_name || 'system',
+        modifiedBy: user?.us_name || 'system',
+        modifiedOn: new Date().toISOString()
       };
       
       if (selectedBooking) {
-        await bookingAPI.updateBooking(selectedBooking.bk_bkid, bookingData);
+        // Identify the correct booking ID field from the selected booking
+        const bookingId = selectedBooking.bk_bkid || selectedBooking.id || selectedBooking.bookingId;
+        if (!bookingId) {
+          throw new Error('Booking ID is missing');
+        }
+        await bookingAPI.updateBooking(bookingId, bookingData);
       } else {
         await bookingAPI.createBooking(bookingData);
       }
@@ -537,7 +506,7 @@ const Bookings = () => {
                   name="customerName"
                   className="erp-input"
                   value={formData.customerName}
-                  onChange={handleCustomerNameChange}
+                  onChange={handleInputChange}
                   disabled={!isEditing}
                   placeholder="Enter customer name..."
                 />

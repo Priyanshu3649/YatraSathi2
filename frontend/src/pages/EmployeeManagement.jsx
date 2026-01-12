@@ -504,7 +504,7 @@ const EmployeeManagement = () => {
                     <td>{item.user?.us_roid || ''}</td>
                     <td>{item.em_salary ? `₹${parseFloat(item.em_salary).toFixed(2)}` : ''}</td>
                     <td>{item.em_joindt ? new Date(item.em_joindt).toLocaleDateString() : ''}</td>
-                    <td>{item.manager?.em_empno || 'N/A'}</td>
+                    <td>{item.manager?.fullName || 'N/A'}</td>
                     <td>{item.em_status || 'ACTIVE'}</td>
                     <td>
                       <button className="btn btn-secondary mr-1" onClick={() => handleEdit(item)}>

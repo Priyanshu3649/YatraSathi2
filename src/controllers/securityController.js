@@ -1048,7 +1048,22 @@ const getAllEmployees = async (req, res) => {
         {
           model: UserTVL,
           as: 'user',
-          attributes: ['us_usid', 'us_fname', 'us_lname', 'us_email', 'us_phone', 'us_roid', 'us_active', 'us_addr1', 'us_city', 'us_state', 'us_pin']
+          attributes: ['us_usid', 'us_fname', 'us_lname', 'us_email', 'us_phone', 'us_roid', 'us_active', 'us_addr1', 'us_city', 'us_state', 'us_pin'],
+          include: [{
+            model: RoleTVL,
+            as: 'fnXfunction',
+            attributes: ['fn_fnid', 'fn_fnshort', 'fn_fndesc'],
+            required: false
+          }]
+        },
+        {
+          model: EmployeeTVL,
+          as: 'manager',
+          include: [{
+            model: UserTVL,
+            as: 'user',
+            attributes: ['us_fname', 'us_lname']
+          }]
         }
       ],
       order: [['edtm', 'DESC']]
@@ -1056,6 +1071,8 @@ const getAllEmployees = async (req, res) => {
 
     const transformedEmployees = employees.map(emp => {
       const user = emp.user || {};
+      const role = user.fnXfunction || {};
+      const manager = emp.manager ? (emp.manager.user || {}) : null;
       return {
         // Top-level fields aligned to DynamicAdminPanel expectations
         us_usid: user.us_usid,
@@ -1071,6 +1088,18 @@ const getAllEmployees = async (req, res) => {
         em_joindt: emp.em_joindt,
         em_manager: emp.em_manager,
         em_status: emp.em_status,
+        // Include role information for display
+        Role: {
+          fn_fnid: role.fn_fnid,
+          fn_fnshort: role.fn_fnshort,
+          fn_fndesc: role.fn_fndesc
+        },
+        // Include manager information for display
+        manager: manager ? {
+          us_fname: manager.us_fname,
+          us_lname: manager.us_lname,
+          fullName: manager.us_fname && manager.us_lname ? `${manager.us_fname} ${manager.us_lname}`.trim() : manager.us_fname || manager.us_lname || 'N/A'
+        } : null,
         // Computed fields for frontend
         fullName: user.us_fname && user.us_lname ? `${user.us_fname} ${user.us_lname}`.trim() : user.us_fname || user.us_lname || 'N/A',
         edtm: emp.edtm,

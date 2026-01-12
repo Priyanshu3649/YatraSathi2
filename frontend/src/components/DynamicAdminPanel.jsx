@@ -264,9 +264,6 @@ const DynamicAdminPanel = () => {
         { name: 'us_aadhaar', label: 'Aadhaar Number', type: 'text', maxLength: 12, pattern: '[0-9]{12}', title: 'Enter 12-digit Aadhaar number' },
         { name: 'us_pan', label: 'PAN Number', type: 'text', maxLength: 10, pattern: '[A-Z]{5}[0-9]{4}[A-Z]{1}', title: 'Enter valid PAN number (e.g., ABCDE1234F)' },
         { name: 'us_roid', label: 'Role', type: 'dropdown', required: true, source: 'roles', displayField: 'fn_fnshort', valueField: 'fn_fnid' },
-        { name: 'us_coid', label: 'Company', type: 'dropdown', required: true, source: 'company', displayField: 'co_coshort', valueField: 'co_coid', defaultValue: 'TRV' },
-        { name: 'em_empno', label: 'Employee Number', type: 'text', required: true, maxLength: 10 },
-        { name: 'em_designation', label: 'Designation', type: 'text', required: true, maxLength: 50 },
         { name: 'em_dept', label: 'Department', type: 'select', required: true, options: [
           { value: 'BOOKING', label: 'Booking' },
           { value: 'ACCOUNTS', label: 'Accounts' },
@@ -295,10 +292,10 @@ const DynamicAdminPanel = () => {
         { name: 'lg_active', label: 'Login Active', type: 'checkbox', defaultValue: 1 },
         { name: 'temp_password', label: 'Temporary Password', type: 'password', maxLength: 50, placeholder: 'Leave blank to keep existing password' }
       ],
-      columns: ['us_usid', 'fullName', 'us_email', 'us_phone', 'em_empno', 'em_designation', 'em_dept', 'roleName', 'em_status', 'us_active', 'edtm'],
-      columnLabels: ['Employee ID', 'Full Name', 'Email', 'Phone', 'Emp No', 'Designation', 'Department', 'Role', 'Status', 'Active', 'Created On'],
-      columnWidths: ['120px', '180px', '200px', '130px', '100px', '150px', '120px', '100px', '100px', '70px', '150px'],
-      filterFields: ['us_usid', 'fullName', 'us_email', 'em_empno', 'em_dept', 'roleName', 'em_status', 'active'],
+      columns: ['us_usid', 'fullName', 'us_email', 'us_phone', 'em_dept', 'roleName', 'em_status', 'us_active', 'edtm'],
+      columnLabels: ['Employee ID', 'Full Name', 'Email', 'Phone', 'Department', 'Role', 'Status', 'Active', 'Created On'],
+      columnWidths: ['120px', '180px', '200px', '130px', '120px', '100px', '100px', '70px', '150px'],
+      filterFields: ['us_usid', 'fullName', 'us_email', 'em_dept', 'roleName', 'em_status', 'active'],
       computedFields: [
         { name: 'fullName', label: 'Full Name', formula: (data) => `${data.us_fname || ''} ${data.us_lname || ''}`.trim() },
         { name: 'roleName', label: 'Role Name', formula: (data) => data.Role?.fn_fnshort || data.us_roid || '' }
@@ -673,8 +670,24 @@ const DynamicAdminPanel = () => {
       if (response.ok) {
         const result = await response.json();
         const dataArray = Array.isArray(result) ? result : result.data || [];
-        setData(dataArray);
-        setFilteredData(dataArray);
+        
+        // Apply computed fields if defined for this module
+        const moduleConfig = modules[activeModule];
+        let processedData = dataArray;
+        if (moduleConfig.computedFields && moduleConfig.computedFields.length > 0) {
+          processedData = dataArray.map(record => {
+            const newRecord = { ...record };
+            moduleConfig.computedFields.forEach(computedField => {
+              if (computedField.formula) {
+                newRecord[computedField.name] = computedField.formula(record);
+              }
+            });
+            return newRecord;
+          });
+        }
+        
+        setData(processedData);
+        setFilteredData(processedData);
       } else {
         setData([]);
         setFilteredData([]);
