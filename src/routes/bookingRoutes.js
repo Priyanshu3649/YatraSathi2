@@ -8,6 +8,8 @@ const {
   cancelBooking,
   deleteBooking,
   assignBooking,
+  approveBooking,
+  confirmBooking,
   getBookingsByStatus,
   searchBookings
 } = require('../controllers/bookingController');
@@ -27,6 +29,8 @@ router.get('/search', searchBookings);
 // Admin routes
 router.get('/', getAllBookings);
 router.post('/assign', assignBooking);
+router.post('/approve', approveBooking);
+router.post('/confirm', confirmBooking);
 
 // Parameterized routes last (less specific paths)
 router.get('/:id', getBookingById);

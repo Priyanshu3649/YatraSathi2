@@ -1,0 +1,323 @@
+/* Vintage ERP Dashboard Styles */
+
+.admin-dashboard {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background-color: #f5f7fa;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+.erp-admin-container {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background-color: #f5f7fa;
+}
+
+/* Top Menu Bar */
+.erp-menu-bar {
+  display: flex;
+  background-color: #2c3e50;
+  color: white;
+  padding: 8px 12px;
+  border-bottom: 1px solid #1a252f;
+  flex-shrink: 0;
+}
+
+.erp-menu-item {
+  padding: 4px 12px;
+  cursor: pointer;
+  border-right: 1px solid #34495e;
+  font-size: 13px;
+  user-select: none;
+}
+
+.erp-menu-item:hover {
+  background-color: #34495e;
+}
+
+.erp-user-info {
+  margin-left: auto;
+  padding: 4px 12px;
+  font-size: 12px;
+  background-color: #3498db;
+  border-radius: 3px;
+}
+
+/* Toolbar */
+.erp-toolbar {
+  display: flex;
+  background-color: #ecf0f1;
+  padding: 6px 12px;
+  border-bottom: 1px solid #bdc3c7;
+  gap: 6px;
+  flex-shrink: 0;
+  align-items: center;
+}
+
+.erp-button {
+  padding: 4px 8px;
+  background-color: #3498db;
+  color: white;
+  border: 1px solid #2980b9;
+  border-radius: 0;
+  cursor: pointer;
+  font-size: 12px;
+  min-width: 60px;
+  height: 28px;
+}
+
+.erp-button:hover {
+  background-color: #2980b9;
+}
+
+.erp-icon-button {
+  padding: 4px;
+  background-color: #95a5a6;
+  color: white;
+  border: 1px solid #7f8c8d;
+  border-radius: 0;
+  cursor: pointer;
+  font-size: 12px;
+  width: 30px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.erp-icon-button:hover {
+  background-color: #7f8c8d;
+}
+
+.erp-tool-separator {
+  width: 1px;
+  background-color: #bdc3c7;
+  margin: 0 6px;
+  height: 24px;
+}
+
+/* Main Content Area */
+.erp-main-content {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+
+.erp-center-content {
+  flex: 1;
+  padding: 12px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* Section Headers */
+.section-header {
+  background-color: #2c3e50;
+  color: white;
+  padding: 6px 12px;
+  font-size: 14px;
+  font-weight: bold;
+  text-transform: uppercase;
+  border: 1px solid #1a252f;
+  margin: 0;
+}
+
+.section-content {
+  background-color: white;
+  border: 1px solid #bdc3c7;
+  padding: 12px;
+  margin-bottom: 12px;
+}
+
+/* Dashboard Summary - System Summary Row */
+.dashboard-summary {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+
+.summary-panel {
+  flex: 1;
+  min-width: 150px;
+  background-color: white;
+  border: 1px solid #bdc3c7;
+  padding: 12px;
+  text-align: center;
+}
+
+.summary-title {
+  font-size: 12px;
+  color: #7f8c8d;
+  margin: 0 0 4px 0;
+  text-transform: uppercase;
+}
+
+.summary-value {
+  font-size: 24px;
+  font-weight: bold;
+  color: #2c3e50;
+  margin: 0 0 4px 0;
+}
+
+.summary-desc {
+  font-size: 11px;
+  color: #95a5a6;
+  margin: 0;
+}
+
+/* Financial Section */
+.financial-section {
+  display: flex;
+  gap: 24px;
+  flex-wrap: wrap;
+}
+
+.financial-table, .outstanding-table, .operational-table, .activity-log-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 8px;
+  font-size: 12px;
+}
+
+.financial-table th, .financial-table td,
+.outstanding-table th, .outstanding-table td,
+.operational-table th, .operational-table td,
+.activity-log-table th, .activity-log-table td {
+  border: 1px solid #bdc3c7;
+  padding: 6px 8px;
+  text-align: left;
+}
+
+.financial-table th, .outstanding-table th,
+.operational-table th, .activity-log-table th {
+  background-color: #ecf0f1;
+  font-weight: bold;
+  text-transform: uppercase;
+  font-size: 11px;
+}
+
+/* Activity Log Table */
+.scrollable-container {
+  max-height: 200px;
+  overflow-y: auto;
+  border: 1px solid #bdc3c7;
+  margin-top: 8px;
+}
+
+.scrollable-container table {
+  margin: 0;
+}
+
+/* Alerts Section */
+.alerts-section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.alert-item {
+  padding: 8px 12px;
+  border: 1px solid;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+}
+
+.alert-item.critical {
+  background-color: #fadbd8;
+  border-color: #e74c3c;
+  color: #c0392b;
+}
+
+.alert-item.warning {
+  background-color: #fcf3cf;
+  border-color: #f39c12;
+  color: #d35400;
+}
+
+.alert-item::before {
+  content: "●";
+  font-size: 20px;
+  margin-right: 8px;
+}
+
+.alert-item.critical::before {
+  color: #e74c3c;
+}
+
+.alert-item.warning::before {
+  color: #f39c12;
+}
+
+/* Quick Navigation */
+.quick-nav-section {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.nav-button {
+  padding: 6px 12px;
+  background-color: #3498db;
+  color: white;
+  border: 1px solid #2980b9;
+  border-radius: 0;
+  cursor: pointer;
+  font-size: 12px;
+  min-width: 80px;
+  height: 30px;
+}
+
+.nav-button:hover {
+  background-color: #2980b9;
+}
+
+/* Status Bar */
+.erp-status-bar {
+  display: flex;
+  background-color: #ecf0f1;
+  padding: 4px 12px;
+  border-top: 1px solid #bdc3c7;
+  font-size: 11px;
+  color: #7f8c8d;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 16px;
+}
+
+.erp-status-item {
+  white-space: nowrap;
+}
+
+/* Loading indicator */
+.loading {
+  text-align: center;
+  padding: 20px;
+  color: #7f8c8d;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .dashboard-summary {
+    flex-direction: column;
+  }
+  
+  .financial-section {
+    flex-direction: column;
+  }
+  
+  .erp-status-bar {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  
+  .erp-status-item {
+    flex: 1 0 auto;
+  }
+}

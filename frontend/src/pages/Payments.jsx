@@ -45,6 +45,74 @@ const Payments = () => {
   // Selected payment for form
   const [selectedPayment, setSelectedPayment] = useState(null);
   
+  // Navigation helper function to find index of selected payment
+  const getSelectedPaymentIndex = () => {
+    if (!selectedPayment) return -1;
+    return payments.findIndex(p => p.pt_ptid === selectedPayment.pt_ptid || p.id === selectedPayment.id);
+  };
+  
+  // Navigation functions
+  const goToFirstRecord = () => {
+    if (payments.length > 0) {
+      handleRowSelect(payments[0]);
+    }
+  };
+  
+  const goToPreviousRecord = () => {
+    const currentIndex = getSelectedPaymentIndex();
+    if (currentIndex > 0) {
+      handleRowSelect(payments[currentIndex - 1]);
+    }
+  };
+  
+  const goToNextRecord = () => {
+    const currentIndex = getSelectedPaymentIndex();
+    if (currentIndex < payments.length - 1) {
+      handleRowSelect(payments[currentIndex + 1]);
+    }
+  };
+  
+  const goToLastRecord = () => {
+    if (payments.length > 0) {
+      handleRowSelect(payments[payments.length - 1]);
+    }
+  };
+  
+  // Keyboard navigation effect
+  useEffect(() => {
+    const handleKeyDown = (event) => {
+      // Only handle navigation if we have payments and are not in an input field
+      if (payments.length === 0 || document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA' || document.activeElement.tagName === 'SELECT') {
+        return;
+      }
+      
+      switch (event.key) {
+        case 'ArrowDown':
+          event.preventDefault();
+          goToNextRecord();
+          break;
+        case 'ArrowUp':
+          event.preventDefault();
+          goToPreviousRecord();
+          break;
+        default:
+          break;
+      }
+    };
+    
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [selectedPayment, payments]);
+  
+  // Auto-select first record when payments data changes
+  useEffect(() => {
+    if (payments.length > 0 && !selectedPayment) {
+      handleRowSelect(payments[0]);
+    }
+  }, [payments, selectedPayment]);
+  
   // Fetch payments when component mounts
   useEffect(() => {
     fetchPayments();
@@ -200,6 +268,11 @@ const Payments = () => {
     <div className="erp-admin-container">
       {/* Toolbar */}
       <div className="erp-toolbar">
+        <button className="erp-icon-button" onClick={goToFirstRecord} disabled={payments.length === 0} title="First Record">|◀</button>
+        <button className="erp-icon-button" onClick={goToPreviousRecord} disabled={payments.length === 0 || getSelectedPaymentIndex() <= 0} title="Previous Record">◀</button>
+        <button className="erp-icon-button" onClick={goToNextRecord} disabled={payments.length === 0 || getSelectedPaymentIndex() >= payments.length - 1} title="Next Record">▶</button>
+        <button className="erp-icon-button" onClick={goToLastRecord} disabled={payments.length === 0} title="Last Record">▶|</button>
+        <div className="erp-tool-separator"></div>
         <button className="erp-button" onClick={handleNew} title="New">New</button>
         <button className="erp-button" onClick={() => selectedPayment ? handleEdit(selectedPayment) : alert('Please select a payment first')} disabled={!selectedPayment || (user?.us_usertype !== 'admin' && user?.us_usertype !== 'employee')} title="Edit">Edit</button>
         <button className="erp-button" onClick={() => selectedPayment ? handleDelete(selectedPayment.pt_ptid) : alert('Please select a payment first')} disabled={!selectedPayment || user?.us_usertype !== 'admin'} title="Delete">Delete</button>
@@ -341,6 +414,7 @@ const Payments = () => {
               <table className="erp-table">
                 <thead>
                   <tr>
+                    <th style={{ width: '30px' }}></th>
                     <th style={{ width: '120px' }}>Payment ID</th>
                     <th style={{ width: '100px' }}>Date</th>
                     <th style={{ width: '120px' }}>Customer ID</th>
@@ -360,6 +434,7 @@ const Payments = () => {
                       onClick={() => handleRowSelect(payment)}
                       className={selectedPayment && (selectedPayment.pt_ptid === payment.pt_ptid || selectedPayment.id === payment.id) ? 'selected' : ''}
                     >
+                      <td><input type="checkbox" checked={selectedPayment && (selectedPayment.pt_ptid === payment.pt_ptid || selectedPayment.id === payment.id)} onChange={() => {}} /></td>
                       <td>{payment.pt_ptid || payment.id}</td>
                       <td>{payment.pt_date ? new Date(payment.pt_date).toLocaleDateString() : ''}</td>
                       <td>{payment.pt_cusid}</td>
@@ -527,6 +602,7 @@ const Payments = () => {
       <div className="erp-status-bar">
         <div className="erp-status-item">Ready</div>
         <div className="erp-status-item">Records: {payments.length}</div>
+        <div className="erp-status-item">Position: {selectedPayment ? `${getSelectedPaymentIndex() + 1} of ${payments.length}` : '- / -'}</div>
         <div className="erp-status-item">User: {user?.us_name || 'Unknown'}</div>
         <div className="status-panel">YatraSathi ERP System</div>
       </div>

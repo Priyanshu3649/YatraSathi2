@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { bookingAPI, customerAPI } from '../services/api';
+import { bookingAPI } from '../services/api';
 import '../styles/vintage-erp-theme.css';
 import '../styles/classic-enterprise-global.css';
 import '../styles/vintage-admin-panel.css';
@@ -17,9 +17,7 @@ const Bookings = () => {
   const [formData, setFormData] = useState({
     bookingId: '',
     bookingDate: new Date().toISOString().split('T')[0],
-    customerId: '',
     customerName: '',
-    totalPassengers: 0,
     fromStation: '',
     toStation: '',
     travelDate: new Date().toISOString().split('T')[0],
@@ -43,20 +41,6 @@ const Bookings = () => {
     idProofType: '',
     idProofNumber: ''
   }]);
-  
-  // Auto-calculate total passengers when passenger list changes
-  useEffect(() => {
-    const total = passengerList.filter(p => p.name.trim() !== '').length;
-    setFormData(prev => ({
-      ...prev,
-      totalPassengers: total
-    }));
-  }, [passengerList]);
-  
-  // State for customer search
-  const [customerSearchTerm, setCustomerSearchTerm] = useState('');
-  const [customerSuggestions, setCustomerSuggestions] = useState([]);
-  const [showCustomerSuggestions, setShowCustomerSuggestions] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const recordsPerPage = 100;
@@ -109,81 +93,10 @@ const Bookings = () => {
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
-    
-    // Handle customer ID change
-    if (name === 'customerId') {
-      setFormData(prev => ({
-        ...prev,
-        customerId: value
-      }));
-      
-      // Fetch customer name when customer ID changes
-      if (value) {
-        fetchCustomerName(value);
-      } else {
-        setFormData(prev => ({
-          ...prev,
-          customerName: ''
-        }));
-      }
-    } 
-    // Handle customer name change
-    else if (name === 'customerName') {
-      setFormData(prev => ({
-        ...prev,
-        customerName: value
-      }));
-      
-      // Fetch customer ID when customer name changes
-      if (value) {
-        fetchCustomerId(value);
-      } else {
-        setFormData(prev => ({
-          ...prev,
-          customerId: ''
-        }));
-      }
-    }
-    // Handle other fields
-    else {
-      setFormData(prev => ({
-        ...prev,
-        [name]: value
-      }));
-    }
-  };
-  
-  // Function to fetch customer name by ID
-  const fetchCustomerName = async (customerId) => {
-    try {
-      const customer = await customerAPI.getCustomerById(customerId);
-      setFormData(prev => ({
-        ...prev,
-        customerName: customer.name || customer.cu_name || customer.cu_custname || ''
-      }));
-    } catch (error) {
-      console.error('Error fetching customer:', error);
-    }
-  };
-  
-  // Function to fetch customer ID by name
-  const fetchCustomerId = async (customerName) => {
-    try {
-      const customers = await customerAPI.searchCustomers(customerName);
-      const customer = Array.isArray(customers) && customers.find(c => 
-        (c.name && c.name.toLowerCase().includes(customerName.toLowerCase())) ||
-        (c.cu_name && c.cu_name.toLowerCase().includes(customerName.toLowerCase())) ||
-        (c.cu_custname && c.cu_custname.toLowerCase().includes(customerName.toLowerCase()))
-      );
-      if (customer) {
-        setFormData(prev => ({
-          ...prev,
-          customerId: customer.id || customer.cu_usid || customer.cu_custno || ''
-        }));
-      }
-    } catch (error) {
-      console.error('Error searching customers:', error);
-    }
+    setFormData(prev => ({
+      ...prev,
+      [name]: value
+    }));
   };
 
   const handleInlineFilterChange = (column, value) => {
@@ -198,9 +111,7 @@ const Bookings = () => {
     setFormData({
       bookingId: '',
       bookingDate: new Date().toISOString().split('T')[0],
-      customerId: '',
       customerName: '',
-      totalPassengers: 0,
       fromStation: '',
       toStation: '',
       travelDate: new Date().toISOString().split('T')[0],
@@ -240,7 +151,6 @@ const Bookings = () => {
       const bookingData = {
         ...formData,
         passengerList,
-        totalPassengers: passengerList.filter(p => p.name.trim() !== '').length,
         createdOn: formData.createdOn || new Date().toISOString(),
         createdBy: formData.createdBy || user?.us_name || 'system'
       };
@@ -280,9 +190,7 @@ const Bookings = () => {
     setFormData({
       bookingId: record.bk_bkid || '',
       bookingDate: record.bk_bookingdt ? new Date(record.bk_bookingdt).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
-      customerId: record.customerId || record.bk_customerid || record.cu_usid || '',
       customerName: record.customerName || record.bk_customername || '',
-      totalPassengers: record.totalPassengers || 0,
       fromStation: record.fromStation?.st_stname || record.bk_fromstation || record.bk_fromst || '',
       toStation: record.toStation?.st_stname || record.bk_tostation || record.bk_tost || '',
       travelDate: record.bk_trvldt ? new Date(record.bk_trvldt).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
@@ -402,18 +310,8 @@ const Bookings = () => {
               />
             </div>
 
-            {/* Customer ID and Name Row */}
+            {/* Customer Name Row */}
             <div className="erp-form-row">
-              <label className="erp-form-label">Customer ID</label>
-              <input
-                type="text"
-                name="customerId"
-                className="erp-input"
-                value={formData.customerId}
-                onChange={handleInputChange}
-                disabled={!isEditing}
-                placeholder="Enter customer ID..."
-              />
               <label className="erp-form-label">Customer Name</label>
               <input
                 type="text"
@@ -422,20 +320,6 @@ const Bookings = () => {
                 value={formData.customerName}
                 onChange={handleInputChange}
                 disabled={!isEditing}
-                placeholder="Enter customer name..."
-              />
-            </div>
-            
-            {/* Total Passengers and Contact Number Row */}
-            <div className="erp-form-row">
-              <label className="erp-form-label">Total Passengers</label>
-              <input
-                type="text"
-                name="totalPassengers"
-                className="erp-input"
-                value={formData.totalPassengers}
-                readOnly
-                disabled
               />
               <label className="erp-form-label">Contact Number</label>
               <input
@@ -728,9 +612,7 @@ const Bookings = () => {
                       <th style={{ width: '30px' }}><input type="checkbox" /></th>
                       <th>Booking ID</th>
                       <th>Booking Date</th>
-                      <th>Customer ID</th>
                       <th>Customer Name</th>
-                      <th>Total Passengers</th>
                       <th>From Station</th>
                       <th>To Station</th>
                       <th>Travel Date</th>
@@ -764,29 +646,9 @@ const Bookings = () => {
                         <input
                           type="text"
                           className="inline-filter-input"
-                          value={inlineFilters['customerId'] || ''}
-                          onChange={(e) => handleInlineFilterChange('customerId', e.target.value)}
-                          placeholder="Filter customer ID..."
-                          style={{ width: '100%', padding: '2px', fontSize: '11px', backgroundColor: '#f0f0f0' }}
-                        />
-                      </td>
-                      <td>
-                        <input
-                          type="text"
-                          className="inline-filter-input"
                           value={inlineFilters['customerName'] || ''}
                           onChange={(e) => handleInlineFilterChange('customerName', e.target.value)}
                           placeholder="Filter customer..."
-                          style={{ width: '100%', padding: '2px', fontSize: '11px', backgroundColor: '#f0f0f0' }}
-                        />
-                      </td>
-                      <td>
-                        <input
-                          type="number"
-                          className="inline-filter-input"
-                          value={inlineFilters['totalPassengers'] || ''}
-                          onChange={(e) => handleInlineFilterChange('totalPassengers', e.target.value)}
-                          placeholder="Filter passengers..."
                           style={{ width: '100%', padding: '2px', fontSize: '11px', backgroundColor: '#f0f0f0' }}
                         />
                       </td>
@@ -872,9 +734,7 @@ const Bookings = () => {
                             <td><input type="checkbox" checked={!!isSelected} onChange={() => {}} /></td>
                             <td>{record.bk_bkid}</td>
                             <td>{new Date(record.bk_bookingdt || record.createdOn || new Date()).toLocaleDateString()}</td>
-                            <td>{record.customerId || record.bk_customerid || record.cu_usid || 'N/A'}</td>
                             <td>{record.customerName || record.bk_customername || 'N/A'}</td>
-                            <td>{record.totalPassengers || passengerList.filter(p => p.name.trim() !== '').length || 0}</td>
                             <td>{record.fromStation?.st_stname || record.bk_fromstation || record.bk_fromst || 'N/A'}</td>
                             <td>{record.toStation?.st_stname || record.bk_tostation || record.bk_tost || 'N/A'}</td>
                             <td>{new Date(record.bk_trvldt || record.bk_travelldate || new Date()).toLocaleDateString()}</td>
@@ -922,16 +782,6 @@ const Bookings = () => {
             />
           </div>
           <div className="erp-form-row">
-            <label className="erp-form-label">Customer ID</label>
-            <input 
-              type="text" 
-              className="erp-input"
-              value={inlineFilters['customerId'] || ''}
-              onChange={(e) => handleInlineFilterChange('customerId', e.target.value)}
-              placeholder="Search customer ID..."
-            />
-          </div>
-          <div className="erp-form-row">
             <label className="erp-form-label">Customer Name</label>
             <input 
               type="text" 
@@ -939,16 +789,6 @@ const Bookings = () => {
               value={inlineFilters['customerName'] || ''}
               onChange={(e) => handleInlineFilterChange('customerName', e.target.value)}
               placeholder="Search customer..."
-            />
-          </div>
-          <div className="erp-form-row">
-            <label className="erp-form-label">Total Passengers</label>
-            <input 
-              type="number" 
-              className="erp-input"
-              value={inlineFilters['totalPassengers'] || ''}
-              onChange={(e) => handleInlineFilterChange('totalPassengers', e.target.value)}
-              placeholder="Search passengers..."
             />
           </div>
           <div className="erp-form-row">

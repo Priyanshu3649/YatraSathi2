@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { dashboardAPI } from '../services/api';
-import '../styles/dashboard.css';
 import '../styles/vintage-erp-theme.css';
 import '../styles/classic-enterprise-global.css';
 import '../styles/vintage-admin-panel.css';
@@ -9,97 +8,135 @@ import '../styles/dynamic-admin-panel.css';
 import '../styles/vintage-erp-global.css';
 import '../styles/vintage-erp-dashboard.css';
 
-const Dashboard = () => {
+const AdminDashboard = () => {
   const { user } = useAuth();
-  const [stats, setStats] = useState(null);
+  const [overview, setOverview] = useState({
+    totalBookings: 0,
+    totalActivePnrs: 0,
+    billsGeneratedToday: 0,
+    totalPending: 0,
+    refundsInProcess: 0,
+    netFareCollected: '₹0',
+    serviceCharges: '₹0',
+    agentFees: '₹0',
+    platformFees: '₹0',
+    discountsGiven: '₹0',
+    taxesCollected: '₹0',
+    totalRevenue: '₹0',
+    pendingBillsCount: 0,
+    pendingBillsAmount: '₹0',
+    partialPaymentsCount: 0,
+    partialPaymentsAmount: '₹0',
+    overduePaymentsCount: 0,
+    overduePaymentsAmount: '₹0',
+    refundPendingCount: 0,
+    refundPendingAmount: '₹0',
+    trainsBookedToday: 0,
+    trainsBookedThisMonth: 0,
+    ticketsIssuedToday: 0,
+    ticketsIssuedThisMonth: 0,
+    ticketsCancelledToday: 0,
+    ticketsCancelledThisMonth: 0,
+    waitlistedPnrsToday: 0,
+    waitlistedPnrsThisMonth: 0,
+    chartsPreparedToday: 0,
+    chartsPreparedThisMonth: 0
+  });
+
+  const [recentActivity, setRecentActivity] = useState([]);
+  const [alerts, setAlerts] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
+  const [lastUpdated, setLastUpdated] = useState(new Date());
 
-  useEffect(() => {
-    const fetchDashboardData = async () => {
-      try {
-        setLoading(true);
-        let data;
+  // Function to fetch dashboard data
+  const fetchDashboardData = async () => {
+    try {
+      setLoading(true);
+      const response = await dashboardAPI.getAdminStats();
+      
+      if (response.success) {
+        const data = response.data;
         
-        if (user && user.us_usertype === 'admin') {
-          data = await dashboardAPI.getAdminStats();
-        } else if (user && user.us_usertype === 'employee') {
-          data = await dashboardAPI.getEmployeeStats();
-        } else {
-          data = await dashboardAPI.getCustomerStats();
-        }
-        
-        setStats(data);
-      } catch (err) {
-        setError(err.message || 'Failed to load dashboard data');
-      } finally {
-        setLoading(false);
+        setOverview({
+          totalBookings: data.overview?.totalBookings || 0,
+          totalActivePnrs: data.overview?.totalActivePnrs || 0,
+          billsGeneratedToday: data.overview?.billsGeneratedToday || 0,
+          totalPending: data.overview?.totalPending || 0,
+          refundsInProcess: data.overview?.refundsInProcess || 0,
+          netFareCollected: data.overview?.netFareCollected || '₹0',
+          serviceCharges: data.overview?.serviceCharges || '₹0',
+          agentFees: data.overview?.agentFees || '₹0',
+          platformFees: data.overview?.platformFees || '₹0',
+          discountsGiven: data.overview?.discountsGiven || '₹0',
+          taxesCollected: data.overview?.taxesCollected || '₹0',
+          totalRevenue: data.overview?.totalRevenue || '₹0',
+          pendingBillsCount: data.overview?.pendingBillsCount || 0,
+          pendingBillsAmount: data.overview?.pendingBillsAmount || '₹0',
+          partialPaymentsCount: data.overview?.partialPaymentsCount || 0,
+          partialPaymentsAmount: data.overview?.partialPaymentsAmount || '₹0',
+          overduePaymentsCount: data.overview?.overduePaymentsCount || 0,
+          overduePaymentsAmount: data.overview?.overduePaymentsAmount || '₹0',
+          refundPendingCount: data.overview?.refundPendingCount || 0,
+          refundPendingAmount: data.overview?.refundPendingAmount || '₹0',
+          trainsBookedToday: data.overview?.trainsBookedToday || 0,
+          trainsBookedThisMonth: data.overview?.trainsBookedThisMonth || 0,
+          ticketsIssuedToday: data.overview?.ticketsIssuedToday || 0,
+          ticketsIssuedThisMonth: data.overview?.ticketsIssuedThisMonth || 0,
+          ticketsCancelledToday: data.overview?.ticketsCancelledToday || 0,
+          ticketsCancelledThisMonth: data.overview?.ticketsCancelledThisMonth || 0,
+          waitlistedPnrsToday: data.overview?.waitlistedPnrsToday || 0,
+          waitlistedPnrsThisMonth: data.overview?.waitlistedPnrsThisMonth || 0,
+          chartsPreparedToday: data.overview?.chartsPreparedToday || 0,
+          chartsPreparedThisMonth: data.overview?.chartsPreparedThisMonth || 0
+        });
+
+        setRecentActivity(data.recentActivity || []);
+        setAlerts(data.alerts || []);
       }
-    };
-
-    if (user) {
-      fetchDashboardData();
-      
-      // Set up interval to refresh data every 30 seconds
-      const interval = setInterval(fetchDashboardData, 30000);
-      
-      // Clean up interval on component unmount
-      return () => clearInterval(interval);
+    } catch (error) {
+      console.error('Error fetching dashboard data:', error);
+    } finally {
+      setLoading(false);
+      setLastUpdated(new Date());
     }
-  }, [user]);
+  };
 
-  if (loading) {
-    return <div className="dashboard panel">Loading dashboard...</div>;
-  }
+  // Initial data fetch and set up interval for real-time updates
+  useEffect(() => {
+    fetchDashboardData();
 
-  if (error) {
-    return <div className="dashboard panel alert alert-error">{error}</div>;
-  }
+    // Set up interval to refresh data every 30 seconds
+    const interval = setInterval(fetchDashboardData, 30000);
 
-  if (!stats) {
-    return <div className="dashboard panel">No dashboard data available</div>;
-  }
+    return () => clearInterval(interval);
+  }, []);
 
-  // Render dashboard based on user type
-  if (user && user.us_usertype === 'admin') {
-    return <AdminDashboard stats={stats} />;
-  } else if (user && user.us_usertype === 'employee') {
-    return <EmployeeDashboard stats={stats} />;
-  } else {
-    return <CustomerDashboard stats={stats} />;
-  }
-};
-
-// Admin Dashboard Component with Vintage ERP Styling
-const AdminDashboard = ({ stats }) => {
-  const { overview, bookingStats, employeePerformance, recentActivity, alerts } = stats || {};
-  
   // Calculate financial metrics
   const revenueMetrics = [
-    { metric: 'Net Fare Collected', amount: overview?.netFareCollected || '₹0' },
-    { metric: 'Service Charges', amount: overview?.serviceCharges || '₹0' },
-    { metric: 'Agent Fees', amount: overview?.agentFees || '₹0' },
-    { metric: 'Platform Fees', amount: overview?.platformFees || '₹0' },
-    { metric: 'Discounts Given', amount: overview?.discountsGiven || '₹0' },
-    { metric: 'Taxes Collected', amount: overview?.taxesCollected || '₹0' },
-    { metric: 'Total Revenue', amount: overview?.totalRevenue || '₹0' }
+    { metric: 'Net Fare Collected', amount: overview.netFareCollected },
+    { metric: 'Service Charges', amount: overview.serviceCharges },
+    { metric: 'Agent Fees', amount: overview.agentFees },
+    { metric: 'Platform Fees', amount: overview.platformFees },
+    { metric: 'Discounts Given', amount: overview.discountsGiven },
+    { metric: 'Taxes Collected', amount: overview.taxesCollected },
+    { metric: 'Total Revenue', amount: overview.totalRevenue }
   ];
-  
+
   const outstandingMetrics = [
-    { category: 'Pending Bills', count: overview?.pendingBillsCount || 0, amount: overview?.pendingBillsAmount || '₹0' },
-    { category: 'Partial Payments', count: overview?.partialPaymentsCount || 0, amount: overview?.partialPaymentsAmount || '₹0' },
-    { category: 'Overdue Payments', count: overview?.overduePaymentsCount || 0, amount: overview?.overduePaymentsAmount || '₹0' },
-    { category: 'Refund Pending', count: overview?.refundPendingCount || 0, amount: overview?.refundPendingAmount || '₹0' }
+    { category: 'Pending Bills', count: overview.pendingBillsCount, amount: overview.pendingBillsAmount },
+    { category: 'Partial Payments', count: overview.partialPaymentsCount, amount: overview.partialPaymentsAmount },
+    { category: 'Overdue Payments', count: overview.overduePaymentsCount, amount: overview.overduePaymentsAmount },
+    { category: 'Refund Pending', count: overview.refundPendingCount, amount: overview.refundPendingAmount }
   ];
-  
+
   const operationalMetrics = [
-    { metric: 'Trains Booked', today: overview?.trainsBookedToday || 0, thisMonth: overview?.trainsBookedThisMonth || 0 },
-    { metric: 'Tickets Issued', today: overview?.ticketsIssuedToday || 0, thisMonth: overview?.ticketsIssuedThisMonth || 0 },
-    { metric: 'Tickets Cancelled', today: overview?.ticketsCancelledToday || 0, thisMonth: overview?.ticketsCancelledThisMonth || 0 },
-    { metric: 'Waitlisted PNRs', today: overview?.waitlistedPnrsToday || 0, thisMonth: overview?.waitlistedPnrsThisMonth || 0 },
-    { metric: 'Chart Prepared', today: overview?.chartsPreparedToday || 0, thisMonth: overview?.chartsPreparedThisMonth || 0 }
+    { metric: 'Trains Booked', today: overview.trainsBookedToday, thisMonth: overview.trainsBookedThisMonth },
+    { metric: 'Tickets Issued', today: overview.ticketsIssuedToday, thisMonth: overview.ticketsIssuedThisMonth },
+    { metric: 'Tickets Cancelled', today: overview.ticketsCancelledToday, thisMonth: overview.ticketsCancelledThisMonth },
+    { metric: 'Waitlisted PNRs', today: overview.waitlistedPnrsToday, thisMonth: overview.waitlistedPnrsThisMonth },
+    { metric: 'Chart Prepared', today: overview.chartsPreparedToday, thisMonth: overview.chartsPreparedThisMonth }
   ];
-  
+
   const navigationLinks = [
     { name: 'Bookings', path: '/bookings' },
     { name: 'Billing', path: '/billing' },
@@ -108,14 +145,22 @@ const AdminDashboard = ({ stats }) => {
     { name: 'Reports', path: '/reports' },
     { name: 'Admin Panel', path: '/admin-panel' }
   ];
-  
+
   const defaultAlerts = [
     { type: 'critical', message: 'Bills overdue > 7 days' },
     { type: 'warning', message: 'Partial payments pending' },
     { type: 'critical', message: 'Refunds pending approval' },
     { type: 'warning', message: 'Charts not prepared for today' }
   ];
-  
+
+  if (loading) {
+    return (
+      <div className="admin-dashboard erp-admin-container">
+        <div className="loading">Loading dashboard...</div>
+      </div>
+    );
+  }
+
   return (
     <div className="admin-dashboard erp-admin-container">
       {/* Top Menu Bar - Static */}
@@ -126,12 +171,12 @@ const AdminDashboard = ({ stats }) => {
         <div className="erp-menu-item">Dashboard</div>
         <div className="erp-menu-item">Reports</div>
         <div className="erp-menu-item">Help</div>
-        <div className="erp-user-info">USER: ADMIN ⚙</div>
+        <div className="erp-user-info">USER: {user?.us_name || 'ADMIN'} ⚙</div>
       </div>
 
       {/* Toolbar - Static */}
       <div className="erp-toolbar">
-        <button className="erp-button">Refresh</button>
+        <button className="erp-button" onClick={fetchDashboardData}>Refresh</button>
         <div className="erp-tool-separator"></div>
         <button className="erp-button">Filters</button>
         <button className="erp-button">Print</button>
@@ -147,27 +192,27 @@ const AdminDashboard = ({ stats }) => {
           <div className="dashboard-summary">
             <div className="summary-panel">
               <div className="summary-title">TOTAL BOOKINGS</div>
-              <div className="summary-value">{overview?.totalBookings || 0}</div>
+              <div className="summary-value">{overview.totalBookings}</div>
               <div className="summary-desc">All time bookings</div>
             </div>
             <div className="summary-panel">
               <div className="summary-title">ACTIVE PNRS</div>
-              <div className="summary-value">{overview?.totalActivePnrs || overview?.activePnrs || 0}</div>
+              <div className="summary-value">{overview.totalActivePnrs}</div>
               <div className="summary-desc">Currently active</div>
             </div>
             <div className="summary-panel">
               <div className="summary-title">BILLS GENERATED TODAY</div>
-              <div className="summary-value">{overview?.billsGeneratedToday || 0}</div>
+              <div className="summary-value">{overview.billsGeneratedToday}</div>
               <div className="summary-desc">Current day</div>
             </div>
             <div className="summary-panel">
               <div className="summary-title">PENDING PAYMENTS</div>
-              <div className="summary-value">{overview?.totalPending || 0}</div>
+              <div className="summary-value">{overview.totalPending}</div>
               <div className="summary-desc">Awaiting clearance</div>
             </div>
             <div className="summary-panel">
               <div className="summary-title">REFUNDS IN PROCESS</div>
-              <div className="summary-value">{overview?.refundsInProcess || 0}</div>
+              <div className="summary-value">{overview.refundsInProcess}</div>
               <div className="summary-desc">Processing queue</div>
             </div>
           </div>
@@ -257,7 +302,7 @@ const AdminDashboard = ({ stats }) => {
                   </tr>
                 </thead>
                 <tbody>
-                  {(recentActivity && recentActivity.length > 0 ? recentActivity : [
+                  {(recentActivity.length > 0 ? recentActivity : [
                     { timestamp: '06/01/2026 14:22', module: 'Billing', action: 'Bill Created', reference: 'BILL-10234', user: 'ADM001' },
                     { timestamp: '06/01/2026 14:15', module: 'Booking', action: 'Booking Confirmed', reference: 'BK-20260106-001', user: 'EMP001' },
                     { timestamp: '06/01/2026 14:10', module: 'Payment', action: 'Payment Received', reference: 'PYMT-001', user: 'ACC001' },
@@ -279,7 +324,7 @@ const AdminDashboard = ({ stats }) => {
           {/* Alerts & Attention Required */}
           <div className="section-header">ALERTS & ATTENTION REQUIRED</div>
           <div className="alerts-section">
-            {(alerts && alerts.length > 0 ? alerts : defaultAlerts).map((alert, index) => (
+            {(alerts.length > 0 ? alerts : defaultAlerts).map((alert, index) => (
               <div key={index} className={`alert-item ${alert.type}`}>
                 <span>{alert.message}</span>
               </div>
@@ -300,126 +345,13 @@ const AdminDashboard = ({ stats }) => {
 
       {/* Audit Footer */}
       <div className="erp-status-bar">
-        <div className="erp-status-item">System Date & Time: {new Date().toLocaleString()}</div>
-        <div className="erp-status-item">Logged-in User: ADMIN</div>
-        <div className="erp-status-item">Role: ADMIN</div>
-        <div className="erp-status-item">Last Login Time: N/A</div>
+        <div className="erp-status-item">System Date & Time: {lastUpdated.toLocaleString()}</div>
+        <div className="erp-status-item">Logged-in User: {user?.us_name || 'ADMIN'}</div>
+        <div className="erp-status-item">Role: {user?.us_usertype || 'ADMIN'}</div>
+        <div className="erp-status-item">Last Login Time: {user?.lastLoginTime || 'N/A'}</div>
       </div>
     </div>
   );
 };
 
-// Employee Dashboard Component
-const EmployeeDashboard = ({ stats }) => {
-  const { overview } = stats || {};
-
-  return (
-    <div className="dashboard employee-dashboard">
-      <div className="panel-header">
-        <h2>Employee Dashboard</h2>
-      </div>
-      
-      {/* Overview Stats */}
-      <div className="row">
-        <div className="col-3">
-          <div className="stat-card">
-            <h3>Total Bookings</h3>
-            <p>{overview?.totalBookings || 0}</p>
-          </div>
-        </div>
-        <div className="col-3">
-          <div className="stat-card">
-            <h3>Pending Bookings</h3>
-            <p>{overview?.pendingBookings || 0}</p>
-          </div>
-        </div>
-        <div className="col-3">
-          <div className="stat-card">
-            <h3>Confirmed Bookings</h3>
-            <p>{overview?.confirmedBookings || 0}</p>
-          </div>
-        </div>
-        <div className="col-3">
-          <div className="stat-card">
-            <h3>Revenue Generated</h3>
-            <p>₹{overview?.revenueGenerated?.toLocaleString() || '0'}</p>
-          </div>
-        </div>
-      </div>
-      
-      {/* Recent Activity */}
-      <div className="panel">
-        <h3>Your Recent Bookings</h3>
-        <div className="summary-details">
-          <p>Recent booking activity will be displayed here.</p>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-// Customer Dashboard Component
-const CustomerDashboard = ({ stats }) => {
-  const { overview, corporateInfo } = stats || {};
-
-  return (
-    <div className="dashboard customer-dashboard">
-      <div className="panel-header">
-        <h2>Customer Dashboard</h2>
-      </div>
-      
-      {/* Overview Stats */}
-      <div className="row">
-        <div className="col-3">
-          <div className="stat-card">
-            <h3>Total Bookings</h3>
-            <p>{overview?.totalBookings || 0}</p>
-          </div>
-        </div>
-        <div className="col-3">
-          <div className="stat-card">
-            <h3>Pending Bookings</h3>
-            <p>{overview?.pendingBookings || 0}</p>
-          </div>
-        </div>
-        <div className="col-3">
-          <div className="stat-card">
-            <h3>Confirmed Bookings</h3>
-            <p>{overview?.confirmedBookings || 0}</p>
-          </div>
-        </div>
-        <div className="col-3">
-          <div className="stat-card">
-            <h3>Total Paid</h3>
-            <p>₹{overview?.totalPaid?.toLocaleString() || '0'}</p>
-          </div>
-        </div>
-      </div>
-      
-      {/* Payment Summary */}
-      <div className="panel">
-        <h3>Payment Summary</h3>
-        <div className="summary-details">
-          <p><strong>Total Amount:</strong> ₹{overview?.totalAmount?.toLocaleString() || '0'}</p>
-          <p><strong>Paid:</strong> ₹{overview?.totalPaid?.toLocaleString() || '0'}</p>
-          <p><strong>Pending:</strong> ₹{overview?.totalPending?.toLocaleString() || '0'}</p>
-        </div>
-      </div>
-      
-      {/* Corporate Info (if applicable) */}
-      {corporateInfo && (
-        <div className="panel">
-          <h3>Corporate Information</h3>
-          <div className="info-details">
-            <p><strong>Company:</strong> {corporateInfo.companyName}</p>
-            <p><strong>Credit Limit:</strong> ₹{corporateInfo.creditLimit?.toLocaleString() || '0'}</p>
-            <p><strong>Credit Used:</strong> ₹{corporateInfo.creditUsed?.toLocaleString() || '0'}</p>
-            <p><strong>Credit Available:</strong> ₹{(corporateInfo.creditLimit - corporateInfo.creditUsed)?.toLocaleString() || '0'}</p>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-};
-
-export default Dashboard;
+export default AdminDashboard;

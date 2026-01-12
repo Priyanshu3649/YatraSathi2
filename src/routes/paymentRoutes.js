@@ -3,6 +3,8 @@ const {
   createPayment,
   allocatePayment,
   refundPayment,
+  updatePayment,
+  deletePayment,
   getAllPayments,
   getCustomerPayments,
   getPaymentById,
@@ -11,7 +13,8 @@ const {
   getCustomerPendingPNRs,
   getCustomerAdvance,
   getOutstandingReceivables,
-  performYearEndClosing
+  performYearEndClosing,
+  recordCustomerPayment
 } = require('../controllers/paymentController');
 const authMiddleware = require('../middleware/authMiddleware');
 const { emEmployee: Employee } = require('../models');
@@ -242,12 +245,64 @@ router.get('/', async (req, res, next) => {
 }, getAllPayments);
 
 /**
+ * PUT /api/payments/:id
+ * Update payment by ID
+ * Access: Admin, Accounts Team
+ */
+router.put('/:id', async (req, res, next) => {
+  if (req.user.us_usertype === 'employee') {
+    try {
+      const employee = await Employee.findOne({ where: { em_usid: req.user.us_usid } });
+      if (!employee || employee.em_dept !== 'ACCOUNTS') {
+        return res.status(403).json({ 
+          success: false,
+          message: 'Access denied. Accounts team access required.' 
+        });
+      }
+    } catch (error) {
+      return res.status(500).json({ 
+        success: false,
+        message: 'Error checking permissions' 
+      });
+    }
+  } else if (req.user.us_usertype !== 'admin') {
+    return res.status(403).json({ 
+      success: false,
+      message: 'Access denied. Admin or Accounts team access required.' 
+    });
+  }
+  next();
+}, updatePayment);
+
+/**
+ * DELETE /api/payments/:id
+ * Delete payment by ID
+ * Access: Admin only
+ */
+router.delete('/:id', async (req, res, next) => {
+  if (req.user.us_usertype !== 'admin') {
+    return res.status(403).json({ 
+      success: false,
+      message: 'Access denied. Admin access required.' 
+    });
+  }
+  next();
+}, deletePayment);
+
+/**
  * GET /api/payments/:id
  * Get payment by ID
  * Access: Admin, Accounts Team, or Customer (own payment)
  * NOTE: This must be LAST to avoid catching other routes
  */
 router.get('/:id', getPaymentById);
+
+/**
+ * POST /api/payments/customer-record
+ * Allow customer to record their own payment
+ * Access: Customer (can only record payment for their own bills)
+ */
+router.post('/customer-record', recordCustomerPayment);
 
 // ============================================================================
 // REPORTS (Admin & Accounts Team Only)

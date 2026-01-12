@@ -233,6 +233,123 @@ const assignBooking = async (req, res) => {
   }
 };
 
+// Approve booking by employee
+const approveBooking = async (req, res) => {
+  try {
+    const { bookingId } = req.body;
+    
+    const booking = await BookingTVL.findByPk(bookingId);
+    
+    if (!booking) {
+      return res.status(404).json({ message: 'Booking not found' });
+    }
+    
+    // Only admin or assigned employee can approve booking
+    if (req.user.us_usertype !== 'admin' && booking.bk_agent !== req.user.us_usid) {
+      return res.status(403).json({ message: 'Access denied. Admin or assigned agent only.' });
+    }
+    
+    // Update booking status to PENDING
+    await booking.update({ 
+      bk_status: 'PENDING',
+      mby: req.user.us_usid 
+    });
+    
+    res.json(booking);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// Confirm booking with PNR
+const confirmBooking = async (req, res) => {
+  try {
+    const { bookingId, pnrNumber, trainNumber, travelDate, travelClass, bookingAmount, serviceCharges, platformFees, agentFees, extraCharges, discounts, totalAmount } = req.body;
+    
+    const booking = await BookingTVL.findByPk(bookingId);
+    
+    if (!booking) {
+      return res.status(404).json({ message: 'Booking not found' });
+    }
+    
+    // Only admin or assigned employee can confirm booking
+    if (req.user.us_usertype !== 'admin' && booking.bk_agent !== req.user.us_usid) {
+      return res.status(403).json({ message: 'Access denied. Admin or assigned agent only.' });
+    }
+    
+    // Update booking status to CONFIRMED
+    await booking.update({ 
+      bk_status: 'CONFIRMED',
+      mby: req.user.us_usid 
+    });
+    
+    // Create PNR record
+    const { Pnr } = require('../models');
+    const pnr = await Pnr.create({
+      pn_bkid: booking.bk_bkid,
+      pn_pnr: pnrNumber,
+      pn_trid: trainNumber,
+      pn_trvldt: travelDate,
+      pn_class: travelClass,
+      pn_passengers: booking.bk_totalpass,
+      pn_status: 'CNF',
+      pn_bookdt: new Date(),
+      pn_bkgamt: bookingAmount || 0,
+      pn_svcamt: serviceCharges || 0,
+      pn_totamt: totalAmount || 0,
+      eby: req.user.us_usid,
+      mby: req.user.us_usid
+    });
+    
+    // Create account record for the booking
+    const { Account } = require('../models');
+    const account = await Account.create({
+      ac_bkid: booking.bk_bkid,
+      ac_usid: booking.bk_usid,
+      ac_totamt: totalAmount || 0,
+      ac_status: 'PENDING',
+      eby: req.user.us_usid,
+      mby: req.user.us_usid
+    });
+    
+    // Create bill automatically
+    const { BillTVL, Customer } = require('../models');
+    const billNumber = `BILL${Date.now()}${Math.floor(Math.random() * 1000)}`;
+    
+    // Fetch customer name
+    const customer = await Customer.findOne({ where: { cu_usid: booking.bk_usid } });
+    const customerName = customer ? customer.cu_name : '';
+    
+    const bill = await BillTVL.create({
+      bill_no: billNumber,
+      customer_id: booking.bk_usid,
+      customer_name: customerName,
+      train_number: trainNumber,
+      reservation_class: travelClass,
+      ticket_type: 'TATKAL', // Default to TATKAL
+      pnr_numbers: JSON.stringify([pnrNumber]),
+      net_fare: bookingAmount || 0,
+      service_charges: serviceCharges || 0,
+      platform_fees: platformFees || 0,
+      agent_fees: agentFees || 0,
+      extra_charges: JSON.stringify(extraCharges || []),
+      discounts: JSON.stringify(discounts || []),
+      total_amount: totalAmount || 0,
+      bill_date: new Date(),
+      status: 'FINAL', // Change status to FINAL since it's generated after confirmation
+      remarks: `Bill for booking ${booking.bk_bkno} and PNR ${pnrNumber}`,
+      created_by: req.user.us_usid,
+      modified_by: req.user.us_usid
+    });
+    
+    // Return booking with PNR and bill details
+    const updatedBooking = await BookingTVL.findByPk(bookingId);
+    res.json({...updatedBooking.toJSON(), pnr: pnr, account: account, bill: bill});
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
 // Get bookings by status
 const getBookingsByStatus = async (req, res) => {
   try {
@@ -384,6 +501,8 @@ module.exports = {
   cancelBooking,
   deleteBooking,
   assignBooking,
+  approveBooking,
+  confirmBooking,
   getBookingsByStatus,
   searchBookings
 };

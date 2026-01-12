@@ -40,6 +40,143 @@ const getAccountingPeriod = (date) => {
   return `${year}-${month}`;
 };
 
+// Customer records payment for their bills
+const recordCustomerPayment = async (req, res) => {
+  try {
+    const {
+      amount,
+      mode,
+      referenceNumber,
+      paymentDate,
+      remarks,
+      billIds // Array of bill IDs to allocate payment to
+    } = req.body;
+    
+    // Validate required fields
+    if (!amount || !mode || !paymentDate || !billIds || !Array.isArray(billIds) || billIds.length === 0) {
+      return res.status(400).json({ 
+        success: false,
+        message: 'Amount, mode, payment date, and bill IDs are required' 
+      });
+    }
+    
+    // Verify the payment amount is positive
+    const paymentAmount = parseFloat(amount);
+    if (paymentAmount <= 0) {
+      return res.status(400).json({ 
+        success: false,
+        message: 'Payment amount must be greater than zero' 
+      });
+    }
+    
+    // Check if the customer is authorized to make payment for these bills
+    const { BillTVL, Pnr } = require('../models');
+    const bills = await BillTVL.findAll({
+      where: {
+        bill_id: { [Sequelize.Op.in]: billIds },
+        customer_id: req.user.us_usid // Only allow customer to pay for their own bills
+      }
+    });
+    
+    if (bills.length !== billIds.length) {
+      return res.status(403).json({ 
+        success: false,
+        message: 'Unauthorized: You can only pay for your own bills' 
+      });
+    }
+    
+    // Create the payment record
+    const payment = await Payment.create({
+      pt_usid: req.user.us_usid,
+      pt_amount: paymentAmount,
+      pt_mode: mode,
+      pt_refno: referenceNumber || null,
+      pt_paydt: paymentDate,
+      pt_rcvby: req.user.us_usid, // Customer is recording their own payment
+      pt_acct_period: getAccountingPeriod(paymentDate),
+      pt_remarks: remarks || null,
+      eby: req.user.us_usid,
+      mby: req.user.us_usid
+    });
+    
+    // Allocate payment to PNRs associated with these bills
+    let remainingAmount = paymentAmount;
+    
+    for (const bill of bills) {
+      // Parse PNR numbers from the bill
+      const pnrNumbers = JSON.parse(bill.pnr_numbers || '[]');
+      
+      for (const pnrNumber of pnrNumbers) {
+        // Find the PNR record
+        const pnr = await Pnr.findOne({
+          where: { pn_pnr: pnrNumber }
+        });
+        
+        if (pnr) {
+          // Calculate pending amount for this PNR
+          const totalPaidForPnr = await PaymentAlloc.sum('pa_amount', {
+            where: { pa_pnid: pnr.pn_pnid }
+          });
+          
+          const pendingAmount = parseFloat(pnr.pn_totamt || 0) - (totalPaidForPnr || 0);
+          
+          if (pendingAmount > 0 && remainingAmount > 0) {
+            const allocationAmount = Math.min(pendingAmount, remainingAmount);
+            
+            // Create payment allocation
+            await PaymentAlloc.create({
+              pa_ptid: payment.pt_ptid,
+              pa_pnid: pnr.pn_pnid, // Link to actual PNR ID
+              pa_pnr: pnr.pn_pnr, // Use actual PNR number
+              pa_amount: allocationAmount,
+              pa_alloctn_type: 'AUTO',
+              eby: req.user.us_usid
+            });
+            
+            remainingAmount -= allocationAmount;
+            
+            if (remainingAmount <= 0) {
+              break; // No more amount to allocate
+            }
+          }
+        }
+        
+        if (remainingAmount <= 0) {
+          break; // No more amount to allocate
+        }
+      }
+      
+      if (remainingAmount <= 0) {
+        break; // No more amount to allocate
+      }
+    }
+    
+    // Update unallocated amount if there's any remaining
+    if (remainingAmount > 0) {
+      await payment.update({ pt_unallocated_amt: remainingAmount });
+    }
+    
+    // Update bill and booking statuses based on payment allocation
+    await updateBillAndBookingStatus(billIds);
+    
+    // Return success response
+    res.status(201).json({
+      success: true,
+      message: 'Payment recorded and allocated successfully',
+      payment: payment,
+      allocatedAmount: paymentAmount - remainingAmount,
+      unallocatedAmount: remainingAmount
+    });
+    
+  } catch (error) {
+    console.error('Error recording customer payment:', error);
+    res.status(500).json({ 
+      success: false,
+      message: error.message 
+    });
+  }
+};
+
 /**
  * Get financial year from date (e.g., 2023-24)
  */
@@ -163,6 +300,63 @@ const calculateCustomerAdvance = async (customerId, fyear = null) => {
   }
 
   return advanceBalance;
+};
+
+/**
+ * Update bill and booking status based on payment allocations
+ */
+const updateBillAndBookingStatus = async (billIds) => {
+  const { BillTVL, BookingTVL, Pnr } = require('../models');
+  
+  for (const billId of billIds) {
+    // Get the bill
+    const bill = await BillTVL.findByPk(billId);
+    if (!bill) continue;
+    
+    // Get total amount paid for this bill through PNRs
+    const pnrNumbers = JSON.parse(bill.pnr_numbers || '[]');
+    let totalPaid = 0;
+    
+    for (const pnrNumber of pnrNumbers) {
+      const pnr = await Pnr.findOne({ where: { pn_pnr: pnrNumber } });
+      if (pnr) {
+        // Calculate total paid for this PNR
+        const pnrPaid = await PaymentAlloc.sum('pa_amount', {
+          where: { pa_pnid: pnr.pn_pnid }
+        });
+        totalPaid += pnrPaid || 0;
+      }
+    }
+    
+    // Determine bill status based on payment status
+    const totalAmount = parseFloat(bill.total_amount || 0);
+    const pendingAmount = totalAmount - totalPaid;
+    
+    let newBillStatus = 'UNPAID';
+    if (pendingAmount <= 0 && totalPaid > 0) {
+      newBillStatus = 'PAID';
+    } else if (pendingAmount > 0 && totalPaid > 0) {
+      newBillStatus = 'PARTIAL';
+    } else if (totalPaid === 0) {
+      newBillStatus = 'UNPAID';
+    }
+    
+    // Update bill status
+    await bill.update({ status: newBillStatus });
+    
+    // Update related booking status if needed
+    // Find bookings related to this bill through PNRs
+    for (const pnrNumber of pnrNumbers) {
+      const pnr = await Pnr.findOne({ where: { pn_pnr: pnrNumber } });
+      if (pnr) {
+        const booking = await BookingTVL.findByPk(pnr.pn_bkid);
+        if (booking) {
+          // Update booking payment status based on PNR payment status
+          await calculatePNRStatus(pnr.pn_pnid);
+        }
+      }
+    }
+  }
 };
 
 /**
@@ -789,6 +983,83 @@ const getPaymentById = async (req, res) => {
 };
 
 /**
+ * Update Payment
+ */
+const updatePayment = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const {
+      customerId,
+      amount,
+      mode,
+      refNo,
+      paymentDate,
+      status,
+      remarks
+    } = req.body;
+    
+    // Find the payment
+    const payment = await Payment.findByPk(id);
+    
+    if (!payment) {
+      return res.status(404).json({
+        success: false,
+        message: 'Payment not found'
+      });
+    }
+    
+    // Check permissions - only admin or accounts employee can update
+    if (req.user.us_usertype !== 'admin') {
+      if (req.user.us_usertype === 'employee') {
+        const { emXemployee: Employee } = require('../models');
+        const employee = await Employee.findOne({
+          where: { em_usid: req.user.us_usid }
+        });
+        if (!employee || employee.em_dept !== 'ACCOUNTS') {
+          return res.status(403).json({
+            success: false,
+            message: 'Access denied. Accounts team access required.'
+          });
+        }
+      } else {
+        return res.status(403).json({
+          success: false,
+          message: 'Access denied. Admin access required.'
+        });
+      }
+    }
+    
+    // Update the payment
+    const updatedData = {
+      pt_custid: parseInt(customerId), // Convert to integer to match database schema
+      pt_totalamt: amount, // Also update total amount
+      pt_amount: amount,
+      pt_mode: mode,
+      pt_refno: refNo,
+      pt_paydt: paymentDate,
+      pt_status: status,
+      pt_remarks: remarks,
+      mby: req.user.us_usid,
+      mdtm: new Date()
+    };
+    
+    await payment.update(updatedData);
+    
+    res.json({
+      success: true,
+      message: 'Payment updated successfully',
+      payment
+    });
+  } catch (error) {
+    console.error('Update payment error:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message || 'Failed to update payment'
+    });
+  }
+};
+
+/**
  * Get Payment Allocations
  */
 const getPaymentAllocations = async (req, res) => {
@@ -1270,6 +1541,64 @@ const refundPayment = async (req, res) => {
   }
 };
 
+/**
+ * Delete Payment
+ * 
+ * CRITICAL: Before deleting payment, check:
+ * - Payment has no allocations
+ * - Payment status allows deletion
+ * - User has proper permissions
+ */
+const deletePayment = async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    // Find the payment
+    const payment = await Payment.findByPk(id);
+    
+    if (!payment) {
+      return res.status(404).json({
+        success: false,
+        message: 'Payment not found'
+      });
+    }
+    
+    // Check if payment has any allocations - if so, don't allow deletion
+    const allocationCount = await PaymentAlloc.count({
+      where: { pa_ptid: id }
+    });
+    
+    if (allocationCount > 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Cannot delete payment that has allocations. Please reverse allocations first.'
+      });
+    }
+    
+    // Check permissions - only admin can delete payments
+    if (req.user.us_usertype !== 'admin') {
+      return res.status(403).json({
+        success: false,
+        message: 'Access denied. Admin access required.'
+      });
+    }
+    
+    // Delete the payment
+    await payment.destroy();
+    
+    res.json({
+      success: true,
+      message: 'Payment deleted successfully'
+    });
+  } catch (error) {
+    console.error('Delete payment error:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message || 'Failed to delete payment'
+    });
+  }
+};
+
 // ============================================================================
 // REPORTS
 // ============================================================================
@@ -1370,6 +1699,8 @@ module.exports = {
   createPayment,
   allocatePayment,
   refundPayment,
+  recordCustomerPayment,
+  updatePayment,
   
   // Query operations
   getAllPayments,
@@ -1388,5 +1719,8 @@ module.exports = {
   calculatePNRStatus,
   calculateCustomerAdvance,
   allocatePaymentFIFO,
-  allocatePaymentToPNR
+  allocatePaymentToPNR,
+  
+  // Delete operation
+  deletePayment
 };

@@ -1014,41 +1014,6 @@ export const billingAPI = {
   }
 };
 
-// Customer API calls
-export const customerAPI = {
-  // Search customers
-  searchCustomers: async (searchTerm) => {
-    const response = await fetch(`${API_BASE_URL}/customers/search?q=${encodeURIComponent(searchTerm)}`, {
-      method: 'GET',
-      headers: getHeaders(true)
-    });
-    
-    const data = await response.json();
-    
-    if (!response.ok) {
-      throw new Error(data.message || 'Failed to search customers');
-    }
-    
-    return data;
-  },
-  
-  // Get customer by ID
-  getCustomerById: async (customerId) => {
-    const response = await fetch(`${API_BASE_URL}/customers/${customerId}`, {
-      method: 'GET',
-      headers: getHeaders(true)
-    });
-    
-    const data = await response.json();
-    
-    if (!response.ok) {
-      throw new Error(data.message || 'Failed to get customer by ID');
-    }
-    
-    return data;
-  }
-};
-
 export default {
   authAPI,
   dashboardAPI,
