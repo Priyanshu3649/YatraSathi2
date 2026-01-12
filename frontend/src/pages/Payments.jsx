@@ -30,6 +30,16 @@ const Payments = () => {
     pt_rcvby: user?.us_usid || ''
   });
   
+  // Audit data state
+  const [auditData, setAuditData] = useState({
+    enteredOn: '',
+    enteredBy: user?.us_usid || 'ADMIN',
+    modifiedOn: '',
+    modifiedBy: '',
+    closedOn: '',
+    closedBy: ''
+  });
+  
   // Filter state
   const [filters, setFilters] = useState({
     pt_ptid: '',
@@ -48,7 +58,7 @@ const Payments = () => {
   // Navigation helper function to find index of selected payment
   const getSelectedPaymentIndex = () => {
     if (!selectedPayment) return -1;
-    return payments.findIndex(p => p.pt_ptid === selectedPayment.pt_ptid || p.id === selectedPayment.id);
+    return payments.findIndex(p => p.pt_ptid === selectedPayment.pt_ptid);
   };
   
   // Navigation functions
@@ -78,6 +88,13 @@ const Payments = () => {
     }
   };
   
+  // Auto-select first record when payments data changes
+  useEffect(() => {
+    if (payments.length > 0 && !selectedPayment) {
+      handleRowSelect(payments[0]);
+    }
+  }, [payments]); // Only trigger when payments change, not selectedPayment
+  
   // Keyboard navigation effect
   useEffect(() => {
     const handleKeyDown = (event) => {
@@ -105,13 +122,6 @@ const Payments = () => {
       window.removeEventListener('keydown', handleKeyDown);
     };
   }, [selectedPayment, payments]);
-  
-  // Auto-select first record when payments data changes
-  useEffect(() => {
-    if (payments.length > 0 && !selectedPayment) {
-      handleRowSelect(payments[0]);
-    }
-  }, [payments, selectedPayment]);
   
   // Fetch payments when component mounts
   useEffect(() => {
@@ -158,6 +168,16 @@ const Payments = () => {
       pt_rcvby: user?.us_usid || ''
     });
     setSelectedPayment(null);
+    
+    // Reset audit data for new record
+    setAuditData({
+      enteredOn: '',
+      enteredBy: user?.us_usid || 'ADMIN',
+      modifiedOn: '',
+      modifiedBy: '',
+      closedOn: '',
+      closedBy: ''
+    });
   };
 
   const handleEdit = (payment) => {
@@ -177,16 +197,38 @@ const Payments = () => {
       pt_rcvby: payment.pt_rcvby
     });
     setSelectedPayment(payment);
+    
+    // Update audit data based on payment record
+    setAuditData({
+      enteredOn: payment.edtm ? new Date(payment.edtm).toLocaleString() : '',
+      enteredBy: payment.eby || '',
+      modifiedOn: payment.mdtm ? new Date(payment.mdtm).toLocaleString() : '',
+      modifiedBy: payment.mby || '',
+      closedOn: payment.cdtm ? new Date(payment.cdtm).toLocaleString() : '',
+      closedBy: payment.cby || ''
+    });
   };
 
   const handleSave = async () => {
     try {
+      // Prepare payment data for API call
+      const paymentData = {
+        customerId: formData.pt_cusid,
+        amount: formData.pt_amount,
+        mode: formData.pt_mode,
+        refNo: formData.pt_refno,
+        paymentDate: formData.pt_date,
+        remarks: formData.pt_remarks,
+        status: formData.pt_status,
+        receivedBy: formData.pt_rcvby
+      };
+      
       if (selectedPayment) {
         // Update existing payment
-        await paymentAPI.updatePayment(formData.pt_ptid, formData);
+        await paymentAPI.updatePayment(formData.pt_ptid, paymentData);
       } else {
         // Create new payment
-        await paymentAPI.createPayment(formData);
+        await paymentAPI.createPayment(paymentData);
       }
       
       fetchPayments();
@@ -268,10 +310,10 @@ const Payments = () => {
     <div className="erp-admin-container">
       {/* Toolbar */}
       <div className="erp-toolbar">
-        <button className="erp-icon-button" onClick={goToFirstRecord} disabled={payments.length === 0} title="First Record">|◀</button>
+        <button className="erp-icon-button" onClick={goToFirstRecord} disabled={payments.length === 0 || getSelectedPaymentIndex() <= 0} title="First Record">|◀</button>
         <button className="erp-icon-button" onClick={goToPreviousRecord} disabled={payments.length === 0 || getSelectedPaymentIndex() <= 0} title="Previous Record">◀</button>
         <button className="erp-icon-button" onClick={goToNextRecord} disabled={payments.length === 0 || getSelectedPaymentIndex() >= payments.length - 1} title="Next Record">▶</button>
-        <button className="erp-icon-button" onClick={goToLastRecord} disabled={payments.length === 0} title="Last Record">▶|</button>
+        <button className="erp-icon-button" onClick={goToLastRecord} disabled={payments.length === 0 || getSelectedPaymentIndex() >= payments.length - 1} title="Last Record">▶|</button>
         <div className="erp-tool-separator"></div>
         <button className="erp-button" onClick={handleNew} title="New">New</button>
         <button className="erp-button" onClick={() => selectedPayment ? handleEdit(selectedPayment) : alert('Please select a payment first')} disabled={!selectedPayment || (user?.us_usertype !== 'admin' && user?.us_usertype !== 'employee')} title="Edit">Edit</button>
@@ -373,34 +415,28 @@ const Payments = () => {
                 rows="3"
                 style={{ gridColumn: '1 / span 2' }}
               ></textarea>
-              <label className="erp-form-label">Entered On</label>
-              <input 
-                type="text" 
-                value={formData.pt_entdt || ''} 
-                readOnly
-                className="erp-input"
-              />
-              <label className="erp-form-label">Entered By</label>
-              <input 
-                type="text" 
-                value={formData.pt_entby || ''} 
-                readOnly
-                className="erp-input"
-              />
-              <label className="erp-form-label">Modified On</label>
-              <input 
-                type="text" 
-                value={formData.pt_moddt || ''} 
-                readOnly
-                className="erp-input"
-              />
-              <label className="erp-form-label">Modified By</label>
-              <input 
-                type="text" 
-                value={formData.pt_modby || ''} 
-                readOnly
-                className="erp-input"
-              />
+            </div>
+            
+            {/* Audit Section */}
+            <div className="erp-audit-section">
+              <div className="erp-audit-row">
+                <label className="erp-audit-label">Entered On</label>
+                <input type="text" className="erp-audit-input" value={auditData.enteredOn} readOnly />
+                <label className="erp-audit-label">Entered By</label>
+                <input type="text" className="erp-audit-input" value={auditData.enteredBy} readOnly />
+              </div>
+              <div className="erp-audit-row">
+                <label className="erp-audit-label">Modified On</label>
+                <input type="text" className="erp-audit-input" value={auditData.modifiedOn} readOnly />
+                <label className="erp-audit-label">Modified By</label>
+                <input type="text" className="erp-audit-input" value={auditData.modifiedBy} readOnly />
+              </div>
+              <div className="erp-audit-row">
+                <label className="erp-audit-label">Closed On</label>
+                <input type="text" className="erp-audit-input" value={auditData.closedOn} readOnly />
+                <label className="erp-audit-label">Closed By</label>
+                <input type="text" className="erp-audit-input" value={auditData.closedBy} readOnly />
+              </div>
             </div>
           </div>
 
@@ -430,14 +466,14 @@ const Payments = () => {
                 <tbody>
                   {payments.map((payment) => (
                     <tr 
-                      key={payment.pt_ptid || payment.id} 
+                      key={payment.pt_ptid} 
                       onClick={() => handleRowSelect(payment)}
-                      className={selectedPayment && (selectedPayment.pt_ptid === payment.pt_ptid || selectedPayment.id === payment.id) ? 'selected' : ''}
+                      className={selectedPayment && selectedPayment.pt_ptid === payment.pt_ptid ? 'selected' : ''}
                     >
-                      <td><input type="checkbox" checked={selectedPayment && (selectedPayment.pt_ptid === payment.pt_ptid || selectedPayment.id === payment.id)} onChange={() => {}} /></td>
-                      <td>{payment.pt_ptid || payment.id}</td>
-                      <td>{payment.pt_date ? new Date(payment.pt_date).toLocaleDateString() : ''}</td>
-                      <td>{payment.pt_cusid}</td>
+                      <td><input type="checkbox" checked={selectedPayment && selectedPayment.pt_ptid === payment.pt_ptid} onChange={() => {}} /></td>
+                      <td>{payment.pt_ptid}</td>
+                      <td>{payment.pt_paydt ? new Date(payment.pt_paydt).toLocaleDateString() : ''}</td>
+                      <td>{payment.pt_custid}</td>
                       <td className="text-right">{payment.pt_amount?.toLocaleString('en-IN', { style: 'currency', currency: 'INR' }) || payment.amount?.toLocaleString('en-IN', { style: 'currency', currency: 'INR' })}</td>
                       <td>{getModeDisplay(payment.pt_mode || payment.mode)}</td>
                       <td>{payment.pt_refno || payment.refNo || ''}</td>
@@ -445,8 +481,8 @@ const Payments = () => {
                         {payment.pt_status || payment.status}
                       </span></td>
                       <td>{payment.pt_rcvby || payment.receivedBy || ''}</td>
-                      <td>{payment.pt_entdt ? new Date(payment.pt_entdt).toLocaleDateString() : ''}</td>
-                      <td>{payment.pt_moddt ? new Date(payment.pt_moddt).toLocaleDateString() : ''}</td>
+                      <td>{payment.edtm ? new Date(payment.edtm).toLocaleDateString() : ''}</td>
+                      <td>{payment.mdtm ? new Date(payment.mdtm).toLocaleDateString() : ''}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -600,10 +636,10 @@ const Payments = () => {
 
       {/* Status Bar */}
       <div className="erp-status-bar">
-        <div className="erp-status-item">Ready</div>
+        <div className="erp-status-item">{selectedPayment ? 'Selected' : 'Ready'}</div>
         <div className="erp-status-item">Records: {payments.length}</div>
         <div className="erp-status-item">Position: {selectedPayment ? `${getSelectedPaymentIndex() + 1} of ${payments.length}` : '- / -'}</div>
-        <div className="erp-status-item">User: {user?.us_name || 'Unknown'}</div>
+        <div className="erp-status-item">User: {user?.us_usid || 'Unknown'}</div>
         <div className="status-panel">YatraSathi ERP System</div>
       </div>
     </div>
