@@ -12,7 +12,7 @@ const getAllEmployees = async (req, res) => {
     
     const employees = await Employee.findAll({ 
       attributes: [
-        'em_usid', 'em_empno', 'em_designation', 'em_dept', 'em_salary', 
+        'em_usid', 'em_empno', 'em_dept', 'em_salary', 
         'em_joindt', 'em_status', 'em_manager', 'em_address', 'em_city', 
         'em_state', 'em_pincode'
       ], 
@@ -88,7 +88,6 @@ const createEmployee = async (req, res) => {
       phone,
       password,
       department,
-      designation,
       aadhaarNumber,
       salary,
       joinDate,
@@ -153,7 +152,6 @@ const createEmployee = async (req, res) => {
     const employee = await Employee.create({
       em_usid: employeeId,
       em_empno: employeeNumber,
-      em_designation: designation,
       em_dept: department,
       em_salary: salary,
       em_joindt: joinDate ? new Date(joinDate) : new Date(),
@@ -201,7 +199,6 @@ const updateEmployee = async (req, res) => {
       email,
       phone,
       department,
-      designation,
       aadhaarNumber,
       salary,
       joinDate,
@@ -224,7 +221,6 @@ const updateEmployee = async (req, res) => {
     await user.save();
     
     // Update employee fields if provided
-    if (designation) employee.em_designation = designation;
     if (department) employee.em_dept = department;
     if (salary !== undefined) employee.em_salary = salary;
     if (joinDate) employee.em_joindt = new Date(joinDate);

@@ -167,6 +167,12 @@ const UserTVL = sequelizeTVL.define('usXuser', {
     allowNull: true,
     defaultValue: '',
     comment: 'Closed By'
+  },
+  us_photo: {
+    type: DataTypes.STRING(255),
+    allowNull: true,
+    defaultValue: null,
+    comment: 'Employee Photo Path'
   }
 }, {
   tableName: 'usXuser',

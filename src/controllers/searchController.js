@@ -348,19 +348,18 @@ const searchEmployees = async (req, res) => {
       limit: 50
     });
     
-    // If we have department, designation or employee status filters, we need to filter the results
+    // If we have department or employee status filters, we need to filter the results
     let filteredUsers = users;
-    if (department || designation || status) {
+    if (department || status) {
       filteredUsers = users.filter(user => {
         // Check department filter
         if (department && (!user.employee || user.employee.em_dept !== department)) {
           return false;
         }
         
-        // Check designation filter
-        if (designation && (!user.employee || user.employee.em_designation !== designation)) {
-          return false;
-        }
+        // Note: designation filter is no longer supported as the field was removed
+        // The designation field has been removed from the employee table
+        // This filter is now skipped to avoid errors
         
         // Check status filter
         if (status && (!user.employee || user.employee.em_status.toLowerCase() !== status.toLowerCase())) {

@@ -15,11 +15,7 @@ const Employee = sequelize.define('emEmployee', {
     unique: true,
     comment: 'Employee Number'
   },
-  em_designation: {
-    type: DataTypes.STRING(50),
-    allowNull: true,
-    comment: 'Designation'
-  },
+
   em_dept: {
     type: DataTypes.STRING(20),
     allowNull: true,

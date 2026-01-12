@@ -119,14 +119,14 @@ BEGIN
     
     -- Get total PNR amount
     SELECT pn_totamt INTO total_amount
-    FROM pnPnr
+    FROM pnXpnr
     WHERE pn_pnid = NEW.pa_pnid;
     
     -- Calculate pending amount
     SET pending_amount = total_amount - total_paid;
     
     -- Update PNR status based on payment status
-    UPDATE pnPnr
+    UPDATE pnXpnr
     SET 
         pn_paidamt = total_paid,
         pn_pendingamt = pending_amount,

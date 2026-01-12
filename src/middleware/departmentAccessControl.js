@@ -36,7 +36,7 @@ const departmentAccessControl = async (req, res, next) => {
         include: [
           {
             model: Employee,
-            attributes: ['em_dept', 'em_designation', 'em_status']
+            attributes: ['em_dept', 'em_status']
           }
         ]
       });
@@ -82,7 +82,6 @@ const departmentAccessControl = async (req, res, next) => {
       userId: user.us_usid,
       role: user.us_roid || user.us_usertype,
       department: employee?.em_dept,
-      designation: employee?.em_designation,
       status: employee?.em_status,
       permissions: permissions.map(p => ({
         function: p.fnXfunction?.fn_fnshort,

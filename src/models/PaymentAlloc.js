@@ -28,7 +28,7 @@ const PaymentAlloc = sequelize.define('paPaymentAlloc', {
   pa_pnid: {
     type: DataTypes.BIGINT,
     allowNull: false,
-    comment: 'PNR ID (Foreign Key to pnPnr)'
+    comment: 'PNR ID (Foreign Key to pnXpnr)'
   },
   pa_pnr: {
     type: DataTypes.STRING(15),

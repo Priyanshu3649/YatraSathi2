@@ -208,7 +208,8 @@ module.exports = {
   Payment,
   PaymentAlloc,
   // Export with table name alias for consistency
-  pnXpnr: Pnr,  ptXpayment: PaymentTVL,
+  pnXpnr: Pnr,
+  ptXpayment: PaymentTVL,
   paXpayalloc: PaymentAllocTVL,
   ptPayment: Payment,
   paPaymentAlloc: PaymentAlloc,

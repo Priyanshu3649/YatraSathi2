@@ -53,7 +53,6 @@ const createDemoData = async () => {
         employee: {
           em_usid: 'EMP001',
           em_empno: 'E001',
-          em_designation: 'Senior Agent',
           em_dept: 'BOOKING',
           em_salary: 35000,
           em_joindt: new Date('2023-01-15'),
@@ -82,7 +81,6 @@ const createDemoData = async () => {
         employee: {
           em_usid: 'EMP002',
           em_empno: 'E002',
-          em_designation: 'Accounts Manager',
           em_dept: 'ACCOUNTS',
           em_salary: 45000,
           em_joindt: new Date('2022-08-20'),
@@ -111,7 +109,6 @@ const createDemoData = async () => {
         employee: {
           em_usid: 'EMP003',
           em_empno: 'E003',
-          em_designation: 'HR Manager',
           em_dept: 'HR',
           em_salary: 50000,
           em_joindt: new Date('2022-03-10'),
@@ -140,7 +137,6 @@ const createDemoData = async () => {
         employee: {
           em_usid: 'EMP004',
           em_empno: 'E004',
-          em_designation: 'Support Executive',
           em_dept: 'SUPPORT',
           em_salary: 28000,
           em_joindt: new Date('2023-06-01'),
@@ -169,7 +165,6 @@ const createDemoData = async () => {
         employee: {
           em_usid: 'EMP005',
           em_empno: 'E005',
-          em_designation: 'Marketing Manager',
           em_dept: 'MARKETING',
           em_salary: 55000,
           em_joindt: new Date('2021-11-15'),
@@ -198,7 +193,6 @@ const createDemoData = async () => {
         employee: {
           em_usid: 'EMP006',
           em_empno: 'E006',
-          em_designation: 'General Manager',
           em_dept: 'MANAGEMENT',
           em_salary: 85000,
           em_joindt: new Date('2020-01-01'),
@@ -229,7 +223,6 @@ const createDemoData = async () => {
         employee: {
           em_usid: 'EMP007',
           em_empno: 'E007',
-          em_designation: 'Agent',
           em_dept: 'BOOKING',
           em_salary: 30000,
           em_joindt: new Date('2023-09-01'),
@@ -259,7 +252,6 @@ const createDemoData = async () => {
         employee: {
           em_usid: 'EMP008',
           em_empno: 'E008',
-          em_designation: 'Junior Agent',
           em_dept: 'BOOKING',
           em_salary: 25000,
           em_joindt: new Date('2024-01-15'),

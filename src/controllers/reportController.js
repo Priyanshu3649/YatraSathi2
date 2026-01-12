@@ -1,4 +1,4 @@
-const { bkBooking: Booking, ptPayment: Payment, pnPnr: Pnr, cuCustomer: Customer, emEmployee: Employee, acAccount: Account, paPaymentAlloc: PaymentAlloc, Sequelize } = require('../models');
+const { bkBooking: Booking, ptPayment: Payment, pnXpnr: Pnr, cuCustomer: Customer, emEmployee: Employee, acAccount: Account, paPaymentAlloc: PaymentAlloc, Sequelize } = require('../models');
 const { Op } = require('sequelize');
 
 // Generate financial summary report

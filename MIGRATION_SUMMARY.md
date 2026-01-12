@@ -37,7 +37,7 @@ All models have been migrated from Mongoose schemas to Sequelize models followin
 - **Train** (`trTrain`) - Train master data
 - **Booking** (`bkBooking`) - Booking requests
 - **Passenger** (`psPassenger`) - Passenger details
-- **Pnr** (`pnPnr`) - PNR details (multiple PNRs per booking)
+- **Pnr** (`pnXpnr`) - PNR details (multiple PNRs per booking)
 
 #### Financial Management Tables
 - **Account** (`acAccount`) - Account master for bookings

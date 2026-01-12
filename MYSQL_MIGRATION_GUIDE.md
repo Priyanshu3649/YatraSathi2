@@ -163,7 +163,7 @@ You should see all 20+ tables:
 | emEmployee             |
 | lgLogin                |
 | paPaymentAlloc         |
-| pnPnr                  |
+| pnXpnr                  |
 | prPermission           |
 | psPassenger            |
 | ptPayment              |

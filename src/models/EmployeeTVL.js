@@ -14,11 +14,7 @@ const EmployeeTVL = sequelizeTVL.define('emXemployee', {
     unique: true,
     comment: 'Employee Number'
   },
-  em_designation: {
-    type: DataTypes.STRING(50),
-    allowNull: false,
-    comment: 'Employee Designation'
-  },
+
   em_dept: {
     type: DataTypes.STRING(20),
     allowNull: false,
@@ -97,6 +93,11 @@ const EmployeeTVL = sequelizeTVL.define('emXemployee', {
     type: DataTypes.STRING(15),
     allowNull: true,
     comment: 'Closed By'
+  },
+  em_photo: {
+    type: DataTypes.STRING(255),
+    allowNull: true,
+    comment: 'Employee Photo Path'
   }
 }, {
   tableName: 'emXemployee',

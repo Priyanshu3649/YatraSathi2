@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const securityController = require('../controllers/securityController');
 const authMiddleware = require('../middleware/authMiddleware');
+const upload = require('../middleware/uploadMiddleware');
 
 // Apply authentication middleware to all routes
 router.use(authMiddleware);
@@ -43,9 +44,10 @@ router.put('/customers/:id', securityController.updateCustomer);
 router.delete('/customers/:id', securityController.deleteCustomer);
 
 // ==================== EMPLOYEE ROUTES ====================
+// Use upload.single('photo') middleware for employee routes to handle photo uploads
 router.get('/employees', securityController.getAllEmployees);
-router.post('/employees', securityController.createEmployee);
-router.put('/employees/:id', securityController.updateEmployee);
+router.post('/employees', upload.single('photo'), securityController.createEmployee);
+router.put('/employees/:id', upload.single('photo'), securityController.updateEmployee);
 router.delete('/employees/:id', securityController.deleteEmployee);
 
 // ==================== ROLE PERMISSION ROUTES ====================

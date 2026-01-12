@@ -3,7 +3,7 @@ const { sequelize, BaseModel } = require('./baseModel');
 const Booking = require('./Booking');
 const Train = require('./Train');
 
-const Pnr = sequelize.define('pnPnr', {
+const Pnr = sequelize.define('pnXpnr', {
   pn_pnid: {
     type: DataTypes.BIGINT,
     primaryKey: true,
@@ -109,7 +109,7 @@ const Pnr = sequelize.define('pnPnr', {
   // Audit fields
   ...BaseModel
 }, {
-  tableName: 'pnPnr',
+  tableName: 'pnXpnr',
   timestamps: false,
   indexes: [
     {

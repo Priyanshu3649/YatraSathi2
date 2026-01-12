@@ -1,5 +1,5 @@
 /**
- * Migration Script: Update pnPnr table for payment tracking
+ * Migration Script: Update pnXpnr table for payment tracking
  * 
  * This script adds new columns required for payment status tracking:
  * - pn_paidamt: Paid Amount
@@ -24,7 +24,7 @@ async function migratePnrTable() {
       SELECT COLUMN_NAME 
       FROM INFORMATION_SCHEMA.COLUMNS 
       WHERE TABLE_SCHEMA = DATABASE() 
-      AND TABLE_NAME = 'pnPnr'
+      AND TABLE_NAME = 'pnXpnr'
       AND COLUMN_NAME = 'pn_paidamt'
     `, { type: QueryTypes.SELECT });
 
@@ -33,7 +33,7 @@ async function migratePnrTable() {
     } else {
       console.log('➕ Adding pn_paidamt column...');
       await sequelize.query(`
-        ALTER TABLE pnPnr 
+        ALTER TABLE pnXpnr 
         ADD COLUMN pn_paidamt DECIMAL(12,2) DEFAULT 0 
         COMMENT 'Paid Amount'
         AFTER pn_totamt
@@ -46,7 +46,7 @@ async function migratePnrTable() {
       SELECT COLUMN_NAME 
       FROM INFORMATION_SCHEMA.COLUMNS 
       WHERE TABLE_SCHEMA = DATABASE() 
-      AND TABLE_NAME = 'pnPnr'
+      AND TABLE_NAME = 'pnXpnr'
       AND COLUMN_NAME = 'pn_pendingamt'
     `, { type: QueryTypes.SELECT });
 
@@ -55,7 +55,7 @@ async function migratePnrTable() {
     } else {
       console.log('➕ Adding pn_pendingamt column...');
       await sequelize.query(`
-        ALTER TABLE pnPnr 
+        ALTER TABLE pnXpnr 
         ADD COLUMN pn_pendingamt DECIMAL(12,2) DEFAULT 0 
         COMMENT 'Pending Amount'
         AFTER pn_paidamt
@@ -68,7 +68,7 @@ async function migratePnrTable() {
       SELECT COLUMN_NAME 
       FROM INFORMATION_SCHEMA.COLUMNS 
       WHERE TABLE_SCHEMA = DATABASE() 
-      AND TABLE_NAME = 'pnPnr'
+      AND TABLE_NAME = 'pnXpnr'
       AND COLUMN_NAME = 'pn_payment_status'
     `, { type: QueryTypes.SELECT });
 
@@ -77,7 +77,7 @@ async function migratePnrTable() {
     } else {
       console.log('➕ Adding pn_payment_status column...');
       await sequelize.query(`
-        ALTER TABLE pnPnr 
+        ALTER TABLE pnXpnr 
         ADD COLUMN pn_payment_status VARCHAR(15) DEFAULT 'UNPAID' 
         COMMENT 'Payment Status (UNPAID | PARTIAL | PAID)'
         AFTER pn_pendingamt
@@ -90,7 +90,7 @@ async function migratePnrTable() {
       SELECT COLUMN_NAME 
       FROM INFORMATION_SCHEMA.COLUMNS 
       WHERE TABLE_SCHEMA = DATABASE() 
-      AND TABLE_NAME = 'pnPnr'
+      AND TABLE_NAME = 'pnXpnr'
       AND COLUMN_NAME = 'pn_closed_flag'
     `, { type: QueryTypes.SELECT });
 
@@ -99,7 +99,7 @@ async function migratePnrTable() {
     } else {
       console.log('➕ Adding pn_closed_flag column...');
       await sequelize.query(`
-        ALTER TABLE pnPnr 
+        ALTER TABLE pnXpnr 
         ADD COLUMN pn_closed_flag VARCHAR(1) DEFAULT 'N' 
         COMMENT 'Closed Flag (Y/N)'
         AFTER pn_payment_status
@@ -112,7 +112,7 @@ async function migratePnrTable() {
       SELECT COLUMN_NAME 
       FROM INFORMATION_SCHEMA.COLUMNS 
       WHERE TABLE_SCHEMA = DATABASE() 
-      AND TABLE_NAME = 'pnPnr'
+      AND TABLE_NAME = 'pnXpnr'
       AND COLUMN_NAME = 'pn_fyear'
     `, { type: QueryTypes.SELECT });
 
@@ -121,7 +121,7 @@ async function migratePnrTable() {
     } else {
       console.log('➕ Adding pn_fyear column...');
       await sequelize.query(`
-        ALTER TABLE pnPnr 
+        ALTER TABLE pnXpnr 
         ADD COLUMN pn_fyear VARCHAR(10) NULL 
         COMMENT 'Financial Year'
         AFTER pn_closed_flag
@@ -132,7 +132,7 @@ async function migratePnrTable() {
     // Initialize existing records: Calculate paid amount from allocations
     console.log('\n🔄 Initializing existing PNR records...');
     const [initResult] = await sequelize.query(`
-      UPDATE pnPnr p
+      UPDATE pnXpnr p
       LEFT JOIN (
         SELECT pa_pnid, SUM(pa_amount) as total_paid
         FROM paPaymentAlloc

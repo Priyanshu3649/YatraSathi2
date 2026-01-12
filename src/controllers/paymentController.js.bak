@@ -87,19 +87,14 @@ const recordCustomerPayment = async (req, res) => {
     
     // Create the payment record
     const payment = await Payment.create({
-      pt_custid: req.user.us_usid,
-      pt_totalamt: paymentAmount,
+      pt_usid: req.user.us_usid,
       pt_amount: paymentAmount,
       pt_mode: mode,
       pt_refno: referenceNumber || null,
       pt_paydt: paymentDate,
-      pt_rcvdt: paymentDate, // Using same date as payment date
-      pt_status: 'RECEIVED',
-      pt_verification_status: 'PENDING', // Customer submitted, awaiting verification
-      pt_acid: 0, // Set to 0 as default for TVL model
+      pt_rcvby: req.user.us_usid, // Customer is recording their own payment
+      pt_acct_period: getAccountingPeriod(paymentDate),
       pt_remarks: remarks || null,
-      pt_finyear: getFinancialYear(paymentDate),
-      pt_period: getAccountingPeriod(paymentDate),
       eby: req.user.us_usid,
       mby: req.user.us_usid
     });
@@ -157,15 +152,8 @@ const recordCustomerPayment = async (req, res) => {
     }
     
     // Update unallocated amount if there's any remaining
-    // Note: pt_unallocamt is a generated column, so we don't set it directly
-    // The value will be calculated by the database trigger
     if (remainingAmount > 0) {
-      // We can update other fields if needed, but not the generated column
-      await payment.update({ 
-        pt_allocatedamt: paymentAmount - remainingAmount,
-        mby: req.user.us_usid,
-        mdtm: new Date()
-      });
+      await payment.update({ pt_unallocated_amt: remainingAmount });
     }
     
     // Update bill and booking statuses based on payment allocation
@@ -483,7 +471,6 @@ const createPayment = async (req, res) => {
       pt_paydt: payDate,
       pt_rcvdt: payDate, // Using pt_paydt as pt_rcvdt since pt_rcvby doesn't exist in TVL table
       pt_status: 'RECEIVED',
-      pt_verification_status: 'VERIFIED', // Admin/Employee created payment is automatically verified
       pt_acid: 0, // Set to 0 as default, since TVL table requires this field
       pt_allocatedamt: 0, // Initially 0 allocated
       pt_finyear: getFinancialYear(payDate),
@@ -539,6 +526,8 @@ const createPayment = async (req, res) => {
     }
 
     // Update payment status only (unallocated amount is calculated by database triggers)
+      payment.pt_status = 'ADJUSTED';
+    }
     payment.mby = req.user.us_usid;
     await payment.save({ transaction });
 
@@ -702,19 +691,9 @@ const allocatePaymentToPNR = async (
   // Update PNR status (real-time calculation)
   await calculatePNRStatus(pnrId);
 
-  // Update payment allocated amount and status (unallocated amount is calculated by database triggers)
-  const totalAllocated = await PaymentAlloc.sum('pa_allocamt', {
-    where: { pa_ptid: paymentId },
-    transaction
-  }) || 0;
-  
-  payment.pt_allocatedamt = totalAllocated;
-  
-  // Update status based on allocation
-  if (totalAllocated > 0) {
-    payment.pt_status = 'ADJUSTED';
-  }
-    payment.mby = userId;
+  // Update payment unallocated amount
+  payment.mby = userId;
+  await payment.save({ transaction });
       
       // Note: Ledger entry will be created automatically by database trigger
       // The trigger will create the ledger entry when the allocation is inserted
@@ -1036,8 +1015,8 @@ const updatePayment = async (req, res) => {
         }
       } else {
         return res.status(403).json({
-            success: false,
-            message: 'Access denied. Admin access required.'
+          success: false,
+          message: 'Access denied. Admin access required.'
         });
       }
     }
@@ -1057,7 +1036,6 @@ const updatePayment = async (req, res) => {
       pt_refno: refNo,
       pt_status: status,
       pt_remarks: remarks,
-      pt_verification_status: 'VERIFIED', // Admin/Employee updated payment is verified
       mby: req.user.us_usid,
       mdtm: new Date()
     };
@@ -1561,99 +1539,6 @@ const refundPayment = async (req, res) => {
 };
 
 /**
- * Verify Customer Submitted Payment (Employee/Admin Only)
- * 
- * This function allows employees/admins to verify customer-submitted payments
- * and move them from PENDING to VERIFIED status.
- */
-const verifyPayment = async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { action, remarks } = req.body; // action: 'VERIFY' or 'REJECT'
-
-    // Find the payment
-    const payment = await Payment.findByPk(id);
-    
-    if (!payment) {
-      return res.status(404).json({
-        success: false,
-        message: 'Payment not found'
-      });
-    }
-
-    // Check permissions - only admin or accounts employee can verify payments
-    if (req.user.us_usertype !== 'admin') {
-      if (req.user.us_usertype === 'employee') {
-        const { emXemployee: Employee } = require('../models');
-        const employee = await Employee.findOne({
-          where: { em_usid: req.user.us_usid }
-        });
-        if (!employee || employee.em_dept !== 'ACCOUNTS') {
-          return res.status(403).json({
-            success: false,
-            message: 'Access denied. Accounts team access required.'
-          });
-        }
-      } else {
-        return res.status(403).json({
-          success: false,
-          message: 'Access denied. Admin access required.'
-        });
-      }
-    }
-
-    // Check if payment is already verified/rejected
-    if (payment.pt_verification_status !== 'PENDING') {
-      return res.status(400).json({
-        success: false,
-        message: `Payment is already ${payment.pt_verification_status.toLowerCase()}. Cannot verify again.`
-      });
-    }
-
-    // Update verification status based on action
-    let newVerificationStatus = payment.pt_verification_status;
-    let newStatus = payment.pt_status;
-
-    if (action === 'VERIFY') {
-      newVerificationStatus = 'VERIFIED';
-      // If payment was received, set status to ADJUSTED after verification
-      if (payment.pt_status === 'RECEIVED') {
-        newStatus = 'ADJUSTED';
-      }
-    } else if (action === 'REJECT') {
-      newVerificationStatus = 'REJECTED';
-      newStatus = 'REJECTED';
-    } else {
-      return res.status(400).json({
-        success: false,
-        message: 'Invalid action. Use VERIFY or REJECT.'
-      });
-    }
-
-    // Update the payment
-    await payment.update({
-      pt_verification_status: newVerificationStatus,
-      pt_status: newStatus,
-      pt_remarks: remarks || payment.pt_remarks,
-      mby: req.user.us_usid,
-      mdtm: new Date()
-    });
-
-    res.json({
-      success: true,
-      message: `Payment ${newVerificationStatus.toLowerCase()} successfully`,
-      payment
-    });
-  } catch (error) {
-    console.error('Verify payment error:', error);
-    res.status(500).json({
-      success: false,
-      message: error.message || 'Failed to verify payment'
-    });
-  }
-};
-
-/**
  * Delete Payment
  * 
  * CRITICAL: Before deleting payment, check:
@@ -1834,8 +1719,5 @@ module.exports = {
   allocatePaymentToPNR,
   
   // Delete operation
-  deletePayment,
-  
-  // Verify operation
-  verifyPayment
+  deletePayment
 };

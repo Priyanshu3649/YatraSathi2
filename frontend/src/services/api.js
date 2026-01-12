@@ -820,12 +820,24 @@ export const employeeAPI = {
     return data;
   },
   
-  // Create employee (admin only)
+  // Create employee (admin only) - handles both regular data and file uploads
   createEmployee: async (employeeData) => {
+    const formData = new FormData();
+    
+    // Append all fields to FormData for multipart upload
+    Object.keys(employeeData).forEach(key => {
+      if (employeeData[key] !== null && employeeData[key] !== undefined) {
+        formData.append(key, employeeData[key]);
+      }
+    });
+    
     const response = await fetch(`${API_BASE_URL}/employees`, {
       method: 'POST',
-      headers: getHeaders(true),
-      body: JSON.stringify(employeeData)
+      headers: {
+        // Don't set Content-Type header - let browser set it with boundary
+        'Authorization': `Bearer ${localStorage.getItem('token')}`
+      },
+      body: formData
     });
     
     const data = await response.json();
@@ -837,12 +849,24 @@ export const employeeAPI = {
     return data;
   },
   
-  // Update employee (admin only)
+  // Update employee (admin only) - handles both regular data and file uploads
   updateEmployee: async (id, employeeData) => {
+    const formData = new FormData();
+    
+    // Append all fields to FormData for multipart upload
+    Object.keys(employeeData).forEach(key => {
+      if (employeeData[key] !== null && employeeData[key] !== undefined) {
+        formData.append(key, employeeData[key]);
+      }
+    });
+    
     const response = await fetch(`${API_BASE_URL}/employees/${id}`, {
       method: 'PUT',
-      headers: getHeaders(true),
-      body: JSON.stringify(employeeData)
+      headers: {
+        // Don't set Content-Type header - let browser set it with boundary
+        'Authorization': `Bearer ${localStorage.getItem('token')}`
+      },
+      body: formData
     });
     
     const data = await response.json();

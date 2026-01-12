@@ -492,7 +492,7 @@ CREATE TABLE psPassenger (
 );
 
 -- PNR Details (Multiple PNRs possible per booking)
-CREATE TABLE pnPnr (
+CREATE TABLE pnXpnr (
     pn_pnid BIGINT PRIMARY KEY AUTO_INCREMENT,
     pn_bkid BIGINT NOT NULL REFERENCES bkBooking(bk_bkid),
     pn_pnr VARCHAR(15) UNIQUE,
@@ -556,7 +556,7 @@ CREATE TABLE ptPayment (
 CREATE TABLE paPaymentAlloc (
     pa_paid BIGINT PRIMARY KEY AUTO_INCREMENT,
     pa_ptid BIGINT NOT NULL REFERENCES ptPayment(pt_ptid),
-    pa_pnid BIGINT NOT NULL REFERENCES pnPnr(pn_pnid),
+    pa_pnid BIGINT NOT NULL REFERENCES pnXpnr(pn_pnid),
     pa_amount DECIMAL(12,2) NOT NULL,
     pa_edtm DATETIME DEFAULT CURRENT_TIMESTAMP,
     pa_eby VARCHAR(15) NOT NULL
@@ -679,7 +679,7 @@ SELECT
 FROM emEmployee e
 JOIN usUser u ON e.em_usid = u.us_usid
 LEFT JOIN bkBooking b ON e.em_usid = b.bk_agent
-LEFT JOIN pnPnr pn ON b.bk_bkid = pn.pn_bkid
+LEFT JOIN pnXpnr pn ON b.bk_bkid = pn.pn_bkid
 WHERE u.us_active = 1 AND e.em_status = 'ACTIVE'
 GROUP BY e.em_usid, u.us_fname, u.us_lname, e.em_dept;
 
@@ -692,6 +692,6 @@ SELECT
     COUNT(CASE WHEN b.bk_status = 'CONFIRMED' THEN 1 END) as confirmed_requests,
     SUM(CASE WHEN pn.pn_totamt IS NOT NULL THEN pn.pn_totamt ELSE 0 END) as daily_revenue
 FROM bkBooking b
-LEFT JOIN pnPnr pn ON b.bk_bkid = pn.pn_bkid
+LEFT JOIN pnXpnr pn ON b.bk_bkid = pn.pn_bkid
 GROUP BY DATE(b.bk_reqdt)
 ORDER BY booking_date DESC;

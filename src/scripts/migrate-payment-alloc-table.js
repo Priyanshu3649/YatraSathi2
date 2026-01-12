@@ -110,7 +110,7 @@ async function migratePaymentAllocTable() {
     console.log('\n🔄 Updating existing records...');
     const [updateResult] = await sequelize.query(`
       UPDATE paPaymentAlloc pa
-      INNER JOIN pnPnr p ON pa.pa_pnid = p.pn_pnid
+      INNER JOIN pnXpnr p ON pa.pa_pnid = p.pn_pnid
       SET pa.pa_pnr = p.pn_pnr
       WHERE pa.pa_pnr IS NULL AND p.pn_pnr IS NOT NULL
     `);

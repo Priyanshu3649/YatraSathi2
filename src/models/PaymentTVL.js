@@ -29,6 +29,11 @@ const PaymentTVL = sequelizeTVL.define('ptXpayment', {
     defaultValue: 'RECEIVED',
     comment: 'Payment Status'
   },
+  pt_verification_status: {
+    type: DataTypes.STRING(15),
+    defaultValue: 'PENDING',
+    comment: 'Verification Status: PENDING | VERIFIED | REJECTED'
+  },
   pt_remarks: {
     type: DataTypes.TEXT,
     allowNull: true,

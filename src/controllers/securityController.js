@@ -10,6 +10,7 @@ const Employee = require('../models/Employee');
 const EmployeeTVL = require('../models/EmployeeTVL');
 const Role = require('../models/Role'); // Add the regular Role model
 const Login = require('../models/Login');
+const LoginTVL = require('../models/LoginTVL');
 const bcrypt = require('bcryptjs');
 
 // Helper function to parse database errors into user-friendly messages
@@ -1039,7 +1040,7 @@ const getAllEmployees = async (req, res) => {
 
     const employees = await EmployeeTVL.findAll({
       attributes: [
-        'em_usid', 'em_empno', 'em_designation', 'em_dept', 'em_salary',
+        'em_usid', 'em_empno', 'em_dept', 'em_salary',
         'em_joindt', 'em_status', 'em_manager', 'em_address', 'em_city',
         'em_state', 'em_pincode', 'edtm', 'eby', 'mdtm', 'mby', 'cdtm', 'cby'
       ],
@@ -1065,7 +1066,6 @@ const getAllEmployees = async (req, res) => {
         us_roid: user.us_roid,
         us_active: user.us_active,
         em_empno: emp.em_empno,
-        em_designation: emp.em_designation,
         em_dept: emp.em_dept,
         em_salary: emp.em_salary,
         em_joindt: emp.em_joindt,
@@ -1114,20 +1114,24 @@ const createEmployee = async (req, res) => {
     const {
       us_usid, us_fname, us_lname, us_email, us_phone, us_aadhaar, us_pan,
       us_addr1, us_addr2, us_city, us_state, us_pin, us_roid, us_coid,
-      em_empno, em_designation, em_dept, em_salary, em_joindt, em_manager, em_status,
+      em_empno, em_dept, em_salary, em_joindt, em_manager, em_status,
       us_active, lg_active, temp_password
     } = req.body;
 
     // Validate required fields
-    if (!us_usid || !us_fname || !us_email || !us_phone || !us_roid || !em_empno || !em_designation || !em_dept || !em_joindt) {
+    if (!us_fname || !us_email || !us_phone || !us_roid || !em_dept || !em_joindt) {
       return res.status(400).json({ message: 'Missing required fields' });
     }
 
-    // Check if user ID, email, phone, or employee number already exists
-    const existingUser = await User.findOne({
+    // Generate employee number if not provided
+    const timestamp = String(Date.now()).slice(-6);
+    const generatedEmpNo = em_empno || `EMP${timestamp}`;
+    const generatedUsId = `EMP${timestamp}`;
+
+    // Check if email or phone already exists
+    const existingUser = await UserTVL.findOne({
       where: {
         [require('sequelize').Op.or]: [
-          { us_usid },
           { us_email },
           { us_phone }
         ]
@@ -1135,20 +1139,26 @@ const createEmployee = async (req, res) => {
     });
 
     if (existingUser) {
-      return res.status(409).json({ message: 'User ID, email, or phone already exists' });
+      return res.status(409).json({ message: 'Email or phone already exists' });
     }
 
-    const existingEmployee = await Employee.findOne({
-      where: { em_empno }
+    const existingEmployee = await EmployeeTVL.findOne({
+      where: { em_empno: generatedEmpNo }
     });
 
     if (existingEmployee) {
       return res.status(409).json({ message: 'Employee number already exists' });
     }
 
+    // Handle photo upload if present
+    let photoPath = null;
+    if (req.file) {
+      photoPath = `/uploads/employees/${req.file.filename}`;
+    }
+
     // Create user record
     const userData = {
-      us_usid,
+      us_usid: generatedUsId,
       us_fname,
       us_lname: us_lname || '',
       us_email,
@@ -1160,31 +1170,36 @@ const createEmployee = async (req, res) => {
       us_city: us_city || null,
       us_state: us_state || null,
       us_pin: us_pin || null,
+      us_photo: photoPath, // Add photo path
       us_usertype: 'employee',
       us_roid,
       us_coid: us_coid || 'TRV',
       us_active: us_active !== undefined ? (us_active ? 1 : 0) : 1,
-      eby: req.user?.us_usid || 'SYSTEM',
-      mby: req.user?.us_usid || 'SYSTEM'
+      us_eby: req.user?.us_usid || 'SYSTEM',
+      us_edtm: new Date(),
+      us_mby: req.user?.us_usid || 'SYSTEM',
+      us_mdtm: new Date()
     };
 
-    const user = await User.create(userData);
+    const user = await UserTVL.create(userData);
 
     // Create employee record
     const employeeData = {
-      em_usid: us_usid,
-      em_empno,
-      em_designation,
+      em_usid: generatedUsId,
+      em_empno: generatedEmpNo,
       em_dept,
       em_salary: em_salary || null,
       em_joindt: new Date(em_joindt),
       em_manager: em_manager || null,
       em_status: em_status || 'ACTIVE',
+      em_photo: photoPath, // Add photo path to employee record too
       eby: req.user?.us_usid || 'SYSTEM',
-      mby: req.user?.us_usid || 'SYSTEM'
+      edtm: new Date(),
+      mby: req.user?.us_usid || 'SYSTEM',
+      mdtm: new Date()
     };
 
-    const employee = await Employee.create(employeeData);
+    const employee = await EmployeeTVL.create(employeeData);
 
     // Create login credentials
     const password = temp_password || 'employee123';
@@ -1192,7 +1207,7 @@ const createEmployee = async (req, res) => {
     const hashedPassword = await bcrypt.hash(password, salt);
 
     const loginData = {
-      lg_usid: us_usid,
+      lg_usid: generatedUsId,  // Fixed: use generatedUsId instead of us_usid
       lg_email: us_email,
       lg_passwd: hashedPassword,
       lg_salt: salt,
@@ -1201,19 +1216,20 @@ const createEmployee = async (req, res) => {
       mby: req.user?.us_usid || 'SYSTEM'
     };
 
-    await Login.create(loginData);
+    await LoginTVL.create(loginData);
 
     // Return the created employee with user data
-    const createdEmployee = await Employee.findOne({
-      where: { em_usid: us_usid },
+    const createdEmployee = await EmployeeTVL.findOne({
+      where: { em_usid: generatedUsId },
       include: [
         {
-          model: User,
+          model: UserTVL,
+          as: 'user',  // Added the required alias
           include: [
             {
               model: RoleTVL,
               attributes: ['fn_fnid', 'fn_fnshort', 'fn_fndesc'],
-              as: 'Role'
+              as: 'fnXfunction'  // Fixed: use correct alias
             }
           ]
         }
@@ -1235,23 +1251,58 @@ const updateEmployee = async (req, res) => {
     const {
       us_fname, us_lname, us_email, us_phone, us_aadhaar, us_pan,
       us_addr1, us_addr2, us_city, us_state, us_pin, us_roid, us_coid,
-      em_empno, em_designation, em_dept, em_salary, em_joindt, em_manager, em_status,
+      em_empno, em_dept, em_salary, em_joindt, em_manager, em_status,
       us_active, lg_active, temp_password
     } = req.body;
 
     // Find employee and user
-    const employee = await Employee.findOne({
+    const employee = await EmployeeTVL.findOne({
       where: { em_usid: id },
-      include: [{ model: User }]
+      include: [{ model: UserTVL, as: 'user' }]
     });
 
     if (!employee) {
       return res.status(404).json({ message: 'Employee not found' });
     }
 
-    const user = employee.User;
+    const user = employee.user;
     if (!user) {
       return res.status(404).json({ message: 'User record not found for employee' });
+    }
+
+    // Check if email or phone already exists for other users
+    const conditions = [];
+    
+    // Only add email condition if email is being updated
+    if (us_email) {
+      conditions.push({ us_email });
+    }
+    
+    // Only add phone condition if phone is being updated
+    if (us_phone) {
+      conditions.push({ us_phone });
+    }
+    
+    let existingUser = null;
+    if (conditions.length > 0) {
+      existingUser = await UserTVL.findOne({
+        where: {
+          [require('sequelize').Op.and]: [
+            { [require('sequelize').Op.or]: conditions },
+            { us_usid: { [require('sequelize').Op.ne]: id } } // Not the current user
+          ]
+        }
+      });
+    }
+
+    if (existingUser) {
+      return res.status(409).json({ message: 'Email or phone already exists for another user' });
+    }
+
+    // Handle photo upload if present
+    let photoPath = user.us_photo; // Keep existing photo if no new upload
+    if (req.file) {
+      photoPath = `/uploads/employees/${req.file.filename}`;
     }
 
     // Update user data
@@ -1267,11 +1318,12 @@ const updateEmployee = async (req, res) => {
       us_city: us_city !== undefined ? us_city : user.us_city,
       us_state: us_state !== undefined ? us_state : user.us_state,
       us_pin: us_pin !== undefined ? us_pin : user.us_pin,
+      us_photo: photoPath, // Update photo path
       us_roid: us_roid || user.us_roid,
       us_coid: us_coid || user.us_coid,
       us_active: us_active !== undefined ? (us_active ? 1 : 0) : user.us_active,
-      mby: req.user?.us_usid || 'SYSTEM',
-      mdtm: new Date()
+      us_mby: req.user?.us_usid || 'SYSTEM',
+      us_mdtm: new Date()
     };
 
     await user.update(userUpdateData);
@@ -1279,12 +1331,12 @@ const updateEmployee = async (req, res) => {
     // Update employee data
     const employeeUpdateData = {
       em_empno: em_empno || employee.em_empno,
-      em_designation: em_designation || employee.em_designation,
       em_dept: em_dept || employee.em_dept,
       em_salary: em_salary !== undefined ? em_salary : employee.em_salary,
       em_joindt: em_joindt ? new Date(em_joindt) : employee.em_joindt,
       em_manager: em_manager !== undefined ? em_manager : employee.em_manager,
       em_status: em_status || employee.em_status,
+      em_photo: photoPath, // Update photo path in employee record too
       mby: req.user?.us_usid || 'SYSTEM',
       mdtm: new Date()
     };
@@ -1293,7 +1345,7 @@ const updateEmployee = async (req, res) => {
 
     // Update login if password is provided
     if (temp_password) {
-      const login = await Login.findOne({ where: { lg_usid: id } });
+      const login = await LoginTVL.findOne({ where: { lg_usid: id } });
       if (login) {
         const salt = await bcrypt.genSalt(10);
         const hashedPassword = await bcrypt.hash(temp_password, salt);
@@ -1307,7 +1359,7 @@ const updateEmployee = async (req, res) => {
         });
       }
     } else if (lg_active !== undefined) {
-      const login = await Login.findOne({ where: { lg_usid: id } });
+      const login = await LoginTVL.findOne({ where: { lg_usid: id } });
       if (login) {
         await login.update({
           lg_active: lg_active ? 1 : 0,
@@ -1318,16 +1370,17 @@ const updateEmployee = async (req, res) => {
     }
 
     // Return updated employee
-    const updatedEmployee = await Employee.findOne({
+    const updatedEmployee = await EmployeeTVL.findOne({
       where: { em_usid: id },
       include: [
         {
-          model: User,
+          model: UserTVL,
+          as: 'user',  // Add the required alias
           include: [
             {
               model: RoleTVL,
               attributes: ['fn_fnid', 'fn_fnshort', 'fn_fndesc'],
-              as: 'Role'
+              as: 'fnXfunction'  // Fixed: use correct alias
             }
           ]
         }
@@ -1348,20 +1401,20 @@ const deleteEmployee = async (req, res) => {
     const { id } = req.params;
 
     // Find employee
-    const employee = await Employee.findOne({ where: { em_usid: id } });
+    const employee = await EmployeeTVL.findOne({ where: { em_usid: id } });
     if (!employee) {
       return res.status(404).json({ message: 'Employee not found' });
     }
 
     // Delete in proper order (respecting foreign key constraints)
     // 1. Delete login
-    await Login.destroy({ where: { lg_usid: id } });
+    await LoginTVL.destroy({ where: { lg_usid: id } });
     
     // 2. Delete employee
-    await Employee.destroy({ where: { em_usid: id } });
+    await EmployeeTVL.destroy({ where: { em_usid: id } });
     
     // 3. Delete user
-    await User.destroy({ where: { us_usid: id } });
+    await UserTVL.destroy({ where: { us_usid: id } });
 
     res.json({ message: 'Employee deleted successfully' });
   } catch (error) {

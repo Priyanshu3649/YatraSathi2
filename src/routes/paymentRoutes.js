@@ -14,7 +14,8 @@ const {
   getCustomerAdvance,
   getOutstandingReceivables,
   performYearEndClosing,
-  recordCustomerPayment
+  recordCustomerPayment,
+  verifyPayment
 } = require('../controllers/paymentController');
 const authMiddleware = require('../middleware/authMiddleware');
 const { emEmployee: Employee } = require('../models');
@@ -117,6 +118,36 @@ router.post('/:paymentId/refund', async (req, res, next) => {
   }
   next();
 }, refundPayment);
+
+/**
+ * POST /api/payments/:id/verify
+ * Verify customer-submitted payment
+ * Access: Admin, Accounts Team
+ */
+router.post('/:id/verify', async (req, res, next) => {
+  if (req.user.us_usertype === 'employee') {
+    try {
+      const employee = await Employee.findOne({ where: { em_usid: req.user.us_usid } });
+      if (!employee || employee.em_dept !== 'ACCOUNTS') {
+        return res.status(403).json({ 
+          success: false,
+          message: 'Access denied. Accounts team access required.' 
+        });
+      }
+    } catch (error) {
+      return res.status(500).json({ 
+        success: false,
+        message: 'Error checking permissions' 
+      });
+    }
+  } else if (req.user.us_usertype !== 'admin') {
+    return res.status(403).json({ 
+      success: false,
+      message: 'Access denied. Admin or Accounts team access required.' 
+    });
+  }
+  next();
+}, verifyPayment);
 
 // ============================================================================
 // QUERY ENDPOINTS

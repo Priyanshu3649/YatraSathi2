@@ -4,7 +4,7 @@
  * This script runs all payment-related migrations:
  * 1. Payment table (ptPayment)
  * 2. PaymentAlloc table (paPaymentAlloc)
- * 3. PNR table (pnPnr)
+ * 3. PNR table (pnXpnr)
  * 
  * Run this script before starting the server:
  * node src/scripts/migrate-all-payment-tables.js

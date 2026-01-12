@@ -15,6 +15,7 @@ const EmployeeManagement = () => {
   const [error, setError] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [editingEmployee, setEditingEmployee] = useState(null);
+  const [photoPreview, setPhotoPreview] = useState(null);
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -22,13 +23,14 @@ const EmployeeManagement = () => {
     password: 'employee123', // Default password
     aadhaarNumber: '',
     department: '',
-    designation: '',
+    roleId: '', // Changed from designation to roleId for role-based access
     salary: '',
     joinDate: '',
     address: '',
     city: '',
     state: '',
-    pincode: ''
+    pincode: '',
+    photo: null
   });
 
   // Load employees
@@ -56,17 +58,59 @@ const EmployeeManagement = () => {
     });
   };
 
+  const handlePhotoChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      setFormData({
+        ...formData,
+        photo: file
+      });
+      
+      // Create preview
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setPhotoPreview(reader.result);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     
     try {
+      const submitData = {
+        ...formData,
+        // Map form fields to backend expected fields
+        us_fname: formData.name.split(' ')[0] || formData.name,
+        us_lname: formData.name.split(' ').slice(1).join(' ') || '',
+        us_email: formData.email,
+        us_phone: formData.phone,
+        us_aadhaar: formData.aadhaarNumber,
+        em_dept: formData.department,
+        us_roid: formData.roleId, // Use roleId instead of designation
+        em_salary: formData.salary,
+        em_joindt: formData.joinDate,
+        em_address: formData.address,
+        em_city: formData.city,
+        em_state: formData.state,
+        em_pincode: formData.pincode,
+        us_coid: 'TRV', // Default company
+        password: formData.password
+      };
+
+      // Remove form-specific fields that don't map to backend
+      delete submitData.name;
+      delete submitData.aadhaarNumber;
+      delete submitData.roleId;
+
       if (editingEmployee) {
         // Update existing employee
-        await employeeAPI.updateEmployee(editingEmployee.us_usid, formData);
+        await employeeAPI.updateEmployee(editingEmployee.us_usid, submitData);
         setEditingEmployee(null);
       } else {
         // Create new employee
-        await employeeAPI.createEmployee(formData);
+        await employeeAPI.createEmployee(submitData);
       }
       
       // Reset form and reload employees
@@ -77,14 +121,16 @@ const EmployeeManagement = () => {
         password: 'employee123',
         aadhaarNumber: '',
         department: '',
-        designation: '',
+        roleId: '',
         salary: '',
         joinDate: '',
         address: '',
         city: '',
         state: '',
-        pincode: ''
+        pincode: '',
+        photo: null
       });
+      setPhotoPreview(null);
       setShowForm(false);
       loadEmployees();
     } catch (err) {
@@ -95,20 +141,25 @@ const EmployeeManagement = () => {
   const handleEdit = (employee) => {
     setEditingEmployee(employee);
     setFormData({
-      name: employee.user?.us_fname || '',
+      name: employee.user?.us_fname ? 
+        (employee.user?.us_lname ? 
+          `${employee.user.us_fname} ${employee.user.us_lname}` : 
+          employee.user.us_fname) : '',
       email: employee.user?.us_email || '',
       phone: employee.user?.us_phone || '',
       password: 'employee123',
       aadhaarNumber: employee.user?.us_aadhaar || '',
       department: employee.em_dept || '',
-      designation: employee.em_designation || '',
+      roleId: employee.user?.us_roid || '', // Use roleId from user record
       salary: employee.em_salary || '',
       joinDate: employee.em_joindt ? employee.em_joindt.split('T')[0] : '',
       address: employee.em_address || '',
       city: employee.em_city || '',
       state: employee.em_state || '',
-      pincode: employee.em_pincode || ''
+      pincode: employee.em_pincode || '',
+      photo: null
     });
+    setPhotoPreview(employee.user?.us_photo || null);
     setShowForm(true);
   };
 
@@ -133,14 +184,16 @@ const EmployeeManagement = () => {
       password: 'employee123',
       aadhaarNumber: '',
       department: '',
-      designation: '',
+      roleId: '',
       salary: '',
       joinDate: '',
       address: '',
       city: '',
       state: '',
-      pincode: ''
+      pincode: '',
+      photo: null
     });
+    setPhotoPreview(null);
   };
 
   if (loading) {
@@ -263,25 +316,19 @@ const EmployeeManagement = () => {
               </div>
               
               <div className="form-group col-6">
-                <label className="form-label">Designation</label>
+                <label className="form-label">Role</label>
                 <select
-                  name="designation"
+                  name="roleId"
                   className="form-control"
-                  value={formData.designation}
+                  value={formData.roleId}
                   onChange={handleInputChange}
                 >
-                  <option value="">Select Designation</option>
-                  <option value="Manager">Manager</option>
-                  <option value="Senior Executive">Senior Executive</option>
-                  <option value="Executive">Executive</option>
-                  <option value="Team Leader">Team Leader</option>
-                  <option value="Booking Agent">Booking Agent</option>
-                  <option value="Travel Consultant">Travel Consultant</option>
-                  <option value="Customer Support">Customer Support</option>
-                  <option value="Accountant">Accountant</option>
-                  <option value="HR Executive">HR Executive</option>
-                  <option value="IT Support">IT Support</option>
-                  <option value="Administrator">Administrator</option>
+                  <option value="">Select Role</option>
+                  <option value="EMP">Employee</option>
+                  <option value="MGR">Manager</option>
+                  <option value="HR">HR</option>
+                  <option value="ACC">Accountant</option>
+                  <option value="ADM">Admin</option>
                 </select>
               </div>
             </div>
@@ -307,6 +354,30 @@ const EmployeeManagement = () => {
                 value={formData.joinDate}
                 onChange={handleInputChange}
               />
+            </div>
+            
+            <div className="form-group">
+              <label className="form-label">Employee Photo</label>
+              <input
+                type="file"
+                accept="image/*"
+                onChange={handlePhotoChange}
+                className="form-control"
+              />
+              {photoPreview && (
+                <div style={{ marginTop: '10px', textAlign: 'center' }}>
+                  <img 
+                    src={photoPreview} 
+                    alt="Preview" 
+                    style={{ 
+                      maxWidth: '150px', 
+                      maxHeight: '150px', 
+                      borderRadius: '8px',
+                      border: '1px solid #ddd'
+                    }} 
+                  />
+                </div>
+              )}
             </div>
             
             <div className="form-group">
@@ -383,12 +454,12 @@ const EmployeeManagement = () => {
             <table className="data-table">
               <thead>
                 <tr>
-                  <th>ID</th>
+                  <th>Photo</th>
                   <th>Name</th>
                   <th>Email</th>
                   <th>Phone</th>
                   <th>Department</th>
-                  <th>Designation</th>
+                  <th>Role</th>
                   <th>Salary</th>
                   <th>Join Date</th>
                   <th>Manager</th>
@@ -399,12 +470,38 @@ const EmployeeManagement = () => {
               <tbody>
                 {employees.map(item => (
                   <tr key={item.em_usid}>
-                    <td>{item.em_usid}</td>
+                    <td>
+                      {item.user?.us_photo ? (
+                        <img 
+                          src={item.user.us_photo} 
+                          alt="Employee" 
+                          style={{ 
+                            width: '40px', 
+                            height: '40px', 
+                            borderRadius: '50%',
+                            objectFit: 'cover' 
+                          }} 
+                        />
+                      ) : (
+                        <div style={{ 
+                          width: '40px', 
+                          height: '40px', 
+                          borderRadius: '50%',
+                          backgroundColor: '#ddd',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          fontSize: '12px'
+                        }}>
+                          {item.user?.us_fname?.charAt(0) || 'N'}
+                        </div>
+                      )}
+                    </td>
                     <td>{item.user?.us_fname} {item.user?.us_lname}</td>
                     <td>{item.user?.us_email}</td>
                     <td>{item.user?.us_phone}</td>
                     <td>{item.em_dept || ''}</td>
-                    <td>{item.em_designation || ''}</td>
+                    <td>{item.user?.us_roid || ''}</td>
                     <td>{item.em_salary ? `₹${parseFloat(item.em_salary).toFixed(2)}` : ''}</td>
                     <td>{item.em_joindt ? new Date(item.em_joindt).toLocaleDateString() : ''}</td>
                     <td>{item.manager?.em_empno || 'N/A'}</td>

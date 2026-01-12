@@ -193,7 +193,6 @@ const employeeLogin = async (req, res) => {
         id: user.us_usid,  // This is what the middleware will use to identify the user
         role: user.us_roid,
         dept: employee?.em_dept || 'ADMIN',
-        designation: employee?.em_designation || 'Administrator',
         userType: user.us_usertype
       }, 
       process.env.JWT_SECRET || 'default_secret',
@@ -209,7 +208,6 @@ const employeeLogin = async (req, res) => {
           email: user.us_email,
           role: user.us_roid,
           department: employee?.em_dept || 'ADMIN',
-          designation: employee?.em_designation || 'Administrator',
           employeeNumber: employee?.em_empno || 'ADMIN001',
           us_usertype: user.us_usertype
         },

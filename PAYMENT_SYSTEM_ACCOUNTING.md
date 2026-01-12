@@ -30,7 +30,7 @@ This payment system is a **financial-grade accounting module** designed to:
 
 ## 📊 DATA MODEL
 
-### 1. PNR Master (`pnPnr`)
+### 1. PNR Master (`pnXpnr`)
 
 Each PNR has a final payable amount with real-time status calculation.
 
@@ -335,7 +335,7 @@ SELECT
     WHEN (pn.pn_totamt - COALESCE(SUM(pa.pa_amount), 0)) = 0 THEN 'PAID'
     ELSE 'PARTIAL'
   END AS payment_status
-FROM pnPnr pn
+FROM pnXpnr pn
 LEFT JOIN paPaymentAlloc pa ON pn.pn_pnid = pa.pa_pnid
 WHERE pn.pn_pnr = 'PNR123456'
 GROUP BY pn.pn_pnid, pn.pn_pnr, pn.pn_totamt;
@@ -363,7 +363,7 @@ SELECT
   b.bk_usid AS customer_id,
   COUNT(DISTINCT pn.pn_pnid) AS pending_pnrs,
   SUM(pn.pn_totamt - COALESCE(paid.paid_amount, 0)) AS total_outstanding
-FROM pnPnr pn
+FROM pnXpnr pn
 JOIN bkBooking b ON pn.pn_bkid = b.bk_bkid
 LEFT JOIN (
   SELECT 

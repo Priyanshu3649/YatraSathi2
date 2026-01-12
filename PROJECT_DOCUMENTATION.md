@@ -67,7 +67,7 @@ The system uses MySQL with the following tables, following the exact schema spec
 11. **stStation** - Station Details (Master Data)
 12. **bkBooking** - Booking Requests
 13. **psPassenger** - Passenger Details
-14. **pnPnr** - PNR Details
+14. **pnXpnr** - PNR Details
 15. **acAccount** - Account Master
 16. **ptPayment** - Payment Transactions
 17. **paPaymentAlloc** - PNR-wise payment allocation

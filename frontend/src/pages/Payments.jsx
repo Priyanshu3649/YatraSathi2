@@ -7,6 +7,27 @@ import '../styles/vintage-admin-panel.css';
 import '../styles/dynamic-admin-panel.css';
 import '../styles/vintage-erp-global.css';
 
+// Utility functions for financial year and accounting period
+const getFinancialYear = (date) => {
+  const d = date ? new Date(date) : new Date();
+  const year = d.getFullYear();
+  const month = d.getMonth() + 1;
+  
+  // Financial year runs from April to March (April = 04, March = 03)
+  if (month >= 4) {
+    return `${year}-${String(year + 1).slice(-2)}`;
+  } else {
+    return `${year - 1}-${String(year).slice(-2)}`;
+  }
+};
+
+const getAccountingPeriod = (date) => {
+  const d = date ? new Date(date) : new Date();
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  return `${year}-${month}`;
+};
+
 const Payments = () => {
   const { user } = useAuth();
   const [payments, setPayments] = useState([]);
@@ -247,14 +268,14 @@ const Payments = () => {
       pt_totalamt: '',
       pt_amount: '',
       pt_allocatedamt: '',
-      pt_unallocamt: '',
+      pt_unallocamt: '', // Will be calculated automatically
       pt_status: 'RECEIVED',
       pt_mode: 'CASH',
       pt_refno: '',
       pt_paydt: new Date().toISOString().split('T')[0],
       pt_rcvdt: '',
-      pt_finyear: '',
-      pt_period: '',
+      pt_finyear: getFinancialYear(new Date()),       // Auto-populate financial year
+      pt_period: getAccountingPeriod(new Date()),     // Auto-populate accounting period
       pt_locked: 0,
       edtm: '',
       eby: user?.us_usid || 'ADMIN',
@@ -544,6 +565,38 @@ const Payments = () => {
       console.error('Error searching customers by name:', error);
     }
   };
+  
+  // Handle payment amount change and recalculate unallocated amount
+  const handlePaymentAmountChange = (e) => {
+    const value = e.target.value;
+    setFormData(prev => {
+      const amount = parseFloat(value) || 0;
+      const allocatedAmount = parseFloat(prev.pt_allocatedamt) || 0;
+      const unallocatedAmount = amount - allocatedAmount;
+      
+      return {
+        ...prev,
+        pt_amount: value,
+        pt_unallocamt: unallocatedAmount.toFixed(2) // Calculate unallocated amount
+      };
+    });
+  };
+  
+  // Handle allocated amount change and recalculate unallocated amount
+  const handleAllocatedAmountChange = (e) => {
+    const value = e.target.value;
+    setFormData(prev => {
+      const amount = parseFloat(prev.pt_amount) || 0;
+      const allocatedAmount = parseFloat(value) || 0;
+      const unallocatedAmount = amount - allocatedAmount;
+      
+      return {
+        ...prev,
+        pt_allocatedamt: value,
+        pt_unallocamt: unallocatedAmount.toFixed(2) // Calculate unallocated amount
+      };
+    });
+  };
 
   if (loading) {
     return (
@@ -655,7 +708,7 @@ const Payments = () => {
                 type="number" 
                 name="pt_amount" 
                 value={formData.pt_amount || ''} 
-                onChange={(e) => setFormData({...formData, pt_amount: e.target.value})}
+                onChange={handlePaymentAmountChange}
                 className={`erp-input ${validationErrors.pt_amount ? 'error' : ''}`}
                 disabled={formData.pt_locked === 1}
               />
@@ -667,7 +720,7 @@ const Payments = () => {
                 type="number" 
                 name="pt_allocatedamt" 
                 value={formData.pt_allocatedamt || ''} 
-                onChange={(e) => setFormData({...formData, pt_allocatedamt: e.target.value})}
+                onChange={handleAllocatedAmountChange}
                 className="erp-input"
                 disabled={formData.pt_locked === 1}
               />
@@ -676,7 +729,6 @@ const Payments = () => {
                 type="number" 
                 name="pt_unallocamt" 
                 value={formData.pt_unallocamt || ''} 
-                onChange={(e) => setFormData({...formData, pt_unallocamt: e.target.value})}
                 className="erp-input"
                 readOnly
               />
