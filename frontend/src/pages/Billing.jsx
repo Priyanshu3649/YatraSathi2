@@ -536,7 +536,7 @@ const Billing = () => {
           <div className="erp-form-section">
             {/* Bill Header Fields - Row 1 */}
             <div className="erp-form-row">
-              <label className="erp-form-label">Bill ID</label>
+              <label className="erp-form-label required">Bill ID</label>
               <input 
                 type="text" 
                 className="erp-input" 
@@ -544,7 +544,7 @@ const Billing = () => {
                 readOnly 
                 disabled={!isEditing}
               />
-              <label className="erp-form-label">Bill Date</label>
+              <label className="erp-form-label required">Bill Date</label>
               <input 
                 type="date" 
                 name="billDate" 
@@ -598,7 +598,7 @@ const Billing = () => {
                   </div>
                 )}
               </div>
-              <label className="erp-form-label">Customer Name</label>
+              <label className="erp-form-label required">Customer Name</label>
               <div style={{ position: 'relative', display: 'inline-block', width: '100%' }}>
                 <input 
                   type="text" 
@@ -643,7 +643,7 @@ const Billing = () => {
             
             {/* Bill Charges - Row 3 */}
             <div className="erp-form-row">
-              <label className="erp-form-label">PNR Number(s)</label>
+              <label className="erp-form-label required">PNR Number(s)</label>
               <input 
                 type="text" 
                 name="pnrNumbers" 
@@ -653,7 +653,7 @@ const Billing = () => {
                 disabled={!isEditing}
                 placeholder="Enter PNR numbers separated by commas"
               />
-              <label className="erp-form-label">Net Journey Fare</label>
+              <label className="erp-form-label required">Net Journey Fare</label>
               <input 
                 type="number" 
                 name="netFare" 
@@ -699,7 +699,7 @@ const Billing = () => {
             
             {/* Journey & Ticket Details */}
             <div className="erp-form-row">
-              <label className="erp-form-label">Train Number</label>
+              <label className="erp-form-label required">Train Number</label>
               <input 
                 type="text" 
                 name="trainNumber" 
@@ -709,7 +709,7 @@ const Billing = () => {
                 disabled={!isEditing}
                 placeholder="Enter train number"
               />
-              <label className="erp-form-label">Reservation Class</label>
+              <label className="erp-form-label required">Reservation Class</label>
               <select 
                 name="reservationClass" 
                 className="erp-input" 
@@ -726,7 +726,7 @@ const Billing = () => {
             </div>
             
             <div className="erp-form-row">
-              <label className="erp-form-label">Ticket Type</label>
+              <label className="erp-form-label required">Ticket Type</label>
               <select 
                 name="ticketType" 
                 className="erp-input" 

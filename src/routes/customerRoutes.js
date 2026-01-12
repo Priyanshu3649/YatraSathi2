@@ -5,7 +5,9 @@ const {
   getCustomerBookings,
   getBookingDetails,
   cancelBooking,
-  getAllCustomers
+  getAllCustomers,
+  searchCustomers,
+  getCustomerById
 } = require('../controllers/customerController');
 const authMiddleware = require('../middleware/authMiddleware');
 
@@ -19,6 +21,8 @@ router.get('/dashboard', getCustomerDashboard);
 
 // Customer management
 router.get('/', getAllCustomers);
+router.get('/search', searchCustomers);
+router.get('/:id', getCustomerById);
 
 // Booking management
 router.post('/bookings', createBooking);

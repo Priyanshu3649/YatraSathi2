@@ -296,7 +296,8 @@ const getAllCustomers = async (req, res) => {
         { 
           model: User, 
           attributes: ['us_fname', 'us_lname', 'us_email', 'us_phone', 'us_aadhaar'], 
-          as: 'user' 
+          as: 'user',
+          required: true
         }
       ] 
     });
@@ -307,11 +308,174 @@ const getAllCustomers = async (req, res) => {
   }
 };
 
+/**
+ * Search customers from cuCustomer table
+ */
+const searchCustomers = async (req, res) => {
+  try {
+    const { q: searchTerm } = req.query;
+    
+    if (!searchTerm) {
+      return res.status(400).json({ 
+        success: false, 
+        error: { 
+          code: 'VALIDATION_ERROR', 
+          message: 'Search term is required' 
+        } 
+      });
+    }
+    
+    const trimmedSearchTerm = searchTerm.trim();
+    
+    // Return empty results for very short search terms instead of error
+    if (trimmedSearchTerm.length < 1) {
+      return res.json({ success: true, data: [] });
+    }
+    
+    // Sanitize the search term to prevent SQL injection and special character issues
+    // Only allow alphanumeric characters, spaces, hyphens, and underscores
+    const sanitizedSearchTerm = trimmedSearchTerm.replace(/[^\w\s\-]/gi, '');
+    
+    // If sanitized term is empty, return empty results
+    if (sanitizedSearchTerm.length === 0) {
+      return res.json({ success: true, data: [] });
+    }
+    
+    // Search in both customer ID and customer name
+    const customers = await Customer.findAll({
+      attributes: [
+        'cu_usid', 'cu_custno'
+      ], 
+      include: [ 
+        { 
+          model: User, 
+          attributes: ['us_fname', 'us_lname', 'us_email', 'us_phone'], 
+          as: 'user',
+          required: true // We need the user data to get the name
+        }
+      ],
+      limit: 20 // Limit results to prevent too many records
+    });
+    
+    // Filter results on the application side to avoid complex SQL
+    const filteredCustomers = customers.filter(customer => {
+      const searchTermLower = sanitizedSearchTerm.toLowerCase();
+      
+      // Check customer ID fields
+      const customerIdMatch = (customer.cu_usid && customer.cu_usid.toLowerCase().includes(searchTermLower)) ||
+                            (customer.cu_custno && customer.cu_custno.toLowerCase().includes(searchTermLower));
+      
+      // Check user name fields
+      const userNameMatch = customer.user && (
+        (customer.user.us_fname && customer.user.us_fname.toLowerCase().includes(searchTermLower)) ||
+        (customer.user.us_lname && customer.user.us_lname.toLowerCase().includes(searchTermLower))
+      );
+      
+      return customerIdMatch || userNameMatch;
+    });
+    
+    // Format the results to match the expected structure
+    const formattedCustomers = filteredCustomers.map(customer => {
+      // Combine first and last name from user as customer name
+      const customerName = (customer.user ? `${customer.user.us_fname || ''} ${customer.user.us_lname || ''}`.trim() : '');
+      
+      return {
+        id: customer.cu_usid || customer.cu_custno,
+        name: customerName,
+        cu_custno: customer.cu_custno,
+        cu_usid: customer.cu_usid,
+        us_fname: customer.user?.us_fname,
+        us_lname: customer.user?.us_lname
+      };
+    });
+    
+    res.json({ success: true, data: formattedCustomers });
+  } catch (error) {
+    console.error('Search customers error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: { code: 'SERVER_ERROR', message: 'An error occurred while searching customers' } 
+    });
+  }
+};
+
+/**
+ * Get customer by ID from cuCustomer table
+ */
+const getCustomerById = async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    if (!id) {
+      return res.status(400).json({ 
+        success: false, 
+        error: { 
+          code: 'VALIDATION_ERROR', 
+          message: 'Customer ID is required' 
+        } 
+      });
+    }
+    
+    const customer = await Customer.findOne({ 
+      attributes: [
+        'cu_usid', 'cu_custno', 'cu_custtype', 'cu_creditlimit', 
+        'cu_creditdays', 'cu_discount', 'cu_active'
+      ], 
+      include: [ 
+        { 
+          model: User, 
+          attributes: ['us_fname', 'us_lname', 'us_email', 'us_phone', 'us_aadhaar'], 
+          as: 'user',
+          required: true
+        }
+      ],
+      where: {
+        [Op.or]: [
+          { cu_usid: id },
+          { cu_custno: id }
+        ]
+      }
+    });
+    
+    if (!customer) {
+      return res.status(404).json({ 
+        success: false, 
+        error: { code: 'NOT_FOUND', message: 'Customer not found' } 
+      });
+    }
+    
+    // Format the customer data for response
+    const formattedCustomer = {
+      id: customer.cu_usid,
+      customerId: customer.cu_custno,
+      customerType: customer.cu_custtype,
+      creditLimit: customer.cu_creditlimit,
+      creditDays: customer.cu_creditdays,
+      discount: customer.cu_discount,
+      active: customer.cu_active,
+      name: customer.user ? `${customer.user.us_fname || ''} ${customer.user.us_lname || ''}`.trim() : '',
+      email: customer.user?.us_email,
+      phone: customer.user?.us_phone,
+      aadhaar: customer.user?.us_aadhaar
+    };
+    
+    res.json({ success: true, data: formattedCustomer });
+  } catch (error) {
+    console.error('Get customer by ID error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: { code: 'SERVER_ERROR', message: error.message } 
+    });
+  }
+};
+
 module.exports = {
   getCustomerDashboard,
   createBooking,
   getCustomerBookings,
   getBookingDetails,
   cancelBooking,
-  getAllCustomers
+  getAllCustomers,
+  searchCustomers,
+  getCustomerById
 };

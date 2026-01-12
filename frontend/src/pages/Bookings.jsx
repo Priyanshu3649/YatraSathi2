@@ -53,10 +53,9 @@ const Bookings = () => {
     }));
   }, [passengerList]);
   
-  // State for customer search
-  const [customerSearchTerm, setCustomerSearchTerm] = useState('');
-  const [customerSuggestions, setCustomerSuggestions] = useState([]);
-  const [showCustomerSuggestions, setShowCustomerSuggestions] = useState(false);
+  // Customer lookup state
+  const [customerLookup, setCustomerLookup] = useState([]);
+  const [showCustomerDropdown, setShowCustomerDropdown] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const recordsPerPage = 100;
@@ -114,34 +113,36 @@ const Bookings = () => {
     if (name === 'customerId') {
       setFormData(prev => ({
         ...prev,
-        customerId: value
+        customerId: value,
+        customerName: value ? '' : prev.customerName // Clear customer name if ID is being entered
       }));
       
-      // Fetch customer name when customer ID changes
-      if (value) {
-        fetchCustomerName(value);
+      // Fetch customer suggestions if search term is long enough
+      if (value.length >= 3) {
+        fetchCustomerLookup(value);
       } else {
-        setFormData(prev => ({
-          ...prev,
-          customerName: ''
-        }));
+        // If we have a valid customer ID, fetch the customer name
+        if (value.length > 0) {
+          fetchCustomerNameById(value);
+        }
+        setCustomerLookup([]);
+        setShowCustomerDropdown(false);
       }
     } 
     // Handle customer name change
     else if (name === 'customerName') {
       setFormData(prev => ({
         ...prev,
-        customerName: value
+        customerName: value,
+        customerId: value ? '' : prev.customerId // Clear customer ID if name is being entered
       }));
       
-      // Fetch customer ID when customer name changes
-      if (value) {
-        fetchCustomerId(value);
+      // Fetch customer suggestions if search term is long enough
+      if (value.length >= 3) {
+        fetchCustomerLookupByName(value);
       } else {
-        setFormData(prev => ({
-          ...prev,
-          customerId: ''
-        }));
+        setCustomerLookup([]);
+        setShowCustomerDropdown(false);
       }
     }
     // Handle other fields
@@ -153,21 +154,105 @@ const Bookings = () => {
     }
   };
   
-  // Function to fetch customer name by ID
-  const fetchCustomerName = async (customerId) => {
+  // Fetch customer lookup
+  const fetchCustomerLookup = async (searchTerm) => {
     try {
-      const customer = await customerAPI.getCustomerById(customerId);
-      setFormData(prev => ({
-        ...prev,
-        customerName: customer.name || customer.cu_name || customer.cu_custname || ''
-      }));
+      // Call the customer API to search for customers
+      const customers = await customerAPI.searchCustomers(searchTerm);
+      
+      // Format the results
+      const formattedResults = Array.isArray(customers) ? 
+        customers.map(customer => ({
+          id: customer.id || customer.cu_usid || customer.cu_custno || '',
+          name: customer.name || customer.cu_name || customer.cu_custname || '',
+          display: `${customer.id || customer.cu_usid || customer.cu_custno || ''} - ${customer.name || customer.cu_name || customer.cu_custname || ''} `
+        })) : [];
+      
+      setCustomerLookup(formattedResults);
+      setShowCustomerDropdown(true);
     } catch (error) {
-      console.error('Error fetching customer:', error);
+      console.error('Error fetching customer lookup:', error);
+      setCustomerLookup([]);
+      setShowCustomerDropdown(false);
     }
   };
   
-  // Function to fetch customer ID by name
-  const fetchCustomerId = async (customerName) => {
+  // Handle customer selection from dropdown
+  const handleCustomerSelect = (customer) => {
+    setFormData(prev => ({
+      ...prev,
+      customerId: customer.id,
+      customerName: customer.name || customer.display?.split(' - ')[1] || '',
+    }));
+    setCustomerLookup([]);
+    setShowCustomerDropdown(false);
+  };
+  
+  // Handle customer name change
+  const handleCustomerNameChange = async (e) => {
+    const value = e.target.value;
+    setFormData(prev => ({
+      ...prev,
+      customerName: value,
+      customerId: value ? '' : prev.customerId // Clear customer ID if name is being entered
+    }));
+    
+    // Fetch customer suggestions if search term is long enough
+    if (value.length >= 3) {
+      try {
+        await fetchCustomerLookupByName(value);
+      } catch (error) {
+        // Silently handle the error to prevent console spam
+        console.log('Customer lookup by name failed:', error.message);
+        setCustomerLookup([]);
+        setShowCustomerDropdown(false);
+      }
+    } else {
+      setCustomerLookup([]);
+      setShowCustomerDropdown(false);
+    }
+  };
+  
+  // Fetch customer lookup by name
+  const fetchCustomerLookupByName = async (searchTerm) => {
+    try {
+      // Call the customer API to search for customers by name
+      const customers = await customerAPI.searchCustomers(searchTerm);
+      
+      // Format the results
+      const formattedResults = Array.isArray(customers) ? 
+        customers.map(customer => ({
+          id: customer.id || customer.cu_usid || customer.cu_custno || '',
+          name: customer.name || customer.cu_name || customer.cu_custname || '',
+          display: `${customer.id || customer.cu_usid || customer.cu_custno || ''} - ${customer.name || customer.cu_name || customer.cu_custname || ''} `
+        })) : [];
+      
+      setCustomerLookup(formattedResults);
+      setShowCustomerDropdown(true);
+    } catch (error) {
+      console.error('Error fetching customer lookup by name:', error);
+      setCustomerLookup([]);
+      setShowCustomerDropdown(false);
+      throw error; // Re-throw to be caught by the calling function
+    }
+  };
+  
+  // Fetch customer name by ID
+  const fetchCustomerNameById = async (customerId) => {
+    try {
+      const customer = await customerAPI.getCustomerById(customerId);
+      const customerName = customer.name || customer.cu_name || customer.cu_custname || '';
+      setFormData(prev => ({
+        ...prev,
+        customerName: customerName
+      }));
+    } catch (error) {
+      console.error('Error fetching customer by ID:', error);
+    }
+  };
+  
+  // Fetch customer ID by name
+  const fetchCustomerIdByName = async (customerName) => {
     try {
       const customers = await customerAPI.searchCustomers(customerName);
       const customer = Array.isArray(customers) && customers.find(c => 
@@ -182,7 +267,7 @@ const Bookings = () => {
         }));
       }
     } catch (error) {
-      console.error('Error searching customers:', error);
+      console.error('Error searching customers by name:', error);
     }
   };
 
@@ -382,7 +467,7 @@ const Bookings = () => {
             
             {/* Booking ID and Date Row */}
             <div className="erp-form-row">
-              <label className="erp-form-label">Booking ID</label>
+              <label className="erp-form-label required">Booking ID</label>
               <input
                 type="text"
                 name="bookingId"
@@ -391,7 +476,7 @@ const Bookings = () => {
                 onChange={handleInputChange}
                 readOnly
               />
-              <label className="erp-form-label">Booking Date</label>
+              <label className="erp-form-label required">Booking Date</label>
               <input
                 type="date"
                 name="bookingDate"
@@ -404,26 +489,88 @@ const Bookings = () => {
 
             {/* Customer ID and Name Row */}
             <div className="erp-form-row">
-              <label className="erp-form-label">Customer ID</label>
-              <input
-                type="text"
-                name="customerId"
-                className="erp-input"
-                value={formData.customerId}
-                onChange={handleInputChange}
-                disabled={!isEditing}
-                placeholder="Enter customer ID..."
-              />
-              <label className="erp-form-label">Customer Name</label>
-              <input
-                type="text"
-                name="customerName"
-                className="erp-input"
-                value={formData.customerName}
-                onChange={handleInputChange}
-                disabled={!isEditing}
-                placeholder="Enter customer name..."
-              />
+              <label className="erp-form-label required">Customer ID</label>
+              <div style={{ position: 'relative', display: 'inline-block', width: '100%' }}>
+                <input
+                  type="text"
+                  name="customerId"
+                  className="erp-input"
+                  value={formData.customerId}
+                  onChange={handleInputChange}
+                  disabled={!isEditing}
+                  placeholder="Enter customer ID..."
+                />
+                {showCustomerDropdown && (
+                  <div className="erp-dropdown" style={{
+                    position: 'absolute',
+                    top: '100%',
+                    left: 0,
+                    right: 0,
+                    backgroundColor: 'white',
+                    border: '1px solid #ccc',
+                    zIndex: 1000,
+                    maxHeight: '150px',
+                    overflowY: 'auto',
+                    boxShadow: '0 2px 5px rgba(0,0,0,0.2)'
+                  }}>
+                    {customerLookup.map(customer => (
+                      <div 
+                        key={customer.id}
+                        className="erp-dropdown-item"
+                        style={{
+                          padding: '4px 8px',
+                          cursor: 'pointer',
+                          borderBottom: '1px solid #eee'
+                        }}
+                        onMouseDown={() => handleCustomerSelect(customer)}
+                      >
+                        {customer.display}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <label className="erp-form-label required">Customer Name</label>
+              <div style={{ position: 'relative', display: 'inline-block', width: '100%' }}>
+                <input
+                  type="text"
+                  name="customerName"
+                  className="erp-input"
+                  value={formData.customerName}
+                  onChange={handleCustomerNameChange}
+                  disabled={!isEditing}
+                  placeholder="Enter customer name..."
+                />
+                {showCustomerDropdown && (
+                  <div className="erp-dropdown" style={{
+                    position: 'absolute',
+                    top: '100%',
+                    left: 0,
+                    right: 0,
+                    backgroundColor: 'white',
+                    border: '1px solid #ccc',
+                    zIndex: 1000,
+                    maxHeight: '150px',
+                    overflowY: 'auto',
+                    boxShadow: '0 2px 5px rgba(0,0,0,0.2)'
+                  }}>
+                    {customerLookup.map(customer => (
+                      <div 
+                        key={customer.id}
+                        className="erp-dropdown-item"
+                        style={{
+                          padding: '4px 8px',
+                          cursor: 'pointer',
+                          borderBottom: '1px solid #eee'
+                        }}
+                        onMouseDown={() => handleCustomerSelect(customer)}
+                      >
+                        {customer.display}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
             
             {/* Total Passengers and Contact Number Row */}
@@ -450,7 +597,7 @@ const Bookings = () => {
 
             {/* Journey Details Row */}
             <div className="erp-form-row">
-              <label className="erp-form-label">From Station</label>
+              <label className="erp-form-label required">From Station</label>
               <input
                 type="text"
                 name="fromStation"
@@ -459,7 +606,7 @@ const Bookings = () => {
                 onChange={handleInputChange}
                 disabled={!isEditing}
               />
-              <label className="erp-form-label">To Station</label>
+              <label className="erp-form-label required">To Station</label>
               <input
                 type="text"
                 name="toStation"
@@ -472,7 +619,7 @@ const Bookings = () => {
 
             {/* Travel Date and Class Row */}
             <div className="erp-form-row">
-              <label className="erp-form-label">Travel Date</label>
+              <label className="erp-form-label required">Travel Date</label>
               <input
                 type="date"
                 name="travelDate"
@@ -481,7 +628,7 @@ const Bookings = () => {
                 onChange={handleInputChange}
                 disabled={!isEditing}
               />
-              <label className="erp-form-label">Travel Class</label>
+              <label className="erp-form-label required">Travel Class</label>
               <select
                 name="travelClass"
                 className="erp-input"

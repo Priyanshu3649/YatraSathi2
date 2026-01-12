@@ -647,6 +647,44 @@ export const paymentAPI = {
     }
     
     return data;
+  },
+
+  // Get payment history for a specific payment (using allocations as history)
+  getPaymentHistory: async (paymentId) => {
+    // Using the existing allocations endpoint as payment history
+    return await paymentAPI.getPaymentAllocations(paymentId);
+  },
+
+  // Search customers for dropdown
+  searchCustomers: async (searchTerm) => {
+    const response = await fetch(`${API_BASE_URL}/customers/search?q=${encodeURIComponent(searchTerm)}`, {
+      method: 'GET',
+      headers: getHeaders(true)
+    });
+    
+    const data = await response.json();
+    
+    if (!response.ok) {
+      throw new Error(data.message || 'Failed to search customers');
+    }
+    
+    return data;
+  },
+
+  // Get customer by ID
+  getCustomerById: async (customerId) => {
+    const response = await fetch(`${API_BASE_URL}/customers/${customerId}`, {
+      method: 'GET',
+      headers: getHeaders(true)
+    });
+    
+    const data = await response.json();
+    
+    if (!response.ok) {
+      throw new Error(data.message || 'Failed to get customer by ID');
+    }
+    
+    return data;
   }
 };
 
@@ -1056,5 +1094,6 @@ export default {
   paymentAPI,
   reportAPI,
   employeeAPI,
-  billingAPI
+  billingAPI,
+  customerAPI
 };
