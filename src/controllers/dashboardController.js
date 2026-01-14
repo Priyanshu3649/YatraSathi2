@@ -6,6 +6,14 @@ const { Op } = require('sequelize');
  */
 const getAdminDashboard = async (req, res) => {
   try {
+    // Check if user has admin role
+    if (req.user.us_roid !== 'ADM') {
+      return res.status(403).json({ 
+        success: false, 
+        error: { code: 'FORBIDDEN', message: 'Access denied. Admin role required.' } 
+      });
+    }
+    
     // Overall statistics
     const totalBookings = await BookingTVL.count();
     const totalEmployees = await EmployeeTVL.count();
@@ -65,7 +73,7 @@ const getAdminDashboard = async (req, res) => {
     
     // Format employee performance data
     const formattedEmployeePerformance = employeePerformance.map(emp => ({
-      name: `${emp.agent?.us_fname || 'N/A'} ${emp.agent?.us_lname || ''}`,
+      name: `${emp.agent?.us_fname || 'N/A'} ${emp.agent?.us_lname || ''}`.trim(),
       department: 'N/A', // Would need to join with Employee table to get actual department
       totalBookings: parseInt(emp.totalBookings),
       confirmedBookings: parseInt(emp.confirmedBookings || 0),

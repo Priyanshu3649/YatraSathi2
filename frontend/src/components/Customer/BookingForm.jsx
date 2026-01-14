@@ -9,9 +9,8 @@ const BookingForm = () => {
     to: '',
     journeyDate: '',
     trainClass: 'SL',
-    berthPreference: 'NO_PREF',
     passengers: [
-      { name: '', age: '', gender: 'M' }
+      { name: '', age: '', gender: 'M', berthPreference: 'NO_PREF' }
     ]
   });
   const [loading, setLoading] = useState(false);
@@ -56,10 +55,12 @@ const BookingForm = () => {
     if (formData.passengers.length < 6) {
       setFormData(prev => ({
         ...prev,
-        passengers: [...prev.passengers, { name: '', age: '', gender: 'M' }]
+        passengers: [...prev.passengers, { name: '', age: '', gender: 'M', berthPreference: 'NO_PREF' }]
       }));
     }
   };
+
+
 
   const removePassenger = (index) => {
     if (formData.passengers.length > 1) {
@@ -145,7 +146,10 @@ const BookingForm = () => {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify(formData)
+        body: JSON.stringify({
+          ...formData,
+          berthPreference: formData.passengers[0]?.berthPreference || 'NO_PREF' // Use first passenger's preference as overall preference
+        })
       });
 
       const data = await response.json();
@@ -227,20 +231,7 @@ const BookingForm = () => {
         </div>
       </div>
 
-      <div className="form-group">
-        <label>Berth Preference</label>
-        <select
-          name="berthPreference"
-          value={formData.berthPreference}
-          onChange={handleInputChange}
-        >
-          {berthPreferences.map(pref => (
-            <option key={pref.value} value={pref.value}>
-              {pref.label}
-            </option>
-          ))}
-        </select>
-      </div>
+
     </div>
   );
 
@@ -263,7 +254,7 @@ const BookingForm = () => {
             )}
           </div>
           
-          <div className="form-row">
+          <div className="form-row four-cols">
             <div className="form-group">
               <label>Full Name</label>
               <input
@@ -297,6 +288,20 @@ const BookingForm = () => {
                 <option value="M">Male</option>
                 <option value="F">Female</option>
                 <option value="O">Other</option>
+              </select>
+            </div>
+            
+            <div className="form-group">
+              <label>Berth Preference</label>
+              <select
+                value={passenger.berthPreference}
+                onChange={(e) => handlePassengerChange(index, 'berthPreference', e.target.value)}
+              >
+                {berthPreferences.map(pref => (
+                  <option key={pref.value} value={pref.value}>
+                    {pref.label}
+                  </option>
+                ))}
               </select>
             </div>
           </div>
@@ -335,10 +340,7 @@ const BookingForm = () => {
             <span>Class:</span>
             <span>{trainClasses.find(c => c.value === formData.trainClass)?.label}</span>
           </div>
-          <div className="summary-item">
-            <span>Berth Preference:</span>
-            <span>{berthPreferences.find(b => b.value === formData.berthPreference)?.label}</span>
-          </div>
+
         </div>
         
         <div className="summary-section">
@@ -346,7 +348,7 @@ const BookingForm = () => {
           {formData.passengers.map((passenger, index) => (
             <div key={index} className="passenger-summary">
               <span>{passenger.name}</span>
-              <span>{passenger.age} years, {passenger.gender === 'M' ? 'Male' : passenger.gender === 'F' ? 'Female' : 'Other'}</span>
+              <span>{passenger.age} years, {passenger.gender === 'M' ? 'Male' : passenger.gender === 'F' ? 'Female' : 'Other'}, {berthPreferences.find(b => b.value === passenger.berthPreference)?.label}</span>
             </div>
           ))}
         </div>

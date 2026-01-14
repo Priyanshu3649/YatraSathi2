@@ -1,15 +1,23 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import '../../styles/customer-dashboard.css';
+import '../../styles/modern-customer-dashboard.css';
 
 const CustomerDashboard = () => {
   const [dashboardData, setDashboardData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [liveUpdateIndex, setLiveUpdateIndex] = useState(0);
   const navigate = useNavigate();
 
   useEffect(() => {
     fetchDashboardData();
+    
+    // Set up interval for cycling through live updates
+    const interval = setInterval(() => {
+      setLiveUpdateIndex(prev => (prev + 1) % liveUpdates.length);
+    }, 4000);
+    
+    return () => clearInterval(interval);
   }, []);
 
   const fetchDashboardData = async () => {
@@ -48,6 +56,13 @@ const CustomerDashboard = () => {
     navigate('/customer/booking/new');
   };
 
+  const liveUpdates = [
+    { id: 1, message: 'New train schedules available for Diwali season!', time: '2 mins ago', type: 'info' },
+    { id: 2, message: 'Special offers on premium bookings this week', time: '15 mins ago', type: 'offer' },
+    { id: 3, message: 'Your booking status updated to CONFIRMED', time: '30 mins ago', type: 'success' },
+    { id: 4, message: 'Payment received successfully', time: '1 hour ago', type: 'success' },
+  ];
+
   if (loading) {
     return (
       <div className="dashboard-loading">
@@ -73,175 +88,183 @@ const CustomerDashboard = () => {
   const user = JSON.parse(localStorage.getItem('user') || '{}');
 
   return (
-    <div className="customer-dashboard">
-      <header className="dashboard-header">
-        <div className="header-content">
-          <div className="user-welcome">
-            <h1>Welcome back, {user.name}!</h1>
-            <p>Manage your travel bookings and plans</p>
-          </div>
-          <div className="header-actions">
-            <button onClick={handleNewBooking} className="btn-primary">
-              <i className="fas fa-plus"></i>
-              New Booking
-            </button>
-            <button onClick={handleLogout} className="btn-outline">
-              <i className="fas fa-sign-out-alt"></i>
-              Logout
-            </button>
+    <div className="modern-customer-dashboard">
+      <div className="dashboard-header">
+        <div className="welcome-section">
+          <h1>Welcome back, {user.name}!</h1>
+          <p>Manage your travel bookings and plans</p>
+        </div>
+        <div className="header-actions">
+          <button onClick={handleNewBooking} className="btn-primary">
+            <span className="btn-icon">🎫</span>
+            New Booking
+          </button>
+        </div>
+      </div>
+
+      {/* Live Updates Ticker */}
+      <div className="live-updates-ticker">
+        <div className="ticker-label">📢</div>
+        <div className="ticker-content">
+          <div className="ticker-message" key={liveUpdateIndex}>
+            {liveUpdates[liveUpdateIndex].message}
           </div>
         </div>
-      </header>
+        <div className="ticker-time">
+          {liveUpdates[liveUpdateIndex].time}
+        </div>
+      </div>
 
-      <div className="dashboard-content">
-        <div className="stats-section">
-          <div className="stat-card">
-            <div className="stat-icon">
-              <i className="fas fa-calendar-check"></i>
-            </div>
-            <div className="stat-content">
-              <h3>{stats?.totalBookings || 0}</h3>
-              <p>Total Bookings</p>
-            </div>
+      <div className="stats-grid">
+        <div className="stat-card">
+          <div className="stat-icon" style={{ backgroundColor: '#3498db' }}>
+            <span className="icon">🎫</span>
           </div>
-
-          <div className="stat-card">
-            <div className="stat-icon active">
-              <i className="fas fa-plane"></i>
-            </div>
-            <div className="stat-content">
-              <h3>{stats?.activeBookings || 0}</h3>
-              <p>Active Bookings</p>
-            </div>
+          <div className="stat-info">
+            <h3>{stats?.totalBookings || 0}</h3>
+            <p>Total Bookings</p>
           </div>
-
-          <div className="stat-card">
-            <div className="stat-icon pending">
-              <i className="fas fa-clock"></i>
-            </div>
-            <div className="stat-content">
-              <h3>{stats?.pendingPayments || 0}</h3>
-              <p>Pending Payments</p>
-            </div>
-          </div>
-
-          <div className="stat-card">
-            <div className="stat-icon monthly">
-              <i className="fas fa-calendar-alt"></i>
-            </div>
-            <div className="stat-content">
-              <h3>{stats?.thisMonthBookings || 0}</h3>
-              <p>This Month</p>
-            </div>
+          <div className="progress-bar">
+            <div className="progress-fill" style={{ width: `${Math.min(100, (stats?.totalBookings || 0) * 10)}%`, backgroundColor: '#3498db' }}></div>
           </div>
         </div>
 
-        <div className="dashboard-grid">
-          <div className="dashboard-section">
-            <div className="section-header">
-              <h2>Recent Bookings</h2>
-              <button onClick={() => navigate('/customer/bookings')} className="btn-link">
-                View All
-              </button>
-            </div>
-            
-            <div className="bookings-list">
-              {recentBookings && recentBookings.length > 0 ? (
-                recentBookings.map((booking) => (
-                  <div key={booking.bk_bkid} className="booking-card">
-                    <div className="booking-info">
-                      <div className="booking-route">
-                        <span className="from">{booking.bk_from}</span>
-                        <i className="fas fa-arrow-right"></i>
-                        <span className="to">{booking.bk_to}</span>
-                      </div>
-                      <div className="booking-details">
-                        <span className="date">
-                          {new Date(booking.bk_jdate).toLocaleDateString()}
-                        </span>
-                        <span className={`status ${booking.bk_status?.toLowerCase()}`}>
-                          {booking.bk_status}
-                        </span>
-                      </div>
-                    </div>
-                    <div className="booking-actions">
-                      <button className="btn-sm">View Details</button>
-                    </div>
-                  </div>
-                ))
-              ) : (
-                <div className="empty-state">
-                  <i className="fas fa-calendar-times"></i>
-                  <h3>No Recent Bookings</h3>
-                  <p>You haven't made any bookings yet.</p>
-                  <button onClick={handleNewBooking} className="btn-primary">
-                    Create Your First Booking
-                  </button>
-                </div>
-              )}
-            </div>
+        <div className="stat-card">
+          <div className="stat-icon" style={{ backgroundColor: '#e74c3c' }}>
+            <span className="icon">⏳</span>
           </div>
-
-          <div className="dashboard-section">
-            <div className="section-header">
-              <h2>Payment History</h2>
-              <button onClick={() => navigate('/customer/payments')} className="btn-link">
-                View All
-              </button>
-            </div>
-            
-            <div className="payments-list">
-              {pendingInvoices && pendingInvoices.length > 0 ? (
-                pendingInvoices.map((invoice) => (
-                  <div key={invoice.id} className="payment-card">
-                    <div className="payment-info">
-                      <div className="payment-amount">
-                        ₹{invoice.amount?.toLocaleString()}
-                      </div>
-                      <div className="payment-details">
-                        <span className="date">
-                          {new Date(invoice.date).toLocaleDateString()}
-                        </span>
-                        <span className={`status ${invoice.status?.toLowerCase()}`}>
-                          {invoice.status}
-                        </span>
-                      </div>
-                    </div>
-                    <div className="payment-actions">
-                      <button className="btn-sm">Download</button>
-                    </div>
-                  </div>
-                ))
-              ) : (
-                <div className="empty-state">
-                  <i className="fas fa-receipt"></i>
-                  <h3>No Payment History</h3>
-                  <p>Your payment history will appear here.</p>
-                </div>
-              )}
-            </div>
+          <div className="stat-info">
+            <h3>{stats?.activeBookings || 0}</h3>
+            <p>Pending</p>
+          </div>
+          <div className="progress-bar">
+            <div className="progress-fill" style={{ width: `${Math.min(100, (stats?.activeBookings || 0) * 15)}%`, backgroundColor: '#e74c3c' }}></div>
           </div>
         </div>
 
-        <div className="quick-actions">
-          <h3>Quick Actions</h3>
-          <div className="action-grid">
-            <button onClick={handleNewBooking} className="action-card">
-              <i className="fas fa-plus-circle"></i>
-              <span>New Booking</span>
-            </button>
-            <button onClick={() => navigate('/customer/bookings')} className="action-card">
-              <i className="fas fa-list"></i>
-              <span>My Bookings</span>
-            </button>
-            <button onClick={() => navigate('/customer/payments')} className="action-card">
-              <i className="fas fa-credit-card"></i>
-              <span>Payment History</span>
-            </button>
-            <button onClick={() => navigate('/customer/profile')} className="action-card">
-              <i className="fas fa-user"></i>
-              <span>My Profile</span>
-            </button>
+        <div className="stat-card">
+          <div className="stat-icon" style={{ backgroundColor: '#2ecc71' }}>
+            <span className="icon">✅</span>
+          </div>
+          <div className="stat-info">
+            <h3>{stats?.activeBookings ? stats.totalBookings - stats.activeBookings : 0}</h3>
+            <p>Confirmed</p>
+          </div>
+          <div className="progress-bar">
+            <div className="progress-fill" style={{ width: `${Math.min(100, ((stats?.activeBookings ? stats.totalBookings - stats.activeBookings : 0) / (stats?.totalBookings || 1)) * 100 || 0)}%`, backgroundColor: '#2ecc71' }}></div>
+          </div>
+        </div>
+
+        <div className="stat-card">
+          <div className="stat-icon" style={{ backgroundColor: '#f39c12' }}>
+            <span className="icon">💰</span>
+          </div>
+          <div className="stat-info">
+            <h3>₹{(stats?.pendingPayments || 0).toLocaleString()}</h3>
+            <p>Payments</p>
+          </div>
+          <div className="progress-bar">
+            <div className="progress-fill" style={{ width: `${Math.min(100, (stats?.pendingPayments || 0) / 1000 * 10 || 0)}%`, backgroundColor: '#f39c12' }}></div>
+          </div>
+        </div>
+      </div>
+
+      <div className="quick-actions-section">
+        <h2>Quick Actions</h2>
+        <div className="quick-actions-grid">
+          <div 
+            className="action-card"
+            style={{ borderLeftColor: '#3498db' }}
+            onClick={handleNewBooking}
+          >
+            <div className="action-icon" style={{ backgroundColor: '#3498db' + '20' }}>
+              <span style={{ color: '#3498db' }}>🎫</span>
+            </div>
+            <div className="action-content">
+              <h3>New Booking Request</h3>
+              <p>Submit a new travel booking</p>
+            </div>
+            <div className="action-arrow">
+              <span>→</span>
+            </div>
+          </div>
+          <div 
+            className="action-card"
+            style={{ borderLeftColor: '#e74c3c' }}
+            onClick={() => navigate('/customer/bookings')}
+          >
+            <div className="action-icon" style={{ backgroundColor: '#e74c3c' + '20' }}>
+              <span style={{ color: '#e74c3c' }}>📋</span>
+            </div>
+            <div className="action-content">
+              <h3>My Requests</h3>
+              <p>View all your booking requests</p>
+            </div>
+            <div className="action-arrow">
+              <span>→</span>
+            </div>
+          </div>
+          <div 
+            className="action-card"
+            style={{ borderLeftColor: '#2ecc71' }}
+            onClick={() => navigate('/customer/bills-payments')}
+          >
+            <div className="action-icon" style={{ backgroundColor: '#2ecc71' + '20' }}>
+              <span style={{ color: '#2ecc71' }}>💰</span>
+            </div>
+            <div className="action-content">
+              <h3>My Payments</h3>
+              <p>Check payment status</p>
+            </div>
+            <div className="action-arrow">
+              <span>→</span>
+            </div>
+          </div>
+          <div 
+            className="action-card"
+            style={{ borderLeftColor: '#9b59b6' }}
+            onClick={() => navigate('/customer/profile')}
+          >
+            <div className="action-icon" style={{ backgroundColor: '#9b59b6' + '20' }}>
+              <span style={{ color: '#9b59b6' }}>👤</span>
+            </div>
+            <div className="action-content">
+              <h3>My Profile</h3>
+              <p>Manage your account</p>
+            </div>
+            <div className="action-arrow">
+              <span>→</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="recent-activity-section">
+        <h2>Recent Activity</h2>
+        <div className="activity-list">
+          <div className="activity-item">
+            <div className="activity-icon">🎫</div>
+            <div className="activity-content">
+              <h4>New Booking Request</h4>
+              <p>Successfully submitted your booking request</p>
+              <span className="activity-time">2 hours ago</span>
+            </div>
+          </div>
+          <div className="activity-item">
+            <div className="activity-icon">✅</div>
+            <div className="activity-content">
+              <h4>Booking Confirmed</h4>
+              <p>Your booking has been confirmed</p>
+              <span className="activity-time">1 day ago</span>
+            </div>
+          </div>
+          <div className="activity-item">
+            <div className="activity-icon">💰</div>
+            <div className="activity-content">
+              <h4>Payment Received</h4>
+              <p>Payment has been processed successfully</p>
+              <span className="activity-time">3 days ago</span>
+            </div>
           </div>
         </div>
       </div>

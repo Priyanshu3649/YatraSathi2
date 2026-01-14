@@ -710,9 +710,10 @@ async function seedTVLDatabase() {
     // Create sample payments in TVL
     console.log('Creating sample payments in TVL...');
     await PaymentTVL.create({
-      pt_ptid: 1,
-      pt_acid: account1.ac_acid,  // Use the actual auto-incremented account ID
+      pt_acid: 1,  // Use the actual auto-incremented account ID
       pt_bkid: 1,
+      pt_custid: 1,
+      pt_totalamt: 5000.00,
       pt_amount: 5000.00,
       pt_mode: 'ONLINE',
       pt_refno: 'TXN1234567890',
@@ -720,6 +721,8 @@ async function seedTVLDatabase() {
       pt_rcvdt: new Date('2025-11-20'),
       pt_status: 'RECEIVED',
       pt_remarks: 'Full payment for confirmed booking',
+      pt_finyear: '2025-26',
+      pt_period: '2025-11',
       edtm: new Date(),
       eby: 'EMP001',
       mdtm: new Date(),
@@ -727,15 +730,18 @@ async function seedTVLDatabase() {
     });
 
     await PaymentTVL.create({
-      pt_ptid: 2,
-      pt_acid: account2.ac_acid,  // Use the actual auto-incremented account ID
+      pt_acid: 2,  // Use the actual auto-incremented account ID
       pt_bkid: 2,
+      pt_custid: 1,
+      pt_totalamt: 1000.00,
       pt_amount: 1000.00,
       pt_mode: 'CASH',
       pt_paydt: new Date('2025-11-21'),
       pt_rcvdt: new Date('2025-11-21'),
       pt_status: 'RECEIVED',
       pt_remarks: 'Advance payment',
+      pt_finyear: '2025-26',
+      pt_period: '2025-11',
       edtm: new Date(),
       eby: 'EMP001',
       mdtm: new Date(),
@@ -743,9 +749,10 @@ async function seedTVLDatabase() {
     });
 
     await PaymentTVL.create({
-      pt_ptid: 3,
-      pt_acid: account3.ac_acid,  // Use the actual auto-incremented account ID
+      pt_acid: 3,  // Use the actual auto-incremented account ID
       pt_bkid: 3,
+      pt_custid: 1,
+      pt_totalamt: 2400.00,
       pt_amount: 2400.00,
       pt_mode: 'ONLINE',
       pt_refno: 'TXN9876543210',
@@ -753,6 +760,8 @@ async function seedTVLDatabase() {
       pt_rcvdt: new Date('2025-11-19'),
       pt_status: 'REFUNDED',
       pt_remarks: 'Refund for cancelled booking',
+      pt_finyear: '2025-26',
+      pt_period: '2025-11',
       edtm: new Date(),
       eby: 'EMP001',
       mdtm: new Date(),

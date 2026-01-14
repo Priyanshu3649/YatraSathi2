@@ -1,4 +1,4 @@
-const { sequelize } = require('../config/db');
+const { sequelize } = require('../models/index');
 const RoleTVL = require('../models/RoleTVL');
 const PermissionTVL = require('../models/PermissionTVL');
 const RolePermissionTVL = require('../models/RolePermissionTVL');

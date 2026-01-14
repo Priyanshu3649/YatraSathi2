@@ -13,8 +13,28 @@ const { departmentAccessControl, hasPermission, checkDepartmentAccess } = requir
 
 const router = express.Router();
 
-// Apply authentication and department access control to all routes
+// Apply authentication middleware to all routes
 router.use(authMiddleware);
+
+// Check if user is an employee
+router.use((req, res, next) => {
+  // Check if user has employee role (using role ID)
+  const employeeRoles = ['AGT', 'ACC', 'HR', 'CC', 'MKT', 'MGT']; // Add other employee roles as needed
+  if (!employeeRoles.includes(req.user.us_roid)) {
+    return res.status(403).json({ 
+      success: false, 
+      error: { code: 'FORBIDDEN', message: 'Access denied. Employee role required.' } 
+    });
+  }
+  next();
+});
+
+// Employee dashboard route - accessible to all employees
+router.get('/dashboard', (req, res) => {
+  res.json({ message: 'Employee dashboard access granted', user: req.user });
+});
+
+// Apply department access control to specific routes
 router.use(departmentAccessControl);
 
 // Employee Management Routes

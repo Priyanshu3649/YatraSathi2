@@ -10,12 +10,12 @@ const getCustomerDashboard = async (req, res) => {
 
     // Get customer bookings
     const totalBookings = await Booking.count({
-      where: { bk_cuid: userId }
+      where: { bk_usid: userId }
     });
 
     const activeBookings = await Booking.count({
       where: { 
-        bk_cuid: userId,
+        bk_usid: userId,
         bk_status: { [Op.in]: ['CONFIRMED', 'PENDING'] }
       }
     });
@@ -27,14 +27,14 @@ const getCustomerDashboard = async (req, res) => {
 
     const thisMonthBookings = await Booking.count({
       where: { 
-        bk_cuid: userId,
+        bk_usid: userId,
         edtm: { [Op.gte]: thisMonth }
       }
     });
 
     // Recent bookings
     const recentBookings = await Booking.findAll({
-      where: { bk_cuid: userId },
+      where: { bk_usid: userId },
       order: [['edtm', 'DESC']],
       limit: 5
     });
@@ -165,7 +165,7 @@ const getCustomerBookings = async (req, res) => {
     const userId = req.user.us_usid;
     const { page = 1, limit = 10, status } = req.query;
 
-    const whereClause = { bk_cuid: userId };
+    const whereClause = { bk_usid: userId };
     if (status) {
       whereClause.bk_status = status;
     }
@@ -208,7 +208,7 @@ const getBookingDetails = async (req, res) => {
     const booking = await Booking.findOne({
       where: { 
         bk_bkid: bookingId,
-        bk_cuid: userId 
+        bk_usid: userId 
       }
     });
 
@@ -240,7 +240,7 @@ const cancelBooking = async (req, res) => {
     const booking = await Booking.findOne({
       where: { 
         bk_bkid: bookingId,
-        bk_cuid: userId 
+        bk_usid: userId 
       }
     });
 
@@ -469,6 +469,60 @@ const getCustomerById = async (req, res) => {
   }
 };
 
+/**
+ * Get Customer Bills
+ */
+const getCustomerBills = async (req, res) => {
+  try {
+    const userId = req.user.us_usid;
+    
+    // Get bills for this customer by joining with BillTVL table
+    // Since BillTVL is not fully defined in the models, we'll use mock data for now
+    // In a real implementation, you would query the BillTVL table
+    const bills = [];
+    
+    res.json({ 
+      success: true, 
+      data: { 
+        bills: bills
+      } 
+    });
+  } catch (error) {
+    console.error('Get customer bills error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: { code: 'SERVER_ERROR', message: 'Failed to fetch bills' } 
+    });
+  }
+};
+
+/**
+ * Get Customer Payments
+ */
+const getCustomerPayments = async (req, res) => {
+  try {
+    const userId = req.user.us_usid;
+    
+    // Get payments for this customer by joining with PaymentTVL table
+    // Since payments are linked to customer via account/booking, we'll fetch based on customer ID
+    // In a real implementation, you would query the PaymentTVL table
+    const payments = [];
+    
+    res.json({ 
+      success: true, 
+      data: { 
+        payments: payments
+      } 
+    });
+  } catch (error) {
+    console.error('Get customer payments error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: { code: 'SERVER_ERROR', message: 'Failed to fetch payments' } 
+    });
+  }
+};
+
 module.exports = {
   getCustomerDashboard,
   createBooking,
@@ -477,5 +531,7 @@ module.exports = {
   cancelBooking,
   getAllCustomers,
   searchCustomers,
-  getCustomerById
+  getCustomerById,
+  getCustomerBills,
+  getCustomerPayments
 };

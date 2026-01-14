@@ -126,9 +126,17 @@
 
 .form-row {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
   gap: 20px;
   margin-bottom: 20px;
+}
+
+.form-row.four-cols {
+  grid-template-columns: repeat(4, 1fr);
+}
+
+.form-row.three-cols {
+  grid-template-columns: repeat(3, 1fr);
 }
 
 .form-group {
@@ -160,12 +168,20 @@
 }
 
 .passenger-card {
-  background: #f8f9fa;
+  background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%);
   border: 2px solid #e1e8ed;
-  border-radius: 12px;
+  border-radius: 16px;
   padding: 25px;
-  margin-bottom: 20px;
-  transition: border-color 0.3s ease;
+  margin-bottom: 25px;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+  position: relative;
+}
+
+.passenger-card:hover {
+  border-color: #667eea;
+  box-shadow: 0 8px 25px rgba(102, 126, 234, 0.15);
+  transform: translateY(-2px);
 }
 
 .passenger-card:hover {

@@ -89,16 +89,86 @@ export const authAPI = {
   // Logout user
   logout: async () => {
     const sessionId = localStorage.getItem('sessionId');
+    // Only send sessionId if it exists, backend will handle TVL users appropriately
+    const requestBody = sessionId ? { sessionId } : {};
+    
     const response = await fetch(`${API_BASE_URL}/auth/logout`, {
       method: 'POST',
       headers: getHeaders(true),
-      body: JSON.stringify({ sessionId })
+      body: JSON.stringify(requestBody)
     });
     
     const data = await response.json();
     
     if (!response.ok) {
       throw new Error(data.message || 'Logout failed');
+    }
+    
+    return data;
+  },
+
+  // Customer Login
+  customerLogin: async (email, password) => {
+    const response = await fetch(`${API_BASE_URL}/auth/login`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify({ email, password })
+    });
+    
+    const data = await response.json();
+    
+    if (!response.ok) {
+      throw new Error(data.message || 'Login failed');
+    }
+    
+    return data;
+  },
+
+  // Request password reset
+  requestPasswordReset: async (email) => {
+    const response = await fetch(`${API_BASE_URL}/auth/request-password-reset`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify({ email })
+    });
+    
+    const data = await response.json();
+    
+    if (!response.ok) {
+      throw new Error(data.message || 'Failed to request password reset');
+    }
+    
+    return data;
+  },
+
+  // Reset password with token
+  resetPassword: async (token, newPassword) => {
+    const response = await fetch(`${API_BASE_URL}/auth/reset-password`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify({ token, newPassword })
+    });
+    
+    const data = await response.json();
+    
+    if (!response.ok) {
+      throw new Error(data.message || 'Failed to reset password');
+    }
+    
+    return data;
+  },
+
+  // Verify email
+  verifyEmail: async (token) => {
+    const response = await fetch(`${API_BASE_URL}/auth/verify-email/${token}`, {
+      method: 'GET',
+      headers: getHeaders()
+    });
+    
+    const data = await response.json();
+    
+    if (!response.ok) {
+      throw new Error(data.message || 'Failed to verify email');
     }
     
     return data;

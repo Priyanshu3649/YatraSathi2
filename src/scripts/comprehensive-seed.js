@@ -1,5 +1,6 @@
 const bcrypt = require('bcryptjs');
-const { User, Employee, Customer, Login, Booking, Payment, sequelize } = require('../models');
+const { User, Employee, Customer, Login, Booking, Payment } = require('../models');
+const { sequelize } = require('../../config/db');
 
 const createComprehensiveData = async () => {
   try {

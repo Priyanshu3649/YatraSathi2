@@ -24,6 +24,7 @@ export const AuthProvider = ({ children }) => {
             us_fname: profile.name,
             us_email: profile.email,
             us_usertype: profile.us_usertype, // Use the correct field name from backend
+            us_roid: profile.role, // Include the role ID for role-based access control
           };
           setUser(userObject);
           setIsAuthenticated(true);

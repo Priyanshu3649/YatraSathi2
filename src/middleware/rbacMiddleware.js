@@ -13,20 +13,12 @@ const requireRole = (roles) => {
         return res.status(401).json({ message: 'Access denied. No user authenticated.' });
       }
       
-      // Get user's role
-      const userRole = await Role.findByPk(req.user.us_roid);
-      
-      if (!userRole) {
-        return res.status(403).json({ message: 'Access denied. User role not found.' });
-      }
-      
       // Check if user's role is in allowed roles
-      if (!allowedRoles.includes(userRole.ur_roid) && !allowedRoles.includes(userRole.ur_roshort)) {
+      // For TVL users, role is stored in us_roid field
+      if (!allowedRoles.includes(req.user.us_roid)) {
         return res.status(403).json({ message: 'Access denied. Insufficient permissions.' });
       }
       
-      // Attach role information to request
-      req.role = userRole;
       next();
     } catch (error) {
       console.error('RBAC error:', error.message);

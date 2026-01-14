@@ -475,8 +475,8 @@ const logoutUser = async (req, res) => {
     const sessionId = req.body.sessionId || req.query.sessionId || req.header('X-Session-Token');
     const userId = req.user ? req.user.us_usid : null;
     
-    if (!sessionId || !userId) {
-      return res.status(400).json({ message: 'Session ID and User ID are required' });
+    if (!userId) {
+      return res.status(400).json({ message: 'User ID is required' });
     }
     
     // Check if this is a TVL user to handle session differently
@@ -490,6 +490,10 @@ const logoutUser = async (req, res) => {
       console.log(`TVL user logout detected: ${userId}, skipping session termination`);
       success = true;
     } else {
+      // For non-TVL users, session ID is required
+      if (!sessionId) {
+        return res.status(400).json({ message: 'Session ID is required for non-TVL users' });
+      }
       // End the session for non-TVL users
       success = await SessionService.endSession(sessionId, userId);
     }

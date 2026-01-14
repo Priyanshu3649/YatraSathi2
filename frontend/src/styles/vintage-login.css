@@ -1,0 +1,471 @@
+/* Vintage Login Page Styling - Classic ERP Theme */
+
+.vintage-login-container {
+  min-height: 100vh;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+.vintage-login-window {
+  width: 100%;
+  max-width: 900px;
+  background: #ece9d8;
+  border: 2px solid #0054e3;
+  box-shadow: 4px 4px 0px rgba(0, 0, 0, 0.3);
+  display: flex;
+  flex-direction: column;
+}
+
+/* Title Bar */
+.vintage-title-bar {
+  background: linear-gradient(180deg, #0997ff 0%, #0053ee 100%);
+  color: white;
+  padding: 3px 5px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 12px;
+  font-weight: bold;
+  border-bottom: 1px solid #003d99;
+}
+
+.title-bar-text {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding-left: 3px;
+}
+
+.title-icon {
+  font-size: 14px;
+}
+
+.title-bar-controls {
+  display: flex;
+  gap: 2px;
+}
+
+.title-bar-button {
+  width: 16px;
+  height: 14px;
+  background: linear-gradient(180deg, #f0f0f0 0%, #c0c0c0 100%);
+  border: 1px solid #808080;
+  font-size: 10px;
+  font-weight: bold;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #000;
+  padding: 0;
+}
+
+.title-bar-button:hover {
+  background: linear-gradient(180deg, #ffffff 0%, #d0d0d0 100%);
+}
+
+.title-bar-button:active {
+  background: linear-gradient(180deg, #c0c0c0 0%, #f0f0f0 100%);
+}
+
+.title-bar-button.close {
+  background: linear-gradient(180deg, #ff6b6b 0%, #ee5a52 100%);
+  color: white;
+}
+
+/* Menu Bar */
+.vintage-menu-bar {
+  background: #ece9d8;
+  border-bottom: 1px solid #919b9c;
+  padding: 2px 5px;
+  display: flex;
+  gap: 10px;
+  font-size: 11px;
+}
+
+.menu-item {
+  padding: 3px 8px;
+  cursor: pointer;
+  color: #000;
+}
+
+.menu-item:hover {
+  background: #316ac5;
+  color: white;
+}
+
+/* Content Area */
+.vintage-login-content {
+  display: grid;
+  grid-template-columns: 1fr 300px;
+  gap: 15px;
+  padding: 20px;
+  background: #ece9d8;
+  min-height: 450px;
+}
+
+/* Login Panel */
+.login-panel {
+  background: #f0f0f0;
+  border: 2px solid #808080;
+  border-top-color: #ffffff;
+  border-left-color: #ffffff;
+  padding: 20px;
+}
+
+.panel-header {
+  margin-bottom: 20px;
+  padding-bottom: 10px;
+  border-bottom: 2px solid #0054e3;
+}
+
+.panel-header h2 {
+  margin: 0 0 5px 0;
+  font-size: 18px;
+  color: #000080;
+  font-weight: bold;
+}
+
+.panel-header p {
+  margin: 0;
+  font-size: 12px;
+  color: #666;
+}
+
+/* Error Box */
+.vintage-error-box {
+  background: #fff0f0;
+  border: 2px solid #ff0000;
+  padding: 10px;
+  margin-bottom: 15px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.error-icon {
+  color: #ff0000;
+  font-size: 16px;
+  font-weight: bold;
+}
+
+.error-text {
+  color: #cc0000;
+  font-weight: bold;
+}
+
+/* Form Styling */
+.vintage-login-form {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+.vintage-form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.vintage-label {
+  font-size: 12px;
+  font-weight: bold;
+  color: #000;
+}
+
+.vintage-input {
+  padding: 6px 8px;
+  border: 2px solid #808080;
+  border-top-color: #404040;
+  border-left-color: #404040;
+  background: #ffffff;
+  font-size: 12px;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  outline: none;
+}
+
+.vintage-input:focus {
+  border-color: #0054e3;
+  border-top-color: #0054e3;
+  border-left-color: #0054e3;
+}
+
+.vintage-input::placeholder {
+  color: #999;
+  font-style: italic;
+}
+
+/* Form Actions */
+.vintage-form-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.vintage-button {
+  padding: 6px 20px;
+  border: 2px solid #808080;
+  border-top-color: #ffffff;
+  border-left-color: #ffffff;
+  background: linear-gradient(180deg, #f0f0f0 0%, #c0c0c0 100%);
+  font-size: 12px;
+  font-weight: bold;
+  cursor: pointer;
+  color: #000;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  min-width: 80px;
+}
+
+.vintage-button:hover {
+  background: linear-gradient(180deg, #ffffff 0%, #d0d0d0 100%);
+}
+
+.vintage-button:active {
+  border-top-color: #808080;
+  border-left-color: #808080;
+  border-bottom-color: #ffffff;
+  border-right-color: #ffffff;
+  background: linear-gradient(180deg, #c0c0c0 0%, #f0f0f0 100%);
+}
+
+.vintage-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.vintage-button.primary {
+  background: linear-gradient(180deg, #4169e1 0%, #0054e3 100%);
+  color: white;
+  border-color: #003d99;
+  border-top-color: #6495ed;
+  border-left-color: #6495ed;
+}
+
+.vintage-button.primary:hover {
+  background: linear-gradient(180deg, #5a7fe6 0%, #1565f0 100%);
+}
+
+.vintage-button.primary:active {
+  background: linear-gradient(180deg, #0054e3 0%, #4169e1 100%);
+}
+
+/* Login Links */
+.vintage-login-links {
+  margin-top: 20px;
+  padding-top: 15px;
+  border-top: 1px solid #ccc;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.vintage-link {
+  color: #0000ee;
+  text-decoration: none;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.vintage-link:hover {
+  color: #0000cc;
+  text-decoration: underline;
+}
+
+.vintage-link:visited {
+  color: #551a8b;
+}
+
+.link-icon {
+  font-size: 14px;
+}
+
+/* Info Panel */
+.info-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+.info-box {
+  background: #f0f0f0;
+  border: 2px solid #808080;
+  border-top-color: #ffffff;
+  border-left-color: #ffffff;
+}
+
+.info-header {
+  background: linear-gradient(180deg, #0997ff 0%, #0053ee 100%);
+  color: white;
+  padding: 4px 8px;
+  font-size: 11px;
+  font-weight: bold;
+  border-bottom: 1px solid #003d99;
+}
+
+.info-content {
+  padding: 12px;
+  font-size: 11px;
+  line-height: 1.6;
+}
+
+.info-content p {
+  margin: 5px 0;
+}
+
+.info-content strong {
+  color: #000080;
+}
+
+.status-active {
+  color: #008000;
+  font-weight: bold;
+}
+
+.quick-link {
+  color: #0000ee;
+  text-decoration: none;
+  font-size: 11px;
+}
+
+.quick-link:hover {
+  text-decoration: underline;
+}
+
+/* Status Bar */
+.vintage-status-bar {
+  background: #ece9d8;
+  border-top: 1px solid #ffffff;
+  padding: 3px 5px;
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  color: #000;
+}
+
+.status-section {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0 8px;
+  border-right: 1px solid #808080;
+}
+
+.status-section:last-child {
+  border-right: none;
+}
+
+.status-icon {
+  color: #00aa00;
+  font-size: 8px;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .vintage-login-content {
+    grid-template-columns: 1fr;
+  }
+
+  .info-panel {
+    order: -1;
+  }
+
+  .vintage-login-window {
+    max-width: 100%;
+  }
+
+  .vintage-form-actions {
+    flex-direction: column;
+  }
+
+  .vintage-button {
+    width: 100%;
+  }
+}
+
+@media (max-width: 480px) {
+  .vintage-login-container {
+    padding: 10px;
+  }
+
+  .vintage-login-content {
+    padding: 15px;
+  }
+
+  .login-panel {
+    padding: 15px;
+  }
+
+  .panel-header h2 {
+    font-size: 16px;
+  }
+}
+
+/* Success Box */
+.vintage-success-box {
+  background: #f0fff0;
+  border: 2px solid #00aa00;
+  padding: 10px;
+  margin-bottom: 15px;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.success-icon {
+  color: #00aa00;
+  font-size: 16px;
+  font-weight: bold;
+  flex-shrink: 0;
+}
+
+.success-content {
+  flex: 1;
+}
+
+.success-content strong {
+  color: #008000;
+  display: block;
+  margin-bottom: 5px;
+}
+
+.success-content p {
+  margin: 5px 0;
+  color: #333;
+}
+
+/* Development Token Box */
+.dev-token-box {
+  background: #fffacd;
+  border: 1px solid #ffd700;
+  padding: 8px;
+  margin-top: 10px;
+  font-size: 11px;
+}
+
+.dev-token-box code {
+  display: block;
+  background: #fff;
+  border: 1px solid #ccc;
+  padding: 5px;
+  margin: 5px 0;
+  font-family: 'Courier New', monospace;
+  word-break: break-all;
+  font-size: 10px;
+}
+
+/* Field Hints */
+.field-hint {
+  font-size: 10px;
+  color: #666;
+  font-style: italic;
+  margin-top: 2px;
+  display: block;
+}

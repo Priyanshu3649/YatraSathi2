@@ -41,6 +41,7 @@ const CustomerAdvanceTVL = require('./CustomerAdvanceTVL');
 const YearEndClosing = require('./YearEndClosing');
 const YearEndClosingTVL = require('./YearEndClosingTVL');
 const BillTVL = require('./BillTVL');
+const PassengerTVL = require('./PassengerTVL');
 
 // Set up associations
 // Company associations
@@ -233,5 +234,6 @@ module.exports = {
   CustomerAdvance,
   CustomerAdvanceTVL,
   YearEndClosing,
-  YearEndClosingTVL
+  YearEndClosingTVL,
+  PassengerTVL
 };

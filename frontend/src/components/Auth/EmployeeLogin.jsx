@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../../contexts/AuthContext';
 import { authAPI } from '../../services/api';
 import '../../styles/erp-auth-theme.css';
 
@@ -11,6 +12,7 @@ const EmployeeLogin = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const navigate = useNavigate();
+  const { login } = useAuth();
 
   const handleChange = (e) => {
     setFormData({
@@ -28,10 +30,23 @@ const EmployeeLogin = () => {
       const data = await authAPI.employeeLogin(formData.email, formData.password);
 
       if (data.success) {
-        // Store token and user data
-        localStorage.setItem('token', data.data.token);
-        localStorage.setItem('user', JSON.stringify(data.data.user));
-        localStorage.setItem('sessionId', data.data.sessionId);
+        // Create user object with all necessary fields
+        const userObject = {
+          us_usid: data.data.user.id,
+          us_fname: data.data.user.name,
+          us_email: data.data.user.email,
+          us_usertype: data.data.user.us_usertype,
+          us_roid: data.data.user.role,
+          department: data.data.user.department
+        };
+        
+        // Update auth context
+        login(data.data.token, userObject);
+        
+        // Store session ID in localStorage
+        if (data.data.sessionId) {
+          localStorage.setItem('sessionId', data.data.sessionId);
+        }
 
         // Redirect based on role/department
         const role = data.data.user.role;
@@ -56,6 +71,9 @@ const EmployeeLogin = () => {
             break;
           case 'MGT':
             navigate('/employee/management');
+            break;
+          case 'ADM':
+            navigate('/admin-dashboard');
             break;
           default:
             navigate('/employee/dashboard');

@@ -4,67 +4,106 @@ import { useAuth } from '../contexts/AuthContext';
 
 // Define role permissions mapping based on backend operation IDs
 const ROLE_PERMISSIONS = {
-  // Accountant permissions
-  ACC: {
-    allowedModules: ['payments', 'billing', 'reports'],
+  // Administrator permissions - full access
+  ADM: {
+    allowedModules: ['dashboard', 'bookings', 'payments', 'billing', 'reports', 'travel-plans', 'admin', 'employee', 'customer', 'config', 'application', 'module', 'operation', 'role', 'user', 'role-permission', 'user-permission'],
     allowedOperations: {
-      payments: ['PYMT_VIEW', 'PYMT_NEW', 'PYMT_EDIT', 'PYMT_APPROVE', 'PYMT_SEARCH'],
-      billing: ['BILL_VIEW', 'BILL_GEN', 'BILL_PRINT'],
-      reports: ['RPT_REV', 'RPT_PYMT']
+      dashboard: ['DASH_VIEW', 'DASH_ADMIN'],
+      bookings: ['BKNG_VIEW', 'BKNG_NEW', 'BKNG_EDIT', 'BKNG_DELETE', 'BKNG_SEARCH', 'BKNG_APPROVE'],
+      payments: ['PYMT_VIEW', 'PYMT_NEW', 'PYMT_EDIT', 'PYMT_DELETE', 'PYMT_APPROVE', 'PYMT_SEARCH'],
+      billing: ['BILL_VIEW', 'BILL_NEW', 'BILL_EDIT', 'BILL_DELETE', 'BILL_GEN', 'BILL_PRINT', 'BILL_SEARCH'],
+      reports: ['RPT_ALL', 'RPT_REV', 'RPT_PYMT', 'RPT_BKNG', 'RPT_OP'],
+      travelPlans: ['TPLN_VIEW', 'TPLN_NEW', 'TPLN_EDIT', 'TPLN_DELETE', 'TPLN_APPROVE', 'TPLN_SEARCH'],
+      admin: ['ADMIN_ALL'],
+      employee: ['EMPL_MGT', 'EMPL_CRUD', 'EMPL_NEW', 'EMPL_EDIT', 'EMPL_DELETE', 'EMPL_SEARCH', 'EMPL_ACT'],
+      customer: ['CUST_VIEW', 'CUST_NEW', 'CUST_EDIT', 'CUST_DELETE', 'CUST_SEARCH'],
+      config: ['CFG_VIEW', 'CFG_EDIT']
     },
-    restrictedModules: ['employee', 'role', 'permission', 'config']
+    restrictedModules: [] // Admin has no restrictions
   },
   
-  // Manager permissions
-  MGR: {
-    allowedModules: ['dashboard', 'bookings', 'payments', 'travel-plans', 'reports'],
+  // Employee Agent permissions
+  AGT: {
+    allowedModules: ['bookings', 'customer', 'travel-plans'],
+    allowedOperations: {
+      bookings: ['BKNG_VIEW', 'BKNG_NEW', 'BKNG_EDIT', 'BKNG_SEARCH'], // Can view/edit but not approve/delete
+      customer: ['CUST_VIEW', 'CUST_NEW', 'CUST_EDIT'],
+      travelPlans: ['TPLN_VIEW']
+    },
+    restrictedModules: ['dashboard', 'payments', 'billing', 'admin', 'reports', 'config', 'employee', 'delete_booking', 'approve_payment']
+  },
+  
+  // Employee Accounts permissions
+  ACC: {
+    allowedModules: ['bookings', 'payments', 'billing', 'reports'],
+    allowedOperations: {
+      bookings: ['BKNG_VIEW', 'BKNG_SEARCH'], // Read-only for bookings
+      payments: ['PYMT_VIEW', 'PYMT_NEW', 'PYMT_EDIT', 'PYMT_APPROVE', 'PYMT_SEARCH'],
+      billing: ['BILL_VIEW', 'BILL_NEW', 'BILL_EDIT', 'BILL_DELETE', 'BILL_GEN', 'BILL_PRINT', 'BILL_SEARCH'],
+      reports: ['RPT_REV', 'RPT_PYMT']
+    },
+    restrictedModules: ['admin', 'travel-plans', 'customer', 'employee', 'config']
+  },
+  
+  // Employee HR permissions
+  HR: {
+    allowedModules: ['employee', 'customer', 'reports'],
+    allowedOperations: {
+      employee: ['EMPL_MGT', 'EMPL_NEW', 'EMPL_EDIT', 'EMPL_SEARCH'],
+      customer: ['CUST_VIEW', 'CUST_SEARCH'],
+      reports: ['RPT_HR', 'RPT_EMP']
+    },
+    restrictedModules: ['dashboard', 'bookings', 'payments', 'billing', 'admin', 'travel-plans', 'config', 'delete_employee']
+  },
+  
+  // Employee Customer Care permissions
+  CC: {
+    allowedModules: ['customer', 'bookings', 'reports'],
+    allowedOperations: {
+      customer: ['CUST_VIEW', 'CUST_NEW', 'CUST_EDIT', 'CUST_SEARCH'],
+      bookings: ['BKNG_VIEW', 'BKNG_SEARCH'],
+      reports: ['RPT_CUST', 'RPT_SUPPORT']
+    },
+    restrictedModules: ['dashboard', 'payments', 'billing', 'admin', 'travel-plans', 'employee', 'config']
+  },
+  
+  // Employee Marketing permissions
+  MKT: {
+    allowedModules: ['customer', 'bookings', 'reports', 'travel-plans'],
+    allowedOperations: {
+      customer: ['CUST_VIEW', 'CUST_NEW', 'CUST_EDIT', 'CUST_SEARCH'],
+      bookings: ['BKNG_VIEW', 'BKNG_SEARCH'],
+      reports: ['RPT_MKT', 'RPT_CAMPAIGN'],
+      travelPlans: ['TPLN_VIEW', 'TPLN_NEW', 'TPLN_EDIT', 'TPLN_SEARCH']
+    },
+    restrictedModules: ['dashboard', 'payments', 'billing', 'admin', 'employee', 'config']
+  },
+  
+  // Employee Management permissions
+  MGT: {
+    allowedModules: ['dashboard', 'bookings', 'reports', 'travel-plans', 'employee', 'customer'],
     allowedOperations: {
       dashboard: ['DASH_VIEW'],
       bookings: ['BKNG_VIEW', 'BKNG_SEARCH', 'BKNG_APPROVE'],
-      payments: ['PYMT_VIEW', 'PYMT_APPROVE'],
+      reports: ['RPT_ALL'],
       travelPlans: ['TPLN_VIEW', 'TPLN_APPROVE'],
-      reports: ['RPT_ALL']
+      employee: ['EMPL_MGT', 'EMPL_SEARCH'],
+      customer: ['CUST_VIEW', 'CUST_SEARCH']
     },
-    restrictedModules: ['delete_records'] // Cannot delete records
+    restrictedModules: ['admin', 'payments', 'billing', 'config', 'delete_records']
   },
   
-  // Administration Executive permissions
-  ADX: {
-    allowedModules: ['application', 'module', 'operation', 'role', 'user', 'role-permission', 'user-permission', 'customer', 'employee'],
+  // Customer role permissions
+  CUS: {
+    allowedModules: ['dashboard', 'bookings', 'payments', 'billing', 'travel-plans'],
     allowedOperations: {
-      application: ['APP_LIST'],
-      module: ['MOD_LIST'],
-      operation: ['OP_LIST'],
-      role: ['ROLE_LIST'],
-      user: ['USR_LIST'],
-      rolePermission: ['ROLE_PERM', 'USR_PERM'],
-      userPermission: ['USR_PERM'],
-      customer: ['CUST_LIST'],
-      employee: ['EMPL_MGT', 'EMPL_CRUD', 'EMPL_NEW', 'EMPL_EDIT', 'EMPL_DELETE', 'EMPL_SEARCH', 'EMPL_ACT']
-    },
-    restrictedModules: [] // No restrictions for admin exec
-  },
-  
-  // Sales Agent permissions
-  SAG: {
-    allowedModules: ['customer', 'booking', 'travel-plans'],
-    allowedOperations: {
-      customer: ['CUST_VIEW', 'CUST_NEW', 'CUST_EDIT'],
-      booking: ['BKNG_NEW', 'BKNG_EDIT', 'BKNG_VIEW', 'BKNG_SEARCH'],
+      dashboard: ['DASH_VIEW'],
+      bookings: ['BKNG_VIEW', 'BKNG_NEW', 'BKNG_CANCEL', 'BKNG_SEARCH'],
+      payments: ['PYMT_VIEW', 'PYMT_NEW'],
+      billing: ['BILL_VIEW'],
       travelPlans: ['TPLN_VIEW']
     },
-    restrictedModules: ['delete_booking', 'approve_payment', 'reports']
-  },
-  
-  // Operations Manager permissions
-  OPM: {
-    allowedModules: ['booking', 'travel-plans', 'reports'],
-    allowedOperations: {
-      booking: ['BKNG_VIEW', 'BKNG_EDIT', 'BKNG_CONFIRM', 'BKNG_CANCEL'],
-      travelPlans: ['TPLN_NEW', 'TPLN_EDIT', 'TPLN_DELETE'],
-      reports: ['RPT_BKNG', 'RPT_OP']
-    },
-    restrictedModules: [] // Has special operational rights
+    restrictedModules: ['admin', 'employee', 'reports', 'delete_booking', 'approve_payment']
   }
 };
 
@@ -188,7 +227,12 @@ const RoleBasedRoute = ({ children, requiredRole, requiredModule, requiredOperat
   }
 
   if (!isAuthenticated) {
-    return <Navigate to="/auth/employee-login" state={{ from: location }} replace />;
+    // Redirect to appropriate login based on user type
+    if (requiredRole === 'CUS' || requiredModule === 'customer') {
+      return <Navigate to="/auth/login" state={{ from: location }} replace />;
+    } else {
+      return <Navigate to="/auth/employee-login" state={{ from: location }} replace />;
+    }
   }
 
   if (hasAccess === false) {
