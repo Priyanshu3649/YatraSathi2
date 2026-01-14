@@ -23,16 +23,16 @@ if (!process.env.DB_NAME || !process.env.DB_HOST || !process.env.DB_USER) {
   process.exit(1);
 }
 
-// Create MySQL Sequelize instance for main database (yatrasathi)
+// Create MySQL Sequelize instance for TVL database only (as per requirements)
 console.log('🔧 Configuring MySQL database connections...');
-console.log('  Main Database:', process.env.DB_NAME);
 console.log('  TVL Database:', process.env.DB_NAME_TVL || 'TVL_001');
 console.log('  Host:', process.env.DB_HOST);
 console.log('  User:', process.env.DB_USER);
 console.log('  Password:', process.env.DB_PASSWORD ? '✅ Configured' : '⚠️  Not set');
 
+// Using TVL database for all operations as per requirements
 const sequelize = new Sequelize(
-  process.env.DB_NAME,
+  process.env.DB_NAME_TVL || 'TVL_001',
   process.env.DB_USER,
   process.env.DB_PASSWORD || '',
   {

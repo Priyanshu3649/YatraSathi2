@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
+import { useNavigate } from 'react-router-dom';
 import { employeeAPI, authAPI } from '../services/api';
 import '../styles/layout.css';
 import '../styles/vintage-erp-theme.css';
@@ -9,7 +10,8 @@ import '../styles/dynamic-admin-panel.css';
 import '../styles/vintage-erp-global.css';
 
 const EmployeeManagement = () => {
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
+  const navigate = useNavigate();
   const [employees, setEmployees] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -210,8 +212,8 @@ const EmployeeManagement = () => {
             <span className="user-name">{user?.us_fname}</span>
             <button className="logout-btn btn btn-primary" onClick={async () => {
               try {
-                await authAPI.logout();
-                window.location.href = '/login';
+                await logout();
+                navigate('/login');
               } catch (error) {
                 console.error('Logout failed:', error);
               }

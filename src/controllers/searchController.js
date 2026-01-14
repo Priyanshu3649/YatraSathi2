@@ -49,7 +49,7 @@ const searchAll = async (req, res) => {
       if (req.user.us_usertype === 'customer') {
         bookingQuery.bk_cuid = req.user.us_usid;
       } else if (req.user.us_usertype === 'employee') {
-        bookingQuery.bk_euid = req.user.us_usid;
+        bookingQuery.bk_agent = req.user.us_usid;
       }
       
       const bookings = await Booking.findAll({
@@ -180,7 +180,7 @@ const searchBookings = async (req, res) => {
     if (req.user.us_usertype === 'customer') {
       searchQuery.bk_cuid = req.user.us_usid;
     } else if (req.user.us_usertype === 'employee') {
-      searchQuery.bk_euid = req.user.us_usid;
+      searchQuery.bk_agent = req.user.us_usid;
     }
     
     const bookings = await Booking.findAll({

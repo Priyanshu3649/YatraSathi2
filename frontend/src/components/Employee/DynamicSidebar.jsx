@@ -1,15 +1,21 @@
 import React from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
+import { useAuth } from '../../contexts/AuthContext';
 import '../../styles/employee-sidebar.css';
 
 const DynamicSidebar = ({ navigation, userInfo }) => {
+  const { logout } = useAuth();
   const navigate = useNavigate();
 
-  const handleLogout = () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
-    localStorage.removeItem('sessionId');
-    navigate('/auth/employee-login');
+  const handleLogout = async () => {
+    try {
+      await logout();
+      navigate('/login');
+    } catch (error) {
+      console.error('Logout failed:', error);
+      // Even if logout API fails, still navigate to login
+      navigate('/login');
+    }
   };
 
   const getIconClass = (iconName) => {

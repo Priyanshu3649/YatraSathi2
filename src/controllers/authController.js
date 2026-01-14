@@ -1,4 +1,4 @@
-const { LoginTVL: Login, UserTVL: User, EmployeeTVL: Employee } = require('../models');
+const { Login, User, Employee, LoginTVL, UserTVL, EmployeeTVL } = require('../models');
 const { Sequelize } = require('sequelize');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
@@ -89,7 +89,8 @@ const registerUser = async (req, res) => {
       res.status(400).json({ message: 'Invalid user data' });
     }
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    console.error('Registration error:', error);
+    res.status(500).json({ message: 'Internal server error' });
   }
 };
 
@@ -106,48 +107,19 @@ const employeeLogin = async (req, res) => {
       });
     }
 
-    // Find login by email - use TVL model for TVL users
-    const login = await Login.findOne({ 
+    // Check if this is a TVL user by looking for both regular and TVL login records
+    let login = await Login.findOne({ 
       where: { lg_email: email, lg_active: 1 }
     });
-
-    if (!login) {
-      return res.status(401).json({ 
-        success: false, 
-        error: { code: 'UNAUTHORIZED', message: 'Invalid email or password' } 
-      });
-    }
-
-    // Verify password
-    const isPasswordValid = await bcrypt.compare(password, login.lg_passwd);
-    if (!isPasswordValid) {
-      return res.status(401).json({ 
-        success: false, 
-        error: { code: 'UNAUTHORIZED', message: 'Invalid email or password' } 
-      });
-    }
-
-    // Get user details with employee info - use TVL models for TVL users
-    // Check if this is a TVL user
-    const isTVLUser = login.lg_usid.startsWith('ADM') || login.lg_usid.startsWith('EMP') || 
-                      login.lg_usid.startsWith('ACC') || login.lg_usid.startsWith('CUS');
     
-    let user;
-    let employee = null;
+    let isTVLUser = false;
+    let user, employee = null;
     
-    if (isTVLUser) {
-      // Use TVL models for TVL users
-      const { UserTVL, EmployeeTVL } = require('../models');
-      user = await UserTVL.findByPk(login.lg_usid);
+    if (login) {
+      // Regular user found
+      isTVLUser = false;
       
-      // Get employee details separately since association might not be set up
-      if (user && (user.us_usertype === 'employee' || user.us_usertype === 'admin')) {
-        employee = await EmployeeTVL.findOne({
-          where: { em_usid: user.us_usid }
-        });
-      }
-    } else {
-      // Use regular models for regular users
+      // Get user details
       user = await User.findOne({
         where: { 
           us_usid: login.lg_usid, 
@@ -160,12 +132,47 @@ const employeeLogin = async (req, res) => {
           where: { em_usid: user.us_usid }
         });
       }
+    } else {
+      // Check TVL database
+      login = await LoginTVL.findOne({ 
+        where: { lg_email: email, lg_active: 1 }
+      });
+      
+      if (login) {
+        isTVLUser = true;
+        
+        // Get TVL user details
+        user = await UserTVL.findByPk(login.lg_usid);
+        
+        // Get employee details separately since association might not be set up
+        if (user && (user.us_usertype === 'employee' || user.us_usertype === 'admin')) {
+          employee = await EmployeeTVL.findOne({
+            where: { em_usid: user.us_usid }
+          });
+        }
+      }
     }
-
-    if (!user) {
+    
+    if (!login || !user) {
       return res.status(401).json({ 
         success: false, 
-        error: { code: 'UNAUTHORIZED', message: 'Employee or Admin account not found' } 
+        error: { code: 'UNAUTHORIZED', message: 'Invalid email or password' } 
+      });
+    }
+
+    // Verify password
+    if (!login.lg_passwd) {
+      return res.status(401).json({ 
+        success: false, 
+        error: { code: 'UNAUTHORIZED', message: 'Invalid email or password' } 
+      });
+    }
+    
+    const isPasswordValid = await bcrypt.compare(password, login.lg_passwd);
+    if (!isPasswordValid) {
+      return res.status(401).json({ 
+        success: false, 
+        error: { code: 'UNAUTHORIZED', message: 'Invalid email or password' } 
       });
     }
 
@@ -184,21 +191,15 @@ const employeeLogin = async (req, res) => {
       console.log(`TVL employee user login detected: ${user.us_usid}`);
     } else {
       // Create session for the employee
-      session = await SessionService.createSession(user, req);
+      try {
+        session = await SessionService.createSession(user, req);
+      } catch (sessionError) {
+        console.error('Session creation failed:', sessionError.message);
+        // Continue login process even if session creation fails
+        session = null;
+      }
     }
     
-    // Generate JWT with user details - ensure consistent ID field for middleware
-    const token = jwt.sign(
-      { 
-        id: user.us_usid,  // This is what the middleware will use to identify the user
-        role: user.us_roid,
-        dept: employee?.em_dept || 'ADMIN',
-        userType: user.us_usertype
-      }, 
-      process.env.JWT_SECRET || 'default_secret',
-      { expiresIn: '8h' } // Shorter expiry for employees/admins
-    );
-
     res.json({
       success: true,
       data: {
@@ -211,7 +212,7 @@ const employeeLogin = async (req, res) => {
           employeeNumber: employee?.em_empno || 'ADMIN001',
           us_usertype: user.us_usertype
         },
-        token,
+        token: generateToken(user.us_usid),
         sessionId: session ? session.ss_ssid : null
       }
     });
@@ -229,37 +230,48 @@ const loginUser = async (req, res) => {
   try {
     const { email, password } = req.body;
 
-    // Find login by email - use TVL model for TVL users
-    const login = await Login.findOne({ 
+    // Check for login in both regular and TVL databases
+    let login = await Login.findOne({ 
       where: { lg_email: email }
     });
-
-    if (login && await bcrypt.compare(password, login.lg_passwd)) {
-      // Check if this is a TVL user
-      const isTVLUser = login.lg_usid.startsWith('ADM') || login.lg_usid.startsWith('EMP') || 
-                        login.lg_usid.startsWith('ACC') || login.lg_usid.startsWith('CUS');
+    
+    let isTVLUser = false;
+    let user;
+    
+    if (login) {
+      // Regular login found
+      isTVLUser = false;
+      user = await User.findByPk(login.lg_usid);
+    } else {
+      // Check TVL database
+      login = await LoginTVL.findOne({ 
+        where: { lg_email: email }
+      });
       
-      let user;
-      if (isTVLUser) {
-        // Use TVL model for TVL users
-        const { UserTVL } = require('../models');
+      if (login) {
+        isTVLUser = true;
         user = await UserTVL.findByPk(login.lg_usid);
-      } else {
-        // Use regular model for regular users
-        user = await User.findByPk(login.lg_usid);
       }
+    }
+
+    if (login && user && login.lg_passwd && await bcrypt.compare(password, login.lg_passwd)) {
       
       // For TVL users, we need to handle session creation differently
       // Check if this is a TVL user (has TVL-specific properties)
       let sessionId = null;
       if (isTVLUser) {
-        // This is a TVL user - for now, we'll skip session creation to avoid foreign key constraint
-        // In a real implementation, we would create a TVL-specific session
+        // This is a TVL user - skip session creation to avoid foreign key constraint
         console.log(`TVL user login detected: ${user.us_usid}`);
       } else {
         // Create session for the user (only for non-TVL users to avoid foreign key constraint)
-        const session = await SessionService.createSession(user, req);
-        sessionId = session.ss_ssid;
+        try {
+          const session = await SessionService.createSession(user, req);
+          sessionId = session.ss_ssid;
+        } catch (sessionError) {
+          console.error('Session creation failed:', sessionError.message);
+          // Continue login process even if session creation fails
+          sessionId = null;
+        }
       }
       
       res.json({
@@ -267,7 +279,7 @@ const loginUser = async (req, res) => {
         name: user.us_fname,
         email: login.lg_email,
         us_usertype: user.us_usertype,
-        token: generateToken(login.lg_usid),
+        token: generateToken(user.us_usid),
         sessionId: sessionId,
         message: 'Login successful'
       });
@@ -275,7 +287,8 @@ const loginUser = async (req, res) => {
       res.status(401).json({ message: 'Invalid email or password' });
     }
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    console.error('Login error:', error);
+    res.status(500).json({ message: 'Internal server error' });
   }
 };
 
@@ -303,8 +316,8 @@ const getUserProfile = async (req, res) => {
       role: user.role ? user.role.ro_name : null
     });
   } catch (error) {
-    console.error('Error in getUserProfile:', error.message);
-    res.status(500).json({ message: error.message });
+    console.error('Error in getUserProfile:', error);
+    res.status(500).json({ message: 'Internal server error' });
   }
 };
 
@@ -322,7 +335,6 @@ const requestPasswordReset = async (req, res) => {
       login = await Login.findOne({ where: { lg_usid: user.us_usid } });
     } else {
       // Check TVL database
-      const { UserTVL, LoginTVL } = require('../models');
       user = await UserTVL.findOne({ where: { us_email: email } });
       if (user) {
         login = await LoginTVL.findOne({ where: { lg_usid: user.us_usid } });
@@ -361,7 +373,8 @@ const requestPasswordReset = async (req, res) => {
       resetToken: resetToken 
     });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    console.error('Password reset request error:', error);
+    res.status(500).json({ message: 'Internal server error' });
   }
 };
 
@@ -385,7 +398,6 @@ const resetPassword = async (req, res) => {
     
     if (!login) {
       // Check TVL database
-      const { LoginTVL } = require('../models');
       login = await LoginTVL.findOne({ 
         where: { 
           lg_reset_token: resetTokenHash,
@@ -415,7 +427,8 @@ const resetPassword = async (req, res) => {
 
     res.json({ message: 'Password reset successfully' });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    console.error('Password reset error:', error);
+    res.status(500).json({ message: 'Internal server error' });
   }
 };
 
@@ -439,7 +452,6 @@ const verifyEmail = async (req, res) => {
     
     if (!login) {
       // Check TVL database
-      const { LoginTVL } = require('../models');
       login = await LoginTVL.findOne({ 
         where: { 
           lg_verification_token: verificationTokenHash,
@@ -464,7 +476,8 @@ const verifyEmail = async (req, res) => {
 
     res.json({ message: 'Email verified successfully' });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    console.error('Email verification error:', error);
+    res.status(500).json({ message: 'Internal server error' });
   }
 };
 
@@ -488,8 +501,8 @@ const logoutUser = async (req, res) => {
     }
     
     // Check if this is a TVL user to handle session differently
-    const isTVLUser = userId.startsWith('ADM') || userId.startsWith('EMP') || 
-                      userId.startsWith('ACC') || userId.startsWith('CUS');
+    const isTVLUser = userId && (userId.startsWith('ADM') || userId.startsWith('EMP') || 
+                      userId.startsWith('ACC') || userId.startsWith('CUS'));
     
     console.log('Is TVL user:', isTVLUser);
     
@@ -520,8 +533,8 @@ const logoutUser = async (req, res) => {
       res.status(404).json({ message: 'Session not found' });
     }
   } catch (error) {
-    console.error('Logout error:', error.message);
-    res.status(500).json({ message: error.message });
+    console.error('Logout error:', error);
+    res.status(500).json({ message: 'Internal server error' });
   }
 };
 
@@ -533,8 +546,8 @@ const getUserSessions = async (req, res) => {
     }
     
     // Check if this is a TVL user
-    const isTVLUser = req.user.us_usid.startsWith('ADM') || req.user.us_usid.startsWith('EMP') || 
-                      req.user.us_usid.startsWith('ACC') || req.user.us_usid.startsWith('CUS');
+    const isTVLUser = req.user.us_usid && (req.user.us_usid.startsWith('ADM') || req.user.us_usid.startsWith('EMP') || 
+                      req.user.us_usid.startsWith('ACC') || req.user.us_usid.startsWith('CUS'));
     
     if (isTVLUser) {
       // For TVL users, return empty sessions array since they don't have sessions in main database
@@ -545,7 +558,8 @@ const getUserSessions = async (req, res) => {
       res.json({ sessions });
     }
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    console.error('Get user sessions error:', error);
+    res.status(500).json({ message: 'Internal server error' });
   }
 };
 
@@ -557,8 +571,8 @@ const logoutAllDevices = async (req, res) => {
     }
     
     // Check if this is a TVL user
-    const isTVLUser = req.user.us_usid.startsWith('ADM') || req.user.us_usid.startsWith('EMP') || 
-                      req.user.us_usid.startsWith('ACC') || req.user.us_usid.startsWith('CUS');
+    const isTVLUser = req.user.us_usid && (req.user.us_usid.startsWith('ADM') || req.user.us_usid.startsWith('EMP') || 
+                      req.user.us_usid.startsWith('ACC') || req.user.us_usid.startsWith('CUS'));
     
     let count = 0;
     if (isTVLUser) {
@@ -577,7 +591,8 @@ const logoutAllDevices = async (req, res) => {
       sessionsEnded: count
     });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    console.error('Logout all devices error:', error);
+    res.status(500).json({ message: 'Internal server error' });
   }
 };
 

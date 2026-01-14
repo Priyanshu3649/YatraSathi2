@@ -7,8 +7,9 @@ const BookingForm = () => {
   const [formData, setFormData] = useState({
     from: '',
     to: '',
-    journeyDate: '',
+    journeyDate: new Date(new Date().setDate(new Date().getDate() + 1)).toISOString().split('T')[0], // Tomorrow's date by default
     trainClass: 'SL',
+    trainPreferences: [], // Array to store multiple train preferences
     passengers: [
       { name: '', age: '', gender: 'M', berthPreference: 'NO_PREF' }
     ]
@@ -80,10 +81,12 @@ const BookingForm = () => {
     
     const journeyDate = new Date(formData.journeyDate);
     const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    tomorrow.setHours(0, 0, 0, 0);
     
-    if (journeyDate < today) {
-      setError('Journey date cannot be in the past');
+    if (journeyDate < tomorrow) {
+      setError('Journey date cannot be in the past or today');
       return false;
     }
     
@@ -148,6 +151,7 @@ const BookingForm = () => {
         },
         body: JSON.stringify({
           ...formData,
+          passengers: formData.passengers,
           berthPreference: formData.passengers[0]?.berthPreference || 'NO_PREF' // Use first passenger's preference as overall preference
         })
       });
@@ -176,7 +180,7 @@ const BookingForm = () => {
     <div className="booking-step">
       <h3>Journey Details</h3>
       
-      <div className="form-row">
+      <div className="form-row three-cols">
         <div className="form-group">
           <label>From Station</label>
           <input
@@ -188,7 +192,7 @@ const BookingForm = () => {
             required
           />
         </div>
-        
+                
         <div className="form-group">
           <label>To Station</label>
           <input
@@ -200,9 +204,7 @@ const BookingForm = () => {
             required
           />
         </div>
-      </div>
-
-      <div className="form-row">
+      
         <div className="form-group">
           <label>Journey Date</label>
           <input
@@ -210,11 +212,13 @@ const BookingForm = () => {
             name="journeyDate"
             value={formData.journeyDate}
             onChange={handleInputChange}
-            min={new Date().toISOString().split('T')[0]}
+            min={new Date(new Date().setDate(new Date().getDate() + 1)).toISOString().split('T')[0]}
             required
           />
         </div>
-        
+      </div>
+      
+      <div className="form-row two-cols">
         <div className="form-group">
           <label>Class</label>
           <select
@@ -229,9 +233,27 @@ const BookingForm = () => {
             ))}
           </select>
         </div>
+      
+        <div className="form-group">
+          <label>Train Preferences</label>
+          <input
+            type="text"
+            name="trainPreferences"
+            value={formData.trainPreferences.join(', ')}
+            onChange={(e) => {
+              const preferences = e.target.value.split(',').map(pref => pref.trim()).filter(pref => pref);
+              setFormData(prev => ({
+                ...prev,
+                trainPreferences: preferences
+              }));
+            }}
+            placeholder="Enter train numbers separated by commas"
+          />
+          <small className="form-help-text">Enter multiple train numbers separated by commas (e.g., 12345, 67890, 11223)</small>
+        </div>
       </div>
-
-
+      
+      
     </div>
   );
 

@@ -97,7 +97,7 @@ const EmployeeDashboard = () => {
   }
 
   if (!userInfo) {
-    return <Navigate to="/auth/employee-login" replace />;
+    return <Navigate to="/login" replace />;
   }
 
   return (

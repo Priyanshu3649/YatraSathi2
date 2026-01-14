@@ -279,7 +279,7 @@ const getEmployeeBookings = async (req, res) => {
     // If employee, they can only see their own bookings
     // If admin, they can see all bookings
     const query = req.user.us_usertype === 'employee' 
-      ? { where: { bk_euid: req.user.us_usid } }
+      ? { where: { bk_agent: req.user.us_usid } }
       : {};
     
     const bookings = await Booking.findAll({ 

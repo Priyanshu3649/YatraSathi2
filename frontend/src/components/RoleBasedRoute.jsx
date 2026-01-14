@@ -227,12 +227,8 @@ const RoleBasedRoute = ({ children, requiredRole, requiredModule, requiredOperat
   }
 
   if (!isAuthenticated) {
-    // Redirect to appropriate login based on user type
-    if (requiredRole === 'CUS' || requiredModule === 'customer') {
-      return <Navigate to="/auth/login" state={{ from: location }} replace />;
-    } else {
-      return <Navigate to="/auth/employee-login" state={{ from: location }} replace />;
-    }
+    // Redirect to unified login page for all users
+    return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
   if (hasAccess === false) {

@@ -115,13 +115,13 @@ const getEmployeeDashboard = async (req, res) => {
 
     // Get employee bookings
     const bookings = await BookingTVL.findAll({
-      where: { bk_euid: userId },
+      where: { bk_agent: userId },
       order: [['edtm', 'DESC']],
       limit: 5
     });
 
     const totalBookings = await BookingTVL.count({
-      where: { bk_euid: userId }
+      where: { bk_agent: userId }
     });
 
     const dashboardData = {
@@ -187,26 +187,26 @@ const getAgentDashboard = async (req, res) => {
 
     // Get assigned bookings
     const bookings = await BookingTVL.findAll({
-      where: { bk_euid: userId },
+      where: { bk_agent: userId },
       order: [['edtm', 'DESC']],
       limit: 10
     });
 
     // Performance metrics
     const totalBookings = await BookingTVL.count({
-      where: { bk_euid: userId }
+      where: { bk_agent: userId }
     });
 
     const confirmedBookings = await BookingTVL.count({
       where: { 
-        bk_euid: userId,
+        bk_agent: userId,
         bk_status: 'CONFIRMED'
       }
     });
 
     const pendingBookings = await BookingTVL.count({
       where: { 
-        bk_euid: userId,
+        bk_agent: userId,
         bk_status: 'PENDING'
       }
     });
@@ -218,7 +218,7 @@ const getAgentDashboard = async (req, res) => {
 
     const monthlyBookings = await BookingTVL.count({
       where: { 
-        bk_euid: userId,
+        bk_agent: userId,
         edtm: { [Op.gte]: thisMonth }
       }
     });
@@ -513,14 +513,14 @@ const getManagementDashboard = async (req, res) => {
     // Top performing agents
     const topAgents = await BookingTVL.findAll({
       attributes: [
-        'bk_euid',
+        'bk_agent',
         [BookingTVL.sequelize.fn('COUNT', BookingTVL.sequelize.col('bk_bkid')), 'bookingCount']
       ],
       where: { 
         bk_status: 'CONFIRMED',
         edtm: { [Op.gte]: thisMonth }
       },
-      group: ['bk_euid'],
+      group: ['bk_agent'],
       order: [[BookingTVL.sequelize.fn('COUNT', BookingTVL.sequelize.col('bk_bkid')), 'DESC']],
       limit: 5,
       include: [{

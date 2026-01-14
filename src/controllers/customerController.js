@@ -80,6 +80,9 @@ const getCustomerDashboard = async (req, res) => {
  */
 const createBooking = async (req, res) => {
   try {
+    console.log('Received booking request:', req.body);
+    console.log('User ID:', req.user.us_usid);
+    
     const userId = req.user.us_usid;
     const {
       from,
@@ -87,8 +90,15 @@ const createBooking = async (req, res) => {
       journeyDate,
       trainClass,
       berthPreference,
-      passengers
+      passengers,
+      trainPreferences = []
     } = req.body;
+    
+    console.log('Parsed booking data:', {
+      from, to, journeyDate, trainClass, berthPreference, 
+      passengerCount: passengers.length,
+      trainPreferences
+    });
 
     // Validate input
     if (!from || !to || !journeyDate || !passengers || passengers.length === 0) {
@@ -105,34 +115,75 @@ const createBooking = async (req, res) => {
       });
     }
 
-    // Check if journey date is in the future
+    // Validate journey date
     const jDate = new Date(journeyDate);
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    
-    if (jDate < today) {
+    if (isNaN(jDate.getTime())) {
       return res.status(400).json({
         success: false,
-        error: { code: 'VALIDATION_ERROR', message: 'Journey date cannot be in the past' }
+        error: { code: 'VALIDATION_ERROR', message: 'Invalid journey date format' }
       });
     }
-
-    // Generate booking ID
+    
+    const today = new Date();
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    tomorrow.setHours(0, 0, 0, 0);
+    
+    if (jDate < tomorrow) {
+      return res.status(400).json({
+        success: false,
+        error: { code: 'VALIDATION_ERROR', message: 'Journey date cannot be in the past or today' }
+      });
+    }
+    
+    // Check if stations exist in the station table, create them if they don't
+    const { StationTVL: Station } = require('../models');
+    
+    let fromStation = await Station.findByPk(from);
+    let toStation = await Station.findByPk(to);
+    
+    // Create from station if it doesn't exist
+    if (!fromStation) {
+      fromStation = await Station.create({
+        st_stid: from,
+        st_stcode: from, // Use the station ID as the station code
+        st_stname: from.toUpperCase(), // Use uppercase as station name
+        st_city: from.toUpperCase(), // Use station code as city if not provided
+        st_state: 'UNKNOWN', // Default state
+        eby: userId,
+        mby: userId
+      });
+    }
+    
+    // Create to station if it doesn't exist
+    if (!toStation) {
+      toStation = await Station.create({
+        st_stid: to,
+        st_stcode: to, // Use the station ID as the station code
+        st_stname: to.toUpperCase(), // Use uppercase as station name
+        st_city: to.toUpperCase(), // Use station code as city if not provided
+        st_state: 'UNKNOWN', // Default state
+        eby: userId,
+        mby: userId
+      });
+    }
+    
+    // Generate unique booking number
     const timestamp = Date.now().toString().slice(-8);
-    const bookingId = `BK${timestamp}`;
+    const bookingNumber = `BKN${timestamp}${Math.floor(Math.random() * 100)}`; // Add random suffix to ensure uniqueness
 
-    // Create booking
+    // Create booking - let bk_bkid be auto-generated
     const booking = await Booking.create({
-      bk_bkid: bookingId,
-      bk_cuid: userId,
-      bk_from: from,
-      bk_to: to,
-      bk_jdate: jDate,
+      bk_bkno: bookingNumber,
+      bk_usid: userId,
+      bk_fromst: from,
+      bk_tost: to,
+      bk_trvldt: jDate,
       bk_class: trainClass || 'SL',
-      bk_berth: berthPreference || 'NO_PREF',
-      bk_pax: passengers.length,
+      bk_berthpref: berthPreference || 'NO_PREF',
+      bk_totalpass: passengers.length,
       bk_status: 'PENDING',
-      bk_amount: 0, // Will be calculated later
+      bk_remarks: trainPreferences.length > 0 ? `Train Preferences: ${trainPreferences.join(', ')}` : null,
       eby: userId,
       mby: userId
     });
@@ -140,19 +191,34 @@ const createBooking = async (req, res) => {
     // Create passenger records (implement Passenger model if needed)
     // For now, store passenger data in booking notes or separate table
 
+    let confirmationMessage = 'Booking created successfully. You will be contacted by our agent soon.';
+    if (trainPreferences.length > 0) {
+      confirmationMessage += ` Train preferences noted: ${trainPreferences.join(', ')}.`;
+    }
+    
     res.status(201).json({
       success: true,
       data: {
-        bookingId: booking.bk_bkid,
+        bookingId: booking.bk_bkid.toString(), // Convert to string to match frontend expectations
         status: booking.bk_status,
-        message: 'Booking created successfully. You will be contacted by our agent soon.'
+        message: confirmationMessage
       }
     });
   } catch (error) {
     console.error('Create booking error:', error);
+    console.error('Error details:', {
+      message: error.message,
+      name: error.name,
+      stack: error.stack,
+      originalError: error.original ? error.original : 'No original error'
+    });
     res.status(500).json({ 
       success: false, 
-      error: { code: 'SERVER_ERROR', message: 'Failed to create booking' } 
+      error: { 
+        code: 'SERVER_ERROR', 
+        message: error.message || 'Failed to create booking',
+        details: process.env.NODE_ENV === 'development' ? error.message : undefined
+      } 
     });
   }
 };

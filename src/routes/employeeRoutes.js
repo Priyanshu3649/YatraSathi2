@@ -41,7 +41,18 @@ router.use(departmentAccessControl);
 router.get('/', getAllEmployees);
 
 // Agent Dashboard Routes
-router.get('/agent/dashboard', hasPermission('BOOKING_MANAGEMENT'), getAgentDashboard);
+router.get('/agent/dashboard', (req, res, next) => {
+  // Allow access to users with agent-related roles (AGT = Agent)
+  // Other roles like ACC (Accounts), CC (Call Center), MKT (Marketing), MGT (Management) might also act as agents
+  const agentRoles = ['AGT', 'ACC', 'CC', 'MKT', 'MGT'];
+  if (!agentRoles.includes(req.user.us_roid)) {
+    return res.status(403).json({ 
+      success: false, 
+      error: { code: 'FORBIDDEN', message: 'Access denied. Agent role required.' } 
+    });
+  }
+  next();
+}, getAgentDashboard);
 
 // Accounts Dashboard Routes  
 router.get('/accounts/dashboard', hasPermission('PAYMENT_PROCESSING'), getAccountsDashboard);

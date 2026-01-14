@@ -2,22 +2,45 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 
-// Create uploads directory if it doesn't exist
-const uploadDir = path.join(__dirname, '../../public/uploads/employees');
-if (!fs.existsSync(uploadDir)) {
-  fs.mkdirSync(uploadDir, { recursive: true });
+// Create uploads directories if they don't exist
+const employeeUploadDir = path.join(__dirname, '../../public/uploads/employees');
+const customerUploadDir = path.join(__dirname, '../../public/uploads/customers');
+const profileUploadDir = path.join(__dirname, '../../public/uploads/profiles');
+
+if (!fs.existsSync(employeeUploadDir)) {
+  fs.mkdirSync(employeeUploadDir, { recursive: true });
+}
+if (!fs.existsSync(customerUploadDir)) {
+  fs.mkdirSync(customerUploadDir, { recursive: true });
+}
+if (!fs.existsSync(profileUploadDir)) {
+  fs.mkdirSync(profileUploadDir, { recursive: true });
 }
 
 // Configure storage
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    cb(null, uploadDir);
+    // Check route to determine upload directory
+    if (req.route.path.includes('/profile/')) {
+      cb(null, profileUploadDir);
+    } else if (req.route.path.includes('/customer/') || req.route.path.includes('/customers/')) {
+      cb(null, customerUploadDir);
+    } else {
+      cb(null, employeeUploadDir);
+    }
   },
   filename: (req, file, cb) => {
-    // Generate unique filename
+    // Generate unique filename based on route
     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
     const ext = path.extname(file.originalname);
-    cb(null, 'employee-' + uniqueSuffix + ext);
+    
+    if (req.route.path.includes('/profile/')) {
+      cb(null, 'profile-' + uniqueSuffix + ext);
+    } else if (req.route.path.includes('/customer/') || req.route.path.includes('/customers/')) {
+      cb(null, 'customer-' + uniqueSuffix + ext);
+    } else {
+      cb(null, 'employee-' + uniqueSuffix + ext);
+    }
   }
 });
 

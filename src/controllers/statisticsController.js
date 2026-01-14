@@ -57,7 +57,7 @@ const getBookingStats = async (req, res) => {
     if (req.user.us_usertype === 'customer') {
       whereClause.bk_cuid = req.user.us_usid; // Assuming customer ID is stored in bk_cuid
     } else if (req.user.us_usertype === 'employee') {
-      whereClause.bk_euid = req.user.us_usid; // Assuming employee ID is stored in bk_euid
+      whereClause.bk_agent = req.user.us_usid; // Assuming employee ID is stored in bk_agent
     }
     
     // Get counts by status
@@ -193,7 +193,7 @@ const getEmployeeStats = async (req, res) => {
     for (const employeeUser of employees) {
       // Get employee's bookings
       const bookings = await Booking.findAll({ 
-        where: { bk_euid: employeeUser.us_usid } // Assuming bk_euid is the employee ID field
+        where: { bk_agent: employeeUser.us_usid } // Assuming bk_agent is the employee ID field
       });
       
       // Calculate statistics

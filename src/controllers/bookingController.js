@@ -57,9 +57,12 @@ const getCustomerBookings = async (req, res) => {
       bk_travelclass: booking.bk_class
     }));
     
-    res.json(transformedBookings);
+    res.json({ success: true, data: { bookings: transformedBookings } });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    res.status(500).json({ 
+      success: false, 
+      error: { code: 'SERVER_ERROR', message: error.message } 
+    });
   }
 };
 
@@ -179,12 +182,18 @@ const deleteBooking = async (req, res) => {
     const booking = await BookingTVL.findByPk(req.params.id);
     
     if (!booking) {
-      return res.status(404).json({ message: 'Booking not found' });
+      return res.status(404).json({ 
+        success: false, 
+        error: { code: 'NOT_FOUND', message: 'Booking not found' } 
+      });
     }
     
     // Only admin can delete bookings
     if (req.user.us_usertype !== 'admin') {
-      return res.status(403).json({ message: 'Access denied. Admin only.' });
+      return res.status(403).json({ 
+        success: false, 
+        error: { code: 'FORBIDDEN', message: 'Access denied. Admin only.' } 
+      });
     }
     
     // First, delete related records in the account table that reference this booking
@@ -194,15 +203,25 @@ const deleteBooking = async (req, res) => {
     // Then delete the booking
     await booking.destroy();
     
-    res.json({ message: 'Booking deleted successfully' });
+    res.json({ 
+      success: true, 
+      data: { message: 'Booking deleted successfully' } 
+    });
   } catch (error) {
     // Handle foreign key constraint errors
     if (error.name === 'SequelizeForeignKeyConstraintError') {
       return res.status(400).json({ 
-        message: 'Cannot delete booking. Related records exist in other tables.' 
+        success: false,
+        error: { 
+          code: 'FOREIGN_KEY_CONSTRAINT', 
+          message: 'Cannot delete booking. Related records exist in other tables.' 
+        } 
       });
     }
-    res.status(500).json({ message: error.message });
+    res.status(500).json({ 
+      success: false, 
+      error: { code: 'SERVER_ERROR', message: error.message } 
+    });
   }
 };
 

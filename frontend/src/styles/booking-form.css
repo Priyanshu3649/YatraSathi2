@@ -139,6 +139,10 @@
   grid-template-columns: repeat(3, 1fr);
 }
 
+.form-row.two-cols {
+  grid-template-columns: repeat(2, 1fr);
+}
+
 .form-group {
   display: flex;
   flex-direction: column;
@@ -158,6 +162,13 @@
   border-radius: 8px;
   font-size: 16px;
   transition: border-color 0.3s ease;
+}
+
+.form-help-text {
+  display: block;
+  color: #7f8c8d;
+  font-size: 12px;
+  margin-top: 5px;
 }
 
 .form-group input:focus,
@@ -365,6 +376,7 @@
   font-size: 14px;
   margin: 0 40px 20px 40px;
 }
+
 
 /* Responsive Design */
 @media (max-width: 768px) {

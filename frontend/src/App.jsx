@@ -1,5 +1,5 @@
 import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
-import { AuthProvider } from './contexts/AuthContext';
+import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { BookingProvider } from './contexts/BookingContext';
 import { PaymentProvider } from './contexts/PaymentContext';
 import { ReportProvider } from './contexts/ReportContext';
@@ -15,9 +15,10 @@ import MessageDisplay from './components/MessageDisplay';
 import AdminDashboard from './components/Dashboard/AdminDashboard';
 import RoleBasedRoute from './components/RoleBasedRoute';
 
+// Import customer components
+import CustomerHeader from './components/Customer/CustomerHeader';
+
 // Import auth components
-import EmployeeLogin from './components/Auth/EmployeeLogin';
-import CustomerLogin from './components/Auth/CustomerLogin';
 
 // Import employee components
 import EmployeeDashboard from './components/Employee/EmployeeDashboard';
@@ -118,6 +119,17 @@ function App() {
     );
   };
 
+  // Conditional Header component
+  const ConditionalHeader = () => {
+    const { user } = useAuth();
+    
+    // Show customer header only for customers, otherwise show regular header
+    if (user && (user.us_roid === 'CUS')) {
+      return <CustomerHeader />;
+    }
+    return <Header />;
+  };
+
   return (
     <AuthProvider>
       <BookingProvider>
@@ -129,14 +141,12 @@ function App() {
             }}>
               <div className="App">
                 <MessageDisplay />
-                <Header />
+                <ConditionalHeader />
                 <main>
                   <Routes>
                     <Route path="/" element={<Home />} />
                     
                     {/* Authentication Routes */}
-                    <Route path="/auth/login" element={<CustomerLogin />} />
-                    <Route path="/auth/employee-login" element={<EmployeeLogin />} />
                     <Route path="/login" element={<Login />} />
                     <Route path="/register" element={<Register />} />
                     <Route path="/forgot-password" element={<ForgotPassword />} />

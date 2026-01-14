@@ -72,7 +72,7 @@ export const authAPI = {
   
   // Get user profile
   getProfile: async () => {
-    const response = await fetch(`${API_BASE_URL}/auth/profile`, {
+    const response = await fetch(`${API_BASE_URL}/profile`, {
       method: 'GET',
       headers: getHeaders(true)
     });
@@ -102,6 +102,47 @@ export const authAPI = {
     
     if (!response.ok) {
       throw new Error(data.message || 'Logout failed');
+    }
+    
+    return data;
+  },
+  
+  // Update user profile
+  updateProfile: async (profileData) => {
+    const response = await fetch(`${API_BASE_URL}/profile`, {
+      method: 'PUT',
+      headers: getHeaders(true),
+      body: JSON.stringify(profileData)
+    });
+    
+    const data = await response.json();
+    
+    if (!response.ok) {
+      throw new Error(data.message || 'Failed to update profile');
+    }
+    
+    return data;
+  },
+  
+  // Upload profile image
+  uploadProfileImage: async (imageFile) => {
+    const formData = new FormData();
+    formData.append('image', imageFile);
+    
+    const token = localStorage.getItem('token');
+    
+    const response = await fetch(`${API_BASE_URL}/profile/upload-image`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`
+      },
+      body: formData
+    });
+    
+    const data = await response.json();
+    
+    if (!response.ok) {
+      throw new Error(data.message || 'Failed to upload image');
     }
     
     return data;
@@ -1148,9 +1189,9 @@ export const billingAPI = {
 
 // Customer API calls
 export const customerAPI = {
-  // Search customers
+  // Search customers (accessible to admin and employees)
   searchCustomers: async (searchTerm) => {
-    const response = await fetch(`${API_BASE_URL}/customers/search?q=${encodeURIComponent(searchTerm)}`, {
+    const response = await fetch(`${API_BASE_URL}/search/customers?q=${encodeURIComponent(searchTerm)}`, {
       method: 'GET',
       headers: getHeaders(true)
     });

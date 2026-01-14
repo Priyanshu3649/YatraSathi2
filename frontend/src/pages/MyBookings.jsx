@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { bookingAPI } from '../services/api';
 import '../styles/my-bookings.css';
 
 const MyBookings = () => {
@@ -14,16 +15,9 @@ const MyBookings = () => {
 
   const fetchBookings = async () => {
     try {
-      const token = localStorage.getItem('token');
-      const response = await fetch('/api/customer/bookings', {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-
-      const data = await response.json();
-
+      // Use the bookingAPI service which calls /api/bookings/my-bookings
+      const data = await bookingAPI.getMyBookings();
+      
       if (data.success) {
         setBookings(data.data.bookings || []);
       } else {
@@ -31,7 +25,7 @@ const MyBookings = () => {
       }
     } catch (error) {
       console.error('Bookings fetch error:', error);
-      setError('Network error. Please try again.');
+      setError(error.message || 'Network error. Please try again.');
     } finally {
       setLoading(false);
     }

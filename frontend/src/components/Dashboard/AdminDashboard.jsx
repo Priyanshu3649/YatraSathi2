@@ -41,7 +41,7 @@ const AdminDashboard = () => {
     localStorage.removeItem('token');
     localStorage.removeItem('user');
     localStorage.removeItem('sessionId');
-    navigate('/auth/employee-login');
+    navigate('/login');
   };
 
   if (loading) {

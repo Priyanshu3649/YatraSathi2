@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { authAPI } from '../services/api';
 import '../styles/vintage-erp-theme.css';
 import '../styles/classic-enterprise-global.css';
 import '../styles/vintage-admin-panel.css';
@@ -6,36 +7,128 @@ import '../styles/dynamic-admin-panel.css';
 import '../styles/vintage-erp-global.css';
 
 const Profile = () => {
-  const [profile, setProfile] = useState({
-    name: 'John Doe',
-    email: 'john@example.com',
-    phone: '9876543210',
-    aadhaar: '123456789012',
-    userType: 'customer'
-  });
-  
+  const [profile, setProfile] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
   const [isEditing, setIsEditing] = useState(false);
-  const [formData, setFormData] = useState({ ...profile });
+  const [formData, setFormData] = useState({});
+  const [imagePreview, setImagePreview] = useState(null);
+  const [isUploading, setIsUploading] = useState(false);
+  
+  useEffect(() => {
+    fetchProfile();
+  }, []);
+  
+  const fetchProfile = async () => {
+    try {
+      setLoading(true);
+      const data = await authAPI.getProfile();
+      setProfile(data);
+      setFormData({
+        firstName: data.firstName,
+        lastName: data.lastName,
+        email: data.email,
+        phone: data.phone,
+        aadhaar: data.aadhaar,
+        pan: data.pan,
+        address: data.address,
+        city: data.city,
+        state: data.state,
+        pincode: data.pincode
+      });
+    } catch (err) {
+      setError(err.message || 'Failed to load profile');
+    } finally {
+      setLoading(false);
+    }
+  };
   
   const onChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
+  };
+  
+  const handleImageUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    
+    try {
+      setIsUploading(true);
+      
+      // Preview the image
+      const reader = new FileReader();
+      reader.onload = () => {
+        setImagePreview(reader.result);
+      };
+      reader.readAsDataURL(file);
+      
+      // Upload the image
+      const result = await authAPI.uploadProfileImage(file);
+      
+      // Refresh profile data to get the new image URL
+      await fetchProfile();
+      
+      setImagePreview(null);
+    } catch (error) {
+      console.error('Image upload error:', error);
+      setError(error.message || 'Failed to upload image');
+    } finally {
+      setIsUploading(false);
+    }
   };
   
   const onSubmit = async (e) => {
     e.preventDefault();
     
     try {
-      // Update profile logic would go here
-      console.log('Profile update attempt with:', formData);
+      await authAPI.updateProfile(formData);
       
       // Update profile state
-      setProfile(formData);
+      setProfile(prev => ({
+        ...prev,
+        firstName: formData.firstName,
+        lastName: formData.lastName,
+        email: formData.email,
+        phone: formData.phone,
+        aadhaar: formData.aadhaar,
+        pan: formData.pan,
+        address: formData.address,
+        city: formData.city,
+        state: formData.state,
+        pincode: formData.pincode
+      }));
+      
       setIsEditing(false);
     } catch (error) {
       console.error('Profile update error:', error);
+      setError(error.message || 'Failed to update profile');
     }
   };
   
+  if (loading) {
+    return (
+      <div className="erp-admin-container">
+        <div className="loading-container">
+          <div className="loading-spinner"></div>
+          <p>Loading profile...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="erp-admin-container">
+        <div className="error-container">
+          <h3>Error Loading Profile</h3>
+          <p>{error}</p>
+          <button onClick={fetchProfile} className="retry-btn">
+            Retry
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="erp-admin-container">
       {/* Title Bar */}
@@ -88,30 +181,80 @@ const Profile = () => {
             {!isEditing ? (
               <div className="profile-view">
                 <div className="form-grid">
-                  <label className="form-label">Name:</label>
+                  <label className="form-label">First Name:</label>
                   <span className="form-input" style={{ background: '#f0f0f0', color: '#000' }}>
-                    {profile.name}
+                    {profile?.firstName}
+                  </span>
+
+                  <label className="form-label">Last Name:</label>
+                  <span className="form-input" style={{ background: '#f0f0f0', color: '#000' }}>
+                    {profile?.lastName}
                   </span>
 
                   <label className="form-label">Email:</label>
                   <span className="form-input" style={{ background: '#f0f0f0', color: '#000' }}>
-                    {profile.email}
+                    {profile?.email}
                   </span>
 
                   <label className="form-label">Phone:</label>
                   <span className="form-input" style={{ background: '#f0f0f0', color: '#000' }}>
-                    {profile.phone}
+                    {profile?.phone}
                   </span>
 
                   <label className="form-label">Aadhaar:</label>
                   <span className="form-input" style={{ background: '#f0f0f0', color: '#000' }}>
-                    {profile.aadhaar}
+                    {profile?.aadhaar}
+                  </span>
+
+                  <label className="form-label">PAN:</label>
+                  <span className="form-input" style={{ background: '#f0f0f0', color: '#000' }}>
+                    {profile?.pan}
                   </span>
 
                   <label className="form-label">User Type:</label>
                   <span className="form-input" style={{ background: '#f0f0f0', color: '#000' }}>
-                    {profile.userType}
+                    {profile?.userType}
                   </span>
+
+                  <label className="form-label">Address:</label>
+                  <span className="form-input" style={{ background: '#f0f0f0', color: '#000' }}>
+                    {profile?.address}
+                  </span>
+
+                  <label className="form-label">City:</label>
+                  <span className="form-input" style={{ background: '#f0f0f0', color: '#000' }}>
+                    {profile?.city}
+                  </span>
+
+                  <label className="form-label">State:</label>
+                  <span className="form-input" style={{ background: '#f0f0f0', color: '#000' }}>
+                    {profile?.state}
+                  </span>
+
+                  <label className="form-label">Pincode:</label>
+                  <span className="form-input" style={{ background: '#f0f0f0', color: '#000' }}>
+                    {profile?.pincode}
+                  </span>
+                </div>
+
+                <div className="profile-image-section">
+                  <div className="profile-image-preview">
+                    {profile?.photo ? (
+                      <img 
+                        src={`${profile.photo}`} 
+                        alt="Profile" 
+                        className="profile-image"
+                        onError={(e) => {
+                          e.target.onerror = null;
+                          e.target.src = '/placeholder-profile.png';
+                        }}
+                      />
+                    ) : (
+                      <div className="profile-image-placeholder">
+                        <span>{profile?.firstName?.charAt(0) || 'U'}</span>
+                      </div>
+                    )}
+                  </div>
                 </div>
 
                 <div className="audit-section">
@@ -139,14 +282,24 @@ const Profile = () => {
               <div className="profile-edit">
                 <form onSubmit={onSubmit}>
                   <div className="form-grid">
-                    <label htmlFor="name" className="form-label required">Name</label>
+                    <label htmlFor="firstName" className="form-label required">First Name</label>
                     <input
                       type="text"
-                      id="name"
-                      name="name"
-                      value={formData.name}
+                      id="firstName"
+                      name="firstName"
+                      value={formData.firstName || ''}
                       onChange={onChange}
                       required
+                      className="form-input"
+                    />
+
+                    <label htmlFor="lastName" className="form-label">Last Name</label>
+                    <input
+                      type="text"
+                      id="lastName"
+                      name="lastName"
+                      value={formData.lastName || ''}
+                      onChange={onChange}
                       className="form-input"
                     />
 
@@ -155,7 +308,7 @@ const Profile = () => {
                       type="email"
                       id="email"
                       name="email"
-                      value={formData.email}
+                      value={formData.email || ''}
                       onChange={onChange}
                       required
                       className="form-input"
@@ -166,35 +319,100 @@ const Profile = () => {
                       type="tel"
                       id="phone"
                       name="phone"
-                      value={formData.phone}
+                      value={formData.phone || ''}
                       onChange={onChange}
                       required
                       className="form-input"
                     />
 
-                    <label htmlFor="aadhaar" className="form-label required">Aadhaar</label>
+                    <label htmlFor="aadhaar" className="form-label">Aadhaar</label>
                     <input
                       type="text"
                       id="aadhaar"
                       name="aadhaar"
-                      value={formData.aadhaar}
+                      value={formData.aadhaar || ''}
                       onChange={onChange}
-                      required
                       className="form-input"
                     />
 
-                    <label htmlFor="userType" className="form-label">User Type</label>
-                    <select
-                      id="userType"
-                      name="userType"
-                      value={formData.userType}
+                    <label htmlFor="pan" className="form-label">PAN</label>
+                    <input
+                      type="text"
+                      id="pan"
+                      name="pan"
+                      value={formData.pan || ''}
                       onChange={onChange}
                       className="form-input"
-                    >
-                      <option value="customer">Customer</option>
-                      <option value="employee">Employee</option>
-                      <option value="admin">Admin</option>
-                    </select>
+                    />
+
+                    <label htmlFor="address" className="form-label">Address</label>
+                    <input
+                      type="text"
+                      id="address"
+                      name="address"
+                      value={formData.address || ''}
+                      onChange={onChange}
+                      className="form-input"
+                    />
+
+                    <label htmlFor="city" className="form-label">City</label>
+                    <input
+                      type="text"
+                      id="city"
+                      name="city"
+                      value={formData.city || ''}
+                      onChange={onChange}
+                      className="form-input"
+                    />
+
+                    <label htmlFor="state" className="form-label">State</label>
+                    <input
+                      type="text"
+                      id="state"
+                      name="state"
+                      value={formData.state || ''}
+                      onChange={onChange}
+                      className="form-input"
+                    />
+
+                    <label htmlFor="pincode" className="form-label">Pincode</label>
+                    <input
+                      type="text"
+                      id="pincode"
+                      name="pincode"
+                      value={formData.pincode || ''}
+                      onChange={onChange}
+                      className="form-input"
+                    />
+                  </div>
+
+                  <div className="profile-upload-section">
+                    <div className="profile-image-upload">
+                      <label className="upload-label">
+                        Profile Photo
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={handleImageUpload}
+                          className="file-input"
+                          disabled={isUploading}
+                        />
+                        {isUploading ? (
+                          <div className="upload-progress">
+                            <span>Uploading...</span>
+                          </div>
+                        ) : (
+                          <div className="upload-button">
+                            <span>Select Image</span>
+                          </div>
+                        )}
+                      </label>
+                      {imagePreview && (
+                        <div className="image-preview">
+                          <img src={imagePreview} alt="Preview" className="preview-image" />
+                        </div>
+                      )}
+                    </div>
                   </div>
 
                   <div className="audit-section">
@@ -226,7 +444,7 @@ const Profile = () => {
       {/* Status Bar */}
       <div className="status-bar">
         <div className="status-item">Mode: {isEditing ? 'Edit' : 'View'}</div>
-        <div className="status-item">User: {profile.name}</div>
+        <div className="status-item">User: {profile?.firstName} {profile?.lastName}</div>
         <div className="status-panel">Ready</div>
       </div>
     </div>

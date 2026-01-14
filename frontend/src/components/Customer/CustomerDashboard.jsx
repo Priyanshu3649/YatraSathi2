@@ -49,7 +49,7 @@ const CustomerDashboard = () => {
     localStorage.removeItem('token');
     localStorage.removeItem('user');
     localStorage.removeItem('sessionId');
-    navigate('/auth/login');
+    navigate('/login');
   };
 
   const handleNewBooking = () => {

@@ -126,7 +126,7 @@ const ManagementDashboard = () => {
               </thead>
               <tbody>
                 {topAgents.map((agent, index) => (
-                  <tr key={agent.bk_euid}>
+                  <tr key={agent.bk_agent || agent.dataValues?.bk_agent}>
                     <td>
                       <span className="rank-badge">#{index + 1}</span>
                     </td>
