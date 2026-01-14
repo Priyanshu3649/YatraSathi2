@@ -7,7 +7,9 @@ const {
   cancelBooking,
   getAllCustomers,
   searchCustomers,
-  getCustomerById
+  getCustomerById,
+  getCustomerBills,
+  getCustomerPayments
 } = require('../controllers/customerController');
 const authMiddleware = require('../middleware/authMiddleware');
 

@@ -39,13 +39,16 @@ const auth = async (req, res, next) => {
     }
 
     // Get user's role information
-    // For TVL users, they have us_usertype field instead of us_roid
+    // For TVL users, the role is stored in us_roid field
     if (!isTVLUser && user.us_roid) {
       const role = await Role.findByPk(user.us_roid);
       user.role = role;
-    } else if (isTVLUser && user.us_usertype) {
-      // For TVL users, set the role based on user type
-      user.role = { ro_name: user.us_usertype };
+    } else if (isTVLUser) {
+      // For TVL users, ensure us_roid is available for role-based checks
+      // The role should already be in the us_roid field
+      if (user.us_roid) {
+        user.role = { ro_name: user.us_roid };
+      }
     }
 
     req.user = user;

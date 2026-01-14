@@ -471,17 +471,27 @@ const verifyEmail = async (req, res) => {
 // Logout user
 const logoutUser = async (req, res) => {
   try {
+    console.log('=== Logout function called ===');
+    console.log('Request body:', req.body);
+    console.log('Request user:', req.user);
+    
     // Get session ID from request
     const sessionId = req.body.sessionId || req.query.sessionId || req.header('X-Session-Token');
     const userId = req.user ? req.user.us_usid : null;
     
+    console.log('Session ID from request:', sessionId);
+    console.log('User ID from request:', userId);
+    
     if (!userId) {
+      console.log('No user ID found in request');
       return res.status(400).json({ message: 'User ID is required' });
     }
     
     // Check if this is a TVL user to handle session differently
     const isTVLUser = userId.startsWith('ADM') || userId.startsWith('EMP') || 
                       userId.startsWith('ACC') || userId.startsWith('CUS');
+    
+    console.log('Is TVL user:', isTVLUser);
     
     let success = false;
     if (isTVLUser) {
@@ -492,8 +502,10 @@ const logoutUser = async (req, res) => {
     } else {
       // For non-TVL users, session ID is required
       if (!sessionId) {
+        console.log('Session ID is required for non-TVL user but not provided');
         return res.status(400).json({ message: 'Session ID is required for non-TVL users' });
       }
+      console.log('Attempting to end session:', sessionId);
       // End the session for non-TVL users
       success = await SessionService.endSession(sessionId, userId);
     }
@@ -501,11 +513,14 @@ const logoutUser = async (req, res) => {
     if (success) {
       // Clear session cookie
       res.clearCookie('sessionId');
+      console.log('Logout successful');
       res.json({ message: 'Logout successful' });
     } else {
+      console.log('Session not found');
       res.status(404).json({ message: 'Session not found' });
     }
   } catch (error) {
+    console.error('Logout error:', error.message);
     res.status(500).json({ message: error.message });
   }
 };

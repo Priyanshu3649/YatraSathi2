@@ -18,9 +18,9 @@ router.use(authMiddleware);
 
 // Check if user is an employee
 router.use((req, res, next) => {
-  // Check if user has employee role (using role ID)
-  const employeeRoles = ['AGT', 'ACC', 'HR', 'CC', 'MKT', 'MGT']; // Add other employee roles as needed
-  if (!employeeRoles.includes(req.user.us_roid)) {
+  // Check if user has employee role or admin role (using role ID)
+  const allowedRoles = ['AGT', 'ACC', 'HR', 'CC', 'MKT', 'MGT', 'ADM']; // Include admin role
+  if (!allowedRoles.includes(req.user.us_roid)) {
     return res.status(403).json({ 
       success: false, 
       error: { code: 'FORBIDDEN', message: 'Access denied. Employee role required.' } 

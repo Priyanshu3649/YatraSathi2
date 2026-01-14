@@ -14,13 +14,6 @@ const Login = () => {
   const navigate = useNavigate();
   const { login } = useAuth();
 
-  // Determine if it's likely an employee/admin login based on email domain or known admin email
-  const isEmployeeLogin = (email) => {
-    // Check if email is the known admin email or ends with company domain
-    // Adjust these checks based on your actual employee email patterns
-    return email === 'admin@example.com' || email.includes('@company.com') || email.includes('@yatra.com');
-  };
-
   const handleChange = (e) => {
     setFormData({
       ...formData,
@@ -36,18 +29,17 @@ const Login = () => {
     try {
       let data;
       
-      // Automatically determine if it's an employee/admin login based on email
-      if (isEmployeeLogin(formData.email)) {
-        // Attempt employee login for likely employee/admin accounts
+      // Try employee login first (for admins and employees)
+      try {
+        data = await authAPI.employeeLogin(formData.email, formData.password);
+      } catch (employeeError) {
+        // If employee login fails, try customer login
         try {
-          data = await authAPI.employeeLogin(formData.email, formData.password);
-        } catch (employeeError) {
-          // If employee login fails, try customer login as fallback
           data = await authAPI.customerLogin(formData.email, formData.password);
+        } catch (customerError) {
+          // Both failed, throw the customer error
+          throw customerError;
         }
-      } else {
-        // Default to customer login for regular users
-        data = await authAPI.customerLogin(formData.email, formData.password);
       }
 
       if (data.success) {
@@ -69,10 +61,9 @@ const Login = () => {
           localStorage.setItem('sessionId', data.data.sessionId);
         }
 
-        // Redirect based on role/department
+        // Redirect based on role
         const role = data.data.user.role;
         
-        // Handle redirection based on user role
         if (role === 'ADM') {
           navigate('/admin-dashboard');
         } else if (['AGT', 'ACC', 'HR', 'CC', 'MKT', 'MGT'].includes(role)) {
@@ -100,7 +91,7 @@ const Login = () => {
               navigate('/employee/dashboard');
           }
         } else {
-          // Default to customer dashboard for customers
+          // Default to customer dashboard
           navigate('/customer/dashboard');
         }
       } else {
@@ -124,7 +115,14 @@ const Login = () => {
           <button className="erp-auth-close-button">×</button>
         </div>
 
-
+        {/* Menu Bar */}
+        <div className="erp-auth-menu-bar">
+          <div className="erp-auth-menu-item">File</div>
+          <div className="erp-auth-menu-item">Edit</div>
+          <div className="erp-auth-menu-item">View</div>
+          <div className="erp-auth-menu-item">Tools</div>
+          <div className="erp-auth-menu-item">Help</div>
+        </div>
 
         {/* Main Content */}
         <div className="erp-auth-content">
@@ -135,7 +133,8 @@ const Login = () => {
 
           {/* Header */}
           <div className="erp-auth-header">
-            <h2>Login to Your Account</h2>
+            <h2>Unified Login Portal</h2>
+            <p>Access your account with our vintage authentication system</p>
           </div>
 
           {/* Form Panel */}
@@ -148,8 +147,6 @@ const Login = () => {
                   {error}
                 </div>
               )}
-
-
 
               <div className="erp-auth-form-group">
                 <label htmlFor="email" className="erp-auth-form-label required">
