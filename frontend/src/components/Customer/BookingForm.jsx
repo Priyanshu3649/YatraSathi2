@@ -180,7 +180,7 @@ const BookingForm = () => {
     <div className="booking-step">
       <h3>Journey Details</h3>
       
-      <div className="form-row three-cols">
+      <div className="form-row two-cols">
         <div className="form-group">
           <label>From Station</label>
           <input
@@ -204,7 +204,9 @@ const BookingForm = () => {
             required
           />
         </div>
+      </div>
       
+      <div className="form-row two-cols">
         <div className="form-group">
           <label>Journey Date</label>
           <input
@@ -216,9 +218,7 @@ const BookingForm = () => {
             required
           />
         </div>
-      </div>
       
-      <div className="form-row two-cols">
         <div className="form-group">
           <label>Class</label>
           <select
@@ -233,7 +233,9 @@ const BookingForm = () => {
             ))}
           </select>
         </div>
+      </div>
       
+      <div className="form-row">
         <div className="form-group">
           <label>Train Preferences</label>
           <input
@@ -252,7 +254,6 @@ const BookingForm = () => {
           <small className="form-help-text">Enter multiple train numbers separated by commas (e.g., 12345, 67890, 11223)</small>
         </div>
       </div>
-      
       
     </div>
   );
@@ -380,73 +381,76 @@ const BookingForm = () => {
 
   return (
     <div className="booking-form-container">
-      <div className="booking-form-header">
-        <button onClick={() => navigate('/customer/dashboard')} className="back-btn">
-          <i className="fas fa-arrow-left"></i>
-          Back to Dashboard
-        </button>
-        <h1>New Booking</h1>
-      </div>
-
-      <div className="booking-form-card">
-        <div className="step-indicator">
-          <div className={`step ${currentStep >= 1 ? 'active' : ''}`}>
-            <span>1</span>
-            <label>Journey</label>
-          </div>
-          <div className={`step ${currentStep >= 2 ? 'active' : ''}`}>
-            <span>2</span>
-            <label>Passengers</label>
-          </div>
-          <div className={`step ${currentStep >= 3 ? 'active' : ''}`}>
-            <span>3</span>
-            <label>Review</label>
-          </div>
+      <div className="centered-card">
+        <div className="booking-form-header">
+          <button onClick={() => navigate('/customer/dashboard')} className="back-btn">
+            <i className="fas fa-arrow-left"></i>
+            Back to Dashboard
+          </button>
+          <h1>New Booking</h1>
         </div>
 
-        {error && (
-          <div className="error-message">
-            {error}
+        <div className="booking-form-card">
+          <div className="step-indicator">
+            <div className={`step ${currentStep >= 1 ? 'active' : ''}`}>
+              <span>1</span>
+              <label>Journey</label>
+            </div>
+            <div className={`step ${currentStep >= 2 ? 'active' : ''}`}>
+              <span>2</span>
+              <label>Passengers</label>
+            </div>
+            <div className={`step ${currentStep >= 3 ? 'active' : ''}`}>
+              <span>3</span>
+              <label>Review</label>
+            </div>
           </div>
-        )}
 
-        <form onSubmit={(e) => e.preventDefault()}>
-          {currentStep === 1 && renderStep1()}
-          {currentStep === 2 && renderStep2()}
-          {currentStep === 3 && renderStep3()}
+          {error && (
+            <div className="error-message">
+              {error}
+            </div>
+          )}
 
-          <div className="form-actions">
-            {currentStep > 1 && (
-              <button
-                type="button"
-                onClick={prevStep}
-                className="btn-outline"
-                disabled={loading}
-              >
-                Previous
-              </button>
-            )}
-            
-            {currentStep < 3 ? (
-              <button
-                type="button"
-                onClick={nextStep}
-                className="btn-primary"
-              >
-                Next
-              </button>
-            ) : (
-              <button
-                type="button"
-                onClick={submitBooking}
-                className="btn-primary"
-                disabled={loading}
-              >
-                {loading ? 'Creating Booking...' : 'Submit Booking'}
-              </button>
-            )}
-          </div>
-        </form>
+          <form onSubmit={(e) => e.preventDefault()}>
+            {currentStep === 1 && renderStep1()}
+            {currentStep === 2 && renderStep2()}
+            {currentStep === 3 && renderStep3()}
+
+            <div className="form-actions">
+              {currentStep > 1 && (
+                <button
+                  type="button"
+                  onClick={prevStep}
+                  className="btn-outline"
+                  disabled={loading}
+                >
+                  Previous
+                </button>
+              )}
+              
+              {currentStep < 3 ? (
+                <button
+                  type="button"
+                  onClick={nextStep}
+                  className="btn-primary"
+                  disabled={loading}
+                >
+                  Next
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={submitBooking}
+                  className="btn-primary"
+                  disabled={loading}
+                >
+                  {loading ? 'Creating Booking...' : 'Submit Booking'}
+                </button>
+              )}
+            </div>
+          </form>
+        </div>
       </div>
     </div>
   );

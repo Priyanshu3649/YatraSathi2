@@ -9,7 +9,8 @@ const {
   searchCustomers,
   getCustomerById,
   getCustomerBills,
-  getCustomerPayments
+  getCustomerPayments,
+  getBookingPassengers
 } = require('../controllers/customerController');
 const authMiddleware = require('../middleware/authMiddleware');
 
@@ -42,6 +43,7 @@ router.get('/:id', getCustomerById);
 router.post('/bookings', createBooking);
 router.get('/bookings', getCustomerBookings);
 router.get('/bookings/:bookingId', getBookingDetails);
+router.get('/bookings/:bookingId/passengers', getBookingPassengers);
 router.put('/bookings/:bookingId/cancel', cancelBooking);
 
 // Bill and payment management

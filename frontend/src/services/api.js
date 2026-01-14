@@ -494,17 +494,30 @@ export const bookingAPI = {
     return data;
   },
   
-  // Get bookings by status
-  getBookingsByStatus: async (status) => {
-    const response = await fetch(`${API_BASE_URL}/bookings/status/${status}`, {
+  // Get passengers for a specific booking
+  getBookingPassengers: async (bookingId) => {
+    // First try the customer route
+    let response;
+    let url = `${API_BASE_URL}/customer/bookings/${bookingId}/passengers`;
+    
+    response = await fetch(url, {
       method: 'GET',
       headers: getHeaders(true)
     });
     
+    // If customer route fails, try the general booking route
+    if (!response.ok) {
+      url = `${API_BASE_URL}/bookings/${bookingId}/passengers`;
+      response = await fetch(url, {
+        method: 'GET',
+        headers: getHeaders(true)
+      });
+    }
+    
     const data = await response.json();
     
     if (!response.ok) {
-      throw new Error(data.message || 'Failed to get bookings by status');
+      throw new Error(data.message || 'Failed to get booking passengers');
     }
     
     return data;

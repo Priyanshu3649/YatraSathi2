@@ -1,5 +1,6 @@
-const { UserTVL: User, CustomerTVL: Customer, BookingTVL: Booking, PaymentTVL: Payment, AccountTVL: Account, EmployeeTVL: Employee } = require('../models');
+const { UserTVL: User, CustomerTVL: Customer, Booking, PaymentTVL: Payment, AccountTVL: Account, EmployeeTVL: Employee } = require('../models');
 const { Op } = require('sequelize');
+const { sequelize } = require('../models/baseModel');
 
 /**
  * Get Customer Dashboard Data
@@ -39,9 +40,12 @@ const getCustomerDashboard = async (req, res) => {
       limit: 5
     });
 
-    // Pending payments (mock data for now)
+    // Pending payments for this customer
     const pendingPayments = await Payment.count({
-      where: { pt_status: 'PENDING' }
+      where: { 
+        pt_custid: userId,
+        pt_status: 'PENDING' 
+      }
     });
 
     // Mock pending invoices (replace with actual invoice logic)
@@ -172,38 +176,62 @@ const createBooking = async (req, res) => {
     const timestamp = Date.now().toString().slice(-8);
     const bookingNumber = `BKN${timestamp}${Math.floor(Math.random() * 100)}`; // Add random suffix to ensure uniqueness
 
-    // Create booking - let bk_bkid be auto-generated
-    const booking = await Booking.create({
-      bk_bkno: bookingNumber,
-      bk_usid: userId,
-      bk_fromst: from,
-      bk_tost: to,
-      bk_trvldt: jDate,
-      bk_class: trainClass || 'SL',
-      bk_berthpref: berthPreference || 'NO_PREF',
-      bk_totalpass: passengers.length,
-      bk_status: 'PENDING',
-      bk_remarks: trainPreferences.length > 0 ? `Train Preferences: ${trainPreferences.join(', ')}` : null,
-      eby: userId,
-      mby: userId
-    });
-
-    // Create passenger records (implement Passenger model if needed)
-    // For now, store passenger data in booking notes or separate table
-
-    let confirmationMessage = 'Booking created successfully. You will be contacted by our agent soon.';
-    if (trainPreferences.length > 0) {
-      confirmationMessage += ` Train preferences noted: ${trainPreferences.join(', ')}.`;
-    }
+    const { Passenger } = require('../models');
+    const transaction = await sequelize.transaction();
     
-    res.status(201).json({
-      success: true,
-      data: {
-        bookingId: booking.bk_bkid.toString(), // Convert to string to match frontend expectations
-        status: booking.bk_status,
-        message: confirmationMessage
+    try {
+      // Create booking - let bk_bkid be auto-generated
+      const booking = await Booking.create({
+        bk_bkno: bookingNumber,
+        bk_usid: userId,
+        bk_fromst: from,
+        bk_tost: to,
+        bk_trvldt: jDate,
+        bk_class: trainClass || 'SL',
+        bk_berthpref: berthPreference || 'NO_PREF',
+        bk_totalpass: passengers.length,
+        bk_status: 'PENDING',
+        bk_remarks: trainPreferences.length > 0 ? `Train Preferences: ${trainPreferences.join(', ')}` : null,
+        eby: userId,
+        mby: userId
+      }, { transaction });
+
+      // Create passenger records in the passenger table
+      for (const passenger of passengers) {
+        await Passenger.create({
+          ps_bkid: booking.bk_bkid, // Link to the newly created booking
+          ps_fname: passenger.name.split(' ')[0] || '', // First name
+          ps_lname: passenger.name.split(' ').slice(1).join(' ') || null, // Last name (if any)
+          ps_age: parseInt(passenger.age) || 0,
+          ps_gender: passenger.gender || 'M',
+          ps_berthpref: passenger.berthPreference || null,
+          ps_active: 1, // Active passenger
+          eby: userId,
+          mby: userId
+        }, { transaction });
       }
-    });
+      
+      // Commit the transaction
+      await transaction.commit();
+      
+      let confirmationMessage = 'Booking created successfully. You will be contacted by our agent soon.';
+      if (trainPreferences.length > 0) {
+        confirmationMessage += ` Train preferences noted: ${trainPreferences.join(', ')}.`;
+      }
+      
+      res.status(201).json({
+        success: true,
+        data: {
+          bookingId: booking.bk_bkid.toString(), // Convert to string to match frontend expectations
+          status: booking.bk_status,
+          message: confirmationMessage
+        }
+      });
+    } catch (error) {
+      // Rollback the transaction on error
+      await transaction.rollback();
+      throw error;
+    }
   } catch (error) {
     console.error('Create booking error:', error);
     console.error('Error details:', {
@@ -236,17 +264,37 @@ const getCustomerBookings = async (req, res) => {
       whereClause.bk_status = status;
     }
 
+    // Import Passenger model to get passenger count
+    const models = require('../models');
+    const Passenger = models.Passenger;
+    
     const bookings = await Booking.findAndCountAll({
       where: whereClause,
       order: [['edtm', 'DESC']],
       limit: parseInt(limit),
       offset: (parseInt(page) - 1) * parseInt(limit)
     });
-
+    
+    // Transform data to match frontend expectations and get actual passenger counts
+    const transformedBookings = await Promise.all(bookings.rows.map(async (booking) => {
+      // Get passenger count for this booking
+      const passengerCount = await Passenger.count({
+        where: { 
+          ps_bkid: booking.bk_bkid,
+          ps_active: 1  // Only count active passengers
+        }
+      });
+      
+      return {
+        ...booking.toJSON(),
+        bk_pax: passengerCount  // Override with actual passenger count from passenger table
+      };
+    }));
+    
     res.json({
       success: true,
       data: {
-        bookings: bookings.rows,
+        bookings: transformedBookings,
         pagination: {
           total: bookings.count,
           page: parseInt(page),
@@ -271,6 +319,10 @@ const getBookingDetails = async (req, res) => {
     const userId = req.user.us_usid;
     const { bookingId } = req.params;
 
+    // Import Passenger model to get passenger count
+    const models = require('../models');
+    const Passenger = models.Passenger;
+    
     const booking = await Booking.findOne({
       where: { 
         bk_bkid: bookingId,
@@ -284,8 +336,21 @@ const getBookingDetails = async (req, res) => {
         error: { code: 'NOT_FOUND', message: 'Booking not found' }
       });
     }
-
-    res.json({ success: true, data: booking });
+    
+    // Get passenger count for this booking
+    const passengerCount = await Passenger.count({
+      where: { 
+        ps_bkid: booking.bk_bkid,
+        ps_active: 1  // Only count active passengers
+      }
+    });
+    
+    const bookingData = {
+      ...booking.toJSON(),
+      bk_pax: passengerCount  // Override with actual passenger count from passenger table
+    };
+    
+    res.json({ success: true, data: bookingData });
   } catch (error) {
     console.error('Get booking details error:', error);
     res.status(500).json({ 
@@ -349,7 +414,7 @@ const cancelBooking = async (req, res) => {
 const getAllCustomers = async (req, res) => {
   try {
     // Only admin can get all customers
-    if (req.user.us_usertype !== 'admin') {
+    if (req.user.us_roid !== 'ADM') {
       return res.status(403).json({ message: 'Access denied' });
     }
     
@@ -542,10 +607,17 @@ const getCustomerBills = async (req, res) => {
   try {
     const userId = req.user.us_usid;
     
-    // Get bills for this customer by joining with BillTVL table
-    // Since BillTVL is not fully defined in the models, we'll use mock data for now
-    // In a real implementation, you would query the BillTVL table
-    const bills = [];
+    // Import Bill model
+    const { BillTVL: Bill } = require('../models');
+    
+    // Get bills for this customer
+    // Bills are linked to customer via customer_id field
+    const bills = await Bill.findAll({
+      where: { 
+        customer_id: userId  // Bills are linked to customer ID
+      },
+      order: [['created_on', 'DESC']]
+    });
     
     res.json({ 
       success: true, 
@@ -569,10 +641,17 @@ const getCustomerPayments = async (req, res) => {
   try {
     const userId = req.user.us_usid;
     
-    // Get payments for this customer by joining with PaymentTVL table
-    // Since payments are linked to customer via account/booking, we'll fetch based on customer ID
-    // In a real implementation, you would query the PaymentTVL table
-    const payments = [];
+    // Import Payment model
+    const { PaymentTVL: Payment } = require('../models');
+    
+    // Get payments for this customer
+    // Payments are linked to customer via pt_custid field
+    const payments = await Payment.findAll({
+      where: { 
+        pt_custid: userId  // Payments are linked to customer ID
+      },
+      order: [['edtm', 'DESC']]
+    });
     
     res.json({ 
       success: true, 
@@ -589,6 +668,72 @@ const getCustomerPayments = async (req, res) => {
   }
 };
 
+const getBookingPassengers = async (req, res) => {
+  try {
+    const bookingId = req.params.bookingId;
+    
+    // Check if user has permission to view this booking's passengers
+    const models = require('../models');
+    const Booking = models.Booking;
+    
+    const booking = await Booking.findByPk(bookingId);
+    
+    if (!booking) {
+      return res.status(404).json({ 
+        success: false,
+        error: { code: 'NOT_FOUND', message: 'Booking not found' } 
+      });
+    }
+    
+    // Check if this booking belongs to the current user
+    if (booking.bk_usid !== req.user.us_usid) {
+      return res.status(403).json({ 
+        success: false,
+        error: { code: 'FORBIDDEN', message: 'Access denied' } 
+      });
+    }
+    
+    // Get passenger details for this booking
+    const Passenger = models.Passenger;
+    
+    const passengers = await Passenger.findAll({
+      where: { 
+        ps_bkid: bookingId,
+        ps_active: 1  // Only active passengers
+      },
+      order: [['ps_psid', 'ASC']]  // Order by passenger ID
+    });
+    
+    // Transform passenger data to match frontend expectations
+    const transformedPassengers = passengers.map(passenger => {
+      return {
+        firstName: passenger.ps_fname,
+        lastName: passenger.ps_lname,
+        age: passenger.ps_age,
+        gender: passenger.ps_gender,
+        berthPreference: passenger.ps_berthpref,
+        berthAllocated: passenger.ps_berthalloc,
+        seatNo: passenger.ps_seatno,
+        coach: passenger.ps_coach,
+        id: passenger.ps_psid
+      };
+    });
+    
+    res.json({ 
+      success: true,
+      bookingId: parseInt(bookingId),
+      passengers: transformedPassengers 
+    });
+    
+  } catch (error) {
+    console.error('Error fetching customer booking passengers:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: { code: 'SERVER_ERROR', message: error.message } 
+    });
+  }
+};
+
 module.exports = {
   getCustomerDashboard,
   createBooking,
@@ -599,5 +744,6 @@ module.exports = {
   searchCustomers,
   getCustomerById,
   getCustomerBills,
-  getCustomerPayments
+  getCustomerPayments,
+  getBookingPassengers
 };

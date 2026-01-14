@@ -11,7 +11,8 @@ const {
   approveBooking,
   confirmBooking,
   getBookingsByStatus,
-  searchBookings
+  searchBookings,
+  getBookingPassengers
 } = require('../controllers/bookingController');
 const authMiddleware = require('../middleware/authMiddleware');
 
@@ -31,6 +32,9 @@ router.get('/', getAllBookings);
 router.post('/assign', assignBooking);
 router.post('/approve', approveBooking);
 router.post('/confirm', confirmBooking);
+
+// New route for getting passengers for a booking
+router.get('/:id/passengers', getBookingPassengers);
 
 // Parameterized routes last (less specific paths)
 router.get('/:id', getBookingById);

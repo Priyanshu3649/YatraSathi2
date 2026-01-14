@@ -29,9 +29,16 @@ export const AuthProvider = ({ children }) => {
           setUser(userObject);
           setIsAuthenticated(true);
         } catch (error) {
-          // Token is invalid, remove it
+          // Token is invalid, remove it and reset auth state
           localStorage.removeItem('token');
+          setUser(null);
+          setIsAuthenticated(false);
+          console.error('Token validation failed:', error);
         }
+      } else {
+        // No token found, ensure clean state
+        setUser(null);
+        setIsAuthenticated(false);
       }
       
       setLoading(false);

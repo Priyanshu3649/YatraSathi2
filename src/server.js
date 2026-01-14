@@ -102,7 +102,7 @@ const { connectDB } = require('../config/db');
 connectDB().then(() => {
   console.log('Database connection established');
   
-  const PORT = process.env.PORT || 5003;
+  const PORT = process.env.PORT || 5004;
   const HOST = '127.0.0.1'; // Explicitly set host
 
   const server = app.listen(PORT, HOST, () => {

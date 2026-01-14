@@ -5,6 +5,16 @@
   padding: 20px;
 }
 
+.centered-card {
+  max-width: 800px;
+  margin: 0 auto;
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+  overflow: hidden;
+  padding: 0;
+}
+
 .booking-form-header {
   max-width: 800px;
   margin: 0 auto 30px auto;
@@ -131,6 +141,17 @@
   margin-bottom: 20px;
 }
 
+.form-row.two-cols {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 25px;
+  margin-bottom: 25px;
+}
+
+.form-row > .form-group {
+  margin-bottom: 0;
+}
+
 .form-row.four-cols {
   grid-template-columns: repeat(4, 1fr);
 }
@@ -162,6 +183,8 @@
   border-radius: 8px;
   font-size: 16px;
   transition: border-color 0.3s ease;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .form-help-text {

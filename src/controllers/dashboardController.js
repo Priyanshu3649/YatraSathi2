@@ -151,13 +151,13 @@ const getCustomerDashboard = async (req, res) => {
 
     // Get customer bookings
     const bookings = await BookingTVL.findAll({
-      where: { bk_cuid: userId },
+      where: { bk_usid: userId },
       order: [['edtm', 'DESC']],
       limit: 5
     });
 
     const totalBookings = await BookingTVL.count({
-      where: { bk_cuid: userId }
+      where: { bk_usid: userId }
     });
 
     const dashboardData = {

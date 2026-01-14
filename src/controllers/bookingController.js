@@ -12,30 +12,70 @@ const createBooking = async (req, res) => {
       travelClass,
       berthPreference,
       totalPassengers,
-      remarks
+      remarks,
+      passengerList,
+      customerId,
+      customerName
     } = req.body;
     
     // Generate booking number
     const bookingNumber = `BK${Date.now()}${Math.floor(Math.random() * 1000)}`;
     
-    // Create new booking
-    const booking = await BookingTVL.create({
-      bk_bkno: bookingNumber,
-      bk_usid: req.user.us_usid,
-      bk_fromst: fromStation,
-      bk_tost: toStation,
-      bk_trvldt: travelDate,
-      bk_class: travelClass,
-      bk_berthpref: berthPreference,
-      bk_totalpass: totalPassengers || 1,
-      bk_remarks: remarks,
-      bk_status: 'PENDING',
-      eby: req.user.us_usid,
-      mby: req.user.us_usid
-    });
+    const transaction = await sequelize.transaction();
     
-    res.status(201).json(booking);
+    try {
+      // Create new booking
+      const booking = await BookingTVL.create({
+        bk_bkno: bookingNumber,
+        bk_usid: customerId || req.user.us_usid, // Use provided customer ID or current user ID
+        bk_fromst: fromStation,
+        bk_tost: toStation,
+        bk_trvldt: travelDate,
+        bk_class: travelClass,
+        bk_berthpref: berthPreference,
+        bk_totalpass: totalPassengers || 1,
+        bk_remarks: remarks,
+        bk_status: 'PENDING',
+        eby: req.user.us_usid,
+        mby: req.user.us_usid
+      }, { transaction });
+      
+      // If passenger list is provided, create passenger records
+      if (passengerList && Array.isArray(passengerList) && passengerList.length > 0) {
+        const models = require('../models');
+        const Passenger = models.Passenger;
+        
+        // Create passenger records for this booking
+        for (const passenger of passengerList) {
+          if (passenger.name && passenger.name.trim() !== '') { // Only create if name is provided
+            await Passenger.create({
+              ps_bkid: booking.bk_bkid, // Link to the newly created booking
+              ps_fname: passenger.name.split(' ')[0] || '', // First name
+              ps_lname: passenger.name.split(' ').slice(1).join(' ') || null, // Last name (if any)
+              ps_age: parseInt(passenger.age) || 0,
+              ps_gender: passenger.gender || 'M',
+              ps_berthpref: passenger.berthPreference || null,
+              ps_idtype: passenger.idProofType || null,
+              ps_idno: passenger.idProofNumber || null,
+              ps_active: 1, // Active passenger
+              eby: req.user.us_usid,
+              mby: req.user.us_usid
+            }, { transaction });
+          }
+        }
+      }
+      
+      // Commit the transaction
+      await transaction.commit();
+      
+      res.status(201).json(booking);
+    } catch (error) {
+      // Rollback the transaction on error
+      await transaction.rollback();
+      throw error;
+    }
   } catch (error) {
+    console.error('Error creating booking with passengers:', error);
     res.status(500).json({ message: error.message });
   }
 };
@@ -43,18 +83,33 @@ const createBooking = async (req, res) => {
 // Get all bookings for a customer
 const getCustomerBookings = async (req, res) => {
   try {
+    // Import Passenger model
+    const models = require('../models');
+    const Passenger = models.Passenger;
+    
     const bookings = await BookingTVL.findAll({ 
       where: { bk_usid: req.user.us_usid },
       order: [['bk_reqdt', 'DESC']]
     });
     
     // Transform data to match frontend expectations
-    const transformedBookings = bookings.map(booking => ({
-      ...booking.toJSON(),
-      bk_fromstation: booking.bk_fromst,
-      bk_tostation: booking.bk_tost,
-      bk_travelldate: booking.bk_trvldt,
-      bk_travelclass: booking.bk_class
+    const transformedBookings = await Promise.all(bookings.map(async (booking) => {
+      // Get passenger count for this booking
+      const passengerCount = await Passenger.count({
+        where: { 
+          ps_bkid: booking.bk_bkid,
+          ps_active: 1  // Only count active passengers
+        }
+      });
+      
+      return {
+        ...booking.toJSON(),
+        bk_fromstation: booking.bk_fromst,
+        bk_tostation: booking.bk_tost,
+        bk_travelldate: booking.bk_trvldt,
+        bk_travelclass: booking.bk_class,
+        bk_pax: passengerCount  // Override with actual passenger count from passenger table
+      };
     }));
     
     res.json({ success: true, data: { bookings: transformedBookings } });
@@ -70,7 +125,7 @@ const getCustomerBookings = async (req, res) => {
 const getAllBookings = async (req, res) => {
   try {
     // Check if user is admin
-    if (req.user.us_usertype !== 'admin') {
+    if (req.user.us_roid !== 'ADM') {
       return res.status(403).json({ message: 'Access denied. Admin only.' });
     }
     
@@ -104,11 +159,23 @@ const getBookingById = async (req, res) => {
     }
     
     // Check if user has permission to view this booking
-    if (req.user.us_usertype !== 'admin' && 
+    if (req.user.us_roid !== 'ADM' && 
         booking.bk_usid !== req.user.us_usid &&
         (booking.bk_agent && booking.bk_agent !== req.user.us_usid)) {
       return res.status(403).json({ message: 'Access denied' });
     }
+    
+    // Import Passenger model to get passenger count
+    const models = require('../models');
+    const Passenger = models.Passenger;
+    
+    // Get passenger count for this booking
+    const passengerCount = await Passenger.count({
+      where: { 
+        ps_bkid: booking.bk_bkid,
+        ps_active: 1  // Only count active passengers
+      }
+    });
     
     // Transform data to match frontend expectations
     const transformedBooking = {
@@ -116,7 +183,8 @@ const getBookingById = async (req, res) => {
       bk_fromstation: booking.bk_fromst,
       bk_tostation: booking.bk_tost,
       bk_travelldate: booking.bk_trvldt,
-      bk_travelclass: booking.bk_class
+      bk_travelclass: booking.bk_class,
+      bk_pax: passengerCount  // Override with actual passenger count from passenger table
     };
     
     res.json(transformedBooking);
@@ -135,13 +203,87 @@ const updateBooking = async (req, res) => {
     }
     
     // Check if user has permission to update this booking
-    if (req.user.us_usertype !== 'admin' && booking.bk_usid !== req.user.us_usid) {
+    if (req.user.us_roid !== 'ADM' && booking.bk_usid !== req.user.us_usid) {
       return res.status(403).json({ message: 'Access denied' });
     }
     
-    await booking.update(req.body);
-    res.json(booking);
+    const transaction = await sequelize.transaction();
+    
+    try {
+      const { passengerList, ...bookingData } = req.body;
+      
+      // Update booking details
+      await booking.update(bookingData, { transaction });
+      
+      // If passenger list is provided, update passenger records
+      if (passengerList && Array.isArray(passengerList)) {
+        const models = require('../models');
+        const Passenger = models.Passenger;
+        
+        // First, mark all existing passengers as inactive for this booking
+        await Passenger.update(
+          { ps_active: 0, mby: req.user.us_usid },
+          { where: { ps_bkid: booking.bk_bkid }, transaction }
+        );
+        
+        // Create or reactivate passenger records for this booking
+        for (const passenger of passengerList) {
+          if (passenger.name && passenger.name.trim() !== '') { // Only create if name is provided
+            // Check if passenger already exists (for updates)
+            const existingPassenger = await Passenger.findOne({
+              where: {
+                ps_bkid: booking.bk_bkid,
+                ps_fname: passenger.name.split(' ')[0] || '',
+                ps_lname: passenger.name.split(' ').slice(1).join(' ') || null,
+                ps_age: parseInt(passenger.age) || 0
+              },
+              transaction
+            });
+            
+            if (existingPassenger) {
+              // Update existing passenger
+              await existingPassenger.update({
+                ps_fname: passenger.name.split(' ')[0] || '',
+                ps_lname: passenger.name.split(' ').slice(1).join(' ') || null,
+                ps_age: parseInt(passenger.age) || 0,
+                ps_gender: passenger.gender || 'M',
+                ps_berthpref: passenger.berthPreference || null,
+                ps_idtype: passenger.idProofType || null,
+                ps_idno: passenger.idProofNumber || null,
+                ps_active: 1, // Reactivate
+                mby: req.user.us_usid
+              }, { transaction });
+            } else {
+              // Create new passenger record
+              await Passenger.create({
+                ps_bkid: booking.bk_bkid, // Link to the booking
+                ps_fname: passenger.name.split(' ')[0] || '', // First name
+                ps_lname: passenger.name.split(' ').slice(1).join(' ') || null, // Last name (if any)
+                ps_age: parseInt(passenger.age) || 0,
+                ps_gender: passenger.gender || 'M',
+                ps_berthpref: passenger.berthPreference || null,
+                ps_idtype: passenger.idProofType || null,
+                ps_idno: passenger.idProofNumber || null,
+                ps_active: 1, // Active passenger
+                eby: req.user.us_usid,
+                mby: req.user.us_usid
+              }, { transaction });
+            }
+          }
+        }
+      }
+      
+      // Commit the transaction
+      await transaction.commit();
+      
+      res.json(booking);
+    } catch (error) {
+      // Rollback the transaction on error
+      await transaction.rollback();
+      throw error;
+    }
   } catch (error) {
+    console.error('Error updating booking with passengers:', error);
     res.status(500).json({ message: error.message });
   }
 };
@@ -156,7 +298,7 @@ const cancelBooking = async (req, res) => {
     }
     
     // Check if user has permission to cancel this booking
-    if (req.user.us_usertype !== 'admin' && booking.bk_usid !== req.user.us_usid) {
+    if (req.user.us_roid !== 'ADM' && booking.bk_usid !== req.user.us_usid) {
       return res.status(403).json({ message: 'Access denied' });
     }
     
@@ -189,7 +331,7 @@ const deleteBooking = async (req, res) => {
     }
     
     // Only admin can delete bookings
-    if (req.user.us_usertype !== 'admin') {
+    if (req.user.us_roid !== 'ADM') {
       return res.status(403).json({ 
         success: false, 
         error: { code: 'FORBIDDEN', message: 'Access denied. Admin only.' } 
@@ -405,6 +547,73 @@ const getBookingsByStatus = async (req, res) => {
   }
 };
 
+// Get passengers for a specific booking
+const getBookingPassengers = async (req, res) => {
+  try {
+    const bookingId = req.params.bookingId;
+    
+    // Check if user has permission to view this booking's passengers
+    const booking = await (require('../models')).Booking.findByPk(bookingId);
+    
+    if (!booking) {
+      return res.status(404).json({ 
+        success: false,
+        error: { code: 'NOT_FOUND', message: 'Booking not found' } 
+      });
+    }
+    
+    // Check if user has permission to view this booking
+    if (req.user.us_roid !== 'ADM' && 
+        booking.bk_usid !== req.user.us_usid &&
+        (booking.bk_agent && booking.bk_agent !== req.user.us_usid)) {
+      return res.status(403).json({ 
+        success: false,
+        error: { code: 'FORBIDDEN', message: 'Access denied' } 
+      });
+    }
+    
+    // Import Passenger model from main models
+    const { Passenger } = require('../models');
+    
+    // Get passengers for this booking
+    const passengers = await Passenger.findAll({
+      where: { 
+        ps_bkid: bookingId,
+        ps_active: 1  // Only active passengers
+      },
+      order: [['ps_psid', 'ASC']]  // Order by passenger ID
+    });
+    
+    // Transform passenger data to match frontend expectations
+    const transformedPassengers = passengers.map(passenger => {
+      return {
+        firstName: passenger.ps_fname,
+        lastName: passenger.ps_lname,
+        age: passenger.ps_age,
+        gender: passenger.ps_gender,
+        berthPreference: passenger.ps_berthpref,
+        berthAllocated: passenger.ps_berthalloc,
+        seatNo: passenger.ps_seatno,
+        coach: passenger.ps_coach,
+        id: passenger.ps_psid
+      };
+    });
+    
+    res.json({ 
+      success: true,
+      bookingId: parseInt(bookingId),
+      passengers: transformedPassengers 
+    });
+    
+  } catch (error) {
+    console.error('Error fetching booking passengers:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: { code: 'SERVER_ERROR', message: error.message } 
+    });
+  }
+};
+
 // Search and filter bookings
 const searchBookings = async (req, res) => {
   try {
@@ -474,10 +683,10 @@ const searchBookings = async (req, res) => {
     }
 
     // Apply user-specific filters
-    if (req.user.us_usertype === 'employee') {
+    if (req.user.us_roid === 'EMP') {
       // Employees can only see their assigned bookings
       whereConditions.bk_agent = req.user.us_usid;
-    } else if (req.user.us_usertype === 'customer') {
+    } else if (req.user.us_roid === 'CUS') {
       // Customers can only see their own bookings
       whereConditions.bk_usid = req.user.us_usid;
     }
@@ -523,5 +732,6 @@ module.exports = {
   approveBooking,
   confirmBooking,
   getBookingsByStatus,
-  searchBookings
+  searchBookings,
+  getBookingPassengers
 };

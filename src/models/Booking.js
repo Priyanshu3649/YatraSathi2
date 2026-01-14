@@ -87,7 +87,7 @@ const Booking = sequelize.define('bkBooking', {
   // Audit fields
   ...BaseModel
 }, {
-  tableName: 'bkBooking',
+  tableName: 'bkXbooking',
   timestamps: false,
   indexes: [
     {

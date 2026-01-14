@@ -78,15 +78,8 @@ const Passenger = sequelize.define('psPassenger', {
   // Audit fields
   ...BaseModel
 }, {
-  tableName: 'psPassenger',
+  tableName: 'psXpassenger',
   timestamps: false
-});
-
-// Define associations
-Passenger.belongsTo(Booking, {
-  foreignKey: 'ps_bkid',
-  targetKey: 'bk_bkid',
-  as: 'booking'
 });
 
 module.exports = Passenger;

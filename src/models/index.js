@@ -99,6 +99,8 @@ Booking.hasOne(Account, { foreignKey: 'ac_bkid', sourceKey: 'bk_bkid' });
 
 // Passenger associations
 Passenger.belongsTo(Booking, { foreignKey: 'ps_bkid', targetKey: 'bk_bkid' });
+Passenger.belongsTo(Booking, { foreignKey: 'ps_bkid', targetKey: 'bk_bkid', as: 'booking' });
+Booking.hasMany(Passenger, { foreignKey: 'ps_bkid', sourceKey: 'bk_bkid', as: 'passengers' });
 
 // Pnr associations
 Pnr.belongsTo(Booking, { 
