@@ -71,14 +71,17 @@
 }
 
 .bookings-table th {
-  background-color: #f8f9fa;
+  background-color: #2c3e50;
   padding: 15px 12px;
   text-align: left;
-  font-weight: 600;
-  color: #2c3e50;
-  border-bottom: 2px solid #dee2e6;
+  font-weight: 700;
+  color: #ffffff;
+  border-bottom: 3px solid #34495e;
   position: sticky;
   top: 0;
+  font-size: 15px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
 }
 
 .bookings-table td {
@@ -126,12 +129,40 @@
 }
 
 .status-badge {
-  padding: 4px 10px;
-  border-radius: 12px;
+  padding: 5px 12px;
+  border-radius: 14px;
   color: white;
   font-size: 12px;
-  font-weight: 600;
+  font-weight: 700;
   text-transform: uppercase;
+  letter-spacing: 0.5px;
+  display: inline-block;
+}
+
+/* Status Color Classes */
+.status-draft {
+  background-color: #95a5a6;
+  color: white;
+}
+
+.status-pending {
+  background-color: #f39c12;
+  color: white;
+}
+
+.status-confirmed {
+  background-color: #27ae60;
+  color: white;
+}
+
+.status-cancelled {
+  background-color: #e74c3c;
+  color: white;
+}
+
+.status-default {
+  background-color: #7f8c8d;
+  color: white;
 }
 
 .employee {
@@ -209,11 +240,27 @@
   text-decoration: underline;
   cursor: pointer;
   font-size: 14px;
-  font-weight: 500;
+  font-weight: 600;
+  transition: all 0.2s ease;
 }
 
 .passenger-link:hover {
   color: #2980b9;
+  text-decoration: none;
+  transform: scale(1.05);
+}
+
+.source .station-name,
+.destination .station-name {
+  font-weight: 600;
+  color: #2c3e50;
+  font-size: 14px;
+}
+
+.pnr {
+  font-weight: 600;
+  color: #27ae60;
+  font-size: 14px;
 }
 
 .passenger-table {

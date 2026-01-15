@@ -46,6 +46,8 @@ const paymentRoutes = require('./routes/paymentRoutes');
 const employeeRoutes = require('./routes/employeeRoutes');
 const employeeDashboardRoutes = require('./routes/employeeRoutes');
 const customerRoutes = require('./routes/customerRoutes');
+const masterPassengerRoutes = require('./routes/masterPassengerRoutes');
+const masterPassengerListRoutes = require('./routes/masterPassengerListRoutes');
 const auditRoutes = require('./routes/auditRoutes');
 const configRoutes = require('./routes/configRoutes');
 const notificationRoutes = require('./routes/notificationRoutes');
@@ -74,7 +76,10 @@ app.use('/api/bookings', bookingRoutes);
 app.use('/api/payments', paymentRoutes);
 app.use('/api/employees', employeeRoutes);
 app.use('/api/employee', employeeDashboardRoutes); // Employee dashboard routes
-app.use('/api/customers', customerRoutes);
+// Customer portal routes - removed /api/customers to avoid conflicts
+// IMPORTANT: Register specific routes BEFORE general routes to avoid conflicts
+app.use('/api/customer/master-passengers', masterPassengerRoutes); // Master passenger routes (cmpXmasterpassenger)
+app.use('/api/customer/master-list', masterPassengerListRoutes); // Master passenger list routes (mlXmasterlist)
 app.use('/api/customer', customerRoutes); // Customer portal routes
 app.use('/api/audit', auditRoutes);
 app.use('/api/config', configRoutes);

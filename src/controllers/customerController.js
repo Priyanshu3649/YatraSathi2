@@ -112,12 +112,7 @@ const createBooking = async (req, res) => {
       });
     }
 
-    if (passengers.length > 6) {
-      return res.status(400).json({
-        success: false,
-        error: { code: 'VALIDATION_ERROR', message: 'Maximum 6 passengers allowed per booking' }
-      });
-    }
+// Removed passenger limit validation - customers can add unlimited passengers
 
     // Validate journey date
     const jDate = new Date(journeyDate);
@@ -264,9 +259,9 @@ const getCustomerBookings = async (req, res) => {
       whereClause.bk_status = status;
     }
 
-    // Import Passenger model to get passenger count
+    // Import models
     const models = require('../models');
-    const Passenger = models.Passenger;
+    const { Passenger, StationTVL: Station } = models;
     
     const bookings = await Booking.findAndCountAll({
       where: whereClause,
@@ -285,11 +280,37 @@ const getCustomerBookings = async (req, res) => {
         }
       });
       
+      // Get station names
+      let fromStationName = booking.bk_fromst || 'Unknown';
+      let toStationName = booking.bk_tost || 'Unknown';
+      
+      try {
+        const fromStation = await Station.findByPk(booking.bk_fromst);
+        if (fromStation) {
+          fromStationName = fromStation.st_stname || fromStation.st_stcode || booking.bk_fromst;
+        }
+        
+        const toStation = await Station.findByPk(booking.bk_tost);
+        if (toStation) {
+          toStationName = toStation.st_stname || toStation.st_stcode || booking.bk_tost;
+        }
+      } catch (stationError) {
+        console.warn('Error fetching station names:', stationError.message);
+        // Fall back to station codes if station lookup fails
+      }
+      
       return {
         ...booking.toJSON(),
-        bk_pax: passengerCount  // Override with actual passenger count from passenger table
+        bk_pax: passengerCount,  // Override with actual passenger count from passenger table
+        bk_from: fromStationName,  // Add full from station name
+        bk_to: toStationName,      // Add full to station name
+        bk_fromst: booking.bk_fromst, // Keep original station code
+        bk_tost: booking.bk_tost      // Keep original station code
       };
     }));
+    
+    // Debug log to see what we're sending
+    console.log('Sending transformed bookings:', JSON.stringify(transformedBookings[0], null, 2));
     
     res.json({
       success: true,

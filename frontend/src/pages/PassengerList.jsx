@@ -29,13 +29,16 @@ const PassengerList = () => {
     ps_birth_preference: ''
   });
 
-  // Mock data for demonstration
+  // Mock data for demonstration - improved with more realistic data
   const mockPassengers = [
     { ps_passengerid: 'PSG001', ps_name: 'RAJESH KUMAR', ps_age: 32, ps_gender: 'MALE', ps_nationality: 'INDIAN', ps_address: '123 MG ROAD, NEW DELHI', ps_phone: '9876543210', ps_email: 'rajesh@example.com', bk_bookingid: 'BK123456789', ps_birth_preference: 'UPPER', ps_enteredon: '2024-01-15', ps_enteredby: 'ADMIN001', ps_modifiedon: '', ps_modifiedby: '', ps_closedon: '', ps_closedby: '' },
     { ps_passengerid: 'PSG002', ps_name: 'PRIYA SHARMA', ps_age: 28, ps_gender: 'FEMALE', ps_nationality: 'INDIAN', ps_address: '456 CONNAUGHT PLACE, NEW DELHI', ps_phone: '9876543211', ps_email: 'priya@example.com', bk_bookingid: 'BK123456790', ps_birth_preference: 'LOWER', ps_enteredon: '2024-01-16', ps_enteredby: 'ADMIN001', ps_modifiedon: '', ps_modifiedby: '', ps_closedon: '', ps_closedby: '' },
     { ps_passengerid: 'PSG003', ps_name: 'VIKRAM SINGH', ps_age: 45, ps_gender: 'MALE', ps_nationality: 'INDIAN', ps_address: '789 JANPATH, NEW DELHI', ps_phone: '9876543212', ps_email: 'vikram@example.com', bk_bookingid: 'BK123456791', ps_birth_preference: 'MIDDLE', ps_enteredon: '2024-01-17', ps_enteredby: 'ADMIN002', ps_modifiedon: '2024-01-18', ps_modifiedby: 'ADMIN001', ps_closedon: '', ps_closedby: '' },
     { ps_passengerid: 'PSG004', ps_name: 'SUNITA DEVI', ps_age: 52, ps_gender: 'FEMALE', ps_nationality: 'INDIAN', ps_address: '321 OLD RAJENDRA NAGAR, NEW DELHI', ps_phone: '9876543213', ps_email: 'sunita@example.com', bk_bookingid: 'BK123456792', ps_birth_preference: 'SIDE UPPER', ps_enteredon: '2024-01-18', ps_enteredby: 'ADMIN002', ps_modifiedon: '', ps_modifiedby: '', ps_closedon: '', ps_closedby: '' },
     { ps_passengerid: 'PSG005', ps_name: 'ARJUN MEHTA', ps_age: 35, ps_gender: 'MALE', ps_nationality: 'INDIAN', ps_address: '654 GREATER KAILASH, NEW DELHI', ps_phone: '9876543214', ps_email: 'arjun@example.com', bk_bookingid: 'BK123456793', ps_birth_preference: 'SIDE LOWER', ps_enteredon: '2024-01-19', ps_enteredby: 'ADMIN001', ps_modifiedon: '', ps_modifiedby: '', ps_closedon: '', ps_closedby: '' },
+    { ps_passengerid: 'PSG006', ps_name: 'MEERA PATEL', ps_age: 29, ps_gender: 'FEMALE', ps_nationality: 'INDIAN', ps_address: '987 MALVIYA NAGAR, NEW DELHI', ps_phone: '9876543215', ps_email: 'meera@example.com', bk_bookingid: 'BK123456794', ps_birth_preference: 'LOWER', ps_enteredon: '2024-01-20', ps_enteredby: 'ADMIN003', ps_modifiedon: '', ps_modifiedby: '', ps_closedon: '', ps_closedby: '' },
+    { ps_passengerid: 'PSG007', ps_name: 'AMIT JOSHI', ps_age: 41, ps_gender: 'MALE', ps_nationality: 'INDIAN', ps_address: '321 SOUTH EXTENSION, NEW DELHI', ps_phone: '9876543216', ps_email: 'amit@example.com', bk_bookingid: 'BK123456795', ps_birth_preference: 'UPPER', ps_enteredon: '2024-01-21', ps_enteredby: 'ADMIN001', ps_modifiedon: '2024-01-22', ps_modifiedby: 'ADMIN002', ps_closedon: '', ps_closedby: '' },
+    { ps_passengerid: 'PSG008', ps_name: 'NEHA GUPTA', ps_age: 26, ps_gender: 'FEMALE', ps_nationality: 'INDIAN', ps_address: '654 DEFENCE COLONY, NEW DELHI', ps_phone: '9876543217', ps_email: 'neha@example.com', bk_bookingid: 'BK123456796', ps_birth_preference: 'MIDDLE', ps_enteredon: '2024-01-22', ps_enteredby: 'ADMIN003', ps_modifiedon: '', ps_modifiedby: '', ps_closedon: '', ps_closedby: '' },
   ];
 
   useEffect(() => {
@@ -378,14 +381,14 @@ const PassengerList = () => {
             <table className="erp-table">
               <thead>
                 <tr>
-                  <th>Passenger ID</th>
-                  <th>Name</th>
-                  <th>Age</th>
-                  <th>Gender</th>
-                  <th>Nationality</th>
-                  <th>Booking ID</th>
-                  <th>Birth Pref</th>
-                  <th>Phone</th>
+                  <th style={{ minWidth: '100px' }}>Passenger ID</th>
+                  <th style={{ minWidth: '150px' }}>Name</th>
+                  <th style={{ minWidth: '60px' }}>Age</th>
+                  <th style={{ minWidth: '80px' }}>Gender</th>
+                  <th style={{ minWidth: '100px' }}>Nationality</th>
+                  <th style={{ minWidth: '120px' }}>Booking ID</th>
+                  <th style={{ minWidth: '100px' }}>Birth Pref</th>
+                  <th style={{ minWidth: '120px' }}>Phone</th>
                 </tr>
               </thead>
               <tbody>
@@ -394,15 +397,40 @@ const PassengerList = () => {
                     key={index} 
                     className={selectedPassenger?.ps_passengerid === passenger.ps_passengerid ? 'selected' : ''}
                     onClick={() => setSelectedPassenger(passenger)}
+                    style={{ cursor: 'pointer', transition: 'background-color 0.2s' }}
                   >
-                    <td>{passenger.ps_passengerid}</td>
-                    <td>{passenger.ps_name}</td>
-                    <td>{passenger.ps_age}</td>
-                    <td>{passenger.ps_gender}</td>
+                    <td style={{ fontWeight: 'bold', color: '#2c3e50' }}>{passenger.ps_passengerid}</td>
+                    <td style={{ color: '#34495e' }}>{passenger.ps_name}</td>
+                    <td style={{ textAlign: 'center' }}>{passenger.ps_age}</td>
+                    <td style={{ textAlign: 'center' }}>
+                      <span style={{
+                        backgroundColor: passenger.ps_gender === 'MALE' ? '#3498db' : passenger.ps_gender === 'FEMALE' ? '#e91e63' : '#95a5a6',
+                        color: 'white',
+                        padding: '2px 8px',
+                        borderRadius: '12px',
+                        fontSize: '12px',
+                        fontWeight: '500'
+                      }}>
+                        {passenger.ps_gender}
+                      </span>
+                    </td>
                     <td>{passenger.ps_nationality}</td>
-                    <td>{passenger.bk_bookingid}</td>
-                    <td>{passenger.ps_birth_preference}</td>
-                    <td>{passenger.ps_phone}</td>
+                    <td style={{ fontFamily: 'monospace', color: '#2980b9' }}>{passenger.bk_bookingid}</td>
+                    <td style={{ textAlign: 'center' }}>
+                      {passenger.ps_birth_preference && (
+                        <span style={{
+                          backgroundColor: '#f39c12',
+                          color: 'white',
+                          padding: '2px 6px',
+                          borderRadius: '8px',
+                          fontSize: '11px',
+                          fontWeight: '500'
+                        }}>
+                          {passenger.ps_birth_preference}
+                        </span>
+                      )}
+                    </td>
+                    <td style={{ fontFamily: 'monospace' }}>{passenger.ps_phone}</td>
                   </tr>
                 ))}
               </tbody>

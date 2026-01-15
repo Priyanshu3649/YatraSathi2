@@ -34,6 +34,10 @@ router.use((req, res, next) => {
 // Customer dashboard
 router.get('/dashboard', getCustomerDashboard);
 
+// Bill and payment management (must be before parameterized routes)
+router.get('/bills', getCustomerBills);
+router.get('/payments', getCustomerPayments);
+
 // Customer management
 router.get('/', getAllCustomers);
 router.get('/search', searchCustomers);
@@ -45,9 +49,5 @@ router.get('/bookings', getCustomerBookings);
 router.get('/bookings/:bookingId', getBookingDetails);
 router.get('/bookings/:bookingId/passengers', getBookingPassengers);
 router.put('/bookings/:bookingId/cancel', cancelBooking);
-
-// Bill and payment management
-router.get('/bills', getCustomerBills);
-router.get('/payments', getCustomerPayments);
 
 module.exports = router;

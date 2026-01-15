@@ -49,7 +49,7 @@ const Login = () => {
           us_fname: data.data.user.name,
           us_email: data.data.user.email,
           us_usertype: data.data.user.us_usertype,
-          us_roid: data.data.user.role,
+          us_roid: data.data.user.role || data.data.user.roleId,
           department: data.data.user.department
         };
         

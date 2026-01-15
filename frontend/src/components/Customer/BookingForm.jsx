@@ -53,12 +53,10 @@ const BookingForm = () => {
   };
 
   const addPassenger = () => {
-    if (formData.passengers.length < 6) {
-      setFormData(prev => ({
-        ...prev,
-        passengers: [...prev.passengers, { name: '', age: '', gender: 'M', berthPreference: 'NO_PREF' }]
-      }));
-    }
+    setFormData(prev => ({
+      ...prev,
+      passengers: [...prev.passengers, { name: '', age: '', gender: 'M', berthPreference: 'NO_PREF' }]
+    }));
   };
 
 
@@ -178,37 +176,37 @@ const BookingForm = () => {
 
   const renderStep1 = () => (
     <div className="booking-step">
-      <h3>Journey Details</h3>
+      <h2 className="journey-heading">Journey Details</h2>
       
-      <div className="form-row two-cols">
-        <div className="form-group">
-          <label>From Station</label>
+      <div className="journey-form-grid">
+        <div className="form-group full-width">
+          <label>From Station *</label>
           <input
             type="text"
             name="from"
             value={formData.from}
             onChange={handleInputChange}
-            placeholder="Enter departure station"
+            placeholder="Enter departure station (e.g., New Delhi, Mumbai Central)"
             required
+            className="wide-input"
           />
         </div>
                 
-        <div className="form-group">
-          <label>To Station</label>
+        <div className="form-group full-width">
+          <label>To Station *</label>
           <input
             type="text"
             name="to"
             value={formData.to}
             onChange={handleInputChange}
-            placeholder="Enter destination station"
+            placeholder="Enter destination station (e.g., Chennai Central, Bangalore City)"
             required
+            className="wide-input"
           />
         </div>
-      </div>
       
-      <div className="form-row two-cols">
-        <div className="form-group">
-          <label>Journey Date</label>
+        <div className="form-group full-width">
+          <label>Journey Date *</label>
           <input
             type="date"
             name="journeyDate"
@@ -216,15 +214,17 @@ const BookingForm = () => {
             onChange={handleInputChange}
             min={new Date(new Date().setDate(new Date().getDate() + 1)).toISOString().split('T')[0]}
             required
+            className="wide-input"
           />
         </div>
       
-        <div className="form-group">
-          <label>Class</label>
+        <div className="form-group full-width">
+          <label>Class *</label>
           <select
             name="trainClass"
             value={formData.trainClass}
             onChange={handleInputChange}
+            className="wide-input"
           >
             {trainClasses.map(cls => (
               <option key={cls.value} value={cls.value}>
@@ -233,11 +233,9 @@ const BookingForm = () => {
             ))}
           </select>
         </div>
-      </div>
       
-      <div className="form-row">
-        <div className="form-group">
-          <label>Train Preferences</label>
+        <div className="form-group full-width">
+          <label>Train Preferences (Optional)</label>
           <input
             type="text"
             name="trainPreferences"
@@ -249,9 +247,10 @@ const BookingForm = () => {
                 trainPreferences: preferences
               }));
             }}
-            placeholder="Enter train numbers separated by commas"
+            placeholder="Enter train numbers separated by commas (e.g., 12345, 67890, 11223)"
+            className="wide-input"
           />
-          <small className="form-help-text">Enter multiple train numbers separated by commas (e.g., 12345, 67890, 11223)</small>
+          <small className="form-help-text">Enter multiple train numbers separated by commas</small>
         </div>
       </div>
       
@@ -265,20 +264,24 @@ const BookingForm = () => {
       {formData.passengers.map((passenger, index) => (
         <div key={index} className="passenger-card">
           <div className="passenger-header">
-            <h4>Passenger {index + 1}</h4>
+            <div className="passenger-title">
+              <h4>Passenger {index + 1}</h4>
+            </div>
             {formData.passengers.length > 1 && (
               <button
                 type="button"
                 onClick={() => removePassenger(index)}
                 className="remove-passenger"
+                title="Remove Passenger"
               >
                 <i className="fas fa-times"></i>
+                Remove
               </button>
             )}
           </div>
           
-          <div className="form-row four-cols">
-            <div className="form-group">
+          <div className="passenger-details-grid">
+            <div className="passenger-field">
               <label>Full Name</label>
               <input
                 type="text"
@@ -289,7 +292,7 @@ const BookingForm = () => {
               />
             </div>
             
-            <div className="form-group">
+            <div className="passenger-field">
               <label>Age</label>
               <input
                 type="number"
@@ -302,7 +305,7 @@ const BookingForm = () => {
               />
             </div>
             
-            <div className="form-group">
+            <div className="passenger-field">
               <label>Gender</label>
               <select
                 value={passenger.gender}
@@ -314,7 +317,7 @@ const BookingForm = () => {
               </select>
             </div>
             
-            <div className="form-group">
+            <div className="passenger-field">
               <label>Berth Preference</label>
               <select
                 value={passenger.berthPreference}
@@ -331,16 +334,16 @@ const BookingForm = () => {
         </div>
       ))}
       
-      {formData.passengers.length < 6 && (
+      <div className="passenger-actions">
         <button
           type="button"
           onClick={addPassenger}
           className="add-passenger"
         >
           <i className="fas fa-plus"></i>
-          Add Passenger
+          Add Another Passenger
         </button>
-      )}
+      </div>
     </div>
   );
 

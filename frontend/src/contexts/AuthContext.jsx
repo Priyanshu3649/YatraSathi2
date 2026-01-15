@@ -18,22 +18,32 @@ export const AuthProvider = ({ children }) => {
       if (token) {
         try {
           const profile = await authAPI.getProfile();
+          console.log('Profile data received:', profile);
+          
           // Create user object with the correct field names
+          // Handle the actual API response structure from getUserProfile
           const userObject = {
-            us_usid: profile.id,
-            us_fname: profile.name,
-            us_email: profile.email,
-            us_usertype: profile.us_usertype, // Use the correct field name from backend
-            us_roid: profile.role, // Include the role ID for role-based access control
+            us_usid: profile.id || profile.us_usid,
+            us_fname: profile.name || profile.us_fname || '',
+            us_lname: '', // Profile API doesn't return lastName
+            us_email: profile.email || profile.us_email,
+            us_usertype: profile.us_usertype || 'customer',
+            us_roid: profile.role || 'CUS', // Use role field from profile API
+            us_coid: 'TRV', // Default company ID
+            us_phone: '', // Profile API doesn't return phone
+            us_active: 1 // Default to active
           };
+          
+          console.log('User object created:', userObject);
           setUser(userObject);
           setIsAuthenticated(true);
         } catch (error) {
+          console.error('Token validation failed:', error);
           // Token is invalid, remove it and reset auth state
           localStorage.removeItem('token');
+          localStorage.removeItem('sessionId');
           setUser(null);
           setIsAuthenticated(false);
-          console.error('Token validation failed:', error);
         }
       } else {
         // No token found, ensure clean state
@@ -50,7 +60,12 @@ export const AuthProvider = ({ children }) => {
   // Login function
   const login = (token, userData) => {
     localStorage.setItem('token', token);
-    setUser(userData);
+    // Ensure us_roid is set properly for role-based routing
+    const userWithRole = {
+      ...userData,
+      us_roid: userData.us_roid || userData.role || 'CUS' // Default to CUS for customers
+    };
+    setUser(userWithRole);
     setIsAuthenticated(true);
   };
 

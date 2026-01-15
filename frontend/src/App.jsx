@@ -50,6 +50,10 @@ import BillsPayments from './pages/BillsPayments';
 import CustomerProfile from './pages/CustomerProfile';
 import CustomerBookingDetails from './pages/CustomerBookingDetails';
 
+// Import customer components
+import MasterPassengerList from './components/Customer/MasterPassengerList';
+import MasterPassengerListML from './components/Customer/MasterPassengerListML';
+
 function App() {
   const UnauthorizedPage = () => {
     return (
@@ -188,6 +192,8 @@ function App() {
                     <Route path="/customer/bookings" element={<RoleBasedRoute requiredRole="CUS"><MyBookings /></RoleBasedRoute>} />
                     <Route path="/customer/bookings/:bookingId" element={<RoleBasedRoute requiredRole="CUS"><CustomerBookingDetails /></RoleBasedRoute>} />
                     <Route path="/customer/bills-payments" element={<RoleBasedRoute requiredRole="CUS"><BillsPayments /></RoleBasedRoute>} />
+                    <Route path="/customer/master-passengers" element={<RoleBasedRoute requiredRole="CUS"><MasterPassengerList /></RoleBasedRoute>} />
+                    <Route path="/customer/master-list" element={<RoleBasedRoute requiredRole="CUS"><MasterPassengerListML /></RoleBasedRoute>} />
                     <Route path="/customer/profile" element={<RoleBasedRoute requiredRole="CUS"><CustomerProfile /></RoleBasedRoute>} />
                   </Routes>
                 </main>

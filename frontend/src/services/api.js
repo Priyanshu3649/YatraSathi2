@@ -781,7 +781,7 @@ export const paymentAPI = {
 
   // Search customers for dropdown
   searchCustomers: async (searchTerm) => {
-    const response = await fetch(`${API_BASE_URL}/customers/search?q=${encodeURIComponent(searchTerm)}`, {
+    const response = await fetch(`${API_BASE_URL}/customer/search?q=${encodeURIComponent(searchTerm)}`, {
       method: 'GET',
       headers: getHeaders(true)
     });
@@ -797,7 +797,7 @@ export const paymentAPI = {
 
   // Get customer by ID
   getCustomerById: async (customerId) => {
-    const response = await fetch(`${API_BASE_URL}/customers/${customerId}`, {
+    const response = await fetch(`${API_BASE_URL}/customer/${customerId}`, {
       method: 'GET',
       headers: getHeaders(true)
     });
@@ -1204,7 +1204,7 @@ export const billingAPI = {
 export const customerAPI = {
   // Search customers (accessible to admin and employees)
   searchCustomers: async (searchTerm) => {
-    const response = await fetch(`${API_BASE_URL}/search/customers?q=${encodeURIComponent(searchTerm)}`, {
+    const response = await fetch(`${API_BASE_URL}/customer/search?q=${encodeURIComponent(searchTerm)}`, {
       method: 'GET',
       headers: getHeaders(true)
     });
@@ -1220,7 +1220,7 @@ export const customerAPI = {
   
   // Get customer by ID
   getCustomerById: async (customerId) => {
-    const response = await fetch(`${API_BASE_URL}/customers/${customerId}`, {
+    const response = await fetch(`${API_BASE_URL}/customer/${customerId}`, {
       method: 'GET',
       headers: getHeaders(true)
     });
@@ -1235,6 +1235,331 @@ export const customerAPI = {
   }
 };
 
+// Master Passenger API calls
+export const masterPassengerAPI = {
+  // Functions for cmpXmasterpassenger table
+
+  // Get all master passengers for current customer
+  getMasterPassengers: async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/customer/master-passengers`, {
+        method: 'GET',
+        headers: getHeaders(true)
+      });
+      
+      const data = await response.json();
+      
+      if (!response.ok) {
+        // Handle different error statuses
+        if (response.status === 401) {
+          // Unauthorized - likely token issue
+          throw new Error(data.message || 'Authentication required. Please log in again.');
+        } else if (response.status === 403) {
+          // Forbidden - access denied
+          throw new Error(data.message || 'Access forbidden. Insufficient permissions.');
+        } else if (response.status === 404) {
+          // Not found - likely endpoint doesn't exist
+          throw new Error(data.message || 'Master passengers endpoint not found. Please contact support.');
+        } else {
+          // Other error
+          throw new Error(data.message || `Failed to get master passengers (${response.status}). Please try again.`);
+        }
+      }
+      
+      return data;
+    } catch (error) {
+      // Handle network errors or other exceptions
+      if (error.name === 'TypeError' && error.message.includes('fetch')) {
+        throw new Error('Network error: Unable to connect to the server. Please check your connection and try again.');
+      }
+      throw error;
+    }
+  },
+  
+  // Create a new master passenger
+  createMasterPassenger: async (passengerData) => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/customer/master-passengers`, {
+        method: 'POST',
+        headers: getHeaders(true),
+        body: JSON.stringify(passengerData)
+      });
+      
+      const data = await response.json();
+      
+      if (!response.ok) {
+        if (response.status === 401) {
+          throw new Error(data.message || 'Authentication required. Please log in again.');
+        } else if (response.status === 403) {
+          throw new Error(data.message || 'Access forbidden. Insufficient permissions.');
+        } else if (response.status === 400) {
+          throw new Error(data.message || 'Invalid data provided. Please check your inputs.');
+        } else {
+          throw new Error(data.message || `Failed to create master passenger (${response.status}). Please try again.`);
+        }
+      }
+      
+      return data;
+    } catch (error) {
+      if (error.name === 'TypeError' && error.message.includes('fetch')) {
+        throw new Error('Network error: Unable to connect to the server. Please check your connection and try again.');
+      }
+      throw error;
+    }
+  },
+  
+  // Get master passenger by ID
+  getMasterPassengerById: async (passengerId) => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/customer/master-passengers/${passengerId}`, {
+        method: 'GET',
+        headers: getHeaders(true)
+      });
+      
+      const data = await response.json();
+      
+      if (!response.ok) {
+        if (response.status === 401) {
+          throw new Error(data.message || 'Authentication required. Please log in again.');
+        } else if (response.status === 403) {
+          throw new Error(data.message || 'Access forbidden. Insufficient permissions.');
+        } else if (response.status === 404) {
+          throw new Error(data.message || 'Master passenger not found.');
+        } else {
+          throw new Error(data.message || `Failed to get master passenger (${response.status}). Please try again.`);
+        }
+      }
+      
+      return data;
+    } catch (error) {
+      if (error.name === 'TypeError' && error.message.includes('fetch')) {
+        throw new Error('Network error: Unable to connect to the server. Please check your connection and try again.');
+      }
+      throw error;
+    }
+  },
+  
+  // Update master passenger
+  updateMasterPassenger: async (passengerId, passengerData) => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/customer/master-passengers/${passengerId}`, {
+        method: 'PUT',
+        headers: getHeaders(true),
+        body: JSON.stringify(passengerData)
+      });
+      
+      const data = await response.json();
+      
+      if (!response.ok) {
+        if (response.status === 401) {
+          throw new Error(data.message || 'Authentication required. Please log in again.');
+        } else if (response.status === 403) {
+          throw new Error(data.message || 'Access forbidden. Insufficient permissions.');
+        } else if (response.status === 400) {
+          throw new Error(data.message || 'Invalid data provided. Please check your inputs.');
+        } else if (response.status === 404) {
+          throw new Error(data.message || 'Master passenger not found.');
+        } else {
+          throw new Error(data.message || `Failed to update master passenger (${response.status}). Please try again.`);
+        }
+      }
+      
+      return data;
+    } catch (error) {
+      if (error.name === 'TypeError' && error.message.includes('fetch')) {
+        throw new Error('Network error: Unable to connect to the server. Please check your connection and try again.');
+      }
+      throw error;
+    }
+  },
+  
+  // Delete (deactivate) master passenger
+  deleteMasterPassenger: async (passengerId) => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/customer/master-passengers/${passengerId}`, {
+        method: 'DELETE',
+        headers: getHeaders(true)
+      });
+      
+      const data = await response.json();
+      
+      if (!response.ok) {
+        if (response.status === 401) {
+          throw new Error(data.message || 'Authentication required. Please log in again.');
+        } else if (response.status === 403) {
+          throw new Error(data.message || 'Access forbidden. Insufficient permissions.');
+        } else if (response.status === 404) {
+          throw new Error(data.message || 'Master passenger not found.');
+        } else {
+          throw new Error(data.message || `Failed to delete master passenger (${response.status}). Please try again.`);
+        }
+      }
+      
+      return data;
+    } catch (error) {
+      if (error.name === 'TypeError' && error.message.includes('fetch')) {
+        throw new Error('Network error: Unable to connect to the server. Please check your connection and try again.');
+      }
+      throw error;
+    }
+  },
+  
+  // Functions for mlXmasterlist table
+  getMasterPassengersML: async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/customer/master-list`, {
+        method: 'GET',
+        headers: getHeaders(true)
+      });
+      
+      const data = await response.json();
+      
+      if (!response.ok) {
+        if (response.status === 401) {
+          throw new Error(data.message || 'Authentication required. Please log in again.');
+        } else if (response.status === 403) {
+          throw new Error(data.message || 'Access forbidden. Insufficient permissions.');
+        } else if (response.status === 404) {
+          throw new Error(data.message || 'Master passengers endpoint not found. Please contact support.');
+        } else {
+          throw new Error(data.message || `Failed to get master passengers (${response.status}). Please try again.`);
+        }
+      }
+      
+      return data;
+    } catch (error) {
+      if (error.name === 'TypeError' && error.message.includes('fetch')) {
+        throw new Error('Network error: Unable to connect to the server. Please check your connection and try again.');
+      }
+      throw error;
+    }
+  },
+  
+  createMasterPassengerML: async (passengerData) => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/customer/master-list`, {
+        method: 'POST',
+        headers: getHeaders(true),
+        body: JSON.stringify(passengerData)
+      });
+      
+      const data = await response.json();
+      
+      if (!response.ok) {
+        if (response.status === 401) {
+          throw new Error(data.message || 'Authentication required. Please log in again.');
+        } else if (response.status === 403) {
+          throw new Error(data.message || 'Access forbidden. Insufficient permissions.');
+        } else if (response.status === 400) {
+          throw new Error(data.message || 'Invalid data provided. Please check your inputs.');
+        } else {
+          throw new Error(data.message || `Failed to create master passenger (${response.status}). Please try again.`);
+        }
+      }
+      
+      return data;
+    } catch (error) {
+      if (error.name === 'TypeError' && error.message.includes('fetch')) {
+        throw new Error('Network error: Unable to connect to the server. Please check your connection and try again.');
+      }
+      throw error;
+    }
+  },
+  
+  getMasterPassengerByIdML: async (passengerId) => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/customer/master-list/${passengerId}`, {
+        method: 'GET',
+        headers: getHeaders(true)
+      });
+      
+      const data = await response.json();
+      
+      if (!response.ok) {
+        if (response.status === 401) {
+          throw new Error(data.message || 'Authentication required. Please log in again.');
+        } else if (response.status === 403) {
+          throw new Error(data.message || 'Access forbidden. Insufficient permissions.');
+        } else if (response.status === 404) {
+          throw new Error(data.message || 'Master passenger not found.');
+        } else {
+          throw new Error(data.message || `Failed to get master passenger (${response.status}). Please try again.`);
+        }
+      }
+      
+      return data;
+    } catch (error) {
+      if (error.name === 'TypeError' && error.message.includes('fetch')) {
+        throw new Error('Network error: Unable to connect to the server. Please check your connection and try again.');
+      }
+      throw error;
+    }
+  },
+  
+  updateMasterPassengerML: async (passengerId, passengerData) => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/customer/master-list/${passengerId}`, {
+        method: 'PUT',
+        headers: getHeaders(true),
+        body: JSON.stringify(passengerData)
+      });
+      
+      const data = await response.json();
+      
+      if (!response.ok) {
+        if (response.status === 401) {
+          throw new Error(data.message || 'Authentication required. Please log in again.');
+        } else if (response.status === 403) {
+          throw new Error(data.message || 'Access forbidden. Insufficient permissions.');
+        } else if (response.status === 400) {
+          throw new Error(data.message || 'Invalid data provided. Please check your inputs.');
+        } else if (response.status === 404) {
+          throw new Error(data.message || 'Master passenger not found.');
+        } else {
+          throw new Error(data.message || `Failed to update master passenger (${response.status}). Please try again.`);
+        }
+      }
+      
+      return data;
+    } catch (error) {
+      if (error.name === 'TypeError' && error.message.includes('fetch')) {
+        throw new Error('Network error: Unable to connect to the server. Please check your connection and try again.');
+      }
+      throw error;
+    }
+  },
+  
+  deleteMasterPassengerML: async (passengerId) => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/customer/master-list/${passengerId}`, {
+        method: 'DELETE',
+        headers: getHeaders(true)
+      });
+      
+      const data = await response.json();
+      
+      if (!response.ok) {
+        if (response.status === 401) {
+          throw new Error(data.message || 'Authentication required. Please log in again.');
+        } else if (response.status === 403) {
+          throw new Error(data.message || 'Access forbidden. Insufficient permissions.');
+        } else if (response.status === 404) {
+          throw new Error(data.message || 'Master passenger not found.');
+        } else {
+          throw new Error(data.message || `Failed to delete master passenger (${response.status}). Please try again.`);
+        }
+      }
+      
+      return data;
+    } catch (error) {
+      if (error.name === 'TypeError' && error.message.includes('fetch')) {
+        throw new Error('Network error: Unable to connect to the server. Please check your connection and try again.');
+      }
+      throw error;
+    }
+  }
+};
+
 export default {
   authAPI,
   dashboardAPI,
@@ -1243,5 +1568,6 @@ export default {
   reportAPI,
   employeeAPI,
   billingAPI,
-  customerAPI
+  customerAPI,
+  masterPassengerAPI
 };

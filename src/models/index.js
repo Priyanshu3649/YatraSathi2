@@ -42,6 +42,8 @@ const YearEndClosing = require('./YearEndClosing');
 const YearEndClosingTVL = require('./YearEndClosingTVL');
 const BillTVL = require('./BillTVL');
 const PassengerTVL = require('./PassengerTVL');
+const MasterPassengerList = require('./MasterPassengerList');
+const CustomerMasterPassenger = require('./CustomerMasterPassenger');
 
 // Set up associations
 // Company associations
@@ -237,5 +239,7 @@ module.exports = {
   CustomerAdvanceTVL,
   YearEndClosing,
   YearEndClosingTVL,
-  PassengerTVL
+  PassengerTVL,
+  MasterPassengerList,
+  CustomerMasterPassenger
 };

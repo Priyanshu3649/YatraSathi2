@@ -120,6 +120,27 @@ const Bookings = () => {
     }
   };
   
+  // Fetch customer ID by name
+  const fetchCustomerIdByName = async (customerName) => {
+    try {
+      const customers = await customerAPI.searchCustomers(customerName);
+      const customer = Array.isArray(customers?.data) && customers.data.find(c => 
+        (c.name && c.name.toLowerCase().includes(customerName.toLowerCase())) ||
+        (c.customerName && c.customerName.toLowerCase().includes(customerName.toLowerCase())) ||
+        (c.cu_name && c.cu_name.toLowerCase().includes(customerName.toLowerCase())) ||
+        (c.cu_custname && c.cu_custname.toLowerCase().includes(customerName.toLowerCase()))
+      );
+      if (customer) {
+        setFormData(prev => ({
+          ...prev,
+          customerId: customer.id || customer.cu_usid || customer.customerId || customer.cu_custno || ''
+        }));
+      }
+    } catch (error) {
+      console.error('Error searching customers by name:', error);
+    }
+  };
+  
   // Fetch bookings when component mounts
   useEffect(() => {
     fetchBookings();
@@ -133,11 +154,16 @@ const Bookings = () => {
       if (user && user.us_usertype === 'admin') {
         data = await bookingAPI.getAllBookings();
       } else {
-        data = await bookingAPI.getMyBookings();
+        const response = await bookingAPI.getMyBookings();
+        // Handle the wrapped response structure for customer bookings
+        data = response.success ? response.data.bookings : [];
       }
       
-      setBookings(data);
-      setFilteredBookings(data);
+      // Ensure data is always an array
+      const bookingsArray = Array.isArray(data) ? data : [];
+      
+      setBookings(bookingsArray);
+      setFilteredBookings(bookingsArray);
       setError('');
     } catch (err) {
       setError(err.message || 'Failed to fetch bookings');
@@ -174,6 +200,11 @@ const Bookings = () => {
         customerName: value ? '' : prev.customerName // Clear customer name if ID is being entered
       }));
       
+      // Fetch customer name by ID if a valid ID is entered
+      if (value.trim().length > 0) {
+        fetchCustomerNameById(value);
+      }
+      
       // Fetch customer suggestions if search term is long enough
       if (value.trim().length >= 1) { // Changed from 3 to 1 to allow single character search
         debouncedCustomerSearch(value.trim());
@@ -189,6 +220,11 @@ const Bookings = () => {
         customerName: value,
         customerId: value ? '' : prev.customerId // Clear customer ID if name is being entered
       }));
+      
+      // Fetch customer ID by name if a valid name is entered
+      if (value.trim().length > 0) {
+        fetchCustomerIdByName(value);
+      }
       
       // Fetch customer suggestions if search term is long enough
       if (value.trim().length >= 1) { // Changed from 3 to 1 to allow single character search

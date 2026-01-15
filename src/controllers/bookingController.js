@@ -83,16 +83,16 @@ const createBooking = async (req, res) => {
 // Get all bookings for a customer
 const getCustomerBookings = async (req, res) => {
   try {
-    // Import Passenger model
+    // Import models
     const models = require('../models');
-    const Passenger = models.Passenger;
+    const { Passenger, StationTVL: Station } = models;
     
     const bookings = await BookingTVL.findAll({ 
       where: { bk_usid: req.user.us_usid },
       order: [['bk_reqdt', 'DESC']]
     });
     
-    // Transform data to match frontend expectations
+    // Transform data to match frontend expectations and get actual passenger counts
     const transformedBookings = await Promise.all(bookings.map(async (booking) => {
       // Get passenger count for this booking
       const passengerCount = await Passenger.count({
@@ -102,10 +102,31 @@ const getCustomerBookings = async (req, res) => {
         }
       });
       
+      // Get station names
+      let fromStationName = booking.bk_fromst || 'Unknown';
+      let toStationName = booking.bk_tost || 'Unknown';
+      
+      try {
+        const fromStation = await Station.findByPk(booking.bk_fromst);
+        if (fromStation) {
+          fromStationName = fromStation.st_stname || fromStation.st_stcode || booking.bk_fromst;
+        }
+        
+        const toStation = await Station.findByPk(booking.bk_tost);
+        if (toStation) {
+          toStationName = toStation.st_stname || toStation.st_stcode || booking.bk_tost;
+        }
+      } catch (stationError) {
+        console.warn('Error fetching station names:', stationError.message);
+        // Fall back to station codes if station lookup fails
+      }
+      
       return {
         ...booking.toJSON(),
-        bk_fromstation: booking.bk_fromst,
-        bk_tostation: booking.bk_tost,
+        bk_from: fromStationName,        // Add full from station name
+        bk_to: toStationName,            // Add full to station name
+        bk_fromst: booking.bk_fromst,    // Keep original station code
+        bk_tost: booking.bk_tost,        // Keep original station code
         bk_travelldate: booking.bk_trvldt,
         bk_travelclass: booking.bk_class,
         bk_pax: passengerCount  // Override with actual passenger count from passenger table
@@ -114,6 +135,7 @@ const getCustomerBookings = async (req, res) => {
     
     res.json({ success: true, data: { bookings: transformedBookings } });
   } catch (error) {
+    console.error('Get customer bookings error:', error);
     res.status(500).json({ 
       success: false, 
       error: { code: 'SERVER_ERROR', message: error.message } 

@@ -487,6 +487,11 @@ const Payments = () => {
       customerName: value ? '' : prev.customerName // Clear customer name if ID is being entered
     }));
     
+    // Fetch customer name by ID if a valid ID is entered
+    if (value.trim().length > 0) {
+      fetchCustomerNameById(value);
+    }
+    
     // Fetch customer suggestions if search term is long enough
     if (value.trim().length >= 1) { // Changed from 3 to 1 to allow single character search
       debouncedCustomerSearch(value.trim());
@@ -519,6 +524,11 @@ const Payments = () => {
       customerName: value,
       pt_custid: value ? '' : prev.pt_custid // Clear customer ID if name is being entered
     }));
+    
+    // Fetch customer ID by name if a valid name is entered
+    if (value.trim().length > 0) {
+      fetchCustomerIdByName(value);
+    }
     
     // Fetch customer suggestions if search term is long enough
     if (value.trim().length >= 1) { // Changed from 3 to 1 to allow single character search

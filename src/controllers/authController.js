@@ -321,8 +321,8 @@ const getUserProfile = async (req, res) => {
       name: user.us_fname,
       email: user.us_email,
       us_usertype: user.us_usertype,
-      // Include role information if available
-      role: user.role ? user.role.ro_name : null
+      // Include role information
+      role: user.us_roid || (user.role ? user.role.ro_name : null)
     });
   } catch (error) {
     console.error('Error in getUserProfile:', error);

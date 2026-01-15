@@ -19,8 +19,24 @@ const MyBookings = () => {
       // Use the bookingAPI service which calls /api/bookings/my-bookings
       const data = await bookingAPI.getMyBookings();
       
+      console.log('Fetched bookings data:', data); // Debug log
+      
       if (data.success) {
-        setBookings(data.data.bookings || []);
+        const bookingsData = data.data.bookings || [];
+        console.log('Bookings array:', bookingsData); // Debug log
+        
+        // Log first booking to see structure
+        if (bookingsData.length > 0) {
+          console.log('First booking structure:', bookingsData[0]);
+          console.log('Date fields:', {
+            bk_jdate: bookingsData[0].bk_jdate,
+            bk_trvldt: bookingsData[0].bk_trvldt,
+            bk_travelldate: bookingsData[0].bk_travelldate,
+            booking_travel_date: bookingsData[0].booking_travel_date
+          });
+        }
+        
+        setBookings(bookingsData);
       } else {
         setError(data.error?.message || 'Failed to load bookings');
       }
@@ -81,9 +97,16 @@ const MyBookings = () => {
   };
 
   const formatDate = (dateString) => {
-    if (!dateString) return '—';
+    if (!dateString || dateString === 'Invalid Date' || dateString === '') return '—';
     try {
-      return new Date(dateString).toLocaleDateString('en-IN');
+      const date = new Date(dateString);
+      // Check if date is valid
+      if (isNaN(date.getTime())) return '—';
+      return date.toLocaleDateString('en-IN', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric'
+      });
     } catch {
       return '—';
     }
@@ -209,76 +232,86 @@ const MyBookings = () => {
           <table className="bookings-table">
             <thead>
               <tr>
-                <th>Route</th>
-                <th>Journey Date</th>
+                <th>Source</th>
+                <th>Destination</th>
                 <th>Passengers</th>
-                <th>Status</th>
-                <th>Assigned Employee</th>
+                <th>Current Status</th>
+                <th>PNR</th>
                 <th>Actions</th>
               </tr>
             </thead>
             <tbody>
-              {bookings.map((booking, index) => (
-                <tr 
-                  key={booking.bk_bkid} 
-                  className={index % 2 === 0 ? 'even-row' : 'odd-row'}
-                >
-                  <td className="journey">
-                    <span className="from">{booking.bk_from}</span>
-                    <i className="arrow">→</i>
-                    <span className="to">{booking.bk_to}</span>
-                  </td>
-                  <td className="date">
-                    {formatDate(booking.bk_jdate)}
-                  </td>
-                  <td className="passengers">
-                    <button 
-                      onClick={() => openPassengerModal(booking.passengers, booking.bk_bkid)}
-                      className="passenger-link"
-                    >
-                      {booking.bk_pax} Passengers
-                    </button>
-                  </td>
-                  <td className="status">
-                    <span 
-                      className="status-badge"
-                      style={{ backgroundColor: getStatusColor(booking.bk_status) }}
-                    >
-                      {getStatusLabel(booking.bk_status)}
-                    </span>
-                  </td>
-                  <td className="employee">
-                    {booking.assignedEmployee || '—'}
-                  </td>
-                  <td className="actions">
-                    <button 
-                      onClick={() => handleViewDetails(booking.bk_bkid)}
-                      className="btn-sm btn-outline"
-                    >
-                      View Details
-                    </button>
-                    {(booking.bk_status !== 'CONFIRMED' && booking.bk_status !== 'CANCELLED' && booking.bk_status !== 'CLOSED') && (
+              {bookings.map((booking, index) => {
+                // Determine status color
+                const statusClass = 
+                  booking.bk_status === 'DRAFT' ? 'status-draft' :
+                  booking.bk_status === 'PENDING' || booking.bk_status === 'REQUESTED' ? 'status-pending' :
+                  booking.bk_status === 'CONFIRMED' ? 'status-confirmed' :
+                  booking.bk_status === 'CANCELLED' ? 'status-cancelled' :
+                  'status-default';
+                
+                return (
+                  <tr 
+                    key={booking.bk_bkid} 
+                    className={index % 2 === 0 ? 'even-row' : 'odd-row'}
+                  >
+                    <td className="source">
+                      <span className="station-name">{booking.bk_from || '—'}</span>
+                    </td>
+                    <td className="destination">
+                      <span className="station-name">{booking.bk_to || '—'}</span>
+                    </td>
+                    <td className="passengers">
                       <button 
-                        onClick={async () => {
-                          if (window.confirm('Are you sure you want to cancel this booking?')) {
-                            try {
-                              await bookingAPI.cancelBooking(booking.bk_bkid);
-                              // Refresh the bookings list
-                              fetchBookings();
-                            } catch (error) {
-                              console.error('Error cancelling booking:', error);
-                              alert('Failed to cancel booking: ' + error.message);
-                            }
-                          }
-                        }}
-                        className="btn-sm btn-danger"
+                        onClick={() => openPassengerModal(booking.passengers, booking.bk_bkid)}
+                        className="passenger-link"
+                        title="Click to view passenger details"
                       >
-                        Cancel
+                        {booking.bk_pax || booking.totalPassengers || 0} Passenger{(booking.bk_pax || booking.totalPassengers || 0) !== 1 ? 's' : ''}
                       </button>
-                    )}
-                  </td>
-                </tr>
-              ))}
+                    </td>
+                    <td className="status">
+                      <span 
+                        className={`status-badge ${statusClass}`}
+                      >
+                        {getStatusLabel(booking.bk_status)}
+                      </span>
+                    </td>
+                    <td className="pnr">
+                      {booking.bk_pnr || booking.pnr_number || '—'}
+                    </td>
+                    <td className="actions">
+                      <button 
+                        onClick={() => handleViewDetails(booking.bk_bkid)}
+                        className="btn-sm btn-outline"
+                        title="View booking details"
+                      >
+                        View Details
+                      </button>
+                      {(booking.bk_status !== 'CONFIRMED' && booking.bk_status !== 'CANCELLED' && booking.bk_status !== 'CLOSED') && (
+                        <button 
+                          onClick={async () => {
+                            if (window.confirm('Are you sure you want to cancel this booking?')) {
+                              try {
+                                await bookingAPI.cancelBooking(booking.bk_bkid);
+                                // Refresh the bookings list
+                                fetchBookings();
+                              } catch (error) {
+                                console.error('Error cancelling booking:', error);
+                                alert('Failed to cancel booking: ' + error.message);
+                              }
+                            }
+                          }}
+                          className="btn-sm btn-danger"
+                          title="Cancel this booking"
+                        >
+                          Cancel
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>

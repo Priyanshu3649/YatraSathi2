@@ -134,9 +134,9 @@ const fetchData = async () => {
         ) : (
           <div className="bills-grid">
             {bills.map((bill) => (
-              <div key={bill.billId} className="bill-card">
+              <div key={bill.bill_id || bill.billId || bill.id} className="bill-card">
                 <div className="bill-header">
-                  <div className="bill-id">Bill #{bill.billId}</div>
+                  <div className="bill-id">Bill #{bill.bill_id || bill.billId || bill.id}</div>
                   <div 
                     className="status-badge"
                     style={{ backgroundColor: getBillStatusColor(bill.status) }}
@@ -148,23 +148,23 @@ const fetchData = async () => {
                 <div className="bill-details">
                   <div className="detail-item">
                     <span className="label">Booking ID:</span>
-                    <span className="value">{bill.bookingId}</span>
+                    <span className="value">{bill.booking_id || bill.bookingId || 'N/A'}</span>
                   </div>
                   <div className="detail-item">
                     <span className="label">Bill Date:</span>
-                    <span className="value">{formatDate(bill.billDate)}</span>
+                    <span className="value">{formatDate(bill.bill_date || bill.billDate || bill.created_on)}</span>
                   </div>
                   <div className="detail-item">
                     <span className="label">Total Amount:</span>
-                    <span className="value amount">{formatAmount(bill.totalAmount)}</span>
+                    <span className="value amount">{formatAmount(bill.total_amount || bill.totalAmount || 0)}</span>
                   </div>
                   <div className="detail-item">
                     <span className="label">Paid Amount:</span>
-                    <span className="value amount">{formatAmount(bill.paidAmount)}</span>
+                    <span className="value amount">{formatAmount(bill.paid_amount || bill.paidAmount || 0)}</span>
                   </div>
                   <div className="detail-item">
                     <span className="label">Balance:</span>
-                    <span className="value amount">{formatAmount(bill.balanceAmount)}</span>
+                    <span className="value amount">{formatAmount((bill.total_amount || bill.totalAmount || 0) - (bill.paid_amount || bill.paidAmount || 0))}</span>
                   </div>
                 </div>
                 
@@ -202,20 +202,20 @@ const fetchData = async () => {
               <tbody>
                 {payments.map((payment, index) => (
                   <tr 
-                    key={payment.paymentId} 
+                    key={payment.pt_ptid || payment.paymentId || payment.id || index} 
                     className={index % 2 === 0 ? 'even-row' : 'odd-row'}
                   >
-                    <td>{payment.paymentId}</td>
-                    <td>{payment.billId}</td>
-                    <td className="amount">{formatAmount(payment.amount)}</td>
-                    <td>{payment.mode}</td>
-                    <td>{formatDate(payment.date)}</td>
+                    <td>{payment.pt_ptid || payment.paymentId || payment.id || 'N/A'}</td>
+                    <td>{payment.pt_bkid || payment.billId || 'N/A'}</td>
+                    <td className="amount">{formatAmount(payment.pt_amount || payment.amount || 0)}</td>
+                    <td>{payment.pt_mode || payment.mode || 'N/A'}</td>
+                    <td>{formatDate(payment.pt_paydt || payment.date || payment.edtm)}</td>
                     <td>
                       <span className="status-badge payment-status">
-                        {payment.status}
+                        {payment.pt_status || payment.status || 'N/A'}
                       </span>
                     </td>
-                    <td>{payment.remarks || '-'}</td>
+                    <td>{payment.pt_remarks || payment.remarks || '-'}</td>
                   </tr>
                 ))}
               </tbody>

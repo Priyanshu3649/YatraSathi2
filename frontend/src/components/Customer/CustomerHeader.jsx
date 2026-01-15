@@ -33,6 +33,7 @@ const CustomerHeader = () => {
             <li><Link to="/customer/booking/new" className={isActive('/customer/booking/new') ? 'active' : ''}>Book Ticket</Link></li>
             <li><Link to="/customer/bookings" className={isActive('/customer/bookings') ? 'active' : ''}>My Bookings</Link></li>
             <li><Link to="/customer/bills-payments" className={isActive('/customer/bills-payments') ? 'active' : ''}>Bills</Link></li>
+            <li><Link to="/customer/master-passengers" className={isActive('/customer/master-passengers') ? 'active' : ''}>Passenger List</Link></li>
             <li><Link to="/customer/profile" className={isActive('/customer/profile') ? 'active' : ''}>Profile</Link></li>
             <li>
               <button onClick={handleLogout} className="btn btn-primary" style={{ marginLeft: '10px' }}>

@@ -1,22 +1,22 @@
-/* Booking Form Styles */
+/* Booking Form Styles - IRCTC-like Design */
 .booking-form-container {
   min-height: 100vh;
-  background-color: #f8f9fa;
-  padding: 20px;
+  background-color: #f0f2f5;
+  padding: 30px 20px;
 }
 
 .centered-card {
-  max-width: 800px;
+  max-width: 900px;
   margin: 0 auto;
   background: white;
-  border-radius: 12px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
   overflow: hidden;
   padding: 0;
 }
 
 .booking-form-header {
-  max-width: 800px;
+  max-width: 900px;
   margin: 0 auto 30px auto;
   display: flex;
   align-items: center;
@@ -28,10 +28,10 @@
   align-items: center;
   gap: 8px;
   background: transparent;
-  border: 2px solid #667eea;
-  color: #667eea;
+  border: 2px solid #ff6b35;
+  color: #ff6b35;
   padding: 10px 16px;
-  border-radius: 8px;
+  border-radius: 6px;
   cursor: pointer;
   font-weight: 500;
   transition: all 0.3s ease;
@@ -39,7 +39,7 @@
 }
 
 .back-btn:hover {
-  background: #667eea;
+  background: #ff6b35;
   color: white;
   transform: translateY(-1px);
 }
@@ -52,11 +52,11 @@
 }
 
 .booking-form-card {
-  max-width: 800px;
+  max-width: 900px;
   margin: 0 auto;
   background: white;
-  border-radius: 12px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
   overflow: hidden;
 }
 
@@ -64,7 +64,7 @@
   display: flex;
   background: #f8f9fa;
   padding: 30px;
-  border-bottom: 1px solid #e1e8ed;
+  border-bottom: 2px solid #e1e8ed;
 }
 
 .step {
@@ -82,13 +82,13 @@
   top: 25px;
   right: -50%;
   width: 100%;
-  height: 2px;
+  height: 3px;
   background: #e1e8ed;
   z-index: 1;
 }
 
 .step.active:not(:last-child)::after {
-  background: #667eea;
+  background: #ff6b35;
 }
 
 .step span {
@@ -100,21 +100,23 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  font-weight: 600;
-  font-size: 18px;
+  font-weight: 700;
+  font-size: 20px;
   position: relative;
   z-index: 2;
   transition: all 0.3s ease;
+  border: 3px solid #e1e8ed;
 }
 
 .step.active span {
-  background: #667eea;
+  background: #ff6b35;
   color: white;
+  border-color: #ff6b35;
 }
 
 .step label {
   font-size: 14px;
-  font-weight: 500;
+  font-weight: 600;
   color: #7f8c8d;
   transition: color 0.3s ease;
 }
@@ -124,14 +126,35 @@
 }
 
 .booking-step {
-  padding: 40px;
+  padding: 40px 50px;
+}
+
+.booking-step h2.journey-heading {
+  color: #2c3e50;
+  font-size: 24px;
+  font-weight: 700;
+  margin: 0 0 30px 0;
+  padding-bottom: 15px;
+  border-bottom: 3px solid #ff6b35;
 }
 
 .booking-step h3 {
   color: #2c3e50;
-  font-size: 24px;
+  font-size: 22px;
   font-weight: 600;
-  margin: 0 0 30px 0;
+  margin: 0 0 25px 0;
+}
+
+/* Journey Form Grid - 2 Column Layout */
+.journey-form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 25px;
+  margin-bottom: 20px;
+}
+
+.journey-form-grid .form-group.full-width {
+  grid-column: span 1;
 }
 
 .form-row {
@@ -171,88 +194,133 @@
 
 .form-group label {
   color: #2c3e50;
-  font-weight: 500;
-  margin-bottom: 8px;
-  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 10px;
+  font-size: 15px;
 }
 
 .form-group input,
-.form-group select {
-  padding: 12px 16px;
-  border: 2px solid #e1e8ed;
-  border-radius: 8px;
+.form-group select,
+.wide-input {
+  padding: 14px 16px;
+  border: 2px solid #d1d5db;
+  border-radius: 6px;
   font-size: 16px;
-  transition: border-color 0.3s ease;
+  transition: all 0.3s ease;
   width: 100%;
   box-sizing: border-box;
+  background: white;
 }
 
 .form-help-text {
   display: block;
-  color: #7f8c8d;
-  font-size: 12px;
-  margin-top: 5px;
+  color: #6b7280;
+  font-size: 13px;
+  margin-top: 6px;
+  font-style: italic;
 }
 
 .form-group input:focus,
-.form-group select:focus {
+.form-group select:focus,
+.wide-input:focus {
   outline: none;
-  border-color: #667eea;
-  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+  border-color: #ff6b35;
+  box-shadow: 0 0 0 3px rgba(255, 107, 53, 0.1);
 }
 
 .passenger-card {
-  background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%);
+  background: linear-gradient(135deg, #fef5f1 0%, #ffffff 100%);
   border: 2px solid #e1e8ed;
-  border-radius: 16px;
+  border-radius: 10px;
   padding: 25px;
-  margin-bottom: 25px;
+  margin-bottom: 20px;
   transition: all 0.3s ease;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
   position: relative;
 }
 
 .passenger-card:hover {
-  border-color: #667eea;
-  box-shadow: 0 8px 25px rgba(102, 126, 234, 0.15);
+  border-color: #ff6b35;
+  box-shadow: 0 4px 12px rgba(255, 107, 53, 0.15);
   transform: translateY(-2px);
 }
 
-.passenger-card:hover {
-  border-color: #667eea;
+/* Compact passenger details grid */
+.passenger-details-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 15px;
+}
+
+.passenger-field {
+  display: flex;
+  flex-direction: column;
+}
+
+.passenger-field label {
+  color: #2c3e50;
+  font-weight: 600;
+  margin-bottom: 6px;
+  font-size: 13px;
+}
+
+.passenger-field input,
+.passenger-field select {
+  padding: 10px 12px;
+  border: 2px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 15px;
+  transition: all 0.3s ease;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.passenger-field input:focus,
+.passenger-field select:focus {
+  outline: none;
+  border-color: #ff6b35;
+  box-shadow: 0 0 0 3px rgba(255, 107, 53, 0.1);
 }
 
 .passenger-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 20px;
+  margin-bottom: 18px;
+  padding-bottom: 12px;
+  border-bottom: 2px solid #e1e8ed;
 }
 
-.passenger-header h4 {
+.passenger-title h4 {
   color: #2c3e50;
   font-size: 18px;
-  font-weight: 600;
+  font-weight: 700;
   margin: 0;
 }
 
 .remove-passenger {
-  background: #e74c3c;
+  background: #dc2626;
   color: white;
   border: none;
-  width: 30px;
-  height: 30px;
-  border-radius: 50%;
+  padding: 8px 14px;
+  border-radius: 6px;
   cursor: pointer;
   display: flex;
   align-items: center;
-  justify-content: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
   transition: all 0.3s ease;
 }
 
 .remove-passenger:hover {
-  background: #c0392b;
-  transform: scale(1.1);
+  background: #b91c1c;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(220, 38, 38, 0.3);
+}
+
+.passenger-actions {
+  margin-top: 20px;
 }
 
 .add-passenger {
@@ -261,25 +329,28 @@
   justify-content: center;
   gap: 10px;
   width: 100%;
-  padding: 15px;
+  padding: 14px;
   background: transparent;
-  border: 2px dashed #667eea;
+  border: 2px dashed #ff6b35;
   border-radius: 8px;
-  color: #667eea;
+  color: #ff6b35;
   cursor: pointer;
-  font-weight: 500;
+  font-weight: 600;
+  font-size: 15px;
   transition: all 0.3s ease;
 }
 
 .add-passenger:hover {
-  background: rgba(102, 126, 234, 0.1);
+  background: rgba(255, 107, 53, 0.1);
   border-style: solid;
+  transform: translateY(-1px);
 }
 
 .booking-summary {
   background: #f8f9fa;
-  border-radius: 12px;
-  padding: 30px;
+  border-radius: 10px;
+  padding: 35px;
+  border: 2px solid #e1e8ed;
 }
 
 .summary-section {
@@ -292,18 +363,18 @@
 
 .summary-section h4 {
   color: #2c3e50;
-  font-size: 18px;
-  font-weight: 600;
-  margin: 0 0 15px 0;
-  padding-bottom: 10px;
-  border-bottom: 2px solid #e1e8ed;
+  font-size: 19px;
+  font-weight: 700;
+  margin: 0 0 18px 0;
+  padding-bottom: 12px;
+  border-bottom: 2px solid #ff6b35;
 }
 
 .summary-item {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 10px 0;
+  padding: 12px 0;
   border-bottom: 1px solid #e1e8ed;
 }
 
@@ -312,20 +383,22 @@
 }
 
 .summary-item span:first-child {
-  color: #7f8c8d;
-  font-weight: 500;
+  color: #6b7280;
+  font-weight: 600;
+  font-size: 15px;
 }
 
 .summary-item span:last-child {
   color: #2c3e50;
-  font-weight: 600;
+  font-weight: 700;
+  font-size: 15px;
 }
 
 .passenger-summary {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 8px 0;
+  padding: 10px 0;
   border-bottom: 1px solid #e1e8ed;
 }
 
@@ -335,11 +408,12 @@
 
 .passenger-summary span:first-child {
   color: #2c3e50;
-  font-weight: 600;
+  font-weight: 700;
+  font-size: 15px;
 }
 
 .passenger-summary span:last-child {
-  color: #7f8c8d;
+  color: #6b7280;
   font-size: 14px;
 }
 
@@ -347,64 +421,69 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 30px 40px;
-  border-top: 1px solid #e1e8ed;
+  padding: 30px 50px;
+  border-top: 2px solid #e1e8ed;
   background: #f8f9fa;
 }
 
 .form-actions button {
-  padding: 12px 30px;
-  border-radius: 8px;
+  padding: 14px 35px;
+  border-radius: 6px;
   font-size: 16px;
-  font-weight: 600;
+  font-weight: 700;
   cursor: pointer;
   transition: all 0.3s ease;
   border: none;
 }
 
 .form-actions .btn-primary {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: #ff6b35;
   color: white;
+  box-shadow: 0 4px 6px rgba(255, 107, 53, 0.2);
 }
 
 .form-actions .btn-primary:hover:not(:disabled) {
+  background: #e55a2b;
   transform: translateY(-2px);
-  box-shadow: 0 8px 25px rgba(102, 126, 234, 0.3);
+  box-shadow: 0 6px 12px rgba(255, 107, 53, 0.3);
 }
 
 .form-actions .btn-primary:disabled {
-  opacity: 0.7;
+  opacity: 0.6;
   cursor: not-allowed;
   transform: none;
+  box-shadow: none;
 }
 
 .form-actions .btn-outline {
   background: transparent;
-  color: #667eea;
-  border: 2px solid #667eea;
+  color: #ff6b35;
+  border: 2px solid #ff6b35;
 }
 
 .form-actions .btn-outline:hover {
-  background: #667eea;
+  background: #ff6b35;
   color: white;
   transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(255, 107, 53, 0.2);
 }
 
 .error-message {
-  background-color: #fee;
-  color: #c53030;
-  padding: 15px 20px;
+  background-color: #fee2e2;
+  color: #dc2626;
+  padding: 16px 20px;
   border-radius: 8px;
-  border-left: 4px solid #c53030;
-  font-size: 14px;
-  margin: 0 40px 20px 40px;
+  border-left: 4px solid #dc2626;
+  font-size: 15px;
+  font-weight: 500;
+  margin: 0 50px 25px 50px;
 }
 
 
 /* Responsive Design */
 @media (max-width: 768px) {
   .booking-form-container {
-    padding: 10px;
+    padding: 15px 10px;
   }
   
   .booking-form-header {
@@ -427,6 +506,11 @@
     padding: 30px 20px;
   }
   
+  .journey-form-grid {
+    grid-template-columns: 1fr;
+    gap: 20px;
+  }
+  
   .form-row {
     grid-template-columns: 1fr;
     gap: 15px;
@@ -434,6 +518,11 @@
   
   .passenger-card {
     padding: 20px 15px;
+  }
+  
+  .passenger-details-grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
   }
   
   .form-actions {

@@ -108,115 +108,54 @@ const EmployeeLogin = () => {
   };
 
   return (
-    <div className="erp-auth-container">
-      <div className="erp-auth-card">
-        {/* Title Bar */}
-        <div className="erp-auth-title-bar">
-          <div className="erp-auth-system-icon">👤</div>
-          <div className="erp-auth-title-text">Employee Authentication System</div>
-          <button className="erp-auth-close-button">×</button>
+    <div className="register panel" style={{ maxWidth: '500px', margin: '30px auto' }}>
+      <div className="panel-header text-center">
+        <h2>Employee Login</h2>
+        <p>Access your employee dashboard and management tools</p>
+      </div>
+      {error && <div className="alert alert-error">{error}</div>}
+      <form onSubmit={handleSubmit}>
+        <div className="input-group">
+          <label htmlFor="email" className="form-label required">Email Address:</label>
+          <input
+            type="email"
+            id="email"
+            name="email"
+            value={formData.email}
+            onChange={handleChange}
+            required
+            className="form-control"
+            disabled={loading}
+            placeholder="Enter your work email"
+          />
         </div>
-
-        {/* Menu Bar */}
-        <div className="erp-auth-menu-bar">
-          <div className="erp-auth-menu-item">File</div>
-          <div className="erp-auth-menu-item">Edit</div>
-          <div className="erp-auth-menu-item">View</div>
-          <div className="erp-auth-menu-item">Tools</div>
-          <div className="erp-auth-menu-item">Help</div>
+        <div className="input-group">
+          <label htmlFor="password" className="form-label required">Password:</label>
+          <input
+            type="password"
+            id="password"
+            name="password"
+            value={formData.password}
+            onChange={handleChange}
+            required
+            className="form-control"
+            disabled={loading}
+            placeholder="Enter your password"
+          />
         </div>
-
-        {/* Main Content */}
-        <div className="erp-auth-content">
-          {/* Logo Section */}
-          <div className="erp-auth-logo">
-            <div className="erp-auth-logo-icon">EMP</div>
-          </div>
-
-          {/* Header */}
-          <div className="erp-auth-header">
-            <h2>Employee Login</h2>
-            <p>Access your employee dashboard and management tools</p>
-          </div>
-
-          {/* Form Panel */}
-          <div className="erp-auth-form-panel">
-            <div className="erp-auth-form-header">Login Credentials</div>
-
-            <form onSubmit={handleSubmit} className="erp-auth-form">
-              {error && (
-                <div className="erp-auth-message erp-auth-error-message">
-                  {error}
-                </div>
-              )}
-
-              <div className="erp-auth-form-group">
-                <label htmlFor="email" className="erp-auth-form-label required">
-                  Email Address
-                </label>
-                <input
-                  type="email"
-                  id="email"
-                  name="email"
-                  value={formData.email}
-                  onChange={handleChange}
-                  required
-                  placeholder="Enter your work email"
-                  disabled={loading}
-                  className="erp-auth-form-input"
-                />
-              </div>
-
-              <div className="erp-auth-form-group">
-                <label htmlFor="password" className="erp-auth-form-label required">
-                  Password
-                </label>
-                <input
-                  type="password"
-                  id="password"
-                  name="password"
-                  value={formData.password}
-                  onChange={handleChange}
-                  required
-                  placeholder="Enter your password"
-                  disabled={loading}
-                  className="erp-auth-form-input"
-                />
-              </div>
-
-              <div className="erp-auth-form-group" style={{ marginTop: '20px' }}>
-                <button 
-                  type="submit" 
-                  className="erp-auth-button erp-auth-button-primary"
-                  disabled={loading}
-                  style={{ width: '100%' }}
-                >
-                  {loading ? (
-                    <span className="erp-auth-loading">Signing In...</span>
-                  ) : (
-                    'Sign In'
-                  )}
-                </button>
-              </div>
-            </form>
-
-            <div className="erp-auth-footer">
-              <p>
-                <a href="/auth/forgot-password">Forgot your password?</a>
-              </p>
-              <p>
-                Customer? <a href="/auth/login">Login here</a>
-              </p>
-            </div>
-          </div>
+        <div className="text-center mt-3">
+          <button type="submit" disabled={loading} className="btn btn-primary">
+            {loading ? 'Signing In...' : 'Sign In'}
+          </button>
         </div>
-
-        {/* Status Bar */}
-        <div className="erp-auth-status-bar">
-          <div className="erp-auth-status-item">Employee Portal</div>
-          <div className="erp-auth-status-item">Version 1.0</div>
-          <div className="erp-auth-status-panel">Ready</div>
-        </div>
+      </form>
+      <div className="text-center mt-3">
+        <p>
+          <a href="/auth/forgot-password">Forgot your password?</a>
+        </p>
+        <p>
+          Customer? <a href="/auth/login">Login here</a>
+        </p>
       </div>
     </div>
   );
