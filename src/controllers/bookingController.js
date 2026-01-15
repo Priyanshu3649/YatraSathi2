@@ -143,30 +143,80 @@ const getCustomerBookings = async (req, res) => {
   }
 };
 
-// Get all bookings (admin only)
+// Get all bookings (admin and authorized employees)
 const getAllBookings = async (req, res) => {
   try {
-    // Check if user is admin
-    if (req.user.us_roid !== 'ADM') {
-      return res.status(403).json({ message: 'Access denied. Admin only.' });
+    // Check if user is admin or employee
+    const allowedRoles = ['AGT', 'ACC', 'HR', 'CC', 'MKT', 'MGT', 'ADM'];
+    const isAuthorizedEmployee = allowedRoles.includes(req.user.us_roid);
+    
+    // Import models for passenger and station lookups
+    const models = require('../models');
+    const { Passenger, StationTVL: Station } = models;
+    
+    let bookings;
+    
+    if (isAuthorizedEmployee) {
+      // For admin and all employees, return all bookings
+      bookings = await BookingTVL.findAll({
+        order: [['edtm', 'DESC']] // Use edtm for consistency
+      });
+    } else {
+      // For other users (shouldn't reach here if using employee endpoint), return their bookings
+      bookings = await BookingTVL.findAll({
+        where: { bk_usid: req.user.us_usid },
+        order: [['edtm', 'DESC']]
+      });
     }
     
-    const bookings = await BookingTVL.findAll({
-      order: [['edtm', 'DESC']] // Use edtm for consistency
-    });
-    
-    // Transform data to match frontend expectations
-    const transformedBookings = bookings.map(booking => ({
-      ...booking.toJSON(),
-      bk_fromstation: booking.bk_fromst,
-      bk_tostation: booking.bk_tost,
-      bk_travelldate: booking.bk_trvldt,
-      bk_travelclass: booking.bk_class
+    // Transform data to match frontend expectations and get actual passenger counts
+    const transformedBookings = await Promise.all(bookings.map(async (booking) => {
+      // Get passenger count for this booking
+      const passengerCount = await Passenger.count({
+        where: { 
+          ps_bkid: booking.bk_bkid,
+          ps_active: 1  // Only count active passengers
+        }
+      });
+      
+      // Get station names
+      let fromStationName = booking.bk_fromst || 'Unknown';
+      let toStationName = booking.bk_tost || 'Unknown';
+      
+      try {
+        const fromStation = await Station.findByPk(booking.bk_fromst);
+        if (fromStation) {
+          fromStationName = fromStation.st_stname || fromStation.st_stcode || booking.bk_fromst;
+        }
+        
+        const toStation = await Station.findByPk(booking.bk_tost);
+        if (toStation) {
+          toStationName = toStation.st_stname || toStation.st_stcode || booking.bk_tost;
+        }
+      } catch (stationError) {
+        console.warn('Error fetching station names:', stationError.message);
+        // Fall back to station codes if station lookup fails
+      }
+      
+      return {
+        ...booking.toJSON(),
+        bk_from: fromStationName,        // Add full from station name
+        bk_to: toStationName,            // Add full to station name
+        bk_fromst: booking.bk_fromst,    // Keep original station code
+        bk_tost: booking.bk_tost,        // Keep original station code
+        bk_travelldate: booking.bk_trvldt,
+        bk_travelclass: booking.bk_class,
+        bk_pax: passengerCount  // Override with actual passenger count from passenger table
+      };
     }));
     
-    res.json(transformedBookings);
+    res.json({ success: true, data: { bookings: transformedBookings } });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    console.error('Get all bookings error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: { code: 'SERVER_ERROR', message: error.message } 
+    });
   }
 };
 
@@ -617,6 +667,8 @@ const getBookingPassengers = async (req, res) => {
         berthAllocated: passenger.ps_berthalloc,
         seatNo: passenger.ps_seatno,
         coach: passenger.ps_coach,
+        idProofType: passenger.ps_idtype,
+        idProofNumber: passenger.ps_idno,
         id: passenger.ps_psid
       };
     });
@@ -705,8 +757,8 @@ const searchBookings = async (req, res) => {
     }
 
     // Apply user-specific filters
-    if (req.user.us_roid === 'EMP') {
-      // Employees can only see their assigned bookings
+    if (['AGT', 'ACC', 'HR', 'CC', 'MKT', 'MGT'].includes(req.user.us_roid)) {
+      // Regular employees can only see their assigned bookings
       whereConditions.bk_agent = req.user.us_usid;
     } else if (req.user.us_roid === 'CUS') {
       // Customers can only see their own bookings
@@ -742,6 +794,70 @@ const searchBookings = async (req, res) => {
   }
 };
 
+// Get bookings assigned to the current employee
+const getAssignedBookings = async (req, res) => {
+  try {
+    // Import models
+    const models = require('../models');
+    const { Passenger, StationTVL: Station } = models;
+    
+    // Get bookings assigned to this employee
+    const bookings = await BookingTVL.findAll({
+      where: { bk_agent: req.user.us_usid },
+      order: [['edtm', 'DESC']]
+    });
+    
+    // Transform data to match frontend expectations and get actual passenger counts
+    const transformedBookings = await Promise.all(bookings.map(async (booking) => {
+      // Get passenger count for this booking
+      const passengerCount = await Passenger.count({
+        where: { 
+          ps_bkid: booking.bk_bkid,
+          ps_active: 1  // Only count active passengers
+        }
+      });
+      
+      // Get station names
+      let fromStationName = booking.bk_fromst || 'Unknown';
+      let toStationName = booking.bk_tost || 'Unknown';
+      
+      try {
+        const fromStation = await Station.findByPk(booking.bk_fromst);
+        if (fromStation) {
+          fromStationName = fromStation.st_stname || fromStation.st_stcode || booking.bk_fromst;
+        }
+        
+        const toStation = await Station.findByPk(booking.bk_tost);
+        if (toStation) {
+          toStationName = toStation.st_stname || toStation.st_stcode || booking.bk_tost;
+        }
+      } catch (stationError) {
+        console.warn('Error fetching station names:', stationError.message);
+        // Fall back to station codes if station lookup fails
+      }
+      
+      return {
+        ...booking.toJSON(),
+        bk_from: fromStationName,        // Add full from station name
+        bk_to: toStationName,            // Add full to station name
+        bk_fromst: booking.bk_fromst,    // Keep original station code
+        bk_tost: booking.bk_tost,        // Keep original station code
+        bk_travelldate: booking.bk_trvldt,
+        bk_travelclass: booking.bk_class,
+        bk_pax: passengerCount  // Override with actual passenger count from passenger table
+      };
+    }));
+    
+    res.json({ success: true, data: { bookings: transformedBookings } });
+  } catch (error) {
+    console.error('Get assigned bookings error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: { code: 'SERVER_ERROR', message: error.message } 
+    });
+  }
+};
+
 module.exports = {
   createBooking,
   getCustomerBookings,
@@ -755,5 +871,6 @@ module.exports = {
   confirmBooking,
   getBookingsByStatus,
   searchBookings,
-  getBookingPassengers
+  getBookingPassengers,
+  getAssignedBookings
 };

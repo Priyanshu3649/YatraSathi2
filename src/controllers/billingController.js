@@ -130,12 +130,36 @@ const getCustomerBills = async (req, res) => {
   }
 };
 
-// Get all bills (admin only)
+// Get all bills (admin and authorized employees)
 const getAllBills = async (req, res) => {
   try {
-    // Check if user is admin
-    if (req.user.us_usertype !== 'admin') {
-      return res.status(403).json({ message: 'Access denied. Admin only.' });
+    // Check permissions - handle both old user types and new role IDs
+    const isEmployee = req.user.us_usertype === 'employee' || ['AGT', 'ACC', 'HR', 'CC', 'MKT', 'MGT', 'ADM'].includes(req.user.us_roid);
+    
+    if (req.user.us_usertype !== 'admin' && req.user.us_roid !== 'ADM') {
+      // For employee role IDs
+      if (['AGT', 'ACC', 'MGT', 'ADM'].includes(req.user.us_roid)) {
+        // Allow access for Agent, Accounts, Management, and Admin roles
+        // No additional check needed
+      } else if (isEmployee) {
+        // For other employees, check if they have accounts department access
+        const { emXemployee: Employee } = require('../models');
+        const employee = await Employee.findOne({
+          where: { em_usid: req.user.us_usid }
+        });
+        if (!employee || !['ACCOUNTS', 'FINANCE', 'MANAGEMENT'].includes(employee.em_dept)) {
+          return res.status(403).json({
+            success: false,
+            message: 'Access denied. Admin, Accounts, or Management access required.'
+          });
+        }
+      } else {
+        // For customers and unauthorized users
+        return res.status(403).json({
+          success: false,
+          message: 'Access denied. Admin, Accounts, or Management access required.'
+        });
+      }
     }
     
     const bills = await BillTVL.findAll({
@@ -170,9 +194,13 @@ const getAllBills = async (req, res) => {
       };
     });
     
-    res.json(transformedBills);
+    res.json({ success: true, data: { bills: transformedBills } });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    console.error('Get all bills error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: { code: 'SERVER_ERROR', message: error.message } 
+    });
   }
 };
 

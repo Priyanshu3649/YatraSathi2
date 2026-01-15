@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { bookingAPI, customerAPI } from '../services/api';
+import CustomerLookupInput from '../components/common/CustomerLookupInput';
 import '../styles/vintage-erp-theme.css';
 import '../styles/classic-enterprise-global.css';
 import '../styles/vintage-admin-panel.css';
@@ -53,93 +54,17 @@ const Bookings = () => {
     }));
   }, [passengerList]);
   
-  // Customer lookup state
-  const [customerLookup, setCustomerLookup] = useState([]);
-  const [showCustomerDropdown, setShowCustomerDropdown] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const recordsPerPage = 100;
+  
+  // State for passenger details modal
+  const [showPassengerModal, setShowPassengerModal] = useState(false);
+  const [passengerDetails, setPassengerDetails] = useState([]);
+  const [loadingPassengers, setLoadingPassengers] = useState(false);
 
   // Filter state for inline grid filtering
   const [inlineFilters, setInlineFilters] = useState({});
-  
-  // Debounce function
-  const debounce = (func, delay) => {
-    let timeoutId;
-    return (...args) => {
-      clearTimeout(timeoutId);
-      timeoutId = setTimeout(() => func.apply(null, args), delay);
-    };
-  };
-  
-  // Fetch customer lookup
-  const fetchCustomerLookup = async (searchTerm) => {
-    // Don't search if the term is empty after trimming
-    if (!searchTerm || searchTerm.trim().length === 0) {
-      setCustomerLookup([]);
-      setShowCustomerDropdown(false);
-      return;
-    }
-    
-    try {
-      // Call the customer API to search for customers
-      const customers = await customerAPI.searchCustomers(searchTerm.trim());
-      
-      // Format the results
-      const formattedResults = Array.isArray(customers?.data) ? 
-        customers.data.map(customer => ({
-          id: customer.id || customer.cu_usid || customer.customerId || customer.cu_custno || '',
-          name: customer.name || customer.customerName || customer.cu_name || customer.cu_custname || '',
-          display: `${customer.id || customer.cu_usid || customer.customerId || customer.cu_custno || ''} - ${customer.name || customer.customerName || customer.cu_name || customer.cu_custname || ''}`
-        })) : [];
-      
-      setCustomerLookup(formattedResults);
-      setShowCustomerDropdown(formattedResults.length > 0); // Only show dropdown if there are results
-    } catch (error) {
-      console.error('Error fetching customer lookup:', error);
-      setCustomerLookup([]);
-      setShowCustomerDropdown(false);
-      // Don't re-throw to avoid blocking UI
-    }
-  };
-  
-  // Debounced customer search
-  const debouncedCustomerSearch = useCallback(debounce(fetchCustomerLookup, 300), []);
-  
-  // Fetch customer name by ID (only called after selection)
-  const fetchCustomerNameById = async (customerId) => {
-    try {
-      const customer = await customerAPI.getCustomerById(customerId);
-      const customerName = customer.data?.name || customer.data?.customerName || customer.data?.cu_name || customer.data?.cu_custname || '';
-      setFormData(prev => ({
-        ...prev,
-        customerName: customerName
-      }));
-    } catch (error) {
-      console.error('Error fetching customer by ID:', error);
-    }
-  };
-  
-  // Fetch customer ID by name
-  const fetchCustomerIdByName = async (customerName) => {
-    try {
-      const customers = await customerAPI.searchCustomers(customerName);
-      const customer = Array.isArray(customers?.data) && customers.data.find(c => 
-        (c.name && c.name.toLowerCase().includes(customerName.toLowerCase())) ||
-        (c.customerName && c.customerName.toLowerCase().includes(customerName.toLowerCase())) ||
-        (c.cu_name && c.cu_name.toLowerCase().includes(customerName.toLowerCase())) ||
-        (c.cu_custname && c.cu_custname.toLowerCase().includes(customerName.toLowerCase()))
-      );
-      if (customer) {
-        setFormData(prev => ({
-          ...prev,
-          customerId: customer.id || customer.cu_usid || customer.customerId || customer.cu_custno || ''
-        }));
-      }
-    } catch (error) {
-      console.error('Error searching customers by name:', error);
-    }
-  };
   
   // Fetch bookings when component mounts
   useEffect(() => {
@@ -151,7 +76,8 @@ const Bookings = () => {
       setLoading(true);
       let data;
       
-      if (user && user.us_usertype === 'admin') {
+      // Check if user is admin or employee
+      if (user && (user.us_usertype === 'admin' || user.us_roid !== 'CUS')) {
         data = await bookingAPI.getAllBookings();
       } else {
         const response = await bookingAPI.getMyBookings();
@@ -191,70 +117,27 @@ const Bookings = () => {
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
-    
-    // Handle customer ID change
-    if (name === 'customerId') {
-      setFormData(prev => ({
-        ...prev,
-        customerId: value,
-        customerName: value ? '' : prev.customerName // Clear customer name if ID is being entered
-      }));
-      
-      // Fetch customer name by ID if a valid ID is entered
-      if (value.trim().length > 0) {
-        fetchCustomerNameById(value);
-      }
-      
-      // Fetch customer suggestions if search term is long enough
-      if (value.trim().length >= 1) { // Changed from 3 to 1 to allow single character search
-        debouncedCustomerSearch(value.trim());
-      } else {
-        setCustomerLookup([]);
-        setShowCustomerDropdown(false);
-      }
-    } 
-    // Handle customer name change
-    else if (name === 'customerName') {
-      setFormData(prev => ({
-        ...prev,
-        customerName: value,
-        customerId: value ? '' : prev.customerId // Clear customer ID if name is being entered
-      }));
-      
-      // Fetch customer ID by name if a valid name is entered
-      if (value.trim().length > 0) {
-        fetchCustomerIdByName(value);
-      }
-      
-      // Fetch customer suggestions if search term is long enough
-      if (value.trim().length >= 1) { // Changed from 3 to 1 to allow single character search
-        debouncedCustomerSearch(value.trim()); // Use the same function for both name and ID
-      } else {
-        setCustomerLookup([]);
-        setShowCustomerDropdown(false);
-      }
-    }
-    // Handle other fields
-    else {
-      setFormData(prev => ({
-        ...prev,
-        [name]: value
-      }));
-    }
-  };
-  
-  // Handle customer selection from dropdown
-  const handleCustomerSelect = (customer) => {
     setFormData(prev => ({
       ...prev,
-      customerId: customer.id,
-      customerName: customer.name || customer.display?.split(' - ')[1] || ''
+      [name]: value
     }));
-    setCustomerLookup([]);
-    setShowCustomerDropdown(false);
-    
-    // Also fetch detailed customer info to populate any additional fields
-    fetchCustomerNameById(customer.id);
+  };
+  
+  // Handle customer selection from CustomerLookupInput component
+  const handleCustomerChange = (customer) => {
+    if (customer) {
+      setFormData(prev => ({
+        ...prev,
+        customerId: customer.code || customer.id,
+        customerName: customer.name
+      }));
+    } else {
+      setFormData(prev => ({
+        ...prev,
+        customerId: '',
+        customerName: ''
+      }));
+    }
   };
   
 
@@ -305,6 +188,22 @@ const Bookings = () => {
       setIsEditing(true);
     } else {
       alert('Please select a record first');
+    }
+  };
+
+  // Function to fetch and show passenger details
+  const showPassengerDetails = async (bookingId) => {
+    try {
+      setLoadingPassengers(true);
+      const response = await bookingAPI.getBookingPassengers(bookingId);
+      const passengers = response.passengers || [];
+      setPassengerDetails(passengers);
+      setShowPassengerModal(true);
+    } catch (error) {
+      console.error('Error fetching passenger details:', error);
+      alert(`Error fetching passenger details: ${error.message}`);
+    } finally {
+      setLoadingPassengers(false);
     }
   };
 
@@ -492,90 +391,15 @@ const Bookings = () => {
               />
             </div>
 
-            {/* Customer ID and Name Row */}
-            <div className="erp-form-row">
-              <label className="erp-form-label required">Customer ID</label>
-              <div style={{ position: 'relative', display: 'inline-block', width: '100%' }}>
-                <input
-                  type="text"
-                  name="customerId"
-                  className="erp-input"
-                  value={formData.customerId}
-                  onChange={handleInputChange}
-                  disabled={!isEditing}
-                  placeholder="Enter customer ID..."
-                />
-                {showCustomerDropdown && (
-                  <div className="erp-dropdown" style={{
-                    position: 'absolute',
-                    top: '100%',
-                    left: 0,
-                    right: 0,
-                    backgroundColor: 'white',
-                    border: '1px solid #ccc',
-                    zIndex: 1000,
-                    maxHeight: '150px',
-                    overflowY: 'auto',
-                    boxShadow: '0 2px 5px rgba(0,0,0,0.2)'
-                  }}>
-                    {customerLookup.map(customer => (
-                      <div 
-                        key={customer.id}
-                        className="erp-dropdown-item"
-                        style={{
-                          padding: '4px 8px',
-                          cursor: 'pointer',
-                          borderBottom: '1px solid #eee'
-                        }}
-                        onMouseDown={() => handleCustomerSelect(customer)}
-                      >
-                        {customer.display}
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-              <label className="erp-form-label required">Customer Name</label>
-              <div style={{ position: 'relative', display: 'inline-block', width: '100%' }}>
-                <input
-                  type="text"
-                  name="customerName"
-                  className="erp-input"
-                  value={formData.customerName}
-                  onChange={handleInputChange}
-                  disabled={!isEditing}
-                  placeholder="Enter customer name..."
-                />
-                {showCustomerDropdown && (
-                  <div className="erp-dropdown" style={{
-                    position: 'absolute',
-                    top: '100%',
-                    left: 0,
-                    right: 0,
-                    backgroundColor: 'white',
-                    border: '1px solid #ccc',
-                    zIndex: 1000,
-                    maxHeight: '150px',
-                    overflowY: 'auto',
-                    boxShadow: '0 2px 5px rgba(0,0,0,0.2)'
-                  }}>
-                    {customerLookup.map(customer => (
-                      <div 
-                        key={customer.id}
-                        className="erp-dropdown-item"
-                        style={{
-                          padding: '4px 8px',
-                          cursor: 'pointer',
-                          borderBottom: '1px solid #eee'
-                        }}
-                        onMouseDown={() => handleCustomerSelect(customer)}
-                      >
-                        {customer.display}
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
+            {/* Customer ID and Name Row - Using CustomerLookupInput */}
+            <div className="erp-form-row" style={{ gridColumn: 'span 4' }}>
+              <CustomerLookupInput
+                customerId={formData.customerId}
+                customerName={formData.customerName}
+                onCustomerChange={handleCustomerChange}
+                disabled={!isEditing}
+                required={true}
+              />
             </div>
             
             {/* Total Passengers and Contact Number Row */}
@@ -1026,7 +850,18 @@ const Bookings = () => {
                             <td>{new Date(record.bk_bookingdt || record.createdOn || new Date()).toLocaleDateString()}</td>
                             <td>{record.customerId || record.bk_customerid || record.cu_usid || 'N/A'}</td>
                             <td>{record.customerName || record.bk_customername || 'N/A'}</td>
-                            <td>{record.totalPassengers || passengerList.filter(p => p.name.trim() !== '').length || 0}</td>
+                            <td>
+                              <button 
+                                className="erp-button" 
+                                style={{ padding: '2px 6px', fontSize: '11px', cursor: 'pointer' }} 
+                                onClick={(e) => {
+                                  e.stopPropagation(); // Prevent row selection
+                                  showPassengerDetails(record.bk_bkid);
+                                }}
+                              >
+                                {record.totalPassengers || passengerList.filter(p => p.name.trim() !== '').length || 0}
+                              </button>
+                            </td>
                             <td>{record.fromStation?.st_stname || record.bk_fromstation || record.bk_fromst || 'N/A'}</td>
                             <td>{record.toStation?.st_stname || record.bk_tostation || record.bk_tost || 'N/A'}</td>
                             <td>{new Date(record.bk_trvldt || record.bk_travelldate || new Date()).toLocaleDateString()}</td>
@@ -1177,6 +1012,69 @@ const Bookings = () => {
           </div>
         </div>
       </div>
+
+      {/* Passenger Details Modal */}
+      {showPassengerModal && (
+        <div className="erp-modal-overlay" onClick={() => setShowPassengerModal(false)}>
+          <div className="erp-modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '600px', width: '90%' }}>
+            <div className="erp-modal-title">
+              <span>Passenger Details</span>
+              <button 
+                className="erp-modal-close" 
+                onClick={() => setShowPassengerModal(false)}
+              >
+                ×
+              </button>
+            </div>
+            <div className="erp-modal-body">
+              {loadingPassengers ? (
+                <div style={{ textAlign: 'center', padding: '20px' }}>Loading passenger details...</div>
+              ) : passengerDetails.length > 0 ? (
+                <table className="erp-table" style={{ width: '100%', fontSize: '12px' }}>
+                  <thead>
+                    <tr>
+                      <th>Name</th>
+                      <th>Age</th>
+                      <th>Gender</th>
+                      <th>Berth Pref</th>
+                      <th>Berth Alloc</th>
+                      <th>Coach</th>
+                      <th>Seat No</th>
+                      <th>ID Type</th>
+                      <th>ID Number</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {passengerDetails.map((passenger, index) => (
+                      <tr key={index}>
+                        <td>{passenger.firstName} {passenger.lastName || ''}</td>
+                        <td>{passenger.age || ''}</td>
+                        <td>{passenger.gender || ''}</td>
+                        <td>{passenger.berthPreference || ''}</td>
+                        <td>{passenger.berthAllocated || ''}</td>
+                        <td>{passenger.coach || ''}</td>
+                        <td>{passenger.seatNo || ''}</td>
+                        <td>{passenger.idProofType || ''}</td>
+                        <td>{passenger.idProofNumber || ''}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              ) : (
+                <div style={{ textAlign: 'center', padding: '20px' }}>No passenger details available</div>
+              )}
+            </div>
+            <div className="erp-modal-footer">
+              <button 
+                className="erp-button" 
+                onClick={() => setShowPassengerModal(false)}
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Status Bar - Static */}
       <div className="erp-status-bar">

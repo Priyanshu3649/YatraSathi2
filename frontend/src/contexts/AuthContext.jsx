@@ -22,16 +22,23 @@ export const AuthProvider = ({ children }) => {
           
           // Create user object with the correct field names
           // Handle the actual API response structure from getUserProfile
+          const profileData = profile.data || profile;
           const userObject = {
-            us_usid: profile.id || profile.us_usid,
-            us_fname: profile.name || profile.us_fname || '',
-            us_lname: '', // Profile API doesn't return lastName
-            us_email: profile.email || profile.us_email,
-            us_usertype: profile.us_usertype || 'customer',
-            us_roid: profile.role || 'CUS', // Use role field from profile API
-            us_coid: 'TRV', // Default company ID
-            us_phone: '', // Profile API doesn't return phone
-            us_active: 1 // Default to active
+            us_usid: profileData.id || profileData.us_usid,
+            us_fname: profileData.firstName || profileData.us_fname || '',
+            us_lname: profileData.lastName || profileData.us_lname || '',
+            us_email: profileData.email || profileData.us_email,
+            us_usertype: profileData.us_usertype || profileData.userType || 'customer',
+            us_roid: profileData.us_roid || profileData.role || 'CUS',
+            us_coid: profileData.us_coid || 'TRV',
+            us_phone: profileData.phone || profileData.us_phone || '',
+            us_active: profileData.us_active || 1,
+            us_addr1: profileData.us_addr1 || '',
+            us_city: profileData.us_city || '',
+            us_state: profileData.us_state || '',
+            us_pin: profileData.us_pin || '',
+            us_aadhaar: profileData.us_aadhaar || '',
+            us_pan: profileData.us_pan || ''
           };
           
           console.log('User object created:', userObject);
@@ -65,6 +72,8 @@ export const AuthProvider = ({ children }) => {
       ...userData,
       us_roid: userData.us_roid || userData.role || 'CUS' // Default to CUS for customers
     };
+    // Store user data in localStorage for API functions to access
+    localStorage.setItem('user', JSON.stringify(userWithRole));
     setUser(userWithRole);
     setIsAuthenticated(true);
   };
@@ -82,6 +91,7 @@ export const AuthProvider = ({ children }) => {
     } finally {
       // Always clear local storage and state
       localStorage.removeItem('token');
+      localStorage.removeItem('user');
       localStorage.removeItem('sessionId');
       setUser(null);
       setIsAuthenticated(false);

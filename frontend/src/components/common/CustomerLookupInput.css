@@ -1,0 +1,180 @@
+/* Customer Lookup Component Styles */
+
+.customer-lookup-container {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 120px 1fr;
+  gap: 6px 8px;
+  align-items: center;
+}
+
+/* Removed grid layout to work with ERP form grid */
+.customer-lookup-row {
+  display: contents;
+}
+
+.customer-lookup-field {
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+
+.customer-lookup-label {
+  font-weight: normal;
+  color: var(--erp-text);
+  margin-bottom: 3px;
+  font-size: 11px;
+  text-align: right;
+  padding-right: 4px;
+}
+
+.required-asterisk {
+  color: #e74c3c;
+}
+
+.customer-lookup-input-wrapper {
+  position: relative;
+  width: 100%;
+}
+
+.customer-lookup-input {
+  width: 100%;
+  background: var(--erp-bg-cream);
+  border: 1px solid var(--erp-border);
+  padding: 3px 6px;
+  font-size: 12px;
+  font-family: 'Segoe UI', Tahoma, sans-serif;
+  color: var(--erp-text);
+  transition: all 0.3s ease;
+  box-sizing: border-box;
+  /* Remove rounded corners to match ERP theme */
+  border-radius: 0 !important;
+  box-shadow: none !important;
+}
+
+.customer-lookup-input:focus {
+  outline: 1px solid var(--erp-blue-dark);
+  border-color: var(--erp-blue-dark);
+  box-shadow: none !important;
+}
+
+.customer-lookup-input:disabled {
+  background-color: #f5f5f5;
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+.customer-lookup-loading {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 16px;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: translateY(-50%) rotate(0deg);
+  }
+  to {
+    transform: translateY(-50%) rotate(360deg);
+  }
+}
+
+/* Dropdown Styles */
+.customer-lookup-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background: white;
+  border: 2px solid #3498db;
+  border-top: none;
+  border-radius: 0 0 6px 6px;
+  max-height: 250px;
+  overflow-y: auto;
+  z-index: 1000;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  margin-top: -2px;
+}
+
+.customer-lookup-dropdown-item {
+  padding: 10px 12px;
+  cursor: pointer;
+  border-bottom: 1px solid #e9ecef;
+  transition: background-color 0.2s ease;
+}
+
+.customer-lookup-dropdown-item:last-child {
+  border-bottom: none;
+}
+
+.customer-lookup-dropdown-item:hover {
+  background-color: #e3f2fd;
+}
+
+.customer-dropdown-main {
+  font-weight: 600;
+  color: #2c3e50;
+  font-size: 14px;
+  margin-bottom: 3px;
+}
+
+.customer-dropdown-sub {
+  font-size: 12px;
+  color: #7f8c8d;
+}
+
+/* Error and No Results Messages */
+.customer-lookup-error {
+  margin-top: 8px;
+  padding: 8px 12px;
+  background-color: #fee2e2;
+  color: #dc2626;
+  border-radius: 6px;
+  font-size: 13px;
+  border-left: 4px solid #dc2626;
+}
+
+.customer-lookup-no-results {
+  margin-top: 8px;
+  padding: 8px 12px;
+  background-color: #fef3c7;
+  color: #92400e;
+  border-radius: 6px;
+  font-size: 13px;
+  text-align: center;
+  font-style: italic;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .customer-lookup-row {
+    grid-template-columns: 1fr;
+    gap: 15px;
+  }
+  
+  .customer-lookup-dropdown {
+    max-height: 200px;
+  }
+}
+
+/* Scrollbar Styling for Dropdown */
+.customer-lookup-dropdown::-webkit-scrollbar {
+  width: 8px;
+}
+
+.customer-lookup-dropdown::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 0 0 6px 0;
+}
+
+.customer-lookup-dropdown::-webkit-scrollbar-thumb {
+  background: #3498db;
+  border-radius: 4px;
+}
+
+.customer-lookup-dropdown::-webkit-scrollbar-thumb:hover {
+  background: #2980b9;
+}

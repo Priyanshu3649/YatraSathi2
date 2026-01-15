@@ -262,7 +262,8 @@ const Billing = () => {
       setLoading(true);
       let data;
       
-      if (user && user.us_usertype === 'admin') {
+      // Check if user is admin or employee
+      if (user && (user.us_usertype === 'admin' || user.us_roid !== 'CUS')) {
         data = await billingAPI.getAllBills();
       } else {
         // For non-admin users, get user-specific bills

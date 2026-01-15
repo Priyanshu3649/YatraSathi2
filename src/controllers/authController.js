@@ -316,13 +316,33 @@ const getUserProfile = async (req, res) => {
     
     console.log('User from middleware:', user ? user.toJSON() : 'User not found');
     
+    // Return complete user profile data similar to profileController
     res.json({
-      id: user.us_usid,
-      name: user.us_fname,
-      email: user.us_email,
-      us_usertype: user.us_usertype,
-      // Include role information
-      role: user.us_roid || (user.role ? user.role.ro_name : null)
+      success: true,
+      data: {
+        id: user.us_usid,
+        us_usid: user.us_usid,
+        firstName: user.us_fname,
+        us_fname: user.us_fname,
+        lastName: user.us_lname || '',
+        us_lname: user.us_lname || '',
+        email: user.us_email,
+        us_email: user.us_email,
+        phone: user.us_phone || '',
+        us_phone: user.us_phone || '',
+        us_usertype: user.us_usertype,
+        us_roid: user.us_roid,
+        us_coid: user.us_coid || 'TRV',
+        us_active: user.us_active || 1,
+        us_addr1: user.us_addr1 || '',
+        us_city: user.us_city || '',
+        us_state: user.us_state || '',
+        us_pin: user.us_pin || '',
+        us_aadhaar: user.us_aadhaar || '',
+        us_pan: user.us_pan || '',
+        role: user.us_roid || (user.role ? user.role.ro_name : null),
+        userType: user.us_usertype
+      }
     });
   } catch (error) {
     console.error('Error in getUserProfile:', error);

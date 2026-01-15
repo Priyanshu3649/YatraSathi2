@@ -256,10 +256,10 @@ const MyBookings = () => {
                     className={index % 2 === 0 ? 'even-row' : 'odd-row'}
                   >
                     <td className="source">
-                      <span className="station-name">{booking.bk_from || '—'}</span>
+                      <span className="station-name">{booking.bk_fromst || booking.bk_fromstation || booking.bk_from || '—'}</span>
                     </td>
                     <td className="destination">
-                      <span className="station-name">{booking.bk_to || '—'}</span>
+                      <span className="station-name">{booking.bk_tost || booking.bk_tostation || booking.bk_to || '—'}</span>
                     </td>
                     <td className="passengers">
                       <button 
@@ -267,7 +267,7 @@ const MyBookings = () => {
                         className="passenger-link"
                         title="Click to view passenger details"
                       >
-                        {booking.bk_pax || booking.totalPassengers || 0} Passenger{(booking.bk_pax || booking.totalPassengers || 0) !== 1 ? 's' : ''}
+                        {booking.bk_pax || booking.totalPassengers || booking.bk_totalpass || 0} Passenger{(booking.bk_pax || booking.totalPassengers || booking.bk_totalpass || 0) !== 1 ? 's' : ''}
                       </button>
                     </td>
                     <td className="status">

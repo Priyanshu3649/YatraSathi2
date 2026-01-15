@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { paymentAPI, customerAPI } from '../services/api';
+import CustomerLookupInput from '../components/common/CustomerLookupInput';
 import '../styles/vintage-erp-theme.css';
 import '../styles/classic-enterprise-global.css';
 import '../styles/vintage-admin-panel.css';
@@ -56,53 +57,6 @@ const Payments = () => {
     mdtm: '',             // Modified On
     mby: ''               // Modified By
   });
-
-  // Customer lookup state
-  const [customerLookup, setCustomerLookup] = useState([]);
-  const [showCustomerDropdown, setShowCustomerDropdown] = useState(false);
-  
-  // Fetch customer lookup
-  const fetchCustomerLookup = async (searchTerm) => {
-    // Don't search if the term is empty after trimming
-    if (!searchTerm || searchTerm.trim().length === 0) {
-      setCustomerLookup([]);
-      setShowCustomerDropdown(false);
-      return;
-    }
-    
-    try {
-      // Call the customer API to search for customers
-      const customers = await customerAPI.searchCustomers(searchTerm.trim());
-      
-      // Format the results
-      const formattedResults = Array.isArray(customers?.data) ? 
-        customers.data.map(customer => ({
-          id: customer.id || customer.cu_usid || customer.customerId || customer.cu_custno || '',
-          name: customer.name || customer.customerName || customer.cu_name || customer.cu_custname || '',
-          display: `${customer.id || customer.cu_usid || customer.customerId || customer.cu_custno || ''} - ${customer.name || customer.customerName || customer.cu_name || customer.cu_custname || ''}`
-        })) : [];
-      
-      setCustomerLookup(formattedResults);
-      setShowCustomerDropdown(formattedResults.length > 0); // Only show dropdown if there are results
-    } catch (error) {
-      console.error('Error fetching customer lookup:', error);
-      setCustomerLookup([]);
-      setShowCustomerDropdown(false);
-      // Don't re-throw to avoid blocking UI
-    }
-  };
-  
-  // Debounce function
-  const debounce = (func, delay) => {
-    let timeoutId;
-    return (...args) => {
-      clearTimeout(timeoutId);
-      timeoutId = setTimeout(() => func.apply(null, args), delay);
-    };
-  };
-  
-  // Debounced customer search
-  const debouncedCustomerSearch = useCallback(debounce(fetchCustomerLookup, 300), []);
 
   // Filter state
   const [filters, setFilters] = useState({
@@ -242,7 +196,8 @@ const Payments = () => {
       setLoading(true);
       let response;
       
-      if (user && user.us_usertype === 'admin') {
+      // Check if user is admin or employee
+      if (user && (user.us_usertype === 'admin' || user.us_roid !== 'CUS')) {
         response = await paymentAPI.getAllPayments();
       } else {
         response = await paymentAPI.getMyPayments();
@@ -287,10 +242,6 @@ const Payments = () => {
     
     // Reset validation errors
     setValidationErrors({});
-    
-    // Reset customer lookup
-    setCustomerLookup([]);
-    setShowCustomerDropdown(false);
   };
 
   const handleEdit = (payment) => {
@@ -320,10 +271,6 @@ const Payments = () => {
     
     // Reset validation errors
     setValidationErrors({});
-    
-    // Reset customer lookup
-    setCustomerLookup([]);
-    setShowCustomerDropdown(false);
   };
 
   const handleSave = async () => {
@@ -478,101 +425,20 @@ const Payments = () => {
     }));
   };
 
-  // Handle customer ID change
-  const handleCustomerIdChange = (e) => {
-    const value = e.target.value;
-    setFormData(prev => ({
-      ...prev,
-      pt_custid: value,
-      customerName: value ? '' : prev.customerName // Clear customer name if ID is being entered
-    }));
-    
-    // Fetch customer name by ID if a valid ID is entered
-    if (value.trim().length > 0) {
-      fetchCustomerNameById(value);
-    }
-    
-    // Fetch customer suggestions if search term is long enough
-    if (value.trim().length >= 1) { // Changed from 3 to 1 to allow single character search
-      debouncedCustomerSearch(value.trim());
-    } else {
-      setCustomerLookup([]);
-      setShowCustomerDropdown(false);
-    }
-  };
-  
-  
-  // Handle customer selection from dropdown
-  const handleCustomerSelect = (customer) => {
-    setFormData(prev => ({
-      ...prev,
-      pt_custid: customer.id,
-      customerName: customer.name || customer.display?.split(' - ')[1] || ''
-    }));
-    setCustomerLookup([]);
-    setShowCustomerDropdown(false);
-    
-    // Also fetch detailed customer info to populate any additional fields
-    fetchCustomerNameById(customer.id);
-  };
-  
-  // Handle customer name change
-  const handleCustomerNameChange = (e) => {
-    const value = e.target.value;
-    setFormData(prev => ({
-      ...prev,
-      customerName: value,
-      pt_custid: value ? '' : prev.pt_custid // Clear customer ID if name is being entered
-    }));
-    
-    // Fetch customer ID by name if a valid name is entered
-    if (value.trim().length > 0) {
-      fetchCustomerIdByName(value);
-    }
-    
-    // Fetch customer suggestions if search term is long enough
-    if (value.trim().length >= 1) { // Changed from 3 to 1 to allow single character search
-      debouncedCustomerSearch(value.trim()); // Use the same function for both name and ID
-    } else {
-      setCustomerLookup([]);
-      setShowCustomerDropdown(false);
-    }
-  };
-  
-
-  
-  // Fetch customer name by ID (only called after selection)
-  const fetchCustomerNameById = async (customerId) => {
-    try {
-      const customer = await customerAPI.getCustomerById(customerId);
-      const customerName = customer.data?.name || customer.data?.customerName || customer.data?.cu_name || customer.data?.cu_custname || '';
+  // Handle customer selection from CustomerLookupInput component
+  const handleCustomerChange = (customer) => {
+    if (customer) {
       setFormData(prev => ({
         ...prev,
-        customerName: customerName
+        pt_custid: customer.code || customer.id,
+        customerName: customer.name
       }));
-    } catch (error) {
-      console.error('Error fetching customer by ID:', error);
-    }
-  };
-  
-  // Fetch customer ID by name
-  const fetchCustomerIdByName = async (customerName) => {
-    try {
-      const customers = await customerAPI.searchCustomers(customerName);
-      const customer = Array.isArray(customers?.data) && customers.data.find(c => 
-        (c.name && c.name.toLowerCase().includes(customerName.toLowerCase())) ||
-        (c.customerName && c.customerName.toLowerCase().includes(customerName.toLowerCase())) ||
-        (c.cu_name && c.cu_name.toLowerCase().includes(customerName.toLowerCase())) ||
-        (c.cu_custname && c.cu_custname.toLowerCase().includes(customerName.toLowerCase()))
-      );
-      if (customer) {
-        setFormData(prev => ({
-          ...prev,
-          pt_custid: customer.id || customer.cu_usid || customer.customerId || customer.cu_custno || ''
-        }));
-      }
-    } catch (error) {
-      console.error('Error searching customers by name:', error);
+    } else {
+      setFormData(prev => ({
+        ...prev,
+        pt_custid: '',
+        customerName: ''
+      }));
     }
   };
   
@@ -653,57 +519,18 @@ const Payments = () => {
                 readOnly
                 className="erp-input"
               />
-              <label className="erp-form-label required">Customer ID</label>
-              <div style={{ position: 'relative', display: 'inline-block', width: '100%' }}>
-                <input 
-                  type="text" 
-                  name="pt_custid" 
-                  value={formData.pt_custid || ''} 
-                  onChange={handleCustomerIdChange}
-                  className="erp-input"
-                  placeholder="Search customer ID..."
+              
+              {/* Customer Lookup - Using CustomerLookupInput Component */}
+              <div style={{ gridColumn: 'span 2' }}>
+                <CustomerLookupInput
+                  customerId={formData.pt_custid}
+                  customerName={formData.customerName}
+                  onCustomerChange={handleCustomerChange}
                   disabled={formData.pt_locked === 1}
+                  required={true}
                 />
-                {showCustomerDropdown && (
-                  <div className="erp-dropdown" style={{
-                    position: 'absolute',
-                    top: '100%',
-                    left: 0,
-                    right: 0,
-                    backgroundColor: 'white',
-                    border: '1px solid #ccc',
-                    zIndex: 1000,
-                    maxHeight: '150px',
-                    overflowY: 'auto',
-                    boxShadow: '0 2px 5px rgba(0,0,0,0.2)'
-                  }}>
-                    {customerLookup.map(customer => (
-                      <div 
-                        key={customer.id}
-                        className="erp-dropdown-item"
-                        style={{
-                          padding: '4px 8px',
-                          cursor: 'pointer',
-                          borderBottom: '1px solid #eee'
-                        }}
-                        onMouseDown={() => handleCustomerSelect(customer)}
-                      >
-                        {customer.display}
-                      </div>
-                    ))}
-                  </div>
-                )}
               </div>
-              <label className="erp-form-label required">Customer Name</label>
-              <input
-                type="text"
-                name="customerName"
-                value={formData.customerName || ''}
-                onChange={handleCustomerNameChange}
-                className="erp-input"
-                placeholder="Customer name..."
-                disabled={formData.pt_locked === 1}
-              />
+              
               <label className="erp-form-label">Total Received Amount</label>
               <input 
                 type="number" 
@@ -780,18 +607,6 @@ const Payments = () => {
                 className="erp-input"
                 disabled={formData.pt_locked === 1}
               />
-              <label className="erp-form-label required">Payment Date</label>
-              <input 
-                type="date" 
-                name="pt_paydt" 
-                value={formData.pt_paydt || ''} 
-                onChange={(e) => setFormData({...formData, pt_paydt: e.target.value})}
-                className={`erp-input ${validationErrors.pt_paydt ? 'error' : ''}`}
-                disabled={formData.pt_locked === 1}
-              />
-              {validationErrors.pt_paydt && (
-                <div className="error-message" style={{ gridColumn: '1 / span 2', color: 'red', fontSize: '12px' }}>{validationErrors.pt_paydt}</div>
-              )}
               <label className="erp-form-label">Received Date</label>
               <input 
                 type="date" 
