@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { authAPI } from '../services/api';
 import '../styles/customer-profile.css';
 
 const CustomerProfile = () => {
@@ -17,29 +18,36 @@ const CustomerProfile = () => {
 
   const fetchProfile = async () => {
     try {
-      const token = localStorage.getItem('token');
-      const response = await fetch('/api/auth/profile', {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
+      const data = await authAPI.getProfile();
+      
+      // Transform the data to match the expected format
+      const profileData = {
+        id: data.id,
+        name: `${data.firstName || ''} ${data.lastName || ''}`.trim(),
+        firstName: data.firstName,
+        lastName: data.lastName,
+        email: data.email,
+        phone: data.phone,
+        customerId: data.id,
+        customerType: data.customer?.customerType || 'Individual',
+        creditLimit: data.customer?.creditLimit || 0,
+        totalBookings: 0, // Would need to fetch from bookings API
+        totalSpent: 0, // Would need to fetch from payments API
+        outstandingAmount: 0, // Would need to calculate
+        lastActivity: data.updatedAt,
+        createdAt: data.createdAt
+      };
+      
+      setProfile(profileData);
+      setEditData({
+        phone: data.phone || '',
+        email: data.email || '',
+        firstName: data.firstName || '',
+        lastName: data.lastName || ''
       });
-
-      const data = await response.json();
-
-      if (data.success) {
-        setProfile(data.data);
-        setEditData({
-          phone: data.data.phone || '',
-          email: data.data.email || '',
-          name: data.data.name || ''
-        });
-      } else {
-        setError(data.error?.message || 'Failed to load profile');
-      }
     } catch (error) {
       console.error('Profile fetch error:', error);
-      setError('Network error. Please try again.');
+      setError(error.message || 'Failed to load profile');
     } finally {
       setLoading(false);
     }
@@ -60,37 +68,37 @@ const CustomerProfile = () => {
   const handleSave = async () => {
     setSaving(true);
     try {
-      const token = localStorage.getItem('token');
-      const response = await fetch('/api/auth/profile', {
-        method: 'PUT',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(editData)
-      });
-
-      const data = await response.json();
-
-      if (data.success) {
-        setProfile(prev => ({ ...prev, ...editData }));
-        setIsEditing(false);
-      } else {
-        setError(data.error?.message || 'Failed to update profile');
-      }
+      // Transform editData to match API expected format
+      const updateData = {
+        firstName: editData.firstName,
+        lastName: editData.lastName,
+        email: editData.email,
+        phone: editData.phone
+      };
+      
+      await authAPI.updateProfile(updateData);
+      
+      // Update local profile state
+      setProfile(prev => ({
+        ...prev,
+        ...updateData,
+        name: `${updateData.firstName || ''} ${updateData.lastName || ''}`.trim()
+      }));
+      setIsEditing(false);
     } catch (error) {
       console.error('Profile update error:', error);
-      setError('Network error. Please try again.');
+      setError(error.message || 'Failed to update profile');
     } finally {
       setSaving(false);
     }
   };
 
   const handleCancel = () => {
-    setEditData({
+setEditData({
       phone: profile.phone || '',
       email: profile.email || '',
-      name: profile.name || ''
+      firstName: profile.firstName || '',
+      lastName: profile.lastName || ''
     });
     setIsEditing(false);
   };
@@ -134,14 +142,25 @@ const CustomerProfile = () => {
             {profile.name ? profile.name.charAt(0).toUpperCase() : '?'}
           </div>
           <div className="profile-basic-info">
-            <h2>{isEditing ? (
-              <input
-                type="text"
-                name="name"
-                value={editData.name}
-                onChange={handleInputChange}
-                className="profile-input"
-              />
+<h2>{isEditing ? (
+              <div style={{display: 'flex', gap: '10px'}}>
+                <input
+                  type="text"
+                  name="firstName"
+                  value={editData.firstName}
+                  onChange={handleInputChange}
+                  className="profile-input"
+                  placeholder="First Name"
+                />
+                <input
+                  type="text"
+                  name="lastName"
+                  value={editData.lastName}
+                  onChange={handleInputChange}
+                  className="profile-input"
+                  placeholder="Last Name"
+                />
+              </div>
             ) : (
               profile.name
             )}</h2>
@@ -156,7 +175,7 @@ const CustomerProfile = () => {
             <div className="detail-grid">
               <div className="detail-item">
                 <label>Email</label>
-                {isEditing ? (
+{isEditing ? (
                   <input
                     type="email"
                     name="email"
@@ -170,7 +189,7 @@ const CustomerProfile = () => {
               </div>
               <div className="detail-item">
                 <label>Phone</label>
-                {isEditing ? (
+{isEditing ? (
                   <input
                     type="tel"
                     name="phone"

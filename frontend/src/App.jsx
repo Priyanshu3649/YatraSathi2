@@ -14,6 +14,7 @@ import DynamicAdminPanel from './components/DynamicAdminPanel';
 import MessageDisplay from './components/MessageDisplay';
 import AdminDashboard from './components/Dashboard/AdminDashboard';
 import RoleBasedRoute from './components/RoleBasedRoute';
+import ProtectedRoute from './components/ProtectedRoute';
 
 // Import customer components
 import CustomerHeader from './components/Customer/CustomerHeader';
@@ -155,17 +156,17 @@ function App() {
                     {/* Employee Portal Routes */}
                     <Route path="/employee/*" element={<EmployeeDashboard />} />
                     
-                    {/* Legacy Routes */}
-                    <Route path="/dashboard" element={<Dashboard />} />
-                    <Route path="/bookings" element={<Bookings />} />
-                    <Route path="/payments" element={<Payments />} />
-                    <Route path="/reports" element={<Reports />} />
-                    <Route path="/travel-plans" element={<TravelPlans />} />
-                    <Route path="/travel-plans/:id" element={<TravelPlanDetail />} />
-                    <Route path="/travel-plans/edit/:id" element={<EditTravelPlan />} />
-                    <Route path="/travel-plans/new" element={<EditTravelPlan />} />
-                    <Route path="/billing" element={<Billing />} />
-                    <Route path="/profile" element={<Profile />} />
+                    {/* Legacy Routes - Protected */}
+                    <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+                    <Route path="/bookings" element={<ProtectedRoute><Bookings /></ProtectedRoute>} />
+                    <Route path="/payments" element={<ProtectedRoute><Payments /></ProtectedRoute>} />
+                    <Route path="/reports" element={<ProtectedRoute><Reports /></ProtectedRoute>} />
+                    <Route path="/travel-plans" element={<ProtectedRoute><TravelPlans /></ProtectedRoute>} />
+                    <Route path="/travel-plans/:id" element={<ProtectedRoute><TravelPlanDetail /></ProtectedRoute>} />
+                    <Route path="/travel-plans/edit/:id" element={<ProtectedRoute><EditTravelPlan /></ProtectedRoute>} />
+                    <Route path="/travel-plans/new" element={<ProtectedRoute><EditTravelPlan /></ProtectedRoute>} />
+                    <Route path="/billing" element={<ProtectedRoute><Billing /></ProtectedRoute>} />
+                    <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
                     
                     {/* Unauthorized Access Route */}
                     <Route path="/unauthorized" element={<UnauthorizedPage />} />

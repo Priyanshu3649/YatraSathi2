@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { authAPI } from '../services/api';
-import '../styles/erp-auth-theme.css';
+import '../styles/auth.css';
 
 const Login = () => {
   const [formData, setFormData] = useState({
@@ -99,122 +99,76 @@ const Login = () => {
       }
     } catch (error) {
       console.error('Login error:', error);
-      setError(error.message || 'Network error. Please try again.');
+      
+      // Provide more specific error messages based on error type
+      let errorMessage = 'Network error. Please try again.';
+      
+      if (error.message) {
+        if (error.message.includes('UNAUTHORIZED')) {
+          errorMessage = 'Invalid email or password. Please check your credentials.';
+        } else if (error.message.includes('EMPLOYEE_INACTIVE')) {
+          errorMessage = 'Your employee account is currently inactive. Please contact your administrator.';
+        } else if (error.message.includes('VALIDATION_ERROR')) {
+          errorMessage = 'Please enter both email and password.';
+        } else if (error.message.includes('SERVER_ERROR')) {
+          errorMessage = 'Server error. Please try again later.';
+        } else {
+          errorMessage = error.message;
+        }
+      }
+      
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="erp-auth-container">
-      <div className="erp-auth-card">
-        {/* Title Bar */}
-        <div className="erp-auth-title-bar">
-          <div className="erp-auth-system-icon">🔐</div>
-          <div className="erp-auth-title-text">Unified Authentication System</div>
-          <button className="erp-auth-close-button">×</button>
+    <div className="register panel" style={{ maxWidth: '500px', margin: '30px auto' }}>
+      <div className="panel-header text-center">
+        <h2>Login</h2>
+      </div>
+      {error && <div className="alert alert-error">{error}</div>}
+      <form onSubmit={handleSubmit}>
+        <div className="input-group">
+          <label htmlFor="email" className="form-label required">Email:</label>
+          <input
+            type="email"
+            id="email"
+            name="email"
+            value={formData.email}
+            onChange={handleChange}
+            required
+            className="form-control"
+            disabled={loading}
+          />
         </div>
-
-        {/* Menu Bar */}
-        <div className="erp-auth-menu-bar">
-          <div className="erp-auth-menu-item">File</div>
-          <div className="erp-auth-menu-item">Edit</div>
-          <div className="erp-auth-menu-item">View</div>
-          <div className="erp-auth-menu-item">Tools</div>
-          <div className="erp-auth-menu-item">Help</div>
+        <div className="input-group">
+          <label htmlFor="password" className="form-label required">Password:</label>
+          <input
+            type="password"
+            id="password"
+            name="password"
+            value={formData.password}
+            onChange={handleChange}
+            required
+            className="form-control"
+            disabled={loading}
+          />
         </div>
-
-        {/* Main Content */}
-        <div className="erp-auth-content">
-          {/* Logo Section */}
-          <div className="erp-auth-logo">
-            <div className="erp-auth-logo-icon">YATRA</div>
-          </div>
-
-          {/* Header */}
-          <div className="erp-auth-header">
-            <h2>Unified Login Portal</h2>
-            <p>Access your account with our vintage authentication system</p>
-          </div>
-
-          {/* Form Panel */}
-          <div className="erp-auth-form-panel">
-            <div className="erp-auth-form-header">Authentication Credentials</div>
-
-            <form onSubmit={handleSubmit} className="erp-auth-form">
-              {error && (
-                <div className="erp-auth-message erp-auth-error-message">
-                  {error}
-                </div>
-              )}
-
-              <div className="erp-auth-form-group">
-                <label htmlFor="email" className="erp-auth-form-label required">
-                  Email Address
-                </label>
-                <input
-                  type="email"
-                  id="email"
-                  name="email"
-                  value={formData.email}
-                  onChange={handleChange}
-                  required
-                  placeholder="Enter your email address"
-                  disabled={loading}
-                  className="erp-auth-form-input"
-                />
-              </div>
-
-              <div className="erp-auth-form-group">
-                <label htmlFor="password" className="erp-auth-form-label required">
-                  Password
-                </label>
-                <input
-                  type="password"
-                  id="password"
-                  name="password"
-                  value={formData.password}
-                  onChange={handleChange}
-                  required
-                  placeholder="Enter your password"
-                  disabled={loading}
-                  className="erp-auth-form-input"
-                />
-              </div>
-
-              <div className="erp-auth-form-group" style={{ marginTop: '20px' }}>
-                <button 
-                  type="submit" 
-                  className="erp-auth-button erp-auth-button-primary"
-                  disabled={loading}
-                  style={{ width: '100%' }}
-                >
-                  {loading ? (
-                    <span className="erp-auth-loading">Authenticating...</span>
-                  ) : (
-                    'Sign In'
-                  )}
-                </button>
-              </div>
-            </form>
-
-            <div className="erp-auth-footer">
-              <p>
-                <a href="/auth/forgot-password">Forgot your password?</a>
-              </p>
-              <p>
-                Need an account? <a href="/register">Register here</a>
-              </p>
-            </div>
-          </div>
+        <div className="text-center mt-3">
+          <button type="submit" disabled={loading} className="btn btn-primary">
+            {loading ? 'Logging in...' : 'Login'}
+          </button>
         </div>
-
-        {/* Status Bar */}
-        <div className="erp-auth-status-bar">
-          <div className="erp-auth-status-item">Unified Portal</div>
-          <div className="erp-auth-status-item">Version 1.0</div>
-          <div className="erp-auth-status-panel">Ready</div>
-        </div>
+      </form>
+      <div className="text-center mt-3">
+        <p>
+          <a href="/auth/forgot-password">Forgot your password?</a>
+        </p>
+        <p>
+          Don't have an account? <a href="/register">Register here</a>
+        </p>
       </div>
     </div>
   );

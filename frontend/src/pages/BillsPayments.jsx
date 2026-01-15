@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { billingAPI, paymentAPI } from '../services/api';
 import '../styles/bills-payments.css';
 
 const BillsPayments = () => {
@@ -13,35 +14,59 @@ const BillsPayments = () => {
     fetchData();
   }, []);
 
-  const fetchData = async () => {
+const fetchData = async () => {
     try {
-      const token = localStorage.getItem('token');
+      // Try customer-specific endpoints first
+      let billsData, paymentsData;
       
-      // Fetch bills
-      const billsResponse = await fetch('/api/customer/bills', {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
+      try {
+        // Try customer routes
+        const billsResponse = await fetch('/api/customer/bills', {
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('token')}`,
+            'Content-Type': 'application/json'
+          }
+        });
+        
+        if (billsResponse.ok) {
+          const billsResult = await billsResponse.json();
+          billsData = billsResult.data?.bills || billsResult.bills || [];
+        } else {
+          throw new Error('Customer bills endpoint failed');
         }
-      });
-
-      const billsData = await billsResponse.json();
-      if (billsData.success) {
-        setBills(billsData.data.bills || []);
+      } catch (billsError) {
+        // Fallback to billing API
+        billsData = await billingAPI.getMyBills();
+        billsData = Array.isArray(billsData) 
+          ? billsData
+          : billsData?.data?.bills || billsData?.bills || [];
+      }
+      
+      try {
+        // Try customer routes
+        const paymentsResponse = await fetch('/api/customer/payments', {
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('token')}`,
+            'Content-Type': 'application/json'
+          }
+        });
+        
+        if (paymentsResponse.ok) {
+          const paymentsResult = await paymentsResponse.json();
+          paymentsData = paymentsResult.data?.payments || paymentsResult.payments || [];
+        } else {
+          throw new Error('Customer payments endpoint failed');
+        }
+      } catch (paymentsError) {
+        // Fallback to payment API
+        paymentsData = await paymentAPI.getMyPayments();
+        paymentsData = Array.isArray(paymentsData)
+          ? paymentsData
+          : paymentsData?.data?.payments || paymentsData?.payments || [];
       }
 
-      // Fetch payments
-      const paymentsResponse = await fetch('/api/customer/payments', {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-
-      const paymentsData = await paymentsResponse.json();
-      if (paymentsData.success) {
-        setPayments(paymentsData.data.payments || []);
-      }
+      setBills(billsData);
+      setPayments(paymentsData);
     } catch (error) {
       console.error('Bills/Payments fetch error:', error);
       setError('Network error. Please try again.');

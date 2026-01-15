@@ -9,8 +9,7 @@ const Register = () => {
     email: '',
     phone: '',
     password: '',
-    password2: '',
-    userType: 'customer' // Only allow customer registration by default
+    password2: ''
   });
   
   const [loading, setLoading] = useState(false);
@@ -19,13 +18,9 @@ const Register = () => {
   
   const navigate = useNavigate();
   
-  const { name, email, phone, password, password2, userType } = formData;
+  const { name, email, phone, password, password2 } = formData;
   
   const onChange = (e) => {
-    // Prevent changing user type to employee
-    if (e.target.name === 'userType' && e.target.value === 'employee') {
-      return; // Don't allow employee selection
-    }
     setFormData({ ...formData, [e.target.name]: e.target.value });
     setError(''); // Clear error when user types
     setSuccess(''); // Clear success message
@@ -60,8 +55,7 @@ const Register = () => {
         name,
         email,
         phone,
-        password,
-        userType: 'customer' // Force user type to customer
+        password
       };
       
       // Register using API
@@ -148,20 +142,7 @@ const Register = () => {
             className="form-control"
           />
         </div>
-        <div className="input-group">
-          <label htmlFor="userType" className="form-label">User Type:</label>
-          <select
-            id="userType"
-            name="userType"
-            value="customer" // Force to customer
-            onChange={onChange}
-            disabled // Disable the dropdown to prevent changes
-            className="form-control"
-          >
-            <option value="customer">Customer</option>
-            {/* Employee option removed to prevent individual employee registration */}
-          </select>
-        </div>
+
         <div className="text-center mt-3">
           <button type="submit" disabled={loading} className="btn btn-primary">
             {loading ? 'Registering...' : 'Register'}

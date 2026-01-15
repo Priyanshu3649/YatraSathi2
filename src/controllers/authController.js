@@ -106,10 +106,14 @@ const employeeLogin = async (req, res) => {
         error: { code: 'VALIDATION_ERROR', message: 'Email and password are required' } 
       });
     }
+    
+    // Sanitize and trim inputs
+    let sanitizedEmail = email.trim().toLowerCase();
+    let sanitizedPassword = password.trim();
 
     // Check if this is a TVL user by looking for both regular and TVL login records
     let login = await Login.findOne({ 
-      where: { lg_email: email, lg_active: 1 }
+      where: { lg_email: sanitizedEmail, lg_active: 1 }
     });
     
     let isTVLUser = false;
@@ -154,6 +158,7 @@ const employeeLogin = async (req, res) => {
     }
     
     if (!login || !user) {
+      console.log(`Login failed for email: ${sanitizedEmail} - User not found`);
       return res.status(401).json({ 
         success: false, 
         error: { code: 'UNAUTHORIZED', message: 'Invalid email or password' } 
@@ -162,14 +167,16 @@ const employeeLogin = async (req, res) => {
 
     // Verify password
     if (!login.lg_passwd) {
+      console.log(`Login failed for email: ${sanitizedEmail} - No password hash found`);
       return res.status(401).json({ 
         success: false, 
         error: { code: 'UNAUTHORIZED', message: 'Invalid email or password' } 
       });
     }
     
-    const isPasswordValid = await bcrypt.compare(password, login.lg_passwd);
+    const isPasswordValid = await bcrypt.compare(sanitizedPassword, login.lg_passwd);
     if (!isPasswordValid) {
+      console.log(`Login failed for email: ${sanitizedEmail} - Invalid password`);
       return res.status(401).json({ 
         success: false, 
         error: { code: 'UNAUTHORIZED', message: 'Invalid email or password' } 
@@ -178,9 +185,10 @@ const employeeLogin = async (req, res) => {
 
     // Check if employee is active (only for employee accounts)
     if (user.us_usertype === 'employee' && employee && employee.em_status !== 'ACTIVE') {
+      console.log(`Login blocked for email: ${sanitizedEmail} - Employee account is ${employee.em_status}`);
       return res.status(403).json({ 
         success: false, 
-        error: { code: 'EMPLOYEE_INACTIVE', message: 'Employee account is inactive' } 
+        error: { code: 'EMPLOYEE_INACTIVE', message: `Employee account is ${employee.em_status.toLowerCase()}` } 
       });
     }
 
@@ -188,13 +196,14 @@ const employeeLogin = async (req, res) => {
     let session = null;
     if (isTVLUser) {
       // This is a TVL user - skip session creation to avoid foreign key constraint
-      console.log(`TVL employee user login detected: ${user.us_usid}`);
+      console.log(`TVL employee user login detected: ${user.us_usid} (${sanitizedEmail})`);
     } else {
       // Create session for the employee
       try {
         session = await SessionService.createSession(user, req);
+        console.log(`Session created for user: ${user.us_usid} (${sanitizedEmail})`);
       } catch (sessionError) {
-        console.error('Session creation failed:', sessionError.message);
+        console.error('Session creation failed for user', user.us_usid, ':', sessionError.message);
         // Continue login process even if session creation fails
         session = null;
       }
@@ -232,7 +241,7 @@ const loginUser = async (req, res) => {
 
     // Check for login in both regular and TVL databases
     let login = await Login.findOne({ 
-      where: { lg_email: email }
+      where: { lg_email: email.trim().toLowerCase() }
     });
     
     let isTVLUser = false;
@@ -245,7 +254,7 @@ const loginUser = async (req, res) => {
     } else {
       // Check TVL database
       login = await LoginTVL.findOne({ 
-        where: { lg_email: email }
+        where: { lg_email: email.trim().toLowerCase() }
       });
       
       if (login) {
