@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
+import { useNavigate } from 'react-router-dom';
 import { bookingAPI, paymentAPI, billingAPI } from '../services/api';
 import '../styles/vintage-erp-theme.css';
 import '../styles/classic-enterprise-global.css';
@@ -15,6 +16,7 @@ import CustomerLedger from '../components/Billing/CustomerLedger';
 
 const Billing = () => {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [bills, setBills] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -461,7 +463,7 @@ const Billing = () => {
     <div className="erp-admin-container">
       {/* Toolbar - Static */}
       <div className="erp-toolbar">
-        <button className="erp-icon-button" title="Home">🏠</button>
+        <button className="erp-icon-button" onClick={() => navigate('/dashboard')} title="Home">🏠</button>
         <button 
           className="erp-icon-button" 
           onClick={() => handleNavigation('first')} 
@@ -496,12 +498,12 @@ const Billing = () => {
         </button>
         <div className="erp-tool-separator"></div>
         <button className="erp-button" onClick={handleNew} title="New">New</button>
-        <button className="erp-button" onClick={handleEdit} title="Edit" disabled={!selectedBill || !user || (user.us_usertype !== 'admin' && user.us_usertype !== 'authorized_employee')}>Edit</button>
+        <button className="erp-button" onClick={handleEdit} title="Edit">Edit</button>
         <button className="erp-button" onClick={() => {
           if (selectedBill) {
             handleDeleteBill(selectedBill.id);
           }
-        }} title="Delete" disabled={!selectedBill || !user || user.us_usertype !== 'admin'}>Delete</button>
+        }} title="Delete">Delete</button>
         <div className="erp-tool-separator"></div>
         <button className="erp-button" onClick={handleSave} disabled={!isEditing}>Save</button>
         <button className="erp-button" onClick={fetchBills} title="Refresh">Refresh</button>
@@ -522,11 +524,6 @@ const Billing = () => {
             alert('Please select a bill to print');
           }
         }} title="Print" disabled={!selectedBill}>Print</button>
-        <div className="erp-tool-separator"></div>
-        <button className="erp-button" onClick={() => {
-          // Send bill to customer functionality
-          alert('Send bill to customer functionality would be implemented here');
-        }} title="Send to Customer" disabled={!selectedBill}>Send</button>
       </div>
 
       {/* Main Content Area - Scrollable */}
@@ -1003,57 +1000,28 @@ const Billing = () => {
                 <option value="FINAL">Final</option>
                 <option value="CANCELLED">Cancelled</option>
               </select>
-              <label className="erp-form-label">Created On</label>
-              <input 
-                type="text" 
-                className="erp-input" 
-                value={auditData.enteredOn || ''} 
-                readOnly 
-              />
             </div>
             
-            <div className="erp-form-row">
-              <label className="erp-form-label">Created By</label>
-              <input 
-                type="text" 
-                className="erp-input" 
-                value={auditData.enteredBy || ''} 
-                readOnly 
-              />
-              <label className="erp-form-label">Modified On</label>
-              <input 
-                type="text" 
-                className="erp-input" 
-                value={auditData.modifiedOn || ''} 
-                readOnly 
-              />
-            </div>
-            
-            <div className="erp-form-row">
-              <label className="erp-form-label">Modified By</label>
-              <input 
-                type="text" 
-                className="erp-input" 
-                value={auditData.modifiedBy || ''} 
-                readOnly 
-              />
-              <label className="erp-form-label">Closed On</label>
-              <input 
-                type="text" 
-                className="erp-input" 
-                value={auditData.closedOn || ''} 
-                readOnly 
-              />
-            </div>
-            
-            <div className="erp-form-row">
-              <label className="erp-form-label">Closed By</label>
-              <input 
-                type="text" 
-                className="erp-input" 
-                value={auditData.closedBy || ''} 
-                readOnly 
-              />
+            {/* Audit Section */}
+            <div className="erp-audit-section">
+              <div className="erp-audit-row">
+                <label className="erp-audit-label">Entered On</label>
+                <input type="text" className="erp-audit-input" value={auditData.enteredOn || ''} readOnly />
+                <label className="erp-audit-label">Entered By</label>
+                <input type="text" className="erp-audit-input" value={auditData.enteredBy || ''} readOnly />
+              </div>
+              <div className="erp-audit-row">
+                <label className="erp-audit-label">Modified On</label>
+                <input type="text" className="erp-audit-input" value={auditData.modifiedOn || ''} readOnly />
+                <label className="erp-audit-label">Modified By</label>
+                <input type="text" className="erp-audit-input" value={auditData.modifiedBy || ''} readOnly />
+              </div>
+              <div className="erp-audit-row">
+                <label className="erp-audit-label">Closed On</label>
+                <input type="text" className="erp-audit-input" value={auditData.closedOn || ''} readOnly />
+                <label className="erp-audit-label">Closed By</label>
+                <input type="text" className="erp-audit-input" value={auditData.closedBy || ''} readOnly />
+              </div>
             </div>
           </div>
 

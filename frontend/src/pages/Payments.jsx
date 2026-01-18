@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../contexts/AuthContext';
+import { useNavigate } from 'react-router-dom';
 import { paymentAPI, customerAPI } from '../services/api';
 import CustomerLookupInput from '../components/common/CustomerLookupInput';
 import '../styles/vintage-erp-theme.css';
@@ -31,6 +32,7 @@ const getAccountingPeriod = (date) => {
 
 const Payments = () => {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [payments, setPayments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -87,39 +89,61 @@ const Payments = () => {
 
   // State for filtered payments
   const [filteredPayments, setFilteredPayments] = useState([]);
+  
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const recordsPerPage = 100;
+  
+  // Pagination
+  const getPaginatedData = () => {
+    const startIndex = (currentPage - 1) * recordsPerPage;
+    const endIndex = startIndex + recordsPerPage;
+    return filteredPayments.slice(startIndex, endIndex);
+  };
+  
+  const totalPages = Math.ceil(filteredPayments.length / recordsPerPage);
     
-  // Navigation helper function to find index of selected payment
+  // Navigation functions
+  const handleNavigation = (direction) => {
+    const paginatedData = getPaginatedData();
+    if (paginatedData.length === 0) return;
+    
+    let newIndex = 0;
+    if (selectedPayment) {
+      const currentIndex = paginatedData.findIndex(item => 
+        item.pt_ptid === selectedPayment.pt_ptid
+      );
+      
+      switch(direction) {
+        case 'first': newIndex = 0; break;
+        case 'prev': newIndex = currentIndex > 0 ? currentIndex - 1 : 0; break;
+        case 'next': newIndex = currentIndex < paginatedData.length - 1 ? currentIndex + 1 : paginatedData.length - 1; break;
+        case 'last': newIndex = paginatedData.length - 1; break;
+        default: break;
+      }
+    }
+    
+    handleRowSelect(paginatedData[newIndex]);
+  };
+  
+  // Helper function to get selected payment index
   const getSelectedPaymentIndex = () => {
     if (!selectedPayment) return -1;
-    return filteredPayments.findIndex(p => p.pt_ptid === selectedPayment.pt_ptid);
+    return paginatedData.findIndex(item => item.pt_ptid === selectedPayment.pt_ptid);
   };
-
-  // Navigation functions
-  const goToFirstRecord = () => {
-    if (filteredPayments.length > 0) {
-      handleRowSelect(filteredPayments[0]);
-    }
-  };
-
-  const goToPreviousRecord = () => {
-    const currentIndex = getSelectedPaymentIndex();
-    if (currentIndex > 0) {
-      handleRowSelect(filteredPayments[currentIndex - 1]);
-    }
-  };
-
-  const goToNextRecord = () => {
-    const currentIndex = getSelectedPaymentIndex();
-    if (currentIndex < filteredPayments.length - 1) {
-      handleRowSelect(filteredPayments[currentIndex + 1]);
-    }
-  };
-
-  const goToLastRecord = () => {
-    if (filteredPayments.length > 0) {
-      handleRowSelect(filteredPayments[filteredPayments.length - 1]);
-    }
-  };
+  
+  // Navigation helper functions
+  const goToFirstRecord = () => handleNavigation('first');
+  const goToPreviousRecord = () => handleNavigation('prev');
+  const goToNextRecord = () => handleNavigation('next');
+  const goToLastRecord = () => handleNavigation('last');
+  
+  // Check if navigation buttons should be disabled
+  const paginatedData = getPaginatedData();
+  const isFirstRecord = selectedPayment && paginatedData.length > 0 && 
+    paginatedData[0].pt_ptid === selectedPayment.pt_ptid;
+  const isLastRecord = selectedPayment && paginatedData.length > 0 && 
+    paginatedData[paginatedData.length - 1].pt_ptid === selectedPayment.pt_ptid;
 
   // Apply filters
   useEffect(() => {
@@ -169,11 +193,11 @@ const Payments = () => {
       switch (event.key) {
         case 'ArrowDown':
           event.preventDefault();
-          goToNextRecord();
+          handleNavigation('next');
           break;
         case 'ArrowUp':
           event.preventDefault();
-          goToPreviousRecord();
+          handleNavigation('prev');
           break;
         default:
           break;
@@ -486,10 +510,39 @@ const Payments = () => {
     <div className="erp-admin-container">
       {/* Toolbar */}
       <div className="erp-toolbar">
-        <button className="erp-icon-button" onClick={goToFirstRecord} disabled={payments.length === 0 || getSelectedPaymentIndex() <= 0} title="First Record">|◀</button>
-        <button className="erp-icon-button" onClick={goToPreviousRecord} disabled={payments.length === 0 || getSelectedPaymentIndex() <= 0} title="Previous Record">◀</button>
-        <button className="erp-icon-button" onClick={goToNextRecord} disabled={payments.length === 0 || getSelectedPaymentIndex() >= payments.length - 1} title="Next Record">▶</button>
-        <button className="erp-icon-button" onClick={goToLastRecord} disabled={payments.length === 0 || getSelectedPaymentIndex() >= payments.length - 1} title="Last Record">▶|</button>
+        <button className="erp-icon-button" onClick={() => navigate('/dashboard')} title="Home">🏠</button>
+        <button 
+          className="erp-icon-button" 
+          onClick={goToFirstRecord} 
+          disabled={!selectedPayment || isFirstRecord}
+          title="First"
+        >
+          |◀
+        </button>
+        <button 
+          className="erp-icon-button" 
+          onClick={goToPreviousRecord} 
+          disabled={!selectedPayment || isFirstRecord}
+          title="Previous"
+        >
+          ◀
+        </button>
+        <button 
+          className="erp-icon-button" 
+          onClick={goToNextRecord} 
+          disabled={!selectedPayment || isLastRecord}
+          title="Next"
+        >
+          ▶
+        </button>
+        <button 
+          className="erp-icon-button" 
+          onClick={goToLastRecord} 
+          disabled={!selectedPayment || isLastRecord}
+          title="Last"
+        >
+          ▶|
+        </button>
         <div className="erp-tool-separator"></div>
         <button className="erp-button" onClick={handleNew} title="New">New</button>
         <button className="erp-button" onClick={() => selectedPayment ? handleEdit(selectedPayment) : alert('Please select a payment first')} disabled={!selectedPayment || (user?.us_usertype !== 'admin' && user?.us_usertype !== 'employee') || (selectedPayment && selectedPayment.pt_locked === 1)} title="Edit">Edit</button>
@@ -499,8 +552,8 @@ const Payments = () => {
         <div className="erp-tool-separator"></div>
         <button className="erp-button" onClick={fetchPayments} title="Refresh">Refresh</button>
         <div className="erp-tool-separator"></div>
-        <button className="erp-button" title="Export">Export</button>
         <button className="erp-button" title="Print">Print</button>
+        <button className="erp-button" title="Export">Export</button>
       </div>
 
       <div className="erp-main-content">
@@ -520,16 +573,15 @@ const Payments = () => {
                 className="erp-input"
               />
               
-              {/* Customer Lookup - Using CustomerLookupInput Component */}
-              <div style={{ gridColumn: 'span 2' }}>
-                <CustomerLookupInput
-                  customerId={formData.pt_custid}
-                  customerName={formData.customerName}
-                  onCustomerChange={handleCustomerChange}
-                  disabled={formData.pt_locked === 1}
-                  required={true}
-                />
-              </div>
+              {/* Customer Lookup - Using CustomerLookupInput Component with horizontal layout */}
+              <CustomerLookupInput
+                customerId={formData.pt_custid}
+                customerName={formData.customerName}
+                onCustomerChange={handleCustomerChange}
+                disabled={formData.pt_locked === 1}
+                required={true}
+                layout="horizontal"
+              />
               
               <label className="erp-form-label">Total Received Amount</label>
               <input 
@@ -1034,7 +1086,7 @@ const Payments = () => {
               </tr>
             </thead>
             <tbody>
-              {filteredPayments.map((payment) => (
+              {paginatedData.map((payment) => (
                 <tr 
                   key={payment.pt_ptid} 
                   onClick={() => handleRowSelect(payment)}
@@ -1070,11 +1122,48 @@ const Payments = () => {
 
       {/* Status Bar */}
       <div className="erp-status-bar">
-        <div className="erp-status-item">{selectedPayment ? 'Selected' : 'Ready'}</div>
-        <div className="erp-status-item">Records: {filteredPayments.length !== payments.length ? `${filteredPayments.length}/${payments.length}` : filteredPayments.length}</div>
-        <div className="erp-status-item">Position: {selectedPayment ? `${filteredPayments.findIndex(p => p.pt_ptid === selectedPayment.pt_ptid) + 1} of ${filteredPayments.length}` : '- / -'}</div>
-        <div className="erp-status-item">User: {user?.us_usid || 'Unknown'}</div>
-        <div className="status-panel">YatraSathi ERP System</div>
+        <div className="erp-status-item">{isEditing ? 'Editing' : 'Ready'}</div>
+        <div className="erp-status-item">
+          Records: {filteredPayments.length !== payments.length ? `${filteredPayments.length}/${payments.length}` : filteredPayments.length}
+        </div>
+        <div className="erp-status-item">
+          Showing: {paginatedData.length > 0 ? `${((currentPage - 1) * recordsPerPage) + 1}-${Math.min(currentPage * recordsPerPage, filteredPayments.length)}` : '0'} of {filteredPayments.length}
+        </div>
+        <div className="erp-status-item" style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '4px' }}>
+          <button 
+            className="erp-icon-button" 
+            onClick={() => setCurrentPage(1)}
+            disabled={currentPage === 1}
+            title="First Page"
+          >
+            |◀
+          </button>
+          <button 
+            className="erp-icon-button" 
+            onClick={() => setCurrentPage(currentPage - 1)}
+            disabled={currentPage === 1}
+            title="Previous Page"
+          >
+            ◀
+          </button>
+          <span style={{ margin: '0 4px', fontSize: '12px' }}>Page {currentPage}/{totalPages || 1}</span>
+          <button 
+            className="erp-icon-button" 
+            onClick={() => setCurrentPage(currentPage + 1)}
+            disabled={currentPage === totalPages || totalPages === 0}
+            title="Next Page"
+          >
+            ▶
+          </button>
+          <button 
+            className="erp-icon-button" 
+            onClick={() => setCurrentPage(totalPages)}
+            disabled={currentPage === totalPages || totalPages === 0}
+            title="Last Page"
+          >
+            ▶|
+          </button>
+        </div>
       </div>
     </div>
   );

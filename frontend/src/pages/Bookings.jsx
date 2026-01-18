@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../contexts/AuthContext';
+import { useNavigate } from 'react-router-dom';
 import { bookingAPI, customerAPI } from '../services/api';
 import CustomerLookupInput from '../components/common/CustomerLookupInput';
 import '../styles/vintage-erp-theme.css';
@@ -10,6 +11,7 @@ import '../styles/vintage-erp-global.css';
 
 const Bookings = () => {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [bookings, setBookings] = useState([]);
   const [filteredBookings, setFilteredBookings] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -58,6 +60,43 @@ const Bookings = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const recordsPerPage = 100;
   
+  // Pagination helper function
+  const getPaginatedData = () => {
+    const startIndex = (currentPage - 1) * recordsPerPage;
+    const endIndex = startIndex + recordsPerPage;
+    return filteredBookings.slice(startIndex, endIndex);
+  };
+  
+  // Navigation functions
+  const handleNavigation = (direction) => {
+    const paginatedData = getPaginatedData();
+    if (paginatedData.length === 0) return;
+    
+    let newIndex = 0;
+    if (selectedBooking) {
+      const currentIndex = paginatedData.findIndex(item => 
+        item.bk_bkid === selectedBooking.bk_bkid
+      );
+      
+      switch(direction) {
+        case 'first': newIndex = 0; break;
+        case 'prev': newIndex = currentIndex > 0 ? currentIndex - 1 : 0; break;
+        case 'next': newIndex = currentIndex < paginatedData.length - 1 ? currentIndex + 1 : paginatedData.length - 1; break;
+        case 'last': newIndex = paginatedData.length - 1; break;
+        default: break;
+      }
+    }
+    
+    handleRecordSelect(paginatedData[newIndex]);
+  };
+  
+  // Check if navigation buttons should be disabled
+  const paginatedData = getPaginatedData();
+  const isFirstRecord = selectedBooking && paginatedData.length > 0 && 
+    paginatedData[0].bk_bkid === selectedBooking.bk_bkid;
+  const isLastRecord = selectedBooking && paginatedData.length > 0 && 
+    paginatedData[paginatedData.length - 1].bk_bkid === selectedBooking.bk_bkid;
+  
   // State for passenger details modal
   const [showPassengerModal, setShowPassengerModal] = useState(false);
   const [passengerDetails, setPassengerDetails] = useState([]);
@@ -77,7 +116,7 @@ const Bookings = () => {
       let data;
       
       // Check if user is admin or employee
-      if (user && (user.us_usertype === 'admin' || user.us_roid !== 'CUS')) {
+      if (user && (user.us_usertype === 'admin' || ['AGT', 'ACC', 'HR', 'CC', 'MKT', 'MGT', 'ADM'].includes(user.us_roid))) {
         data = await bookingAPI.getAllBookings();
       } else {
         const response = await bookingAPI.getMyBookings();
@@ -185,6 +224,17 @@ const Bookings = () => {
 
   const handleEdit = () => {
     if (selectedBooking) {
+      // Check if user is customer and booking status
+      const isCustomer = user && (user.us_usertype === 'customer' || user.us_roid === 'CUS');
+      const bookingStatus = selectedBooking.bk_status?.toUpperCase() || selectedBooking.status?.toUpperCase() || 'DRAFT';
+      
+      // For customers, only allow editing when status is DRAFT
+      if (isCustomer && bookingStatus !== 'DRAFT') {
+        alert('You can only edit bookings that are in DRAFT status. Once the booking status changes, editing is locked.');
+        return;
+      }
+      
+      // For admin/employees, allow editing regardless of status
       setIsEditing(true);
     } else {
       alert('Please select a record first');
@@ -324,15 +374,7 @@ const Bookings = () => {
     ));
   };
 
-  // Pagination
-  const getPaginatedData = () => {
-    const startIndex = (currentPage - 1) * recordsPerPage;
-    const endIndex = startIndex + recordsPerPage;
-    return filteredBookings.slice(startIndex, endIndex);
-  };
-
   const totalPages = Math.ceil(filteredBookings.length / recordsPerPage);
-  const paginatedData = getPaginatedData();
 
   return (
     <div className="erp-admin-container">
@@ -347,18 +389,62 @@ const Bookings = () => {
         <div className="erp-user-info">USER: {user?.us_name || 'ADMIN'} ⚙</div>
       </div>
 
+      {/* Top Menu Bar - Static */}
+      <div className="erp-menu-bar">
+        <div className="erp-menu-item">File</div>
+        <div className="erp-menu-item">Edit</div>
+        <div className="erp-menu-item">View</div>
+        <div className="erp-menu-item">Booking</div>
+        <div className="erp-menu-item">Reports</div>
+        <div className="erp-menu-item">Help</div>
+        <div className="erp-user-info">USER: {user?.us_name || 'ADMIN'} ⚙</div>
+      </div>
+
       {/* Toolbar - Static */}
       <div className="erp-toolbar">
-        <button className="erp-button" onClick={handleNew}>New</button>
-        <button className="erp-button" onClick={handleEdit}>Edit</button>
-        <button className="erp-button" onClick={handleDelete}>Delete</button>
+        <button className="erp-icon-button" onClick={() => navigate('/dashboard')} title="Home">🏠</button>
+        <button 
+          className="erp-icon-button" 
+          onClick={() => handleNavigation('first')} 
+          disabled={!selectedBooking || isFirstRecord}
+          title="First"
+        >
+          |◀
+        </button>
+        <button 
+          className="erp-icon-button" 
+          onClick={() => handleNavigation('prev')} 
+          disabled={!selectedBooking || isFirstRecord}
+          title="Previous"
+        >
+          ◀
+        </button>
+        <button 
+          className="erp-icon-button" 
+          onClick={() => handleNavigation('next')} 
+          disabled={!selectedBooking || isLastRecord}
+          title="Next"
+        >
+          ▶
+        </button>
+        <button 
+          className="erp-icon-button" 
+          onClick={() => handleNavigation('last')} 
+          disabled={!selectedBooking || isLastRecord}
+          title="Last"
+        >
+          ▶|
+        </button>
         <div className="erp-tool-separator"></div>
-        <button className="erp-button" onClick={handleSave} disabled={!isEditing}>Save</button>
-        <button className="erp-button" onClick={fetchBookings}>Refresh</button>
+        <button className="erp-button" onClick={handleNew} title="New">New</button>
+        <button className="erp-button" onClick={handleEdit} title="Edit">Edit</button>
+        <button className="erp-button" onClick={handleDelete} title="Delete">Delete</button>
         <div className="erp-tool-separator"></div>
-        <button className="erp-button">Filters</button>
-        <button className="erp-button">Print</button>
-        <button className="erp-button">Export</button>
+        <button className="erp-button" onClick={handleSave} disabled={!isEditing} title="Save">Save</button>
+        <button className="erp-button" onClick={fetchBookings} title="Refresh">Refresh</button>
+        <div className="erp-tool-separator"></div>
+        <button className="erp-button" title="Print">Print</button>
+        <button className="erp-button" title="Export">Export</button>
       </div>
 
       {/* Main Content Area - Scrollable */}
@@ -391,14 +477,15 @@ const Bookings = () => {
               />
             </div>
 
-            {/* Customer ID and Name Row - Using CustomerLookupInput */}
-            <div className="erp-form-row" style={{ gridColumn: 'span 4' }}>
+            {/* Customer ID and Name Row - Using CustomerLookupInput with horizontal layout */}
+            <div className="erp-form-row">
               <CustomerLookupInput
                 customerId={formData.customerId}
                 customerName={formData.customerName}
                 onCustomerChange={handleCustomerChange}
                 disabled={!isEditing}
                 required={true}
+                layout="horizontal"
               />
             </div>
             
@@ -657,7 +744,7 @@ const Bookings = () => {
                 <option value="Cancelled">Cancelled</option>
               </select>
             </div>
-
+            
             {/* Audit Section */}
             <div className="erp-audit-section">
               <div className="erp-audit-row">
@@ -702,17 +789,17 @@ const Bookings = () => {
                   <thead>
                     <tr>
                       <th style={{ width: '30px' }}><input type="checkbox" /></th>
-                      <th>Booking ID</th>
-                      <th>Booking Date</th>
-                      <th>Customer ID</th>
-                      <th>Customer Name</th>
-                      <th>Total Passengers</th>
-                      <th>From Station</th>
-                      <th>To Station</th>
-                      <th>Travel Date</th>
-                      <th>Travel Class</th>
-                      <th>Status</th>
-                      <th>Created By</th>
+                      <th style={{ width: '100px' }}>Booking ID</th>
+                      <th style={{ width: '150px' }}>Booking Date</th>
+                      <th style={{ width: '150px' }}>Customer ID</th>
+                      <th style={{ width: '200px' }}>Customer Name</th>
+                      <th style={{ width: '120px' }}>Total Passengers</th>
+                      <th style={{ width: '150px' }}>From Station</th>
+                      <th style={{ width: '150px' }}>To Station</th>
+                      <th style={{ width: '150px' }}>Travel Date</th>
+                      <th style={{ width: '100px' }}>Travel Class</th>
+                      <th style={{ width: '100px' }}>Status</th>
+                      <th style={{ width: '150px' }}>Created By</th>
                     </tr>
                     {/* Inline Filter Row */}
                     <tr className="inline-filter-row">

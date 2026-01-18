@@ -1,5 +1,35 @@
 /* Customer Lookup Component Styles */
 
+/* ERP Form Integration Classes */
+.erp-form-field-container {
+  /* Make input wrapper fill the grid cell */
+  width: 100%;
+  position: relative;
+}
+
+.customer-lookup-input {
+  /* Match standard ERP input field styling */
+  width: 100% !important;
+  background: var(--cream-white) !important;
+  border: 1px solid var(--border-gray) !important;
+  padding: 3px 6px !important;
+  font-size: 12px !important;
+  font-family: 'Segoe UI', Tahoma, sans-serif !important;
+  box-sizing: border-box !important;
+}
+
+.customer-lookup-input:focus {
+  outline: 1px solid var(--primary-blue) !important;
+  border-color: var(--primary-blue) !important;
+}
+
+.customer-lookup-input:disabled,
+.customer-lookup-input:read-only {
+  background: #f0f0f0 !important;
+  color: #808080 !important;
+}
+
+/* Vertical Layout (Default) */
 .customer-lookup-container {
   width: 100%;
   display: grid;
@@ -7,6 +37,8 @@
   gap: 6px 8px;
   align-items: center;
 }
+
+/* Horizontal Layout classes removed - now using fragment to integrate with parent grid */
 
 /* Removed grid layout to work with ERP form grid */
 .customer-lookup-row {
@@ -35,33 +67,6 @@
 .customer-lookup-input-wrapper {
   position: relative;
   width: 100%;
-}
-
-.customer-lookup-input {
-  width: 100%;
-  background: var(--erp-bg-cream);
-  border: 1px solid var(--erp-border);
-  padding: 3px 6px;
-  font-size: 12px;
-  font-family: 'Segoe UI', Tahoma, sans-serif;
-  color: var(--erp-text);
-  transition: all 0.3s ease;
-  box-sizing: border-box;
-  /* Remove rounded corners to match ERP theme */
-  border-radius: 0 !important;
-  box-shadow: none !important;
-}
-
-.customer-lookup-input:focus {
-  outline: 1px solid var(--erp-blue-dark);
-  border-color: var(--erp-blue-dark);
-  box-shadow: none !important;
-}
-
-.customer-lookup-input:disabled {
-  background-color: #f5f5f5;
-  cursor: not-allowed;
-  opacity: 0.7;
 }
 
 .customer-lookup-loading {

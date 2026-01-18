@@ -185,7 +185,7 @@ const createBooking = async (req, res) => {
         bk_class: trainClass || 'SL',
         bk_berthpref: berthPreference || 'NO_PREF',
         bk_totalpass: passengers.length,
-        bk_status: 'PENDING',
+        bk_status: 'DRAFT',
         bk_remarks: trainPreferences.length > 0 ? `Train Preferences: ${trainPreferences.join(', ')}` : null,
         eby: userId,
         mby: userId

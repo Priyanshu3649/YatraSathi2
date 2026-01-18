@@ -28,29 +28,64 @@ export const AuthProvider = ({ children }) => {
             us_fname: profileData.firstName || profileData.us_fname || '',
             us_lname: profileData.lastName || profileData.us_lname || '',
             us_email: profileData.email || profileData.us_email,
-            us_usertype: profileData.us_usertype || profileData.userType || 'customer',
-            us_roid: profileData.us_roid || profileData.role || 'CUS',
-            us_coid: profileData.us_coid || 'TRV',
+            us_usertype: profileData.us_usertype || profileData.userType || profileData.usertype || 'customer',
+            us_roid: profileData.us_roid || profileData.role || profileData.us_roid || 'CUS',
+            us_coid: profileData.us_coid || profileData.companyId || 'TRV',
             us_phone: profileData.phone || profileData.us_phone || '',
-            us_active: profileData.us_active || 1,
-            us_addr1: profileData.us_addr1 || '',
-            us_city: profileData.us_city || '',
-            us_state: profileData.us_state || '',
-            us_pin: profileData.us_pin || '',
-            us_aadhaar: profileData.us_aadhaar || '',
-            us_pan: profileData.us_pan || ''
+            us_active: profileData.us_active || profileData.isActive || 1,
+            us_addr1: profileData.us_addr1 || profileData.address1 || '',
+            us_city: profileData.us_city || profileData.city || '',
+            us_state: profileData.us_state || profileData.state || '',
+            us_pin: profileData.us_pin || profileData.pin || '',
+            us_aadhaar: profileData.us_aadhaar || profileData.aadhaar || '',
+            us_pan: profileData.us_pan || profileData.pan || ''
           };
           
           console.log('User object created:', userObject);
           setUser(userObject);
           setIsAuthenticated(true);
+          // Also store user in localStorage for immediate access
+          localStorage.setItem('user', JSON.stringify(userObject));
         } catch (error) {
           console.error('Token validation failed:', error);
-          // Token is invalid, remove it and reset auth state
-          localStorage.removeItem('token');
-          localStorage.removeItem('sessionId');
-          setUser(null);
-          setIsAuthenticated(false);
+          // Try to get user data from localStorage as fallback
+          try {
+            const storedUser = localStorage.getItem('user');
+            if (storedUser) {
+              let userObject = JSON.parse(storedUser);
+              
+              // Ensure role fields are properly set
+              if (!userObject.us_roid && userObject.role) {
+                userObject.us_roid = userObject.role;
+              }
+              if (!userObject.us_roid) {
+                userObject.us_roid = 'CUS';
+              }
+              if (!userObject.us_usertype && userObject.userType) {
+                userObject.us_usertype = userObject.userType;
+              }
+              if (!userObject.us_usertype) {
+                userObject.us_usertype = 'customer';
+              }
+              
+              setUser(userObject);
+              setIsAuthenticated(true);
+              console.log('Restored user from localStorage:', userObject);
+            } else {
+              // Token is invalid and no stored user, remove it and reset auth state
+              localStorage.removeItem('token');
+              localStorage.removeItem('sessionId');
+              localStorage.removeItem('user');
+              setUser(null);
+              setIsAuthenticated(false);
+            }
+          } catch (fallbackError) {
+            console.error('Failed to restore user from localStorage:', fallbackError);
+            localStorage.removeItem('token');
+            localStorage.removeItem('sessionId');
+            setUser(null);
+            setIsAuthenticated(false);
+          }
         }
       } else {
         // No token found, ensure clean state

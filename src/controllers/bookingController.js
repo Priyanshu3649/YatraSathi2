@@ -35,7 +35,7 @@ const createBooking = async (req, res) => {
         bk_berthpref: berthPreference,
         bk_totalpass: totalPassengers || 1,
         bk_remarks: remarks,
-        bk_status: 'PENDING',
+        bk_status: 'DRAFT',
         eby: req.user.us_usid,
         mby: req.user.us_usid
       }, { transaction });
