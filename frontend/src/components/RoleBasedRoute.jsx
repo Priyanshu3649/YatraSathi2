@@ -180,38 +180,53 @@ const isModuleRestrictedByRole = (role, module) => {
 };
 
 const RoleBasedRoute = ({ children, requiredRole, requiredModule, requiredOperation, fallbackPath = '/unauthorized' }) => {
-  const { user, isAuthenticated, loading } = useAuth();
   const location = useLocation();
+  const [authState, setAuthState] = useState({ user: null, isAuthenticated: false, loading: true });
   const [hasAccess, setHasAccess] = useState(null);
 
   useEffect(() => {
-    if (loading) return;
+    // Safely get auth context
+    try {
+      const authContext = useAuth();
+      setAuthState({
+        user: authContext.user,
+        isAuthenticated: authContext.isAuthenticated,
+        loading: authContext.loading
+      });
+    } catch (error) {
+      console.warn('Auth context not available in RoleBasedRoute:', error);
+      setAuthState({ user: null, isAuthenticated: false, loading: false });
+    }
+  }, []);
+
+  useEffect(() => {
+    if (authState.loading) return;
 
     let access = true;
 
     // Check role-based access
     if (requiredRole) {
       if (Array.isArray(requiredRole)) {
-        access = requiredRole.includes(user?.us_roid);
+        access = requiredRole.includes(authState.user?.us_roid);
       } else {
-        access = user?.us_roid === requiredRole;
+        access = authState.user?.us_roid === requiredRole;
       }
     }
 
     // Check module-based access
     if (access && requiredModule) {
-      access = hasModuleAccess(user?.us_roid, requiredModule, requiredOperation);
+      access = hasModuleAccess(authState.user?.us_roid, requiredModule, requiredOperation);
     }
 
     // Check if module is restricted
     if (access && requiredModule) {
-      access = !isModuleRestrictedByRole(user?.us_roid, requiredModule);
+      access = !isModuleRestrictedByRole(authState.user?.us_roid, requiredModule);
     }
 
     setHasAccess(access);
-  }, [user, isAuthenticated, loading, requiredRole, requiredModule, requiredOperation]);
+  }, [authState, requiredRole, requiredModule, requiredOperation]);
 
-  if (loading) {
+  if (authState.loading) {
     return (
       <div style={{
         display: 'flex',
@@ -226,7 +241,7 @@ const RoleBasedRoute = ({ children, requiredRole, requiredModule, requiredOperat
     );
   }
 
-  if (!isAuthenticated) {
+  if (!authState.isAuthenticated) {
     // Redirect to unified login page for all users
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
@@ -240,24 +255,37 @@ const RoleBasedRoute = ({ children, requiredRole, requiredModule, requiredOperat
 
 // Component to conditionally render UI elements based on role/permissions
 export const RoleBasedElement = ({ allowedRoles, allowedModule, allowedOperation, children }) => {
-  const { user, loading } = useAuth();
+  const [authState, setAuthState] = useState({ user: null, loading: true });
 
-  if (loading) return null;
+  useEffect(() => {
+    try {
+      const authContext = useAuth();
+      setAuthState({
+        user: authContext.user,
+        loading: authContext.loading
+      });
+    } catch (error) {
+      console.warn('Auth context not available in RoleBasedElement:', error);
+      setAuthState({ user: null, loading: false });
+    }
+  }, []);
+
+  if (authState.loading) return null;
 
   let isVisible = true;
 
   // Check role-based visibility
   if (allowedRoles) {
     if (Array.isArray(allowedRoles)) {
-      isVisible = allowedRoles.includes(user?.us_roid);
+      isVisible = allowedRoles.includes(authState.user?.us_roid);
     } else {
-      isVisible = user?.us_roid === allowedRoles;
+      isVisible = authState.user?.us_roid === allowedRoles;
     }
   }
 
   // Check module-based visibility
   if (isVisible && allowedModule) {
-    isVisible = hasModuleAccess(user?.us_roid, allowedModule, allowedOperation);
+    isVisible = hasModuleAccess(authState.user?.us_roid, allowedModule, allowedOperation);
   }
 
   return isVisible ? children : null;
@@ -265,7 +293,20 @@ export const RoleBasedElement = ({ allowedRoles, allowedModule, allowedOperation
 
 // Hook to get user permissions
 export const usePermissions = () => {
-  const { user } = useAuth();
+  const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true);
+  
+  useEffect(() => {
+    try {
+      const authContext = useAuth();
+      setUser(authContext.user);
+      setLoading(false);
+    } catch (error) {
+      console.warn('Auth context not available in usePermissions hook:', error);
+      setUser(null);
+      setLoading(false);
+    }
+  }, []);
   
   const canAccessModule = (module, operation = null) => {
     return hasModuleAccess(user?.us_roid, module, operation);
@@ -283,7 +324,8 @@ export const usePermissions = () => {
     canAccessModule,
     isModuleRestricted,
     getUserPermissions,
-    userRole: user?.us_roid
+    userRole: user?.us_roid,
+    loading
   };
 };
 

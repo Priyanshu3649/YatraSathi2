@@ -126,13 +126,25 @@ function App() {
 
   // Conditional Header component
   const ConditionalHeader = () => {
-    const { user } = useAuth();
-    
-    // Show customer header only for customers, otherwise show regular header
-    if (user && (user.us_roid === 'CUS')) {
-      return <CustomerHeader />;
+    try {
+      const { user, loading } = useAuth();
+      
+      // Show nothing while loading to prevent flash of incorrect header
+      if (loading) {
+        return null;
+      }
+      
+      // Show customer header only for customers, otherwise show regular header
+      if (user && (user.us_roid === 'CUS')) {
+        return <CustomerHeader />;
+      }
+      return <Header />;
+    } catch (error) {
+      // If context is not available, return null
+      // This can happen during hot module replacement
+      console.warn('Auth context not available, skipping header rendering');
+      return null;
     }
-    return <Header />;
   };
 
   return (

@@ -4,7 +4,6 @@ import { authAPI } from '../services/api';
 // Create Auth Context
 const AuthContext = createContext();
 
-// Auth Provider Component
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -13,6 +12,9 @@ export const AuthProvider = ({ children }) => {
   // Check if user is logged in on initial load
   useEffect(() => {
     const checkUserStatus = async () => {
+      // Set loading to true at the start of the check
+      setLoading(true);
+      
       const token = localStorage.getItem('token');
       
       if (token) {
@@ -48,51 +50,20 @@ export const AuthProvider = ({ children }) => {
           localStorage.setItem('user', JSON.stringify(userObject));
         } catch (error) {
           console.error('Token validation failed:', error);
-          // Try to get user data from localStorage as fallback
-          try {
-            const storedUser = localStorage.getItem('user');
-            if (storedUser) {
-              let userObject = JSON.parse(storedUser);
-              
-              // Ensure role fields are properly set
-              if (!userObject.us_roid && userObject.role) {
-                userObject.us_roid = userObject.role;
-              }
-              if (!userObject.us_roid) {
-                userObject.us_roid = 'CUS';
-              }
-              if (!userObject.us_usertype && userObject.userType) {
-                userObject.us_usertype = userObject.userType;
-              }
-              if (!userObject.us_usertype) {
-                userObject.us_usertype = 'customer';
-              }
-              
-              setUser(userObject);
-              setIsAuthenticated(true);
-              console.log('Restored user from localStorage:', userObject);
-            } else {
-              // Token is invalid and no stored user, remove it and reset auth state
-              localStorage.removeItem('token');
-              localStorage.removeItem('sessionId');
-              localStorage.removeItem('user');
-              setUser(null);
-              setIsAuthenticated(false);
-            }
-          } catch (fallbackError) {
-            console.error('Failed to restore user from localStorage:', fallbackError);
-            localStorage.removeItem('token');
-            localStorage.removeItem('sessionId');
-            setUser(null);
-            setIsAuthenticated(false);
-          }
-        }
+          // Remove invalid token and user data to prevent "Access Denied" errors
+          localStorage.removeItem('token');
+          localStorage.removeItem('sessionId');
+          localStorage.removeItem('user');
+          setUser(null);
+          setIsAuthenticated(false);
+        };
       } else {
         // No token found, ensure clean state
         setUser(null);
         setIsAuthenticated(false);
       }
       
+      // Always set loading to false at the end
       setLoading(false);
     };
 
@@ -111,6 +82,7 @@ export const AuthProvider = ({ children }) => {
     localStorage.setItem('user', JSON.stringify(userWithRole));
     setUser(userWithRole);
     setIsAuthenticated(true);
+    setLoading(false); // Ensure loading is false after login
   };
 
   // Logout function
@@ -130,6 +102,7 @@ export const AuthProvider = ({ children }) => {
       localStorage.removeItem('sessionId');
       setUser(null);
       setIsAuthenticated(false);
+      setLoading(false); // Ensure loading is false after logout
     }
   };
 
@@ -144,7 +117,7 @@ export const AuthProvider = ({ children }) => {
 
   return (
     <AuthContext.Provider value={value}>
-      {!loading && children}
+      {children}
     </AuthContext.Provider>
   );
 };

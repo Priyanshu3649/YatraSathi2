@@ -344,6 +344,132 @@ const DynamicAdminPanel = () => {
       columns: ['co_coid', 'co_coshort', 'co_codesc', 'co_city', 'co_state'],
       columnLabels: ['Company ID', 'Short Name', 'Description', 'City', 'State'],
       filterFields: ['shortName']
+    },
+    // ==================== BUSINESS MODULES ====================
+    bookings: {
+      name: 'Bookings Management',
+      endpoint: '/bookings',
+      fields: [
+        { name: 'bk_bkid', label: 'Booking ID', type: 'text', readOnly: true },
+        { name: 'bk_bkno', label: 'Booking Number', type: 'text', required: true },
+        { name: 'bk_usid', label: 'Customer ID', type: 'text', required: true },
+        { name: 'bk_fromst', label: 'From Station', type: 'text', required: true },
+        { name: 'bk_tost', label: 'To Station', type: 'text', required: true },
+        { name: 'bk_trvldt', label: 'Travel Date', type: 'date', required: true },
+        { name: 'bk_class', label: 'Travel Class', type: 'select', required: true, options: [
+          { value: '1A', label: 'First AC' },
+          { value: '2A', label: 'Second AC' },
+          { value: '3A', label: 'Third AC' },
+          { value: 'SL', label: 'Sleeper' },
+          { value: '2S', label: 'Second Sitting' }
+        ]},
+        { name: 'bk_berthpref', label: 'Berth Preference', type: 'select', options: [
+          { value: 'NO_PREF', label: 'No Preference' },
+          { value: 'LOWER', label: 'Lower Berth' },
+          { value: 'UPPER', label: 'Upper Berth' },
+          { value: 'SIDE_LOWER', label: 'Side Lower' },
+          { value: 'SIDE_UPPER', label: 'Side Upper' }
+        ]},
+        { name: 'bk_totalpass', label: 'Total Passengers', type: 'number', required: true, min: 1 },
+        { name: 'bk_status', label: 'Status', type: 'select', required: true, defaultValue: 'DRAFT', options: [
+          { value: 'DRAFT', label: 'Draft' },
+          { value: 'PENDING', label: 'Pending' },
+          { value: 'CONFIRMED', label: 'Confirmed' },
+          { value: 'CANCELLED', label: 'Cancelled' }
+        ]},
+        { name: 'bk_agent', label: 'Assigned Agent', type: 'text' },
+        { name: 'bk_remarks', label: 'Remarks', type: 'textarea' }
+      ],
+      columns: ['bk_bkid', 'bk_bkno', 'customerName', 'bk_fromst', 'bk_tost', 'bk_trvldt', 'bk_class', 'bk_status', 'bk_agent', 'edtm'],
+      columnLabels: ['ID', 'Booking No', 'Customer', 'From', 'To', 'Travel Date', 'Class', 'Status', 'Agent', 'Created'],
+      columnWidths: ['80px', '120px', '180px', '100px', '100px', '120px', '80px', '100px', '100px', '150px'],
+      filterFields: ['bk_bkno', 'customerName', 'bk_fromst', 'bk_tost', 'bk_status', 'bk_agent'],
+      computedFields: [
+        { name: 'customerName', label: 'Customer Name', formula: (data) => data.Customer?.cu_name || data.bk_usid || 'N/A' }
+      ]
+    },
+    billings: {
+      name: 'Billing Management',
+      endpoint: '/billing',
+      fields: [
+        { name: 'bill_id', label: 'Bill ID', type: 'text', readOnly: true },
+        { name: 'bill_no', label: 'Bill Number', type: 'text', required: true },
+        { name: 'customer_id', label: 'Customer ID', type: 'text', required: true },
+        { name: 'customer_name', label: 'Customer Name', type: 'text', readOnly: true },
+        { name: 'train_number', label: 'Train Number', type: 'text' },
+        { name: 'reservation_class', label: 'Reservation Class', type: 'select', options: [
+          { value: '1A', label: 'First AC' },
+          { value: '2A', label: 'Second AC' },
+          { value: '3A', label: 'Third AC' },
+          { value: 'SL', label: 'Sleeper' },
+          { value: '2S', label: 'Second Sitting' }
+        ]},
+        { name: 'ticket_type', label: 'Ticket Type', type: 'select', defaultValue: 'NORMAL', options: [
+          { value: 'NORMAL', label: 'Normal' },
+          { value: 'TATKAL', label: 'Tatkal' },
+          { value: 'PREMIUM_TATKAL', label: 'Premium Tatkal' }
+        ]},
+        { name: 'pnr_numbers', label: 'PNR Numbers', type: 'text' },
+        { name: 'net_fare', label: 'Net Fare', type: 'number', step: '0.01', min: '0' },
+        { name: 'service_charges', label: 'Service Charges', type: 'number', step: '0.01', min: '0' },
+        { name: 'platform_fees', label: 'Platform Fees', type: 'number', step: '0.01', min: '0' },
+        { name: 'agent_fees', label: 'Agent Fees', type: 'number', step: '0.01', min: '0' },
+        { name: 'total_amount', label: 'Total Amount', type: 'number', step: '0.01', min: '0', readOnly: true },
+        { name: 'bill_date', label: 'Bill Date', type: 'date', required: true },
+        { name: 'status', label: 'Status', type: 'select', required: true, defaultValue: 'DRAFT', options: [
+          { value: 'DRAFT', label: 'Draft' },
+          { value: 'PENDING', label: 'Pending' },
+          { value: 'FINAL', label: 'Final' },
+          { value: 'CANCELLED', label: 'Cancelled' }
+        ]},
+        { name: 'remarks', label: 'Remarks', type: 'textarea' }
+      ],
+      columns: ['bill_id', 'bill_no', 'customer_name', 'train_number', 'reservation_class', 'total_amount', 'status', 'bill_date', 'edtm'],
+      columnLabels: ['ID', 'Bill No', 'Customer', 'Train', 'Class', 'Amount', 'Status', 'Bill Date', 'Created'],
+      columnWidths: ['80px', '120px', '180px', '100px', '80px', '120px', '100px', '120px', '150px'],
+      filterFields: ['bill_no', 'customer_name', 'train_number', 'status', 'bill_date'],
+      computedFields: [
+        { name: 'total_amount', label: 'Total Amount', formula: (data) => {
+          const net = parseFloat(data.net_fare) || 0;
+          const service = parseFloat(data.service_charges) || 0;
+          const platform = parseFloat(data.platform_fees) || 0;
+          const agent = parseFloat(data.agent_fees) || 0;
+          return net + service + platform + agent;
+        }}
+      ]
+    },
+    payments: {
+      name: 'Payment Management',
+      endpoint: '/payments',
+      fields: [
+        { name: 'pt_ptid', label: 'Payment ID', type: 'text', readOnly: true },
+        { name: 'pt_transid', label: 'Transaction ID', type: 'text', required: true },
+        { name: 'pt_usid', label: 'Customer ID', type: 'text', required: true },
+        { name: 'pt_amount', label: 'Amount', type: 'number', step: '0.01', required: true, min: '0' },
+        { name: 'pt_mode', label: 'Payment Mode', type: 'select', required: true, options: [
+          { value: 'UPI', label: 'UPI' },
+          { value: 'CARD', label: 'Card' },
+          { value: 'NET_BANKING', label: 'Net Banking' },
+          { value: 'WALLET', label: 'Wallet' },
+          { value: 'CASH', label: 'Cash' },
+          { value: 'CHEQUE', label: 'Cheque' }
+        ]},
+        { name: 'pt_status', label: 'Status', type: 'select', required: true, defaultValue: 'PENDING', options: [
+          { value: 'PENDING', label: 'Pending' },
+          { value: 'PROCESSED', label: 'Processed' },
+          { value: 'FAILED', label: 'Failed' },
+          { value: 'REFUNDED', label: 'Refunded' }
+        ]},
+        { name: 'pt_paydt', label: 'Payment Date', type: 'date', required: true },
+        { name: 'pt_remarks', label: 'Remarks', type: 'textarea' }
+      ],
+      columns: ['pt_ptid', 'pt_transid', 'customerName', 'pt_amount', 'pt_mode', 'pt_status', 'pt_paydt', 'edtm'],
+      columnLabels: ['ID', 'Trans ID', 'Customer', 'Amount', 'Mode', 'Status', 'Pay Date', 'Created'],
+      columnWidths: ['80px', '150px', '180px', '120px', '100px', '100px', '120px', '150px'],
+      filterFields: ['pt_transid', 'customerName', 'pt_mode', 'pt_status', 'pt_paydt'],
+      computedFields: [
+        { name: 'customerName', label: 'Customer Name', formula: (data) => data.Customer?.cu_name || data.pt_usid || 'N/A' }
+      ]
     }
   };
 
@@ -1077,6 +1203,9 @@ const DynamicAdminPanel = () => {
         <div className="erp-menu-item" onClick={() => handleModuleChange('users')}>User List</div>
         <div className="erp-menu-item" onClick={() => handleModuleChange('rolePermissions')}>Role Permission</div>
         <div className="erp-menu-item" onClick={() => handleModuleChange('userPermissions')}>User Permission</div>
+        <div className="erp-menu-item" onClick={() => handleModuleChange('bookings')}>Bookings</div>
+        <div className="erp-menu-item" onClick={() => handleModuleChange('billings')}>Billings</div>
+        <div className="erp-menu-item" onClick={() => handleModuleChange('payments')}>Payments</div>
         <div className="erp-user-info">ADMINISTRATOR ⚙</div>
       </div>
 

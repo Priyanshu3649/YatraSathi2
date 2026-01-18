@@ -15,6 +15,7 @@ const {
   getBookingPassengers
 } = require('../controllers/bookingController');
 const authMiddleware = require('../middleware/authMiddleware');
+const { canEditBooking, canViewBooking, canCancelBooking } = require('../middleware/bookingAuthorization');
 
 const router = express.Router();
 
@@ -36,10 +37,10 @@ router.post('/confirm', confirmBooking);
 // New route for getting passengers for a booking
 router.get('/:id/passengers', getBookingPassengers);
 
-// Parameterized routes last (less specific paths)
-router.get('/:id', getBookingById);
-router.put('/:id', updateBooking);
-router.post('/:id/cancel', cancelBooking);
-router.delete('/:id', deleteBooking);
+// Parameterized routes last (less specific paths) - with authorization middleware
+router.get('/:id', canViewBooking, getBookingById);
+router.put('/:id', canEditBooking, updateBooking);
+router.post('/:id/cancel', canCancelBooking, cancelBooking);
+router.delete('/:id', canEditBooking, deleteBooking);
 
 module.exports = router;

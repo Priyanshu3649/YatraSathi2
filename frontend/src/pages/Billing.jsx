@@ -265,14 +265,17 @@ const Billing = () => {
       let data;
       
       // Check if user is admin or employee
-      if (user && (user.us_usertype === 'admin' || user.us_roid !== 'CUS')) {
+      const isEmployee = user && ['AGT', 'ACC', 'HR', 'CC', 'MKT', 'MGT', 'ADM'].includes(user.us_roid);
+      if (isEmployee) {
         data = await billingAPI.getAllBills();
       } else {
-        // For non-admin users, get user-specific bills
+        // For customers, get user-specific bills
         data = await billingAPI.getMyBills();
       }
       
-      setBills(Array.isArray(data) ? data : (data.bills || []));
+      // Handle the response structure
+      const billsData = data?.data?.bills || data?.bills || data || [];
+      setBills(Array.isArray(billsData) ? billsData : []);
       setError('');
     } catch (err) {
       setError(err.message || 'Failed to fetch bills');

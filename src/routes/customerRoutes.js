@@ -13,6 +13,7 @@ const {
   getBookingPassengers
 } = require('../controllers/customerController');
 const authMiddleware = require('../middleware/authMiddleware');
+const { canEditBooking, canViewBooking, canCancelBooking } = require('../middleware/bookingAuthorization');
 
 const router = express.Router();
 
@@ -46,8 +47,8 @@ router.get('/:id', getCustomerById);
 // Booking management
 router.post('/bookings', createBooking);
 router.get('/bookings', getCustomerBookings);
-router.get('/bookings/:bookingId', getBookingDetails);
+router.get('/bookings/:bookingId', canViewBooking, getBookingDetails);
 router.get('/bookings/:bookingId/passengers', getBookingPassengers);
-router.put('/bookings/:bookingId/cancel', cancelBooking);
+router.put('/bookings/:bookingId/cancel', canCancelBooking, cancelBooking);
 
 module.exports = router;

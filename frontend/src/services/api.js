@@ -365,16 +365,19 @@ export const bookingAPI = {
   
   // Get all bookings (admin and employees)
   getAllBookings: async () => {
-    const token = localStorage.getItem('token');
-    // Try to decode token to check user role
+    // Get user data from localStorage
     let userRole = 'customer'; // default
-    if (token) {
-      try {
-        const payload = JSON.parse(atob(token.split('.')[1]));
-        userRole = payload.role || 'customer';
-      } catch (e) {
-        console.warn('Could not decode token to determine role');
+    let userId = null;
+    
+    try {
+      const userStr = localStorage.getItem('user');
+      if (userStr) {
+        const userData = JSON.parse(userStr);
+        userRole = userData.us_roid || userData.role || 'customer';
+        userId = userData.us_usid || userData.id || null;
       }
+    } catch (e) {
+      console.warn('Could not get user data to determine role');
     }
       
     // Use employee-specific endpoint for employee roles
@@ -1144,19 +1147,10 @@ export const billingAPI = {
   },
   
   // Get all bills (admin and employees)
+  // Get all bills (admin and employees)
   getAllBills: async () => {
-    const token = localStorage.getItem('token');
-    // Try to decode token to check user role
-    let userRole = 'customer'; // default
-    if (token) {
-      try {
-        const payload = JSON.parse(atob(token.split('.')[1]));
-        userRole = payload.role || 'customer';
-      } catch (e) {
-        console.warn('Could not decode token to determine role');
-      }
-    }
-      
+    const userRole = getUserRole();
+    
     // Use employee-specific endpoint for employee roles
     const isEmployee = ['AGT', 'ACC', 'HR', 'CC', 'MKT', 'MGT', 'ADM'].includes(userRole);
     const url = isEmployee 

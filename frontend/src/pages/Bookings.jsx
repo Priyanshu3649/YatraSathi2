@@ -116,7 +116,8 @@ const Bookings = () => {
       let data;
       
       // Check if user is admin or employee
-      if (user && (user.us_usertype === 'admin' || ['AGT', 'ACC', 'HR', 'CC', 'MKT', 'MGT', 'ADM'].includes(user.us_roid))) {
+      const isEmployee = user && ['AGT', 'ACC', 'HR', 'CC', 'MKT', 'MGT', 'ADM'].includes(user.us_roid);
+      if (isEmployee) {
         data = await bookingAPI.getAllBookings();
       } else {
         const response = await bookingAPI.getMyBookings();
@@ -124,8 +125,9 @@ const Bookings = () => {
         data = response.success ? response.data.bookings : [];
       }
       
-      // Ensure data is always an array
-      const bookingsArray = Array.isArray(data) ? data : [];
+      // Handle the response structure
+      const bookingsData = data?.data?.bookings || data?.bookings || data || [];
+      const bookingsArray = Array.isArray(bookingsData) ? bookingsData : [];
       
       setBookings(bookingsArray);
       setFilteredBookings(bookingsArray);
