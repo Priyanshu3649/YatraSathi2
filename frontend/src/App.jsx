@@ -3,6 +3,7 @@ import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { BookingProvider } from './contexts/BookingContext';
 import { PaymentProvider } from './contexts/PaymentContext';
 import { ReportProvider } from './contexts/ReportContext';
+import { KeyboardNavigationProvider } from './contexts/KeyboardNavigationContext';
 import './App.css';
 import './styles/dashboard.css';
 import './styles/vintage-theme.css';
@@ -152,66 +153,68 @@ function App() {
       <BookingProvider>
         <PaymentProvider>
           <ReportProvider>
-            <Router future={{ 
-              v7_startTransition: true,
-              v7_relativeSplatPath: true 
-            }}>
-              <div className="App">
-                <MessageDisplay />
-                <ConditionalHeader />
-                <main>
-                  <Routes>
-                    <Route path="/" element={<Home />} />
-                    
-                    {/* Authentication Routes */}
-                    <Route path="/login" element={<Login />} />
-                    <Route path="/register" element={<Register />} />
-                    <Route path="/forgot-password" element={<ForgotPassword />} />
-                    <Route path="/reset-password" element={<ResetPassword />} />
-                    
-                    {/* Employee Portal Routes */}
-                    <Route path="/employee/*" element={<EmployeeDashboard />} />
-                    
-                    {/* Legacy Routes - Protected */}
-                    <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
-                    <Route path="/bookings" element={<ProtectedRoute><Bookings /></ProtectedRoute>} />
-                    <Route path="/payments" element={<ProtectedRoute><Payments /></ProtectedRoute>} />
-                    <Route path="/reports" element={<ProtectedRoute><Reports /></ProtectedRoute>} />
-                    <Route path="/travel-plans" element={<ProtectedRoute><TravelPlans /></ProtectedRoute>} />
-                    <Route path="/travel-plans/:id" element={<ProtectedRoute><TravelPlanDetail /></ProtectedRoute>} />
-                    <Route path="/travel-plans/edit/:id" element={<ProtectedRoute><EditTravelPlan /></ProtectedRoute>} />
-                    <Route path="/travel-plans/new" element={<ProtectedRoute><EditTravelPlan /></ProtectedRoute>} />
-                    <Route path="/billing" element={<ProtectedRoute><Billing /></ProtectedRoute>} />
-                    <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
-                    
-                    {/* Unauthorized Access Route */}
-                    <Route path="/unauthorized" element={<UnauthorizedPage />} />
-                    
-                    {/* Admin Routes with Role-Based Access Control */}
-                    <Route path="/admin-dashboard" element={<RoleBasedRoute requiredRole="ADM"><DynamicAdminPanel /></RoleBasedRoute>} />
-                    <Route path="/admin/*" element={<RoleBasedRoute requiredRole="ADM"><DynamicAdminPanel /></RoleBasedRoute>} />
-                    
-                    {/* Employee Routes with Role-Based Access Control */}
-                    <Route path="/employee/dashboard" element={<RoleBasedRoute requiredModule="employee"><EmployeeDashboard /></RoleBasedRoute>} />
-                    <Route path="/employee/*" element={<RoleBasedRoute requiredModule="employee"><EmployeeDashboard /></RoleBasedRoute>} />
-                    
-                    {/* Customer Portal Routes */}
-                    <Route path="/customer/booking/new" element={<BookingForm />} />
-                    
-                    {/* Customer Routes with Role-Based Access Control */}
-                    <Route path="/customer/dashboard" element={<RoleBasedRoute requiredRole="CUS"><CustomerDashboard /></RoleBasedRoute>} />
-                    <Route path="/customer/booking/new" element={<RoleBasedRoute requiredRole="CUS"><BookingForm /></RoleBasedRoute>} />
-                    <Route path="/customer/bookings" element={<RoleBasedRoute requiredRole="CUS"><MyBookings /></RoleBasedRoute>} />
-                    <Route path="/customer/bookings/:bookingId" element={<RoleBasedRoute requiredRole="CUS"><CustomerBookingDetails /></RoleBasedRoute>} />
-                    <Route path="/customer/bills-payments" element={<RoleBasedRoute requiredRole="CUS"><BillsPayments /></RoleBasedRoute>} />
-                    <Route path="/customer/master-passengers" element={<RoleBasedRoute requiredRole="CUS"><MasterPassengerList /></RoleBasedRoute>} />
-                    <Route path="/customer/master-list" element={<RoleBasedRoute requiredRole="CUS"><MasterPassengerListML /></RoleBasedRoute>} />
-                    <Route path="/customer/profile" element={<RoleBasedRoute requiredRole="CUS"><CustomerProfile /></RoleBasedRoute>} />
-                  </Routes>
-                </main>
-                <Footer />
-              </div>
-            </Router>
+            <KeyboardNavigationProvider>
+              <Router future={{ 
+                v7_startTransition: true,
+                v7_relativeSplatPath: true 
+              }}>
+                <div className="App">
+                  <MessageDisplay />
+                  <ConditionalHeader />
+                  <main>
+                    <Routes>
+                      <Route path="/" element={<Home />} />
+                      
+                      {/* Authentication Routes */}
+                      <Route path="/login" element={<Login />} />
+                      <Route path="/register" element={<Register />} />
+                      <Route path="/forgot-password" element={<ForgotPassword />} />
+                      <Route path="/reset-password" element={<ResetPassword />} />
+                      
+                      {/* Employee Portal Routes */}
+                      <Route path="/employee/*" element={<EmployeeDashboard />} />
+                      
+                      {/* Legacy Routes - Protected */}
+                      <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+                      <Route path="/bookings" element={<ProtectedRoute><Bookings /></ProtectedRoute>} />
+                      <Route path="/payments" element={<ProtectedRoute><Payments /></ProtectedRoute>} />
+                      <Route path="/reports" element={<ProtectedRoute><Reports /></ProtectedRoute>} />
+                      <Route path="/travel-plans" element={<ProtectedRoute><TravelPlans /></ProtectedRoute>} />
+                      <Route path="/travel-plans/:id" element={<ProtectedRoute><TravelPlanDetail /></ProtectedRoute>} />
+                      <Route path="/travel-plans/edit/:id" element={<ProtectedRoute><EditTravelPlan /></ProtectedRoute>} />
+                      <Route path="/travel-plans/new" element={<ProtectedRoute><EditTravelPlan /></ProtectedRoute>} />
+                      <Route path="/billing" element={<ProtectedRoute><Billing /></ProtectedRoute>} />
+                      <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
+                      
+                      {/* Unauthorized Access Route */}
+                      <Route path="/unauthorized" element={<UnauthorizedPage />} />
+                      
+                      {/* Admin Routes with Role-Based Access Control */}
+                      <Route path="/admin-dashboard" element={<RoleBasedRoute requiredRole="ADM"><DynamicAdminPanel /></RoleBasedRoute>} />
+                      <Route path="/admin/*" element={<RoleBasedRoute requiredRole="ADM"><DynamicAdminPanel /></RoleBasedRoute>} />
+                      
+                      {/* Employee Routes with Role-Based Access Control */}
+                      <Route path="/employee/dashboard" element={<RoleBasedRoute requiredModule="employee"><EmployeeDashboard /></RoleBasedRoute>} />
+                      <Route path="/employee/*" element={<RoleBasedRoute requiredModule="employee"><EmployeeDashboard /></RoleBasedRoute>} />
+                      
+                      {/* Customer Portal Routes */}
+                      <Route path="/customer/booking/new" element={<BookingForm />} />
+                      
+                      {/* Customer Routes with Role-Based Access Control */}
+                      <Route path="/customer/dashboard" element={<RoleBasedRoute requiredRole="CUS"><CustomerDashboard /></RoleBasedRoute>} />
+                      <Route path="/customer/booking/new" element={<RoleBasedRoute requiredRole="CUS"><BookingForm /></RoleBasedRoute>} />
+                      <Route path="/customer/bookings" element={<RoleBasedRoute requiredRole="CUS"><MyBookings /></RoleBasedRoute>} />
+                      <Route path="/customer/bookings/:bookingId" element={<RoleBasedRoute requiredRole="CUS"><CustomerBookingDetails /></RoleBasedRoute>} />
+                      <Route path="/customer/bills-payments" element={<RoleBasedRoute requiredRole="CUS"><BillsPayments /></RoleBasedRoute>} />
+                      <Route path="/customer/master-passengers" element={<RoleBasedRoute requiredRole="CUS"><MasterPassengerList /></RoleBasedRoute>} />
+                      <Route path="/customer/master-list" element={<RoleBasedRoute requiredRole="CUS"><MasterPassengerListML /></RoleBasedRoute>} />
+                      <Route path="/customer/profile" element={<RoleBasedRoute requiredRole="CUS"><CustomerProfile /></RoleBasedRoute>} />
+                    </Routes>
+                  </main>
+                  <Footer />
+                </div>
+              </Router>
+            </KeyboardNavigationProvider>
           </ReportProvider>
         </PaymentProvider>
       </BookingProvider>

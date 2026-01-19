@@ -1,8 +1,11 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
-import { bookingAPI, customerAPI } from '../services/api';
+import { bookingAPI } from '../services/api';
 import CustomerLookupInput from '../components/common/CustomerLookupInput';
+import SaveConfirmationModal from '../components/common/SaveConfirmationModal';
+import { useKeyboardNav } from '../hooks/useKeyboardNavigation';
+import { usePassengerEntry } from '../hooks/usePassengerEntry';
 import '../styles/vintage-erp-theme.css';
 import '../styles/classic-enterprise-global.css';
 import '../styles/vintage-admin-panel.css';
@@ -47,16 +50,116 @@ const Bookings = () => {
     idProofNumber: ''
   }]);
   
+  // Keyboard navigation state
+  const [isEditing, setIsEditing] = useState(false);
+  
+  // Define business logic field order for keyboard navigation
+  const fieldOrder = [
+    'bookingDate',
+    'customerId', 
+    'customerName',
+    'fromStation',
+    'toStation',
+    'travelDate',
+    'travelClass',
+    'berthPreference',
+    'quotaType',
+    // Passenger fields will be handled separately
+    'passenger_name',
+    'passenger_age', 
+    'passenger_gender',
+    'passenger_berth',
+    'remarks',
+    'status'
+  ];
+  
+  // Handle save confirmation from keyboard navigation
+  const handleSaveConfirmed = useCallback(async () => {
+    try {
+      await handleSave();
+      setShowSaveModal(false);
+    } catch (error) {
+      console.error('Save failed:', error);
+      setError(error.message || 'Failed to save booking');
+    }
+  }, [handleSave]);
+
+  // Initialize keyboard navigation
+  const {
+    formRef,
+    saveConfirmationOpen,
+    focusField
+  } = useKeyboardNav({
+    fieldOrder,
+    autoFocus: true,
+    onSave: handleSaveConfirmed,
+    onCancel: () => setIsEditing(false),
+    validateField: (fieldName, value) => {
+      // Basic validation
+      if (fieldName === 'customerId' && !value) {
+        return { isValid: false, error: 'Customer ID is required' };
+      }
+      if (fieldName === 'fromStation' && !value) {
+        return { isValid: false, error: 'From Station is required' };
+      }
+      if (fieldName === 'toStation' && !value) {
+        return { isValid: false, error: 'To Station is required' };
+      }
+      return { isValid: true };
+    }
+  });
+  
+  // Initialize passenger entry system
+  const {
+    isInLoop,
+    enterPassengerLoop,
+    getFieldProps
+  } = usePassengerEntry({
+    passengerFields: ['name', 'age', 'gender', 'berth'],
+    onPassengerSave: (passenger) => {
+      // Add passenger to the main list
+      setPassengerList(prev => [...prev, {
+        id: passenger.id,
+        name: passenger.name,
+        age: passenger.age,
+        gender: passenger.gender,
+        berthPreference: passenger.berth,
+        idProofType: '',
+        idProofNumber: ''
+      }]);
+    },
+    onLoopExit: () => {
+      // Move focus to next field after passenger section
+      focusField('remarks');
+    },
+    onPassengerValidate: (data) => {
+      if (!data.name || data.name.trim() === '') {
+        return { isValid: false, error: 'Passenger name is required', invalidField: 'name' };
+      }
+      if (!data.age || data.age < 1 || data.age > 120) {
+        return { isValid: false, error: 'Valid age is required', invalidField: 'age' };
+      }
+      return { isValid: true };
+    }
+  });
+  
+  // Set form to NEW mode by default on page load
+  useEffect(() => {
+    handleNew();
+  }, [handleNew]);
+  
   // Auto-calculate total passengers when passenger list changes
   useEffect(() => {
-    const total = passengerList.filter(p => p.name.trim() !== '').length;
-    setFormData(prev => ({
-      ...prev,
-      totalPassengers: total
-    }));
+    const total = passengerList.filter(p => p.name && p.name.trim() !== '').length;
+    setFormData(prev => {
+      // Only update if the total has actually changed to prevent loops
+      if (prev.totalPassengers !== total) {
+        return { ...prev, totalPassengers: total };
+      }
+      return prev;
+    });
   }, [passengerList]);
   
-  const [isEditing, setIsEditing] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const recordsPerPage = 100;
   
@@ -110,7 +213,7 @@ const Bookings = () => {
     fetchBookings();
   }, [user]);
 
-  const fetchBookings = async () => {
+  const fetchBookings = useCallback(async () => {
     try {
       setLoading(true);
       let data;
@@ -137,7 +240,7 @@ const Bookings = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [user]);
 
   // Apply filters
   useEffect(() => {
@@ -190,7 +293,7 @@ const Bookings = () => {
     }));
   };
 
-  const handleNew = () => {
+  const handleNew = useCallback(() => {
     setSelectedBooking(null);
     setFormData({
       bookingId: '',
@@ -222,7 +325,12 @@ const Bookings = () => {
       idProofNumber: ''
     }]);
     setIsEditing(true);
-  };
+    
+    // Set focus to first field after a short delay
+    setTimeout(() => {
+      focusField('bookingDate');
+    }, 100);
+  }, [user?.us_name, focusField]);
 
   const handleEdit = () => {
     if (selectedBooking) {
@@ -259,12 +367,12 @@ const Bookings = () => {
     }
   };
 
-  const handleSave = async () => {
+  const handleSave = useCallback(async () => {
     try {
       const bookingData = {
         ...formData,
         passengerList,
-        totalPassengers: passengerList.filter(p => p.name.trim() !== '').length,
+        totalPassengers: passengerList.filter(p => p.name && p.name.trim() !== '').length,
         // Map fields to match backend expectations
         customerId: formData.customerId,
         customerName: formData.customerName,
@@ -298,7 +406,7 @@ const Bookings = () => {
     } catch (error) {
       setError(error.message || 'Failed to save booking');
     }
-  };
+  }, [formData, passengerList, selectedBooking, user?.us_name, fetchBookings]);
 
   const handleDelete = async () => {
     if (!selectedBooking) {
@@ -350,31 +458,19 @@ const Bookings = () => {
     setIsEditing(false);
   };
 
-  const addPassenger = () => {
-    setPassengerList([...passengerList, {
-      id: Date.now(),
-      name: '',
-      age: '',
-      gender: '',
-      berthPreference: '',
-      idProofType: '',
-      idProofNumber: ''
-    }]);
-  };
-
-  const removePassenger = (id) => {
+  const removePassenger = useCallback((id) => {
     if (passengerList.length <= 1) {
       setError('At least one passenger is required');
       return;
     }
     setPassengerList(passengerList.filter(p => p.id !== id));
-  };
+  }, [passengerList]);
 
-  const updatePassenger = (id, field, value) => {
+  const updatePassenger = useCallback((id, field, value) => {
     setPassengerList(passengerList.map(p => 
       p.id === id ? { ...p, [field]: value } : p
     ));
-  };
+  }, [passengerList]);
 
   const totalPages = Math.ceil(filteredBookings.length / recordsPerPage);
 
@@ -454,7 +550,7 @@ const Bookings = () => {
         {/* Center Content - Now takes full space since left sidebar is removed */}
         <div className="erp-center-content">
           {/* Form Panel - Static */}
-          <div className="erp-form-section">
+          <div className="erp-form-section" ref={formRef}>
             <div className="erp-panel-header">Booking Details</div>
             
             {/* Booking ID and Date Row */}
@@ -463,15 +559,18 @@ const Bookings = () => {
               <input
                 type="text"
                 name="bookingId"
+                data-field="bookingId"
                 className="erp-input"
                 value={formData.bookingId}
                 onChange={handleInputChange}
                 readOnly
+                tabIndex={-1}
               />
               <label className="erp-form-label required">Booking Date</label>
               <input
                 type="date"
                 name="bookingDate"
+                data-field="bookingDate"
                 className="erp-input"
                 value={formData.bookingDate}
                 onChange={handleInputChange}
@@ -488,6 +587,16 @@ const Bookings = () => {
                 disabled={!isEditing}
                 required={true}
                 layout="horizontal"
+                fieldProps={{
+                  customerIdProps: {
+                    'data-field': 'customerId',
+                    name: 'customerId'
+                  },
+                  customerNameProps: {
+                    'data-field': 'customerName',
+                    name: 'customerName'
+                  }
+                }}
               />
             </div>
             
@@ -501,11 +610,13 @@ const Bookings = () => {
                 value={formData.totalPassengers}
                 readOnly
                 disabled
+                tabIndex={-1}
               />
               <label className="erp-form-label">Contact Number</label>
               <input
                 type="text"
                 name="contactNumber"
+                data-field="contactNumber"
                 className="erp-input"
                 value={formData.contactNumber || ''}
                 onChange={handleInputChange}
@@ -519,6 +630,7 @@ const Bookings = () => {
               <input
                 type="text"
                 name="fromStation"
+                data-field="fromStation"
                 className="erp-input"
                 value={formData.fromStation}
                 onChange={handleInputChange}
@@ -528,6 +640,7 @@ const Bookings = () => {
               <input
                 type="text"
                 name="toStation"
+                data-field="toStation"
                 className="erp-input"
                 value={formData.toStation}
                 onChange={handleInputChange}
@@ -541,6 +654,7 @@ const Bookings = () => {
               <input
                 type="date"
                 name="travelDate"
+                data-field="travelDate"
                 className="erp-input"
                 value={formData.travelDate}
                 onChange={handleInputChange}
@@ -549,6 +663,7 @@ const Bookings = () => {
               <label className="erp-form-label required">Travel Class</label>
               <select
                 name="travelClass"
+                data-field="travelClass"
                 className="erp-input"
                 value={formData.travelClass}
                 onChange={handleInputChange}
@@ -568,6 +683,7 @@ const Bookings = () => {
               <label className="erp-form-label">Berth Preference</label>
               <select
                 name="berthPreference"
+                data-field="berthPreference"
                 className="erp-input"
                 value={formData.berthPreference}
                 onChange={handleInputChange}
@@ -583,6 +699,7 @@ const Bookings = () => {
               <label className="erp-form-label">Quota Type</label>
               <select
                 name="quotaType"
+                data-field="quotaType"
                 className="erp-input"
                 value={formData.quotaType}
                 onChange={handleInputChange}
@@ -596,7 +713,7 @@ const Bookings = () => {
               </select>
             </div>
 
-            {/* Passenger Details Section */}
+            {/* Passenger Details Section - Keyboard Navigation Implementation */}
             <div className="erp-form-row">
               <label className="erp-form-label" style={{ gridColumn: 'span 4' }}>
                 Passenger Details
@@ -604,13 +721,73 @@ const Bookings = () => {
                   type="button" 
                   className="erp-button" 
                   style={{ marginLeft: '10px', padding: '2px 8px', fontSize: '11px' }} 
-                  onClick={addPassenger}
+                  onClick={() => {
+                    if (isEditing) {
+                      enterPassengerLoop();
+                    }
+                  }}
                   disabled={!isEditing}
+                  tabIndex={-1}
                 >
-                  Add Passenger
+                  Enter Passenger Mode
                 </button>
               </label>
             </div>
+            
+            {/* Passenger Entry Fields - Only visible when in loop */}
+            {isInLoop && (
+              <div className="passenger-entry-section" style={{ border: '2px solid #007acc', padding: '10px', marginBottom: '10px', backgroundColor: '#f0f8ff' }}>
+                <div className="erp-form-row">
+                  <label className="erp-form-label">Name</label>
+                  <input
+                    type="text"
+                    {...getFieldProps('name')}
+                    className="erp-input"
+                    disabled={!isEditing}
+                    placeholder="Enter passenger name"
+                  />
+                  <label className="erp-form-label">Age</label>
+                  <input
+                    type="number"
+                    {...getFieldProps('age')}
+                    className="erp-input"
+                    disabled={!isEditing}
+                    placeholder="Age"
+                    min="1"
+                    max="120"
+                  />
+                </div>
+                <div className="erp-form-row">
+                  <label className="erp-form-label">Gender</label>
+                  <select
+                    {...getFieldProps('gender')}
+                    className="erp-input"
+                    disabled={!isEditing}
+                  >
+                    <option value="">Select</option>
+                    <option value="M">Male</option>
+                    <option value="F">Female</option>
+                    <option value="O">Other</option>
+                  </select>
+                  <label className="erp-form-label">Berth Preference</label>
+                  <select
+                    {...getFieldProps('berth')}
+                    className="erp-input"
+                    disabled={!isEditing}
+                  >
+                    <option value="">Any</option>
+                    <option value="LB">Lower Berth</option>
+                    <option value="UB">Upper Berth</option>
+                    <option value="MB">Middle Berth</option>
+                  </select>
+                </div>
+                <div style={{ fontSize: '11px', color: '#666', marginTop: '5px' }}>
+                  Press Tab to save passenger and add next. Double-Tab on empty fields to exit.
+                </div>
+              </div>
+            )}
+            
+            {/* Passenger Grid Display */}
             <div style={{ border: '1px solid var(--border-gray)', padding: '5px', maxHeight: '150px', overflowY: 'auto', marginBottom: '10px' }}>
               <table className="grid-table" style={{ width: '100%', fontSize: '11px' }}>
                 <thead>
@@ -635,6 +812,7 @@ const Bookings = () => {
                           className="erp-input" 
                           style={{ padding: '2px', fontSize: '11px', width: '100%' }} 
                           disabled={!isEditing}
+                          tabIndex={-1}
                         />
                       </td>
                       <td>
@@ -645,6 +823,7 @@ const Bookings = () => {
                           className="erp-input" 
                           style={{ padding: '2px', fontSize: '11px', width: '100%' }} 
                           disabled={!isEditing}
+                          tabIndex={-1}
                         />
                       </td>
                       <td>
@@ -654,6 +833,7 @@ const Bookings = () => {
                           className="erp-input" 
                           style={{ padding: '2px', fontSize: '11px', width: '100%' }}
                           disabled={!isEditing}
+                          tabIndex={-1}
                         >
                           <option value="">-</option>
                           <option value="M">M</option>
@@ -668,6 +848,7 @@ const Bookings = () => {
                           className="erp-input" 
                           style={{ padding: '2px', fontSize: '11px', width: '100%' }}
                           disabled={!isEditing}
+                          tabIndex={-1}
                         >
                           <option value="">-</option>
                           <option value="LB">LB</option>
@@ -682,6 +863,7 @@ const Bookings = () => {
                           className="erp-input" 
                           style={{ padding: '2px', fontSize: '11px', width: '100%' }}
                           disabled={!isEditing}
+                          tabIndex={-1}
                         >
                           <option value="">-</option>
                           <option value="ADHAAR">ADHAAR</option>
@@ -697,6 +879,7 @@ const Bookings = () => {
                           className="erp-input" 
                           style={{ padding: '2px', fontSize: '11px', width: '100%' }} 
                           disabled={!isEditing}
+                          tabIndex={-1}
                         />
                       </td>
                       <td>
@@ -706,6 +889,7 @@ const Bookings = () => {
                           style={{ padding: '2px 6px', fontSize: '11px' }} 
                           onClick={() => removePassenger(passenger.id)}
                           disabled={!isEditing}
+                          tabIndex={-1}
                         >
                           Del
                         </button>
@@ -721,6 +905,7 @@ const Bookings = () => {
               <label className="erp-form-label">Remarks</label>
               <textarea
                 name="remarks"
+                data-field="remarks"
                 className="erp-input"
                 value={formData.remarks}
                 onChange={handleInputChange}
@@ -735,6 +920,7 @@ const Bookings = () => {
               <label className="erp-form-label">Status</label>
               <select
                 name="status"
+                data-field="status"
                 className="erp-input"
                 value={formData.status}
                 onChange={handleInputChange}
@@ -1210,6 +1396,14 @@ const Bookings = () => {
           </button>
         </div>
       </div>
+
+      {/* Save Confirmation Modal */}
+      <SaveConfirmationModal
+        isOpen={saveConfirmationOpen}
+        onConfirm={handleSaveConfirmed}
+        onCancel={() => {}}
+        message="You have reached the end of the form. Save this booking record?"
+      />
     </div>
   );
 };

@@ -1,0 +1,173 @@
+/* Payments Menu CSS - ASCII Wireframe Style */
+/* Implements the exact visual style as specified in the redesign plan */
+
+.payments-menu-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  background-color: #000080; /* Classic ERP blue background */
+  color: #ffffff;
+  font-family: 'Courier New', monospace;
+  font-size: 14px;
+  line-height: 1.2;
+  padding: 20px;
+}
+
+/* ASCII Border Styling */
+.payments-menu-header,
+.payments-menu-footer {
+  color: #ffffff;
+  font-weight: bold;
+}
+
+.ascii-border-top,
+.ascii-border-bottom,
+.ascii-content,
+.ascii-title {
+  font-family: 'Courier New', monospace;
+  font-size: 14px;
+  white-space: pre;
+  text-align: left;
+}
+
+.ascii-title {
+  font-weight: bold;
+  text-align: center;
+}
+
+/* Menu Items Container */
+.payments-menu-items {
+  outline: none;
+  cursor: pointer;
+}
+
+.payments-menu-items:focus {
+  outline: none;
+}
+
+/* Individual Menu Items */
+.ascii-menu-item {
+  font-family: 'Courier New', monospace;
+  font-size: 14px;
+  white-space: pre;
+  cursor: pointer;
+  transition: background-color 0.1s ease;
+}
+
+.ascii-menu-item:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+}
+
+.ascii-menu-item.selected {
+  background-color: #ffffff;
+  color: #000080;
+  font-weight: bold;
+}
+
+.ascii-menu-item.selected .ascii-item-line {
+  background-color: #ffffff;
+  color: #000080;
+}
+
+.ascii-item-line {
+  padding: 0;
+  margin: 0;
+}
+
+/* Instructions */
+.payments-menu-instructions {
+  margin-top: 30px;
+  text-align: center;
+  color: #ffff00; /* Yellow text for instructions */
+  font-size: 12px;
+}
+
+.instruction-line {
+  margin: 2px 0;
+}
+
+/* Selected Item Description */
+.selected-item-description {
+  margin-top: 20px;
+  padding: 10px 20px;
+  background-color: rgba(255, 255, 255, 0.1);
+  border: 1px solid #ffffff;
+  border-radius: 4px;
+  text-align: center;
+  max-width: 500px;
+  color: #ffffff;
+}
+
+.selected-item-description strong {
+  color: #ffff00;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .payments-menu-container {
+    font-size: 12px;
+    padding: 10px;
+  }
+  
+  .ascii-border-top,
+  .ascii-border-bottom,
+  .ascii-content,
+  .ascii-title,
+  .ascii-menu-item {
+    font-size: 12px;
+  }
+  
+  .selected-item-description {
+    font-size: 11px;
+    padding: 8px 15px;
+  }
+}
+
+/* High Contrast Mode Support */
+@media (prefers-contrast: high) {
+  .payments-menu-container {
+    background-color: #000000;
+    color: #ffffff;
+  }
+  
+  .ascii-menu-item.selected {
+    background-color: #ffffff;
+    color: #000000;
+  }
+  
+  .payments-menu-instructions {
+    color: #ffffff;
+  }
+}
+
+/* Focus Indicators for Accessibility */
+.payments-menu-items:focus-visible {
+  outline: 2px solid #ffff00;
+  outline-offset: 2px;
+}
+
+/* Animation for Selection */
+.ascii-menu-item.selected {
+  animation: selectPulse 0.3s ease-in-out;
+}
+
+@keyframes selectPulse {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.02); }
+  100% { transform: scale(1); }
+}
+
+/* Print Styles */
+@media print {
+  .payments-menu-container {
+    background-color: white;
+    color: black;
+  }
+  
+  .ascii-menu-item.selected {
+    background-color: #cccccc;
+    color: black;
+  }
+}

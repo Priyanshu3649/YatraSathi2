@@ -1,19 +1,19 @@
-// Payment Entry Controller - Handles money going out
-const PaymentEntry = require('../models/PaymentEntry');
+// Receipt Entry Controller - Handles money coming in
+const ReceiptEntry = require('../models/ReceiptEntry');
 const LedgerMaster = require('../models/LedgerMaster');
 
-class PaymentController {
-  // Get all payment entries
+class ReceiptController {
+  // Get all receipt entries
   static async getAllEntries(req, res) {
     try {
       const filters = {
         entry_date_from: req.query.entry_date_from,
         entry_date_to: req.query.entry_date_to,
         voucher_no: req.query.voucher_no,
-        payment_mode: req.query.payment_mode
+        receipt_mode: req.query.receipt_mode
       };
 
-      const entries = await PaymentEntry.findAll(filters);
+      const entries = await ReceiptEntry.findAll(filters);
       
       res.json({
         success: true,
@@ -28,16 +28,16 @@ class PaymentController {
     }
   }
 
-  // Get single payment entry by ID
+  // Get single receipt entry by ID
   static async getEntryById(req, res) {
     try {
       const { id } = req.params;
-      const entry = await PaymentEntry.findById(id);
+      const entry = await ReceiptEntry.findById(id);
       
       if (!entry) {
         return res.status(404).json({
           success: false,
-          message: 'Payment entry not found'
+          message: 'Receipt entry not found'
         });
       }
       
@@ -53,7 +53,7 @@ class PaymentController {
     }
   }
 
-  // Create new payment entry
+  // Create new receipt entry
   static async createEntry(req, res) {
     try {
       const entryData = {
@@ -62,7 +62,7 @@ class PaymentController {
       };
 
       // Validate data
-      const validation = PaymentEntry.validate(entryData);
+      const validation = ReceiptEntry.validate(entryData);
       if (!validation.isValid) {
         return res.status(400).json({
           success: false,
@@ -71,22 +71,11 @@ class PaymentController {
         });
       }
 
-      // Check if sufficient balance exists
-      const ledgerName = entryData.payment_mode === 'Cash' ? 'Cash' : 'Bank';
-      const currentBalance = await LedgerMaster.getBalance(ledgerName);
-      
-      if (currentBalance < parseFloat(entryData.amount)) {
-        return res.status(400).json({
-          success: false,
-          message: `Insufficient balance in ${ledgerName}. Available: ₹${currentBalance.toFixed(2)}`
-        });
-      }
-
-      const entry = await PaymentEntry.create(entryData);
+      const entry = await ReceiptEntry.create(entryData);
       
       res.status(201).json({
         success: true,
-        message: 'Payment entry created successfully',
+        message: 'Receipt entry created successfully',
         data: entry
       });
     } catch (error) {
@@ -97,14 +86,14 @@ class PaymentController {
     }
   }
 
-  // Update payment entry
+  // Update receipt entry
   static async updateEntry(req, res) {
     try {
       const { id } = req.params;
       const updateData = req.body;
 
       // Validate data
-      const validation = PaymentEntry.validate(updateData);
+      const validation = ReceiptEntry.validate(updateData);
       if (!validation.isValid) {
         return res.status(400).json({
           success: false,
@@ -113,11 +102,11 @@ class PaymentController {
         });
       }
 
-      const entry = await PaymentEntry.update(id, updateData);
+      const entry = await ReceiptEntry.update(id, updateData);
       
       res.json({
         success: true,
-        message: 'Payment entry updated successfully',
+        message: 'Receipt entry updated successfully',
         data: entry
       });
     } catch (error) {
@@ -128,16 +117,16 @@ class PaymentController {
     }
   }
 
-  // Delete payment entry
+  // Delete receipt entry
   static async deleteEntry(req, res) {
     try {
       const { id } = req.params;
       
-      await PaymentEntry.delete(id);
+      await ReceiptEntry.delete(id);
       
       res.json({
         success: true,
-        message: 'Payment entry deleted successfully'
+        message: 'Receipt entry deleted successfully'
       });
     } catch (error) {
       res.status(500).json({
@@ -150,7 +139,7 @@ class PaymentController {
   // Get next voucher number
   static async getNextVoucherNumber(req, res) {
     try {
-      const voucherNo = await PaymentEntry.generateVoucherNumber();
+      const voucherNo = await ReceiptEntry.generateVoucherNumber();
       
       res.json({
         success: true,
@@ -164,8 +153,8 @@ class PaymentController {
     }
   }
 
-  // Get payment modes
-  static async getPaymentModes(req, res) {
+  // Get receipt modes
+  static async getReceiptModes(req, res) {
     try {
       const modes = ['Cash', 'Bank', 'Cheque', 'Draft'];
       
@@ -200,4 +189,4 @@ class PaymentController {
   }
 }
 
-module.exports = PaymentController;
+module.exports = ReceiptController;

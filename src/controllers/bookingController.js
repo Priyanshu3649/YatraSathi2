@@ -1,4 +1,5 @@
 const { BookingTVL, UserTVL, CustomerTVL: Customer, EmployeeTVL: Employee, StationTVL: Station } = require('../models');
+const Passenger = require('./Passenger'); // Import the new Passenger model
 const { Sequelize } = require('sequelize');
 const { sequelize } = require('../models/baseModel');
 
@@ -40,28 +41,20 @@ const createBooking = async (req, res) => {
         mby: req.user.us_usid
       }, { transaction });
       
-      // If passenger list is provided, create passenger records
+      // If passenger list is provided, create passenger records using new Passenger model
       if (passengerList && Array.isArray(passengerList) && passengerList.length > 0) {
-        const models = require('../models');
-        const Passenger = models.Passenger;
+        // Filter out empty passengers
+        const validPassengers = passengerList.filter(passenger => 
+          passenger.name && passenger.name.trim() !== ''
+        );
         
-        // Create passenger records for this booking
-        for (const passenger of passengerList) {
-          if (passenger.name && passenger.name.trim() !== '') { // Only create if name is provided
-            await Passenger.create({
-              ps_bkid: booking.bk_bkid, // Link to the newly created booking
-              ps_fname: passenger.name.split(' ')[0] || '', // First name
-              ps_lname: passenger.name.split(' ').slice(1).join(' ') || null, // Last name (if any)
-              ps_age: parseInt(passenger.age) || 0,
-              ps_gender: passenger.gender || 'M',
-              ps_berthpref: passenger.berthPreference || null,
-              ps_idtype: passenger.idProofType || null,
-              ps_idno: passenger.idProofNumber || null,
-              ps_active: 1, // Active passenger
-              eby: req.user.us_usid,
-              mby: req.user.us_usid
-            }, { transaction });
-          }
+        if (validPassengers.length > 0) {
+          // Use the new Passenger model's createMultiple method
+          await Passenger.createMultiple(
+            booking.bk_bkid, 
+            validPassengers, 
+            req.user.us_name || req.user.us_usid
+          );
         }
       }
       
@@ -83,10 +76,6 @@ const createBooking = async (req, res) => {
 // Get all bookings for a customer
 const getCustomerBookings = async (req, res) => {
   try {
-    // Import models
-    const models = require('../models');
-    const { Passenger, StationTVL: Station } = models;
-    
     const bookings = await BookingTVL.findAll({ 
       where: { bk_usid: req.user.us_usid },
       order: [['bk_reqdt', 'DESC']]
@@ -94,13 +83,9 @@ const getCustomerBookings = async (req, res) => {
     
     // Transform data to match frontend expectations and get actual passenger counts
     const transformedBookings = await Promise.all(bookings.map(async (booking) => {
-      // Get passenger count for this booking
-      const passengerCount = await Passenger.count({
-        where: { 
-          ps_bkid: booking.bk_bkid,
-          ps_active: 1  // Only count active passengers
-        }
-      });
+      // Get passenger count for this booking using new Passenger model
+      const passengerCountResult = await Passenger.getCountByBookingId(booking.bk_bkid);
+      const passengerCount = passengerCountResult.success ? passengerCountResult.count : 0;
       
       // Get station names
       let fromStationName = booking.bk_fromst || 'Unknown';

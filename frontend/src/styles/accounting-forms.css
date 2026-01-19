@@ -1,0 +1,318 @@
+/* Accounting Forms CSS - ASCII Wireframe Style */
+/* Implements the exact visual style as specified in the redesign plan */
+
+.accounting-form-container {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  background-color: #000080; /* Classic ERP blue background */
+  color: #ffffff;
+  font-family: 'Courier New', monospace;
+  font-size: 14px;
+  line-height: 1.2;
+  padding: 20px;
+}
+
+.payments-container {
+  min-height: 100vh;
+  background-color: #000080;
+}
+
+/* ASCII Border Styling */
+.form-header,
+.form-footer {
+  color: #ffffff;
+  font-weight: bold;
+  margin: 10px 0;
+}
+
+.ascii-border,
+.ascii-line {
+  font-family: 'Courier New', monospace;
+  font-size: 14px;
+  white-space: pre;
+  text-align: left;
+  color: #ffffff;
+}
+
+/* Form Content */
+.form-content {
+  flex: 1;
+  padding: 20px;
+  outline: none;
+}
+
+.form-content:focus {
+  outline: 2px solid #ffff00;
+  outline-offset: 2px;
+}
+
+/* Entry Fields */
+.entry-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+  margin-bottom: 30px;
+}
+
+.field-row {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+}
+
+.field-row label {
+  min-width: 150px;
+  color: #ffffff;
+  font-weight: bold;
+}
+
+.form-input {
+  flex: 1;
+  padding: 8px 12px;
+  background-color: #ffffff;
+  color: #000000;
+  border: 2px solid #cccccc;
+  font-family: 'Courier New', monospace;
+  font-size: 14px;
+  outline: none;
+}
+
+.form-input:focus {
+  border-color: #ffff00;
+  background-color: #ffffcc;
+}
+
+.form-input:disabled {
+  background-color: #f0f0f0;
+  color: #666666;
+}
+
+/* Select Styling */
+select.form-input {
+  cursor: pointer;
+}
+
+select.form-input option {
+  background-color: #ffffff;
+  color: #000000;
+}
+
+/* Textarea Styling */
+textarea.form-input {
+  resize: vertical;
+  min-height: 80px;
+}
+
+/* Action Buttons */
+.action-buttons {
+  display: flex;
+  gap: 20px;
+  justify-content: center;
+  margin: 30px 0;
+}
+
+.btn-primary,
+.btn-secondary {
+  padding: 10px 20px;
+  font-family: 'Courier New', monospace;
+  font-size: 14px;
+  font-weight: bold;
+  border: 2px solid;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-primary {
+  background-color: #ffff00;
+  color: #000080;
+  border-color: #ffff00;
+}
+
+.btn-primary:hover {
+  background-color: #ffffff;
+  color: #000080;
+  border-color: #ffffff;
+}
+
+.btn-primary:disabled {
+  background-color: #cccccc;
+  color: #666666;
+  border-color: #cccccc;
+  cursor: not-allowed;
+}
+
+.btn-secondary {
+  background-color: transparent;
+  color: #ffffff;
+  border-color: #ffffff;
+}
+
+.btn-secondary:hover {
+  background-color: #ffffff;
+  color: #000080;
+}
+
+/* Messages */
+.error-message {
+  background-color: #ff0000;
+  color: #ffffff;
+  padding: 10px;
+  margin: 10px 0;
+  border: 2px solid #ffffff;
+  font-weight: bold;
+  text-align: center;
+}
+
+.success-message {
+  background-color: #00ff00;
+  color: #000000;
+  padding: 10px;
+  margin: 10px 0;
+  border: 2px solid #000000;
+  font-weight: bold;
+  text-align: center;
+}
+
+/* Ledger Grid (for future implementation) */
+.ledger-grid {
+  margin: 20px 0;
+  border: 2px solid #ffffff;
+  background-color: rgba(255, 255, 255, 0.1);
+}
+
+.ledger-grid table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: 'Courier New', monospace;
+  font-size: 12px;
+}
+
+.ledger-grid th,
+.ledger-grid td {
+  padding: 8px;
+  border: 1px solid #ffffff;
+  text-align: left;
+}
+
+.ledger-grid th {
+  background-color: #ffffff;
+  color: #000080;
+  font-weight: bold;
+}
+
+.ledger-grid td {
+  color: #ffffff;
+}
+
+/* Balance Display */
+.balance-display {
+  display: flex;
+  justify-content: space-between;
+  margin: 20px 0;
+  padding: 10px;
+  background-color: rgba(255, 255, 255, 0.1);
+  border: 2px solid #ffffff;
+}
+
+.balance-item {
+  font-weight: bold;
+}
+
+.balance-item.debit {
+  color: #ff6666;
+}
+
+.balance-item.credit {
+  color: #66ff66;
+}
+
+.balance-item.total {
+  color: #ffff00;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .accounting-form-container {
+    font-size: 12px;
+    padding: 10px;
+  }
+  
+  .field-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 5px;
+  }
+  
+  .field-row label {
+    min-width: auto;
+  }
+  
+  .action-buttons {
+    flex-direction: column;
+    gap: 10px;
+  }
+  
+  .ascii-border,
+  .ascii-line {
+    font-size: 12px;
+  }
+}
+
+/* High Contrast Mode Support */
+@media (prefers-contrast: high) {
+  .accounting-form-container {
+    background-color: #000000;
+    color: #ffffff;
+  }
+  
+  .form-input {
+    border-color: #ffffff;
+  }
+  
+  .form-input:focus {
+    border-color: #ffffff;
+    background-color: #ffffff;
+    color: #000000;
+  }
+}
+
+/* Focus Indicators for Accessibility */
+.form-input:focus-visible {
+  outline: 3px solid #ffff00;
+  outline-offset: 2px;
+}
+
+.btn-primary:focus-visible,
+.btn-secondary:focus-visible {
+  outline: 3px solid #ffff00;
+  outline-offset: 2px;
+}
+
+/* Animation for Form Transitions */
+.form-content {
+  animation: fadeIn 0.3s ease-in-out;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Print Styles */
+@media print {
+  .accounting-form-container {
+    background-color: white;
+    color: black;
+  }
+  
+  .form-input {
+    border-color: black;
+    background-color: white;
+    color: black;
+  }
+  
+  .action-buttons {
+    display: none;
+  }
+}

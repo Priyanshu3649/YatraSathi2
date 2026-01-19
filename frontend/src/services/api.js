@@ -363,25 +363,26 @@ export const bookingAPI = {
     return data;
   },
   
-  // Get all bookings (admin and employees)
-  getAllBookings: async () => {
-    // Get user data from localStorage
-    let userRole = 'customer'; // default
-    let userId = null;
+  // Get all bookings (admin and employees) - accepts user role to avoid localStorage inconsistencies
+  getAllBookings: async (userRole = null) => {
+    // If user role is passed in, use it directly
+    let effectiveUserRole = userRole;
     
-    try {
-      const userStr = localStorage.getItem('user');
-      if (userStr) {
-        const userData = JSON.parse(userStr);
-        userRole = userData.us_roid || userData.role || 'customer';
-        userId = userData.us_usid || userData.id || null;
+    // Otherwise, get user data from localStorage as fallback
+    if (!effectiveUserRole) {
+      try {
+        const userStr = localStorage.getItem('user');
+        if (userStr) {
+          const userData = JSON.parse(userStr);
+          effectiveUserRole = userData.us_roid || userData.role || 'customer';
+        }
+      } catch (e) {
+        console.warn('Could not get user data to determine role');
       }
-    } catch (e) {
-      console.warn('Could not get user data to determine role');
     }
       
     // Use employee-specific endpoint for employee roles
-    const isEmployee = ['AGT', 'ACC', 'HR', 'CC', 'MKT', 'MGT', 'ADM'].includes(userRole);
+    const isEmployee = ['AGT', 'ACC', 'HR', 'CC', 'MKT', 'MGT', 'ADM'].includes(effectiveUserRole);
     const url = isEmployee 
       ? `${API_BASE_URL}/employee/bookings`
       : `${API_BASE_URL}/bookings`;

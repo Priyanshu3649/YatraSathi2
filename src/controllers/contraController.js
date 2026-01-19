@@ -1,19 +1,18 @@
-// Payment Entry Controller - Handles money going out
-const PaymentEntry = require('../models/PaymentEntry');
+// Contra Entry Controller - Handles Cash to Bank / Bank to Cash transfers
+const ContraEntry = require('../models/ContraEntry');
 const LedgerMaster = require('../models/LedgerMaster');
 
-class PaymentController {
-  // Get all payment entries
+class ContraController {
+  // Get all contra entries
   static async getAllEntries(req, res) {
     try {
       const filters = {
         entry_date_from: req.query.entry_date_from,
         entry_date_to: req.query.entry_date_to,
-        voucher_no: req.query.voucher_no,
-        payment_mode: req.query.payment_mode
+        voucher_no: req.query.voucher_no
       };
 
-      const entries = await PaymentEntry.findAll(filters);
+      const entries = await ContraEntry.findAll(filters);
       
       res.json({
         success: true,
@@ -28,16 +27,16 @@ class PaymentController {
     }
   }
 
-  // Get single payment entry by ID
+  // Get single contra entry by ID
   static async getEntryById(req, res) {
     try {
       const { id } = req.params;
-      const entry = await PaymentEntry.findById(id);
+      const entry = await ContraEntry.findById(id);
       
       if (!entry) {
         return res.status(404).json({
           success: false,
-          message: 'Payment entry not found'
+          message: 'Contra entry not found'
         });
       }
       
@@ -53,7 +52,7 @@ class PaymentController {
     }
   }
 
-  // Create new payment entry
+  // Create new contra entry
   static async createEntry(req, res) {
     try {
       const entryData = {
@@ -62,7 +61,7 @@ class PaymentController {
       };
 
       // Validate data
-      const validation = PaymentEntry.validate(entryData);
+      const validation = ContraEntry.validate(entryData);
       if (!validation.isValid) {
         return res.status(400).json({
           success: false,
@@ -71,22 +70,31 @@ class PaymentController {
         });
       }
 
-      // Check if sufficient balance exists
-      const ledgerName = entryData.payment_mode === 'Cash' ? 'Cash' : 'Bank';
-      const currentBalance = await LedgerMaster.getBalance(ledgerName);
-      
-      if (currentBalance < parseFloat(entryData.amount)) {
+      // Verify ledgers exist and are cash/bank type
+      const fromLedger = await LedgerMaster.findByName(entryData.ledger_from);
+      const toLedger = await LedgerMaster.findByName(entryData.ledger_to);
+
+      if (!fromLedger || !toLedger) {
         return res.status(400).json({
           success: false,
-          message: `Insufficient balance in ${ledgerName}. Available: ₹${currentBalance.toFixed(2)}`
+          message: 'One or both ledgers not found'
         });
       }
 
-      const entry = await PaymentEntry.create(entryData);
+      // Contra entries should only be between Cash and Bank
+      const validTypes = ['Cash', 'Bank'];
+      if (!validTypes.includes(fromLedger.ledger_type) || !validTypes.includes(toLedger.ledger_type)) {
+        return res.status(400).json({
+          success: false,
+          message: 'Contra entries are only allowed between Cash and Bank ledgers'
+        });
+      }
+
+      const entry = await ContraEntry.create(entryData);
       
       res.status(201).json({
         success: true,
-        message: 'Payment entry created successfully',
+        message: 'Contra entry created successfully',
         data: entry
       });
     } catch (error) {
@@ -97,14 +105,14 @@ class PaymentController {
     }
   }
 
-  // Update payment entry
+  // Update contra entry
   static async updateEntry(req, res) {
     try {
       const { id } = req.params;
       const updateData = req.body;
 
       // Validate data
-      const validation = PaymentEntry.validate(updateData);
+      const validation = ContraEntry.validate(updateData);
       if (!validation.isValid) {
         return res.status(400).json({
           success: false,
@@ -113,11 +121,11 @@ class PaymentController {
         });
       }
 
-      const entry = await PaymentEntry.update(id, updateData);
+      const entry = await ContraEntry.update(id, updateData);
       
       res.json({
         success: true,
-        message: 'Payment entry updated successfully',
+        message: 'Contra entry updated successfully',
         data: entry
       });
     } catch (error) {
@@ -128,16 +136,16 @@ class PaymentController {
     }
   }
 
-  // Delete payment entry
+  // Delete contra entry
   static async deleteEntry(req, res) {
     try {
       const { id } = req.params;
       
-      await PaymentEntry.delete(id);
+      await ContraEntry.delete(id);
       
       res.json({
         success: true,
-        message: 'Payment entry deleted successfully'
+        message: 'Contra entry deleted successfully'
       });
     } catch (error) {
       res.status(500).json({
@@ -150,7 +158,7 @@ class PaymentController {
   // Get next voucher number
   static async getNextVoucherNumber(req, res) {
     try {
-      const voucherNo = await PaymentEntry.generateVoucherNumber();
+      const voucherNo = await ContraEntry.generateVoucherNumber();
       
       res.json({
         success: true,
@@ -164,32 +172,14 @@ class PaymentController {
     }
   }
 
-  // Get payment modes
-  static async getPaymentModes(req, res) {
+  // Get cash and bank ledgers for dropdown
+  static async getCashBankLedgers(req, res) {
     try {
-      const modes = ['Cash', 'Bank', 'Cheque', 'Draft'];
+      const ledgers = await LedgerMaster.getCashBankLedgers();
       
       res.json({
         success: true,
-        data: modes
-      });
-    } catch (error) {
-      res.status(500).json({
-        success: false,
-        message: error.message
-      });
-    }
-  }
-
-  // Get ledger balance
-  static async getLedgerBalance(req, res) {
-    try {
-      const { ledger_name } = req.params;
-      const balance = await LedgerMaster.getBalance(ledger_name);
-      
-      res.json({
-        success: true,
-        balance: balance
+        data: ledgers
       });
     } catch (error) {
       res.status(500).json({
@@ -200,4 +190,4 @@ class PaymentController {
   }
 }
 
-module.exports = PaymentController;
+module.exports = ContraController;

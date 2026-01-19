@@ -1,19 +1,18 @@
-// Payment Entry Controller - Handles money going out
-const PaymentEntry = require('../models/PaymentEntry');
+// Journal Entry Controller - Handles adjustments and other entries
+const JournalEntry = require('../models/JournalEntry');
 const LedgerMaster = require('../models/LedgerMaster');
 
-class PaymentController {
-  // Get all payment entries
+class JournalController {
+  // Get all journal entries
   static async getAllEntries(req, res) {
     try {
       const filters = {
         entry_date_from: req.query.entry_date_from,
         entry_date_to: req.query.entry_date_to,
-        voucher_no: req.query.voucher_no,
-        payment_mode: req.query.payment_mode
+        voucher_no: req.query.voucher_no
       };
 
-      const entries = await PaymentEntry.findAll(filters);
+      const entries = await JournalEntry.findAll(filters);
       
       res.json({
         success: true,
@@ -28,16 +27,16 @@ class PaymentController {
     }
   }
 
-  // Get single payment entry by ID
+  // Get single journal entry by ID
   static async getEntryById(req, res) {
     try {
       const { id } = req.params;
-      const entry = await PaymentEntry.findById(id);
+      const entry = await JournalEntry.findById(id);
       
       if (!entry) {
         return res.status(404).json({
           success: false,
-          message: 'Payment entry not found'
+          message: 'Journal entry not found'
         });
       }
       
@@ -53,7 +52,7 @@ class PaymentController {
     }
   }
 
-  // Create new payment entry
+  // Create new journal entry
   static async createEntry(req, res) {
     try {
       const entryData = {
@@ -62,7 +61,7 @@ class PaymentController {
       };
 
       // Validate data
-      const validation = PaymentEntry.validate(entryData);
+      const validation = JournalEntry.validate(entryData);
       if (!validation.isValid) {
         return res.status(400).json({
           success: false,
@@ -71,22 +70,22 @@ class PaymentController {
         });
       }
 
-      // Check if sufficient balance exists
-      const ledgerName = entryData.payment_mode === 'Cash' ? 'Cash' : 'Bank';
-      const currentBalance = await LedgerMaster.getBalance(ledgerName);
-      
-      if (currentBalance < parseFloat(entryData.amount)) {
+      // Verify ledgers exist
+      const debitLedger = await LedgerMaster.findByName(entryData.debit_ledger);
+      const creditLedger = await LedgerMaster.findByName(entryData.credit_ledger);
+
+      if (!debitLedger || !creditLedger) {
         return res.status(400).json({
           success: false,
-          message: `Insufficient balance in ${ledgerName}. Available: ₹${currentBalance.toFixed(2)}`
+          message: 'One or both ledgers not found'
         });
       }
 
-      const entry = await PaymentEntry.create(entryData);
+      const entry = await JournalEntry.create(entryData);
       
       res.status(201).json({
         success: true,
-        message: 'Payment entry created successfully',
+        message: 'Journal entry created successfully',
         data: entry
       });
     } catch (error) {
@@ -97,14 +96,14 @@ class PaymentController {
     }
   }
 
-  // Update payment entry
+  // Update journal entry
   static async updateEntry(req, res) {
     try {
       const { id } = req.params;
       const updateData = req.body;
 
       // Validate data
-      const validation = PaymentEntry.validate(updateData);
+      const validation = JournalEntry.validate(updateData);
       if (!validation.isValid) {
         return res.status(400).json({
           success: false,
@@ -113,11 +112,11 @@ class PaymentController {
         });
       }
 
-      const entry = await PaymentEntry.update(id, updateData);
+      const entry = await JournalEntry.update(id, updateData);
       
       res.json({
         success: true,
-        message: 'Payment entry updated successfully',
+        message: 'Journal entry updated successfully',
         data: entry
       });
     } catch (error) {
@@ -128,16 +127,16 @@ class PaymentController {
     }
   }
 
-  // Delete payment entry
+  // Delete journal entry
   static async deleteEntry(req, res) {
     try {
       const { id } = req.params;
       
-      await PaymentEntry.delete(id);
+      await JournalEntry.delete(id);
       
       res.json({
         success: true,
-        message: 'Payment entry deleted successfully'
+        message: 'Journal entry deleted successfully'
       });
     } catch (error) {
       res.status(500).json({
@@ -150,7 +149,7 @@ class PaymentController {
   // Get next voucher number
   static async getNextVoucherNumber(req, res) {
     try {
-      const voucherNo = await PaymentEntry.generateVoucherNumber();
+      const voucherNo = await JournalEntry.generateVoucherNumber();
       
       res.json({
         success: true,
@@ -164,14 +163,14 @@ class PaymentController {
     }
   }
 
-  // Get payment modes
-  static async getPaymentModes(req, res) {
+  // Get all ledgers for dropdown
+  static async getAllLedgers(req, res) {
     try {
-      const modes = ['Cash', 'Bank', 'Cheque', 'Draft'];
+      const ledgers = await LedgerMaster.getLedgerList();
       
       res.json({
         success: true,
-        data: modes
+        data: ledgers
       });
     } catch (error) {
       res.status(500).json({
@@ -200,4 +199,4 @@ class PaymentController {
   }
 }
 
-module.exports = PaymentController;
+module.exports = JournalController;
