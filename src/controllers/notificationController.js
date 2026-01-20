@@ -4,7 +4,7 @@ let notifications = [];
 // Create a notification
 const createNotification = (userId, title, message, type = 'info') => {
   const notification = {
-    id: notifications.length + 1,
+    id: Date.now(),
     userId,
     title,
     message,

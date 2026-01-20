@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { bookingAPI, paymentAPI, billingAPI } from '../services/api';
 import '../styles/vintage-erp-theme.css';
 import '../styles/classic-enterprise-global.css';
@@ -17,6 +17,7 @@ import CustomerLedger from '../components/Billing/CustomerLedger';
 const Billing = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const [bills, setBills] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -24,6 +25,11 @@ const Billing = () => {
   const [activeView, setActiveView] = useState('list'); // 'list', 'create', 'ledger'
   const [selectedBill, setSelectedBill] = useState(null);
   const [showBillDetails, setShowBillDetails] = useState(false);
+  
+  // Booking integration state
+  const [bookingData, setBookingData] = useState(null);
+  const [billingMode, setBillingMode] = useState('list'); // 'list', 'generate', 'view'
+  
   const [formData, setFormData] = useState({
     id: '',
     billDate: new Date().toISOString().split('T')[0],
@@ -31,6 +37,7 @@ const Billing = () => {
     customerName: '',
     customerGstin: '',
     customerBillingAddress: '',
+    bookingId: '', // NEW: Link to booking
     pnrNumbers: [],
     trainNumber: '',
     reservationClass: '3A',
@@ -41,9 +48,102 @@ const Billing = () => {
     agentFees: '',
     extraCharges: [],
     discounts: [],
+    totalAmount: 0, // Auto-calculated
+    taxAmount: 0,   // Auto-calculated
+    grandTotal: 0,  // Auto-calculated
     status: 'DRAFT',
     remarks: ''
   });
+
+  // Handle booking integration from location state
+  useEffect(() => {
+    if (location.state) {
+      const { bookingId, mode, bookingData: passedBookingData } = location.state;
+      
+      if (bookingId && mode) {
+        setBillingMode(mode);
+        setBookingData(passedBookingData);
+        
+        if (mode === 'generate' && passedBookingData) {
+          // Auto-populate form with booking data
+          setFormData(prev => ({
+            ...prev,
+            bookingId: bookingId,
+            customerId: passedBookingData.bk_usid || passedBookingData.customerId,
+            customerName: passedBookingData.customerName || passedBookingData.bk_customername,
+            trainNumber: passedBookingData.trainNumber || '',
+            reservationClass: passedBookingData.bk_class || '3A',
+            // Auto-calculate amounts based on booking
+            netFare: calculateNetFare(passedBookingData),
+            serviceCharges: calculateServiceCharges(passedBookingData),
+            platformFees: calculatePlatformFees(passedBookingData),
+            agentFees: calculateAgentFees(passedBookingData)
+          }));
+          
+          setActiveView('create');
+          setShowForm(true);
+        } else if (mode === 'view') {
+          // Load existing bill for this booking
+          loadBillForBooking(bookingId);
+        }
+      }
+    }
+  }, [location.state]);
+
+  // Billing calculation functions
+  const calculateNetFare = (booking) => {
+    // Base fare calculation logic
+    const baseRate = getBaseRateForClass(booking.bk_class);
+    const passengers = booking.totalPassengers || 1;
+    return baseRate * passengers;
+  };
+
+  const calculateServiceCharges = (booking) => {
+    // Service charges (configurable percentage)
+    const netFare = calculateNetFare(booking);
+    return Math.round(netFare * 0.05); // 5% service charge
+  };
+
+  const calculatePlatformFees = (booking) => {
+    // Platform fees (fixed amount per booking)
+    return 20; // Fixed ₹20 platform fee
+  };
+
+  const calculateAgentFees = (booking) => {
+    // Agent fees (configurable)
+    const netFare = calculateNetFare(booking);
+    return Math.round(netFare * 0.02); // 2% agent fee
+  };
+
+  const getBaseRateForClass = (travelClass) => {
+    const rates = {
+      'SL': 500,
+      '3A': 800,
+      '2A': 1200,
+      '1A': 2000,
+      'CC': 600,
+      'EC': 1000
+    };
+    return rates[travelClass] || 500;
+  };
+
+  const loadBillForBooking = async (bookingId) => {
+    try {
+      setLoading(true);
+      const response = await billingAPI.getBillByBookingId(bookingId);
+      if (response.success && response.data) {
+        setSelectedBill(response.data);
+        setShowBillDetails(true);
+        setActiveView('view');
+      } else {
+        setError('No billing record found for this booking');
+      }
+    } catch (error) {
+      setError(error.message || 'Failed to load billing record');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // Audit data for the form
   const [auditData, setAuditData] = useState({

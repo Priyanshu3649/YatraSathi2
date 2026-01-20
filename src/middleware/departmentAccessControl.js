@@ -1,4 +1,4 @@
-const { User, Employee, Role, RolePermission, UserTVL, EmployeeTVL } = require('../models');
+const { User, Employee, Role, RolePermission, UserTVL, EmployeeTVL, RolePermissionTVL, RoleTVL, PermissionTVL } = require('../models');
 
 /**
  * Department Access Control Middleware
@@ -62,8 +62,32 @@ const departmentAccessControl = async (req, res, next) => {
 
     // Get role permissions
     let permissions = [];
-    if (!isTVLUser && user.us_roid) {
-      permissions = await RolePermission.findAll({
+    if (isTVLUser && user.us_roid) {
+      const rolePermissions = await RolePermissionTVL.findAll({
+        where: { 
+          fp_fnid: user.us_roid,
+          fp_active: 1 
+        },
+        include: [
+          {
+            model: RoleTVL,
+            as: 'Role',
+            attributes: ['fn_fnshort', 'fn_fndesc']
+          }
+        ]
+      });
+
+      // Map TVL permissions to common format
+      // Note: TVL uses composite ID in fp_opid which implicitly defines the permission/function
+      // We are using RoleTVL to get the function name/description
+      permissions = rolePermissions.map(p => ({
+        function: p.Role?.fn_fnshort,
+        type: p.Role?.fn_fndesc,
+        allow: p.fp_allow
+      }));
+
+    } else if (!isTVLUser && user.us_roid) {
+      const rolePermissions = await RolePermission.findAll({
         where: { 
           rp_roid: user.us_roid,
           rp_active: 1 
@@ -75,6 +99,12 @@ const departmentAccessControl = async (req, res, next) => {
           }
         ]
       });
+
+      permissions = rolePermissions.map(p => ({
+        function: p.fnXfunction?.fn_fnshort,
+        type: p.fnXfunction?.fn_fndesc,
+        allow: p.rp_allow
+      }));
     }
 
     // Attach user details and permissions to request
@@ -83,11 +113,7 @@ const departmentAccessControl = async (req, res, next) => {
       role: user.us_roid || user.us_usertype,
       department: employee?.em_dept,
       status: employee?.em_status,
-      permissions: permissions.map(p => ({
-        function: p.fnXfunction?.fn_fnshort,
-        type: p.fnXfunction?.fn_fndesc,
-        allow: p.rp_allow
-      }))
+      permissions: permissions
     };
 
     next();

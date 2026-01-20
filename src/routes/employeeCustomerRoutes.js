@@ -1,7 +1,8 @@
 const express = require('express');
 const { 
   searchCustomers,
-  getCustomerById 
+  getCustomerById,
+  findCustomerByPhone
 } = require('../controllers/customerController');
 const authMiddleware = require('../middleware/authMiddleware');
 
@@ -25,6 +26,7 @@ router.use((req, res, next) => {
 
 // Employee customer search and access routes
 router.get('/search', searchCustomers);
+router.get('/phone/:phoneNumber', findCustomerByPhone); // MANDATORY: Phone lookup endpoint for employees
 router.get('/:id', getCustomerById);
 
 module.exports = router;

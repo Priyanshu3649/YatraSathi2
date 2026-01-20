@@ -1350,6 +1350,34 @@ export const customerAPI = {
     return data;
   },
 
+  // MANDATORY: Find customer by phone number (for booking auto-fetch)
+  findByPhone: async (phoneNumber) => {
+    const userRole = getUserRole();
+    
+    // Use employee-specific endpoint for non-customer roles
+    const isEmployee = ['AGT', 'ACC', 'HR', 'CC', 'MKT', 'MGT', 'ADM'].includes(userRole);
+    const url = isEmployee 
+      ? `${API_BASE_URL}/employee/customers/phone/${encodeURIComponent(phoneNumber)}`
+      : `${API_BASE_URL}/customer/phone/${encodeURIComponent(phoneNumber)}`;
+    
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: getHeaders(true)
+    });
+    
+    const data = await response.json();
+    
+    if (!response.ok) {
+      // Return not found instead of throwing error for graceful handling
+      if (response.status === 404) {
+        return { success: false, data: null, message: 'Customer not found' };
+      }
+      throw new Error(data.message || 'Failed to lookup customer by phone');
+    }
+    
+    return data;
+  },
+
   // Get customer by ID
   getCustomerById: async (customerId) => {
     const userRole = getUserRole();

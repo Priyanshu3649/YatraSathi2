@@ -1,16 +1,53 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { bookingAPI } from '../services/api';
-import CustomerLookupInput from '../components/common/CustomerLookupInput';
 import SaveConfirmationModal from '../components/common/SaveConfirmationModal';
-import { useKeyboardNav } from '../hooks/useKeyboardNavigation';
+import RecordActionMenu from '../components/common/RecordActionMenu';
+import { useKeyboardForm } from '../hooks/useKeyboardForm';
 import { usePassengerEntry } from '../hooks/usePassengerEntry';
+import { usePhoneLookup } from '../hooks/usePhoneLookup';
 import '../styles/vintage-erp-theme.css';
 import '../styles/classic-enterprise-global.css';
 import '../styles/vintage-admin-panel.css';
 import '../styles/dynamic-admin-panel.css';
 import '../styles/vintage-erp-global.css';
+
+// Add inline styles for keyboard navigation
+const keyboardNavigationStyles = `
+  .erp-table tbody tr.highlighted {
+    background-color: #e3f2fd !important;
+    border: 2px solid #1976d2 !important;
+  }
+  
+  .erp-table tbody tr.selected {
+    background-color: #bbdefb !important;
+  }
+  
+  .erp-table tbody tr:focus {
+    outline: 2px solid #1976d2;
+    outline-offset: -2px;
+  }
+  
+  .keyboard-shortcuts-help {
+    position: fixed;
+    bottom: 10px;
+    right: 10px;
+    background: rgba(0, 0, 0, 0.8);
+    color: white;
+    padding: 10px;
+    border-radius: 4px;
+    font-size: 11px;
+    z-index: 1000;
+  }
+`;
+
+// Inject styles
+if (typeof document !== 'undefined') {
+  const styleSheet = document.createElement('style');
+  styleSheet.textContent = keyboardNavigationStyles;
+  document.head.appendChild(styleSheet);
+}
 
 const Bookings = () => {
   const { user } = useAuth();
@@ -23,8 +60,10 @@ const Bookings = () => {
   const [formData, setFormData] = useState({
     bookingId: '',
     bookingDate: new Date().toISOString().split('T')[0],
-    customerId: '',
+    // CUSTOMER ID REMOVED - System managed only
     customerName: '',
+    phoneNumber: '',    // NEW: Phone Number (required, 10-15 digits)
+    internalCustomerId: '', // Internal system field, never exposed to UI
     totalPassengers: 0,
     fromStation: '',
     toStation: '',
@@ -53,166 +92,27 @@ const Bookings = () => {
   // Keyboard navigation state
   const [isEditing, setIsEditing] = useState(false);
   
-  // Define business logic field order for keyboard navigation
-  const fieldOrder = [
+  // MANDATORY: Define business logic field order (MEMOIZED) - CUSTOMER ID REMOVED
+  const fieldOrder = useMemo(() => [
     'bookingDate',
-    'customerId', 
-    'customerName',
+    'customerName',     // Customer Name (required)
+    'phoneNumber',      // Phone Number (required, 10-15 digits)
     'fromStation',
     'toStation',
     'travelDate',
     'travelClass',
     'berthPreference',
     'quotaType',
-    // Passenger fields will be handled separately
+    // Passenger fields handled by passenger loop - these will be activated automatically
     'passenger_name',
     'passenger_age', 
     'passenger_gender',
     'passenger_berth',
     'remarks',
     'status'
-  ];
+  ], []);
   
-  // Handle save confirmation from keyboard navigation
-  const handleSaveConfirmed = useCallback(async () => {
-    try {
-      await handleSave();
-      setShowSaveModal(false);
-    } catch (error) {
-      console.error('Save failed:', error);
-      setError(error.message || 'Failed to save booking');
-    }
-  }, [handleSave]);
-
-  // Initialize keyboard navigation
-  const {
-    formRef,
-    saveConfirmationOpen,
-    focusField
-  } = useKeyboardNav({
-    fieldOrder,
-    autoFocus: true,
-    onSave: handleSaveConfirmed,
-    onCancel: () => setIsEditing(false),
-    validateField: (fieldName, value) => {
-      // Basic validation
-      if (fieldName === 'customerId' && !value) {
-        return { isValid: false, error: 'Customer ID is required' };
-      }
-      if (fieldName === 'fromStation' && !value) {
-        return { isValid: false, error: 'From Station is required' };
-      }
-      if (fieldName === 'toStation' && !value) {
-        return { isValid: false, error: 'To Station is required' };
-      }
-      return { isValid: true };
-    }
-  });
-  
-  // Initialize passenger entry system
-  const {
-    isInLoop,
-    enterPassengerLoop,
-    getFieldProps
-  } = usePassengerEntry({
-    passengerFields: ['name', 'age', 'gender', 'berth'],
-    onPassengerSave: (passenger) => {
-      // Add passenger to the main list
-      setPassengerList(prev => [...prev, {
-        id: passenger.id,
-        name: passenger.name,
-        age: passenger.age,
-        gender: passenger.gender,
-        berthPreference: passenger.berth,
-        idProofType: '',
-        idProofNumber: ''
-      }]);
-    },
-    onLoopExit: () => {
-      // Move focus to next field after passenger section
-      focusField('remarks');
-    },
-    onPassengerValidate: (data) => {
-      if (!data.name || data.name.trim() === '') {
-        return { isValid: false, error: 'Passenger name is required', invalidField: 'name' };
-      }
-      if (!data.age || data.age < 1 || data.age > 120) {
-        return { isValid: false, error: 'Valid age is required', invalidField: 'age' };
-      }
-      return { isValid: true };
-    }
-  });
-  
-  // Set form to NEW mode by default on page load
-  useEffect(() => {
-    handleNew();
-  }, [handleNew]);
-  
-  // Auto-calculate total passengers when passenger list changes
-  useEffect(() => {
-    const total = passengerList.filter(p => p.name && p.name.trim() !== '').length;
-    setFormData(prev => {
-      // Only update if the total has actually changed to prevent loops
-      if (prev.totalPassengers !== total) {
-        return { ...prev, totalPassengers: total };
-      }
-      return prev;
-    });
-  }, [passengerList]);
-  
-  const [currentPage, setCurrentPage] = useState(1);
-  const recordsPerPage = 100;
-  
-  // Pagination helper function
-  const getPaginatedData = () => {
-    const startIndex = (currentPage - 1) * recordsPerPage;
-    const endIndex = startIndex + recordsPerPage;
-    return filteredBookings.slice(startIndex, endIndex);
-  };
-  
-  // Navigation functions
-  const handleNavigation = (direction) => {
-    const paginatedData = getPaginatedData();
-    if (paginatedData.length === 0) return;
-    
-    let newIndex = 0;
-    if (selectedBooking) {
-      const currentIndex = paginatedData.findIndex(item => 
-        item.bk_bkid === selectedBooking.bk_bkid
-      );
-      
-      switch(direction) {
-        case 'first': newIndex = 0; break;
-        case 'prev': newIndex = currentIndex > 0 ? currentIndex - 1 : 0; break;
-        case 'next': newIndex = currentIndex < paginatedData.length - 1 ? currentIndex + 1 : paginatedData.length - 1; break;
-        case 'last': newIndex = paginatedData.length - 1; break;
-        default: break;
-      }
-    }
-    
-    handleRecordSelect(paginatedData[newIndex]);
-  };
-  
-  // Check if navigation buttons should be disabled
-  const paginatedData = getPaginatedData();
-  const isFirstRecord = selectedBooking && paginatedData.length > 0 && 
-    paginatedData[0].bk_bkid === selectedBooking.bk_bkid;
-  const isLastRecord = selectedBooking && paginatedData.length > 0 && 
-    paginatedData[paginatedData.length - 1].bk_bkid === selectedBooking.bk_bkid;
-  
-  // State for passenger details modal
-  const [showPassengerModal, setShowPassengerModal] = useState(false);
-  const [passengerDetails, setPassengerDetails] = useState([]);
-  const [loadingPassengers, setLoadingPassengers] = useState(false);
-
-  // Filter state for inline grid filtering
-  const [inlineFilters, setInlineFilters] = useState({});
-  
-  // Fetch bookings when component mounts
-  useEffect(() => {
-    fetchBookings();
-  }, [user]);
-
+  // Define fetchBookings function first to avoid dependency cycle
   const fetchBookings = useCallback(async () => {
     try {
       setLoading(true);
@@ -241,141 +141,46 @@ const Bookings = () => {
       setLoading(false);
     }
   }, [user]);
-
-  // Apply filters
-  useEffect(() => {
-    let filtered = [...bookings];
-    
-    // Apply inline filters
-    Object.entries(inlineFilters).forEach(([column, value]) => {
-      if (value !== undefined && value !== '') {
-        filtered = filtered.filter(record => 
-          record[column]?.toString().toLowerCase().includes(value.toLowerCase())
-        );
-      }
-    });
-    
-    setFilteredBookings(filtered);
-    setCurrentPage(1); // Reset to first page when filtering
-  }, [inlineFilters, bookings]);
-
-  const handleInputChange = (e) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      [name]: value
-    }));
-  };
   
-  // Handle customer selection from CustomerLookupInput component
-  const handleCustomerChange = (customer) => {
-    if (customer) {
-      setFormData(prev => ({
-        ...prev,
-        customerId: customer.code || customer.id,
-        customerName: customer.name
-      }));
-    } else {
-      setFormData(prev => ({
-        ...prev,
-        customerId: '',
-        customerName: ''
-      }));
-    }
-  };
+  // Create a ref to hold the handleSave function to avoid dependency cycle
+  const handleSaveRef = useRef();
   
-
-
-  const handleInlineFilterChange = (column, value) => {
-    setInlineFilters(prev => ({
-      ...prev,
-      [column]: value
-    }));
-  };
-
-  const handleNew = useCallback(() => {
-    setSelectedBooking(null);
-    setFormData({
-      bookingId: '',
-      bookingDate: new Date().toISOString().split('T')[0],
-      customerId: '',
-      customerName: '',
-      totalPassengers: 0,
-      fromStation: '',
-      toStation: '',
-      travelDate: new Date().toISOString().split('T')[0],
-      travelClass: '3A',
-      berthPreference: '',
-      remarks: '',
-      status: 'Draft',
-      createdBy: user?.us_name || 'system',
-      createdOn: new Date().toISOString(),
-      modifiedBy: '',
-      modifiedOn: '',
-      closedBy: '',
-      closedOn: ''
-    });
-    setPassengerList([{
-      id: Date.now(),
-      name: '',
-      age: '',
-      gender: '',
-      berthPreference: '',
-      idProofType: '',
-      idProofNumber: ''
-    }]);
-    setIsEditing(true);
-    
-    // Set focus to first field after a short delay
-    setTimeout(() => {
-      focusField('bookingDate');
-    }, 100);
-  }, [user?.us_name, focusField]);
-
-  const handleEdit = () => {
-    if (selectedBooking) {
-      // Check if user is customer and booking status
-      const isCustomer = user && (user.us_usertype === 'customer' || user.us_roid === 'CUS');
-      const bookingStatus = selectedBooking.bk_status?.toUpperCase() || selectedBooking.status?.toUpperCase() || 'DRAFT';
-      
-      // For customers, only allow editing when status is DRAFT
-      if (isCustomer && bookingStatus !== 'DRAFT') {
-        alert('You can only edit bookings that are in DRAFT status. Once the booking status changes, editing is locked.');
-        return;
-      }
-      
-      // For admin/employees, allow editing regardless of status
-      setIsEditing(true);
-    } else {
-      alert('Please select a record first');
-    }
-  };
-
-  // Function to fetch and show passenger details
-  const showPassengerDetails = async (bookingId) => {
-    try {
-      setLoadingPassengers(true);
-      const response = await bookingAPI.getBookingPassengers(bookingId);
-      const passengers = response.passengers || [];
-      setPassengerDetails(passengers);
-      setShowPassengerModal(true);
-    } catch (error) {
-      console.error('Error fetching passenger details:', error);
-      alert(`Error fetching passenger details: ${error.message}`);
-    } finally {
-      setLoadingPassengers(false);
-    }
-  };
-
+  // MANDATORY: Initialize phone lookup system (COMPLIANT) - MUST BE BEFORE handleSave
+  const { 
+    lookupCustomerByPhone, 
+    validatePhoneNumber, 
+    formatPhoneNumber,
+    isLookingUp,
+    clearLookupCache
+  } = usePhoneLookup();
+  
+  // Define handleSave function
   const handleSave = useCallback(async () => {
     try {
+      // MANDATORY: Validate phone number before saving
+      if (!formData.phoneNumber) {
+        throw new Error('Phone number is required');
+      }
+      
+      const phoneValidation = validatePhoneNumber(formData.phoneNumber);
+      if (!phoneValidation.isValid) {
+        throw new Error(phoneValidation.error);
+      }
+
+      // MANDATORY: Validate customer name
+      if (!formData.customerName || formData.customerName.trim() === '') {
+        throw new Error('Customer name is required');
+      }
+
       const bookingData = {
         ...formData,
         passengerList,
         totalPassengers: passengerList.filter(p => p.name && p.name.trim() !== '').length,
+        // MANDATORY: Use phone-based customer model
+        phoneNumber: phoneValidation.cleanPhone,
+        customerName: formData.customerName.trim(),
+        internalCustomerId: formData.internalCustomerId || null, // May be null for new customers
         // Map fields to match backend expectations
-        customerId: formData.customerId,
-        customerName: formData.customerName,
         fromStation: formData.fromStation,
         toStation: formData.toStation,
         travelDate: formData.travelDate,
@@ -397,6 +202,7 @@ const Bookings = () => {
         }
         await bookingAPI.updateBooking(bookingId, bookingData);
       } else {
+        // MANDATORY: Create booking with atomic customer creation
         await bookingAPI.createBooking(bookingData);
       }
       
@@ -406,31 +212,205 @@ const Bookings = () => {
     } catch (error) {
       setError(error.message || 'Failed to save booking');
     }
-  }, [formData, passengerList, selectedBooking, user?.us_name, fetchBookings]);
+  }, [formData, passengerList, passengerList.length, selectedBooking, user?.us_name, fetchBookings]);
+  
+  // Store the handleSave function in the ref
+  useEffect(() => {
+    handleSaveRef.current = handleSave;
+  }, [handleSave]);
+  
+  // Handle save confirmation from keyboard navigation
+  const handleSaveConfirmed = useCallback(async () => {
+    try {
+      await handleSaveRef.current();
+    } catch (error) {
+      console.error('Save failed:', error);
+      setError(error.message || 'Failed to save booking');
+    }
+  }, []);
 
-  const handleDelete = async () => {
-    if (!selectedBooking) {
-      alert('Please select a record to delete');
+  // MANDATORY: Initialize keyboard navigation (COMPLIANT)
+  const { isModalOpen } = useKeyboardForm({
+    formId: 'BOOKING_FORM',
+    fields: fieldOrder,
+    onSave: handleSaveConfirmed,
+    onCancel: () => setIsEditing(false)
+  });
+  
+  // MANDATORY: Initialize passenger entry system (COMPLIANT)
+  const {
+    isInLoop,
+    enterPassengerLoop,
+    exitPassengerLoop,
+    getFieldProps
+  } = usePassengerEntry({
+    passengerFields: ['passenger_name', 'passenger_age', 'passenger_gender', 'passenger_berth'],
+    onPassengerSave: (passenger) => {
+      // Add passenger to the main list
+      setPassengerList(prev => [...prev, {
+        id: passenger.id,
+        name: passenger.passenger_name,
+        age: passenger.passenger_age,
+        gender: passenger.passenger_gender,
+        berthPreference: passenger.passenger_berth,
+        idProofType: '',
+        idProofNumber: ''
+      }]);
+    },
+    onLoopExit: () => {
+      // Move focus to next field after passenger section handled by keyboard engine
+      console.log('Passenger loop exited');
+    },
+    onPassengerValidate: (data) => {
+      if (!data.passenger_name || data.passenger_name.trim() === '') {
+        return { isValid: false, error: 'Passenger name is required', invalidField: 'passenger_name' };
+      }
+      if (!data.passenger_age || data.passenger_age < 1 || data.passenger_age > 120) {
+        return { isValid: false, error: 'Valid age is required', invalidField: 'passenger_age' };
+      }
+      return { isValid: true };
+    }
+  });
+  
+  // State for passenger details modal
+  const [showPassengerModal, setShowPassengerModal] = useState(false);
+  const [passengerDetails, setPassengerDetails] = useState([]);
+  const [loadingPassengers, setLoadingPassengers] = useState(false);
+  
+  // Record navigation and action menu state
+  const [selectedRecordIndex, setSelectedRecordIndex] = useState(-1);
+  const [actionMenuOpen, setActionMenuOpen] = useState(false);
+  const [actionMenuPosition, setActionMenuPosition] = useState({ top: 0, left: 0 });
+  const [focusedOnGrid, setFocusedOnGrid] = useState(false);
+  const gridRef = useRef(null);
+    
+  // Filter state for inline grid filtering
+  const [inlineFilters, setInlineFilters] = useState({});
+  
+  // Debug: Log isInLoop state changes
+  useEffect(() => {
+    // Passenger loop state tracking
+  }, [isInLoop]);
+  
+  // MANDATORY: Phone number auto-fetch handler (COMPLIANT)
+  const handlePhoneBlur = useCallback(async (phoneNumber) => {
+    if (!phoneNumber || !isEditing) return;
+    
+    const validation = validatePhoneNumber(phoneNumber);
+    if (!validation.isValid) {
+      setError(validation.error);
       return;
     }
 
-    if (window.confirm('Are you sure you want to delete this record?')) {
-      try {
-        await bookingAPI.deleteBooking(selectedBooking.bk_bkid);
-        fetchBookings();
-      } catch (error) {
-        setError(error.message || 'Failed to delete booking');
+    try {
+      const result = await lookupCustomerByPhone(phoneNumber);
+      
+      if (result.found && result.customer) {
+        // Customer found - auto-populate name (silent background fetch)
+        setFormData(prev => ({
+          ...prev,
+          customerName: result.customer.customerName,
+          phoneNumber: result.customer.phoneNumber,
+          internalCustomerId: result.customer.internalCustomerId
+        }));
+        setError(''); // Clear any previous errors
+      } else {
+        // Customer not found - clear name field for manual entry
+        setFormData(prev => ({
+          ...prev,
+          customerName: '',
+          phoneNumber: validation.cleanPhone,
+          internalCustomerId: ''
+        }));
+        setError(''); // Clear any previous errors (not an error condition)
       }
+    } catch (error) {
+      console.warn('Phone lookup failed:', error);
+      // Don't show error to user - fail gracefully
+      setFormData(prev => ({
+        ...prev,
+        phoneNumber: validation.cleanPhone,
+        internalCustomerId: ''
+      }));
     }
-  };
+  }, [validatePhoneNumber, lookupCustomerByPhone, isEditing]);
 
-  const handleRecordSelect = (record) => {
+  // Define handleNew function first to avoid initialization error
+  const handleNew = useCallback(() => {
+    setSelectedBooking(null);
+    setFormData({
+      bookingId: '',
+      bookingDate: new Date().toISOString().split('T')[0],
+      // CUSTOMER ID REMOVED - System managed only
+      customerName: '',
+      phoneNumber: '',    // NEW: Phone Number (required, 10-15 digits)
+      internalCustomerId: '', // Internal system field, never exposed to UI
+      totalPassengers: 0,
+      fromStation: '',
+      toStation: '',
+      travelDate: new Date().toISOString().split('T')[0],
+      travelClass: '3A',
+      berthPreference: '',
+      remarks: '',
+      status: 'Draft',
+      createdBy: user?.us_name || 'system',
+      createdOn: new Date().toISOString(),
+      modifiedBy: '',
+      modifiedOn: '',
+      closedBy: '',
+      closedOn: ''
+    });
+    setPassengerList([{ 
+      id: Date.now(),
+      name: '',
+      age: '',
+      gender: '',
+      berthPreference: '',
+      idProofType: '',
+      idProofNumber: ''
+    }]);
+    clearLookupCache(); // Clear phone lookup cache for new booking
+    setIsEditing(true);
+      
+    // Focus will be handled automatically by keyboard engine
+  }, [user?.us_name, clearLookupCache]);
+    
+  // Set form to NEW mode by default on page load
+  useEffect(() => {
+    handleNew();
+  }, []);
+    
+  // Auto-calculate total passengers when passenger list changes
+  useEffect(() => {
+    const total = passengerList.filter(p => p.name && p.name.trim() !== '').length;
+    
+    setFormData(prev => {
+      if (prev.totalPassengers !== total) {
+        return { ...prev, totalPassengers: total };
+      }
+      return prev;
+    });
+  }, [passengerList, passengerList.length]);
+    
+  const [currentPage, setCurrentPage] = useState(1);
+  const recordsPerPage = 100;
+    
+  // Pagination helper function
+  const getPaginatedData = useCallback(() => {
+    const startIndex = (currentPage - 1) * recordsPerPage;
+    const endIndex = startIndex + recordsPerPage;
+    return filteredBookings.slice(startIndex, endIndex);
+  }, [filteredBookings, currentPage, recordsPerPage]);
+    
+  const handleRecordSelect = useCallback((record) => {
     setSelectedBooking(record);
     setFormData({
       bookingId: record.bk_bkid || '',
       bookingDate: record.bk_bookingdt ? new Date(record.bk_bookingdt).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
-      customerId: record.customerId || record.bk_customerid || record.cu_usid || '',
+      // CUSTOMER ID REMOVED - System managed only
       customerName: record.customerName || record.bk_customername || '',
+      phoneNumber: record.phoneNumber || record.bk_phonenumber || record.bk_phone || '',
+      internalCustomerId: record.customerId || record.bk_customerid || record.cu_usid || '',
       totalPassengers: record.totalPassengers || 0,
       fromStation: record.fromStation?.st_stname || record.bk_fromstation || record.bk_fromst || '',
       toStation: record.toStation?.st_stname || record.bk_tostation || record.bk_tost || '',
@@ -456,23 +436,390 @@ const Bookings = () => {
       idProofNumber: ''
     }]);
     setIsEditing(false);
-  };
+  }, []);
+  
+  // Navigation functions
+  const handleNavigation = useCallback((direction) => {
+    const paginatedData = getPaginatedData();
+    if (paginatedData.length === 0) return;
+        
+    let newIndex = 0;
+    if (selectedBooking) {
+      const currentIndex = paginatedData.findIndex(item => 
+        item.bk_bkid === selectedBooking.bk_bkid
+      );
+          
+      switch(direction) {
+        case 'first': newIndex = 0; break;
+        case 'prev': newIndex = currentIndex > 0 ? currentIndex - 1 : 0; break;
+        case 'next': newIndex = currentIndex < paginatedData.length - 1 ? currentIndex + 1 : paginatedData.length - 1; break;
+        case 'last': newIndex = paginatedData.length - 1; break;
+        default: break;
+      }
+    }
+        
+    handleRecordSelect(paginatedData[newIndex]);
+  }, [getPaginatedData, selectedBooking, handleRecordSelect]);
+  
+  // Check if navigation buttons should be disabled
+  const { paginatedData, isFirstRecord, isLastRecord } = useMemo(() => {
+    const data = getPaginatedData();
+    const first = selectedBooking && data.length > 0 && 
+      data[0].bk_bkid === selectedBooking.bk_bkid;
+    const last = selectedBooking && data.length > 0 && 
+      data[data.length - 1].bk_bkid === selectedBooking.bk_bkid;
+    return { paginatedData: data, isFirstRecord: first, isLastRecord: last };
+  }, [filteredBookings, currentPage, recordsPerPage, selectedBooking]);
+      
+  // Fetch bookings when component mounts
+  useEffect(() => {
+    fetchBookings();
+  }, [user?.us_usid]);
+      
+  // Apply filters
+  useEffect(() => {
+    let filtered = [...bookings];
+        
+    // Apply inline filters
+    Object.entries(inlineFilters).forEach(([column, value]) => {
+      if (value !== undefined && value !== '') {
+        filtered = filtered.filter(record => 
+          record[column]?.toString().toLowerCase().includes(value.toLowerCase())
+        );
+      }
+    });
+        
+    setFilteredBookings(filtered);
+    setCurrentPage(1); // Reset to first page when filtering
+  }, [inlineFilters, bookings]);
+    
+  const handleInputChange = useCallback((e) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({
+      ...prev,
+      [name]: value
+    }));
+    
+    // Auto-enter passenger mode after quota type selection
+    if (name === 'quotaType' && value && isEditing) {
+      // Small delay to ensure the form state is updated
+      setTimeout(() => {
+        enterPassengerLoop();
+        // Focus on the first passenger field after entering passenger mode
+        setTimeout(() => {
+          const passengerNameField = document.querySelector('[data-field="passenger_name"]');
+          if (passengerNameField) {
+            passengerNameField.focus();
+          }
+        }, 150);
+      }, 100);
+    }
+  }, [isEditing, enterPassengerLoop]);
+      
+  // Handle customer selection from CustomerLookupInput component
+  const handleCustomerChange = useCallback((customer) => {
+    if (customer) {
+      setFormData(prev => ({
+        ...prev,
+        internalCustomerId: customer.code || customer.id,
+        customerName: customer.name,
+        phoneNumber: customer.phone || prev.phoneNumber
+      }));
+    } else {
+      setFormData(prev => ({
+        ...prev,
+        internalCustomerId: '',
+        customerName: '',
+        phoneNumber: ''
+      }));
+    }
+  }, []);
+      
+    
+    
+  const handleInlineFilterChange = useCallback((column, value) => {
+    setInlineFilters(prev => ({
+      ...prev,
+      [column]: value
+    }));
+  }, []);
+    
+  const handleEdit = useCallback(() => {
+    if (selectedBooking) {
+      // Check if user is customer and booking status
+      const isCustomer = user && (user.us_usertype === 'customer' || user.us_roid === 'CUS');
+      const bookingStatus = selectedBooking.bk_status?.toUpperCase() || selectedBooking.status?.toUpperCase() || 'DRAFT';
+          
+      // For customers, only allow editing when status is DRAFT
+      if (isCustomer && bookingStatus !== 'DRAFT') {
+        alert('You can only edit bookings that are in DRAFT status. Once the booking status changes, editing is locked.');
+        return;
+      }
+          
+      // For admin/employees, allow editing regardless of status
+      setIsEditing(true);
+    } else {
+      alert('Please select a record first');
+    }
+  }, [selectedBooking, user]);
+    
+  // Function to fetch and show passenger details
+  const showPassengerDetails = useCallback(async (bookingId) => {
+    try {
+      setLoadingPassengers(true);
+      const response = await bookingAPI.getBookingPassengers(bookingId);
+      const passengers = response.passengers || [];
+      setPassengerDetails(passengers);
+      setShowPassengerModal(true);
+    } catch (error) {
+      console.error('Error fetching passenger details:', error);
+      alert(`Error fetching passenger details: ${error.message}`);
+    } finally {
+      setLoadingPassengers(false);
+    }
+  }, []);
+  
+  const handleDelete = useCallback(async () => {
+    if (!selectedBooking) {
+      alert('Please select a record to delete');
+      return;
+    }
+  
+    if (window.confirm('Are you sure you want to delete this record?')) {
+      try {
+        await bookingAPI.deleteBooking(selectedBooking.bk_bkid);
+        fetchBookings();
+      } catch (error) {
+        setError(error.message || 'Failed to delete booking');
+      }
+    }
+  }, [selectedBooking, fetchBookings]);
 
   const removePassenger = useCallback((id) => {
     if (passengerList.length <= 1) {
       setError('At least one passenger is required');
       return;
     }
-    setPassengerList(passengerList.filter(p => p.id !== id));
-  }, [passengerList]);
+    setPassengerList(prev => prev.filter(p => p.id !== id));
+  }, []);
 
   const updatePassenger = useCallback((id, field, value) => {
-    setPassengerList(passengerList.map(p => 
+    setPassengerList(prev => prev.map(p => 
       p.id === id ? { ...p, [field]: value } : p
     ));
-  }, [passengerList]);
+  }, []);
 
-  const totalPages = Math.ceil(filteredBookings.length / recordsPerPage);
+  const totalPages = useMemo(() => Math.ceil(filteredBookings.length / recordsPerPage), [filteredBookings, recordsPerPage]);
+
+  // Action menu functions
+  const openActionMenu = useCallback((e) => {
+    if (!selectedBooking) return;
+    
+    const rect = e.target.getBoundingClientRect();
+    setActionMenuPosition({
+      top: rect.bottom + window.scrollY,
+      left: rect.left + window.scrollX
+    });
+    setActionMenuOpen(true);
+  }, [selectedBooking]);
+
+  const closeActionMenu = useCallback(() => {
+    setActionMenuOpen(false);
+    // Return focus to grid
+    if (gridRef.current) {
+      gridRef.current.focus();
+    }
+  }, []);
+
+  const handleActionSelect = useCallback(async (action, record) => {
+    closeActionMenu();
+    
+    switch (action) {
+      case 'generate_bill':
+        // Navigate to billing with booking data
+        navigate('/billing', { 
+          state: { 
+            bookingId: record.bk_bkid,
+            mode: 'generate',
+            bookingData: record
+          }
+        });
+        break;
+      case 'view_bill':
+        // Navigate to billing in view mode
+        navigate('/billing', { 
+          state: { 
+            bookingId: record.bk_bkid,
+            mode: 'view'
+          }
+        });
+        break;
+      case 'edit_booking':
+        handleRecordSelect(record);
+        handleEdit();
+        break;
+      case 'cancel_booking':
+        if (window.confirm('Are you sure you want to cancel this booking?')) {
+          try {
+            await bookingAPI.cancelBooking(record.bk_bkid);
+            fetchBookings(); // Refresh data
+          } catch (error) {
+            setError(error.message || 'Failed to cancel booking');
+          }
+        }
+        break;
+      default:
+        break;
+    }
+  }, [closeActionMenu, navigate, handleRecordSelect, handleEdit, fetchBookings]);
+
+  // Generate action menu items based on booking status
+  const getActionMenuItems = useCallback((record) => {
+    const items = [];
+    
+    // Generate Bill
+    const canGenerateBill = record.bk_status === 'CONFIRMED' && !record.hasBilling;
+    items.push({
+      action: 'generate_bill',
+      label: 'Generate Bill',
+      disabled: !canGenerateBill,
+      reason: !canGenerateBill ? 'Billing can only be generated for confirmed bookings' : null
+    });
+    
+    // View Bill
+    items.push({
+      action: 'view_bill',
+      label: 'View Bill',
+      disabled: !record.hasBilling,
+      reason: !record.hasBilling ? 'No billing record exists' : null
+    });
+    
+    // Edit Booking
+    const canEdit = record.bk_status !== 'CANCELLED' && record.bk_status !== 'COMPLETED';
+    items.push({
+      action: 'edit_booking',
+      label: 'Edit Booking',
+      disabled: !canEdit,
+      reason: !canEdit ? 'Cannot edit cancelled or completed bookings' : null
+    });
+    
+    // Cancel Booking
+    const canCancel = record.bk_status !== 'CANCELLED' && record.bk_status !== 'COMPLETED';
+    items.push({
+      action: 'cancel_booking',
+      label: 'Cancel Booking',
+      disabled: !canCancel,
+      reason: !canCancel ? 'Booking is already cancelled or completed' : null
+    });
+    
+    return items;
+  }, []);
+
+  // Keyboard shortcuts and record navigation (moved after all callbacks are defined)
+  useEffect(() => {
+    const handleGlobalKeyDown = (e) => {
+      // Only handle shortcuts when not in form fields
+      const isInFormField = e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT' || e.target.tagName === 'TEXTAREA';
+      
+      if (!isInFormField || focusedOnGrid) {
+        const currentPaginatedData = getPaginatedData();
+        
+        switch (e.key) {
+          case 'ArrowUp':
+            e.preventDefault();
+            if (selectedRecordIndex > 0) {
+              setSelectedRecordIndex(prev => prev - 1);
+              const newRecord = currentPaginatedData[selectedRecordIndex - 1];
+              if (newRecord) {
+                handleRecordSelect(newRecord);
+              }
+            }
+            break;
+          case 'ArrowDown':
+            e.preventDefault();
+            if (selectedRecordIndex < currentPaginatedData.length - 1) {
+              setSelectedRecordIndex(prev => prev + 1);
+              const newRecord = currentPaginatedData[selectedRecordIndex + 1];
+              if (newRecord) {
+                handleRecordSelect(newRecord);
+              }
+            }
+            break;
+          case 'ArrowLeft':
+            e.preventDefault();
+            if (currentPage > 1) {
+              setCurrentPage(prev => prev - 1);
+            }
+            break;
+          case 'ArrowRight':
+            e.preventDefault();
+            if (currentPage < totalPages) {
+              setCurrentPage(prev => prev + 1);
+            }
+            break;
+          case 'Enter':
+            if (focusedOnGrid && selectedBooking) {
+              e.preventDefault();
+              openActionMenu(e);
+            }
+            break;
+          default:
+            break;
+        }
+      }
+      
+      // Global shortcuts (work regardless of focus)
+      if (e.ctrlKey || e.metaKey) {
+        switch (e.key) {
+          case 'e':
+            e.preventDefault();
+            if (selectedBooking) {
+              handleEdit();
+            }
+            break;
+          case 'd':
+            e.preventDefault();
+            if (selectedBooking) {
+              handleDelete();
+            }
+            break;
+          case 'n':
+            e.preventDefault();
+            handleNew();
+            break;
+          default:
+            break;
+        }
+      }
+      
+      // Function keys
+      switch (e.key) {
+        case 'F2':
+          e.preventDefault();
+          if (selectedBooking) {
+            handleEdit();
+          }
+          break;
+        case 'F4':
+          e.preventDefault();
+          if (selectedBooking) {
+            handleDelete();
+          }
+          break;
+        case 'F10':
+          e.preventDefault();
+          if (isEditing) {
+            handleSave();
+          }
+          break;
+        default:
+          break;
+      }
+    };
+
+    document.addEventListener('keydown', handleGlobalKeyDown);
+    return () => document.removeEventListener('keydown', handleGlobalKeyDown);
+  }, [selectedRecordIndex, getPaginatedData, currentPage, totalPages, selectedBooking, focusedOnGrid, isEditing, handleEdit, handleDelete, handleNew, handleSave, handleRecordSelect, openActionMenu]);
 
   return (
     <div className="erp-admin-container">
@@ -550,7 +897,7 @@ const Bookings = () => {
         {/* Center Content - Now takes full space since left sidebar is removed */}
         <div className="erp-center-content">
           {/* Form Panel - Static */}
-          <div className="erp-form-section" ref={formRef}>
+          <div className="erp-form-section">{/* KEYBOARD ENGINE HANDLES FOCUS */}
             <div className="erp-panel-header">Booking Details</div>
             
             {/* Booking ID and Date Row */}
@@ -578,50 +925,63 @@ const Bookings = () => {
               />
             </div>
 
-            {/* Customer ID and Name Row - Using CustomerLookupInput with horizontal layout */}
+            {/* Customer Name and Phone Row - MANDATORY: Phone-based identification */}
             <div className="erp-form-row">
-              <CustomerLookupInput
-                customerId={formData.customerId}
-                customerName={formData.customerName}
-                onCustomerChange={handleCustomerChange}
+              <label className="erp-form-label required">Customer Name</label>
+              <input
+                type="text"
+                name="customerName"
+                data-field="customerName"
+                className="erp-input"
+                value={formData.customerName}
+                onChange={handleInputChange}
                 disabled={!isEditing}
-                required={true}
-                layout="horizontal"
-                fieldProps={{
-                  customerIdProps: {
-                    'data-field': 'customerId',
-                    name: 'customerId'
-                  },
-                  customerNameProps: {
-                    'data-field': 'customerName',
-                    name: 'customerName'
-                  }
-                }}
+                placeholder="Enter customer name..."
+                required
               />
+              <label className="erp-form-label required">Phone Number</label>
+              <div style={{ position: 'relative' }}>
+                <input
+                  type="tel"
+                  name="phoneNumber"
+                  data-field="phoneNumber"
+                  className="erp-input"
+                  value={formData.phoneNumber}
+                  onChange={handleInputChange}
+                  onBlur={(e) => handlePhoneBlur(e.target.value)}
+                  disabled={!isEditing}
+                  placeholder="Enter phone number (10-15 digits)..."
+                  required
+                />
+                {isLookingUp && (
+                  <span style={{ 
+                    position: 'absolute', 
+                    right: '8px', 
+                    top: '50%', 
+                    transform: 'translateY(-50%)',
+                    fontSize: '12px'
+                  }}>
+                    🔄
+                  </span>
+                )}
+              </div>
             </div>
             
-            {/* Total Passengers and Contact Number Row */}
+            {/* Alternate Phone Number Row */}
             <div className="erp-form-row">
-              <label className="erp-form-label">Total Passengers</label>
+              <label className="erp-form-label">Alternate Phone Number</label>
               <input
-                type="text"
-                name="totalPassengers"
-                className="erp-input"
-                value={formData.totalPassengers}
-                readOnly
-                disabled
-                tabIndex={-1}
-              />
-              <label className="erp-form-label">Contact Number</label>
-              <input
-                type="text"
+                type="tel"
                 name="contactNumber"
                 data-field="contactNumber"
                 className="erp-input"
                 value={formData.contactNumber || ''}
                 onChange={handleInputChange}
                 disabled={!isEditing}
+                placeholder="Enter alternate phone number (optional)..."
               />
+              <div></div> {/* Empty div to maintain grid layout */}
+              <div></div> {/* Empty div to maintain grid layout */}
             </div>
 
             {/* Journey Details Row */}
@@ -703,6 +1063,22 @@ const Bookings = () => {
                 className="erp-input"
                 value={formData.quotaType}
                 onChange={handleInputChange}
+                onKeyDown={(e) => {
+                  if (e.key === 'Tab' && !e.shiftKey && formData.quotaType && isEditing) {
+                    // Prevent default tab behavior
+                    e.preventDefault();
+                    // Auto-enter passenger mode and focus first passenger field
+                    setTimeout(() => {
+                      enterPassengerLoop();
+                      setTimeout(() => {
+                        const passengerNameField = document.querySelector('[data-field="passenger_name"]');
+                        if (passengerNameField) {
+                          passengerNameField.focus();
+                        }
+                      }, 100);
+                    }, 50);
+                  }
+                }}
                 disabled={!isEditing}
               >
                 <option value="GN">General (GN)</option>
@@ -713,76 +1089,103 @@ const Bookings = () => {
               </select>
             </div>
 
-            {/* Passenger Details Section - Keyboard Navigation Implementation */}
+            {/* Passenger Details Section */}
             <div className="erp-form-row">
               <label className="erp-form-label" style={{ gridColumn: 'span 4' }}>
                 Passenger Details
-                <button 
-                  type="button" 
-                  className="erp-button" 
-                  style={{ marginLeft: '10px', padding: '2px 8px', fontSize: '11px' }} 
-                  onClick={() => {
-                    if (isEditing) {
-                      enterPassengerLoop();
-                    }
-                  }}
-                  disabled={!isEditing}
-                  tabIndex={-1}
-                >
-                  Enter Passenger Mode
-                </button>
               </label>
             </div>
             
-            {/* Passenger Entry Fields - Only visible when in loop */}
+            {/* Total Passengers Field - Moved to Passenger Details Section */}
+            <div className="erp-form-row">
+              <label className="erp-form-label">Total Passengers</label>
+              <input
+                type="text"
+                name="totalPassengers"
+                className="erp-input"
+                value={formData.totalPassengers}
+                readOnly
+                disabled
+                tabIndex={-1}
+              />
+              <div></div> {/* Empty div to maintain grid layout */}
+              <div></div> {/* Empty div to maintain grid layout */}
+            </div>
+            
+            {/* Passenger Entry Fields - Single Row Layout */}
             {isInLoop && (
               <div className="passenger-entry-section" style={{ border: '2px solid #007acc', padding: '10px', marginBottom: '10px', backgroundColor: '#f0f8ff' }}>
-                <div className="erp-form-row">
+                <div style={{ marginBottom: '5px', fontSize: '12px', fontWeight: 'bold', color: '#007acc' }}>
+                  Passenger Entry Mode - Fill details and press Tab on last field to add passenger, or Escape to exit
+                </div>
+                {/* Labels Row */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 80px 120px 150px', gap: '10px', marginBottom: '2px' }}>
                   <label className="erp-form-label">Name</label>
+                  <label className="erp-form-label">Age</label>
+                  <label className="erp-form-label">Gender</label>
+                  <label className="erp-form-label">Berth Preference</label>
+                </div>
+                {/* Input Fields Row */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 80px 120px 150px', gap: '10px', marginBottom: '5px' }}>
                   <input
                     type="text"
-                    {...getFieldProps('name')}
+                    {...getFieldProps('passenger_name')}
                     className="erp-input"
                     disabled={!isEditing}
                     placeholder="Enter passenger name"
+                    onKeyDown={(e) => {
+                      if (e.key === 'Escape') {
+                        exitPassengerLoop();
+                      }
+                    }}
                   />
-                  <label className="erp-form-label">Age</label>
                   <input
                     type="number"
-                    {...getFieldProps('age')}
+                    {...getFieldProps('passenger_age')}
                     className="erp-input"
                     disabled={!isEditing}
                     placeholder="Age"
                     min="1"
                     max="120"
+                    onKeyDown={(e) => {
+                      if (e.key === 'Escape') {
+                        exitPassengerLoop();
+                      }
+                    }}
                   />
-                </div>
-                <div className="erp-form-row">
-                  <label className="erp-form-label">Gender</label>
                   <select
-                    {...getFieldProps('gender')}
+                    {...getFieldProps('passenger_gender')}
                     className="erp-input"
                     disabled={!isEditing}
+                    defaultValue="M"
+                    onKeyDown={(e) => {
+                      if (e.key === 'Escape') {
+                        exitPassengerLoop();
+                      }
+                    }}
                   >
-                    <option value="">Select</option>
                     <option value="M">Male</option>
                     <option value="F">Female</option>
                     <option value="O">Other</option>
                   </select>
-                  <label className="erp-form-label">Berth Preference</label>
                   <select
-                    {...getFieldProps('berth')}
+                    {...getFieldProps('passenger_berth')}
                     className="erp-input"
                     disabled={!isEditing}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Tab' && !e.shiftKey) {
+                        e.preventDefault();
+                        saveCurrentPassenger();
+                      } else if (e.key === 'Escape') {
+                        exitPassengerLoop();
+                      }
+                    }}
                   >
                     <option value="">Any</option>
                     <option value="LB">Lower Berth</option>
                     <option value="UB">Upper Berth</option>
                     <option value="MB">Middle Berth</option>
                   </select>
-                </div>
-                <div style={{ fontSize: '11px', color: '#666', marginTop: '5px' }}>
-                  Press Tab to save passenger and add next. Double-Tab on empty fields to exit.
                 </div>
               </div>
             )}
@@ -979,8 +1382,8 @@ const Bookings = () => {
                       <th style={{ width: '30px' }}><input type="checkbox" /></th>
                       <th style={{ width: '100px' }}>Booking ID</th>
                       <th style={{ width: '150px' }}>Booking Date</th>
-                      <th style={{ width: '150px' }}>Customer ID</th>
                       <th style={{ width: '200px' }}>Customer Name</th>
+                      <th style={{ width: '150px' }}>Phone Number</th>
                       <th style={{ width: '120px' }}>Total Passengers</th>
                       <th style={{ width: '150px' }}>From Station</th>
                       <th style={{ width: '150px' }}>To Station</th>
@@ -1015,19 +1418,19 @@ const Bookings = () => {
                         <input
                           type="text"
                           className="inline-filter-input"
-                          value={inlineFilters['customerId'] || ''}
-                          onChange={(e) => handleInlineFilterChange('customerId', e.target.value)}
-                          placeholder="Filter customer ID..."
+                          value={inlineFilters['customerName'] || ''}
+                          onChange={(e) => handleInlineFilterChange('customerName', e.target.value)}
+                          placeholder="Filter customer..."
                           style={{ width: '100%', padding: '2px', fontSize: '11px', backgroundColor: '#f0f0f0' }}
                         />
                       </td>
                       <td>
                         <input
-                          type="text"
+                          type="tel"
                           className="inline-filter-input"
-                          value={inlineFilters['customerName'] || ''}
-                          onChange={(e) => handleInlineFilterChange('customerName', e.target.value)}
-                          placeholder="Filter customer..."
+                          value={inlineFilters['phoneNumber'] || ''}
+                          onChange={(e) => handleInlineFilterChange('phoneNumber', e.target.value)}
+                          placeholder="Filter phone..."
                           style={{ width: '100%', padding: '2px', fontSize: '11px', backgroundColor: '#f0f0f0' }}
                         />
                       </td>
@@ -1110,21 +1513,37 @@ const Bookings = () => {
                   </thead>
                   <tbody>
                     {paginatedData.length === 0 ? (
-                      <tr><td colSpan="10" style={{ textAlign: 'center' }}>No records found</td></tr>
+                      <tr><td colSpan="12" style={{ textAlign: 'center' }}>No records found</td></tr>
                     ) : (
                       paginatedData.map((record, idx) => {
                         const isSelected = selectedBooking && selectedBooking.bk_bkid === record.bk_bkid;
+                        const isHighlighted = selectedRecordIndex === idx;
                         return (
                           <tr 
                             key={idx}
-                            className={isSelected ? 'selected' : ''}
-                            onClick={() => handleRecordSelect(record)}
+                            className={`${isSelected ? 'selected' : ''} ${isHighlighted ? 'highlighted' : ''}`}
+                            onClick={() => {
+                              handleRecordSelect(record);
+                              setSelectedRecordIndex(idx);
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                openActionMenu(e);
+                              }
+                            }}
+                            onFocus={() => {
+                              setFocusedOnGrid(true);
+                              setSelectedRecordIndex(idx);
+                            }}
+                            onBlur={() => setFocusedOnGrid(false)}
+                            tabIndex={0}
+                            style={{ cursor: 'pointer' }}
                           >
                             <td><input type="checkbox" checked={!!isSelected} onChange={() => {}} /></td>
                             <td>{record.bk_bkid}</td>
                             <td>{new Date(record.bk_bookingdt || record.createdOn || new Date()).toLocaleDateString()}</td>
-                            <td>{record.customerId || record.bk_customerid || record.cu_usid || 'N/A'}</td>
                             <td>{record.customerName || record.bk_customername || 'N/A'}</td>
+                            <td>{formatPhoneNumber(record.phoneNumber || record.bk_phonenumber || record.bk_phone || 'N/A')}</td>
                             <td>
                               <button 
                                 className="erp-button" 
@@ -1184,16 +1603,6 @@ const Bookings = () => {
             />
           </div>
           <div className="erp-form-row">
-            <label className="erp-form-label">Customer ID</label>
-            <input 
-              type="text" 
-              className="erp-input"
-              value={inlineFilters['customerId'] || ''}
-              onChange={(e) => handleInlineFilterChange('customerId', e.target.value)}
-              placeholder="Search customer ID..."
-            />
-          </div>
-          <div className="erp-form-row">
             <label className="erp-form-label">Customer Name</label>
             <input 
               type="text" 
@@ -1201,6 +1610,16 @@ const Bookings = () => {
               value={inlineFilters['customerName'] || ''}
               onChange={(e) => handleInlineFilterChange('customerName', e.target.value)}
               placeholder="Search customer..."
+            />
+          </div>
+          <div className="erp-form-row">
+            <label className="erp-form-label">Phone Number</label>
+            <input 
+              type="tel" 
+              className="erp-input"
+              value={inlineFilters['phoneNumber'] || ''}
+              onChange={(e) => handleInlineFilterChange('phoneNumber', e.target.value)}
+              placeholder="Search phone..."
             />
           </div>
           <div className="erp-form-row">
@@ -1399,11 +1818,29 @@ const Bookings = () => {
 
       {/* Save Confirmation Modal */}
       <SaveConfirmationModal
-        isOpen={saveConfirmationOpen}
+        isOpen={isModalOpen}
         onConfirm={handleSaveConfirmed}
         onCancel={() => {}}
         message="You have reached the end of the form. Save this booking record?"
       />
+
+      {/* Record Action Menu */}
+      <RecordActionMenu
+        isOpen={actionMenuOpen}
+        onClose={closeActionMenu}
+        position={actionMenuPosition}
+        record={selectedBooking}
+        actions={selectedBooking ? getActionMenuItems(selectedBooking) : []}
+        onActionSelect={handleActionSelect}
+      />
+
+      {/* Keyboard Shortcuts Help */}
+      <div className="keyboard-shortcuts-help">
+        <div style={{ fontWeight: 'bold', marginBottom: '5px' }}>Keyboard Shortcuts:</div>
+        <div>↑↓ Navigate Records | ←→ Navigate Pages</div>
+        <div>Enter: Action Menu | Ctrl+N: New | Ctrl+E: Edit | Ctrl+D: Delete</div>
+        <div>F2: Edit | F4: Delete | F10: Save | Esc: Cancel</div>
+      </div>
     </div>
   );
 };

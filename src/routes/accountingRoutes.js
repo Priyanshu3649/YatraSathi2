@@ -10,7 +10,7 @@ const JournalController = require('../controllers/journalController');
 const LedgerController = require('../controllers/ledgerController');
 
 // Middleware for authentication (if needed)
-const { authenticateToken } = require('../middleware/auth');
+const authenticateToken = require('../middleware/authMiddleware');
 
 // Apply authentication middleware to all routes
 router.use(authenticateToken);

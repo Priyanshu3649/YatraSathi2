@@ -36,7 +36,7 @@ export const useKeyboardNav = (options = {}) => {
         setInitialFocus(formRef);
       }
     }
-  }, [fieldOrder, autoFocus, setFocusOrder, setInitialFocus, formRef]);
+  }, [fieldOrder, autoFocus, setFocusOrder, setInitialFocus]);
 
   // Handle form-specific keyboard events
   const handleKeyDown = useCallback((event) => {

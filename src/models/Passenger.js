@@ -1,7 +1,7 @@
 // Passenger Model - psXpassenger table
 // Handles passenger data for bookings as per YatraSathi specification
 
-const db = require('../config/db');
+const db = require('../../config/db');
 
 class Passenger {
   constructor(data) {

@@ -1,5 +1,5 @@
 // Contra Entry Model - Cash to Bank / Bank to Cash transfers
-const db = require('../../config/db');
+const { mysqlPool: db } = require('../../config/db');
 
 class ContraEntry {
   constructor(data) {

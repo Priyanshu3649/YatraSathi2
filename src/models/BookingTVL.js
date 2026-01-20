@@ -20,6 +20,17 @@ const BookingTVL = sequelizeTVL.define('bkXbooking', {
     allowNull: false,
     comment: 'Customer User ID'
   },
+  // MANDATORY: Phone-based customer identification fields
+  bk_phonenumber: {
+    type: DataTypes.STRING(15),
+    allowNull: true,
+    comment: 'Customer Phone Number (10-15 digits)'
+  },
+  bk_customername: {
+    type: DataTypes.STRING(100),
+    allowNull: true,
+    comment: 'Customer Name (for quick access)'
+  },
   bk_fromst: {
     type: DataTypes.STRING(10),
     allowNull: false,

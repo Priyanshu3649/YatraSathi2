@@ -1,5 +1,5 @@
 // Journal Entry Model - Adjustments and other entries
-const db = require('../../config/db');
+const { mysqlPool: db } = require('../../config/db');
 
 class JournalEntry {
   constructor(data) {

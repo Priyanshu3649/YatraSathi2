@@ -8,6 +8,7 @@ const {
   getAllCustomers,
   searchCustomers,
   getCustomerById,
+  findCustomerByPhone,
   getCustomerBills,
   getCustomerPayments,
   getBookingPassengers
@@ -42,6 +43,7 @@ router.get('/payments', getCustomerPayments);
 // Customer management
 router.get('/', getAllCustomers);
 router.get('/search', searchCustomers);
+router.get('/phone/:phoneNumber', findCustomerByPhone); // MANDATORY: Phone lookup endpoint
 router.get('/:id', getCustomerById);
 
 // Booking management

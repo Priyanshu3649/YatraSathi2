@@ -1,5 +1,5 @@
 // Receipt Entry Model - Money coming in
-const db = require('../../config/db');
+const { mysqlPool: db } = require('../../config/db');
 
 class ReceiptEntry {
   constructor(data) {

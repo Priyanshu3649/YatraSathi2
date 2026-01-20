@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
-import { useKeyboardNavigation } from '../contexts/KeyboardNavigationContext';
+import { useKeyboardForm } from '../hooks/useKeyboardForm';
 import PaymentsMenu from '../components/Payments/PaymentsMenu';
 import ContraForm from '../components/Payments/ContraForm';
 import PaymentForm from '../components/Payments/PaymentForm';
@@ -15,17 +15,13 @@ const Payments = () => {
   const navigate = useNavigate();
   const [currentView, setCurrentView] = useState('menu'); // 'menu', 'contra', 'payment', 'receipt', 'journal'
   
-  const {
-    updateState
-  } = useKeyboardNavigation();
-
-  // Initialize keyboard navigation for payments module
-  useEffect(() => {
-    updateState({ 
-      isNewMode: true,
-      isPassengerLoopActive: false 
-    });
-  }, [updateState]);
+  // MANDATORY: Initialize keyboard navigation (COMPLIANT)
+  const { isModalOpen } = useKeyboardForm({
+    formId: 'PAYMENTS_MODULE',
+    fields: ['menu_selection'], // Simple field for menu navigation
+    onSave: () => console.log('Payments module save'),
+    onCancel: () => navigate('/dashboard')
+  });
 
   // Handle menu selection
   const handleMenuSelect = (menuType) => {

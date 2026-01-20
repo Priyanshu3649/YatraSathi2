@@ -1,5 +1,5 @@
 // Payment Entry Model - Money going out
-const db = require('../../config/db');
+const { mysqlPool: db } = require('../../config/db');
 
 class PaymentEntry {
   constructor(data) {

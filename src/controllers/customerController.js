@@ -755,6 +755,103 @@ const getBookingPassengers = async (req, res) => {
   }
 };
 
+/**
+ * Find customer by phone number (MANDATORY for phone-based booking)
+ */
+const findCustomerByPhone = async (req, res) => {
+  try {
+    const { phoneNumber } = req.params;
+    
+    if (!phoneNumber) {
+      return res.status(400).json({ 
+        success: false, 
+        error: { 
+          code: 'VALIDATION_ERROR', 
+          message: 'Phone number is required' 
+        } 
+      });
+    }
+    
+    // Clean phone number (remove non-digits)
+    const cleanPhone = phoneNumber.replace(/\D/g, '');
+    
+    // Validate phone number length (10-15 digits)
+    if (cleanPhone.length < 10 || cleanPhone.length > 15) {
+      return res.status(400).json({ 
+        success: false, 
+        error: { 
+          code: 'VALIDATION_ERROR', 
+          message: 'Phone number must be 10-15 digits' 
+        } 
+      });
+    }
+    
+    // Search for customer by phone number in User table
+    const customer = await Customer.findOne({ 
+      attributes: [
+        'cu_usid', 'cu_custno', 'cu_custtype', 'cu_creditlimit', 
+        'cu_creditdays', 'cu_discount', 'cu_active'
+      ], 
+      include: [ 
+        { 
+          model: User, 
+          attributes: ['us_fname', 'us_lname', 'us_email', 'us_phone', 'us_aadhaar', 'us_addr1', 'us_city', 'us_state'], 
+          as: 'user',
+          required: true,
+          where: {
+            us_phone: {
+              [Op.or]: [
+                cleanPhone,
+                phoneNumber,
+                // Also try with common phone number formats
+                `+91${cleanPhone}`,
+                `91${cleanPhone}`
+              ]
+            }
+          }
+        }
+      ]
+    });
+    
+    if (!customer) {
+      return res.status(404).json({ 
+        success: false, 
+        data: null,
+        message: 'Customer not found' 
+      });
+    }
+    
+    // Format the customer data for response
+    const formattedCustomer = {
+      us_usid: customer.cu_usid,
+      id: customer.cu_usid,
+      us_fname: customer.user?.us_fname,
+      us_lname: customer.user?.us_lname,
+      us_email: customer.user?.us_email,
+      us_phone: customer.user?.us_phone,
+      us_addr1: customer.user?.us_addr1,
+      us_city: customer.user?.us_city,
+      us_state: customer.user?.us_state,
+      // Additional customer fields
+      cu_custno: customer.cu_custno,
+      cu_custtype: customer.cu_custtype,
+      cu_active: customer.cu_active
+    };
+    
+    res.json({ 
+      success: true, 
+      data: formattedCustomer,
+      message: 'Customer found' 
+    });
+  } catch (error) {
+    console.error('Find customer by phone error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: { code: 'SERVER_ERROR', message: error.message } 
+    });
+  }
+};
+
 module.exports = {
   getCustomerDashboard,
   createBooking,
@@ -764,6 +861,7 @@ module.exports = {
   getAllCustomers,
   searchCustomers,
   getCustomerById,
+  findCustomerByPhone,
   getCustomerBills,
   getCustomerPayments,
   getBookingPassengers

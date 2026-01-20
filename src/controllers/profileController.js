@@ -41,26 +41,22 @@ const getUserProfile = async (req, res) => {
       // Fetch employee-specific data
       let employee;
       
-      // Try TVL first
       try {
+        // Try TVL first
         employee = await EmployeeTVL.findOne({ 
-          where: { em_usid: user.us_usid },
-          include: [{
-            model: UserTVL,
-            as: 'user',
-            attributes: ['us_fname', 'us_lname', 'us_email', 'us_phone']
-          }]
+          where: { em_usid: user.us_usid }
         });
       } catch (tvLError) {
-        // If TVL fails, try regular Employee table
-        employee = await Employee.findOne({ 
-          where: { em_usid: user.us_usid },
-          include: [{
-            model: User,
-            as: 'User',
-            attributes: ['us_fname', 'us_lname', 'us_email', 'us_phone']
-          }]
-        });
+        console.log('TVL Employee model not available, trying regular model');
+        try {
+          // If TVL fails, try regular Employee table
+          employee = await Employee.findOne({ 
+            where: { em_usid: user.us_usid }
+          });
+        } catch (regularError) {
+          console.log('Regular Employee model query failed:', regularError.message);
+          employee = null;
+        }
       }
       
       if (employee) {
@@ -94,20 +90,22 @@ const getUserProfile = async (req, res) => {
       // Fetch customer-specific data
       let customer;
       
-      // Try TVL first
       try {
+        // Try TVL first
         customer = await CustomerTVL.findOne({ 
           where: { cu_usid: user.us_usid }
         });
       } catch (tvLError) {
-        // If TVL fails, try regular Customer table
-        customer = await Customer.findOne({ 
-          where: { cu_usid: user.us_usid },
-          include: [{
-            model: CorporateCustomer,
-            attributes: ['cu_company', 'cu_gst', 'cu_panno']
-          }]
-        });
+        console.log('TVL Customer model not available, trying regular model');
+        try {
+          // If TVL fails, try regular Customer table
+          customer = await Customer.findOne({ 
+            where: { cu_usid: user.us_usid }
+          });
+        } catch (regularError) {
+          console.log('Regular Customer model query failed:', regularError.message);
+          customer = null;
+        }
       }
       
       if (customer) {
@@ -119,8 +117,8 @@ const getUserProfile = async (req, res) => {
             id: custData.cu_usid,
             customerNumber: custData.cu_custno,
             customerType: custData.cu_custtype,
-            companyName: custData.cu_company || (custData.CorporateCustomer ? custData.CorporateCustomer.cu_company : null),
-            gstNumber: custData.cu_gst || (custData.CorporateCustomer ? custData.CorporateCustomer.cu_gst : null),
+            companyName: custData.cu_company,
+            gstNumber: custData.cu_gst,
             creditLimit: custData.cu_creditlimit,
             creditUsed: custData.cu_creditused,
             paymentTerms: custData.cu_paymentterms,

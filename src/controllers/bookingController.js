@@ -1,5 +1,5 @@
 const { BookingTVL, UserTVL, CustomerTVL: Customer, EmployeeTVL: Employee, StationTVL: Station } = require('../models');
-const Passenger = require('./Passenger'); // Import the new Passenger model
+const { Passenger } = require('../models'); // Import the Passenger model
 const { Sequelize } = require('sequelize');
 const { sequelize } = require('../models/baseModel');
 
@@ -15,9 +15,38 @@ const createBooking = async (req, res) => {
       totalPassengers,
       remarks,
       passengerList,
-      customerId,
-      customerName
+      // MANDATORY: Phone-based customer model
+      phoneNumber,
+      customerName,
+      internalCustomerId // May be null for new customers
     } = req.body;
+    
+    // MANDATORY: Validate phone number
+    if (!phoneNumber) {
+      return res.status(400).json({ 
+        success: false, 
+        error: { code: 'VALIDATION_ERROR', message: 'Phone number is required' } 
+      });
+    }
+    
+    // Clean phone number (remove non-digits)
+    const cleanPhone = phoneNumber.replace(/\D/g, '');
+    
+    // Validate phone number length (10-15 digits)
+    if (cleanPhone.length < 10 || cleanPhone.length > 15) {
+      return res.status(400).json({ 
+        success: false, 
+        error: { code: 'VALIDATION_ERROR', message: 'Phone number must be 10-15 digits' } 
+      });
+    }
+    
+    // MANDATORY: Validate customer name
+    if (!customerName || customerName.trim() === '') {
+      return res.status(400).json({ 
+        success: false, 
+        error: { code: 'VALIDATION_ERROR', message: 'Customer name is required' } 
+      });
+    }
     
     // Generate booking number
     const bookingNumber = `BK${Date.now()}${Math.floor(Math.random() * 1000)}`;
@@ -25,10 +54,73 @@ const createBooking = async (req, res) => {
     const transaction = await sequelize.transaction();
     
     try {
-      // Create new booking
+      let customerId = internalCustomerId;
+      
+      // MANDATORY: Atomic customer creation if customer doesn't exist
+      if (!customerId) {
+        // Check if customer exists by phone number
+        const existingCustomer = await Customer.findOne({
+          include: [{
+            model: UserTVL,
+            as: 'user',
+            where: {
+              us_phone: {
+                [Sequelize.Op.or]: [
+                  cleanPhone,
+                  phoneNumber,
+                  `+91${cleanPhone}`,
+                  `91${cleanPhone}`
+                ]
+              }
+            },
+            required: true
+          }]
+        }, { transaction });
+        
+        if (existingCustomer) {
+          // Customer exists, use their ID
+          customerId = existingCustomer.cu_usid;
+        } else {
+          // MANDATORY: Create new customer atomically
+          const nameParts = customerName.trim().split(' ');
+          const firstName = nameParts[0] || '';
+          const lastName = nameParts.slice(1).join(' ') || '';
+          
+          // Create user record first
+          const newUser = await UserTVL.create({
+            us_fname: firstName,
+            us_lname: lastName,
+            us_phone: cleanPhone,
+            us_email: `${cleanPhone}@phone.booking`, // Temporary email
+            us_usertype: 'customer',
+            us_roid: 'CUS',
+            us_active: 1,
+            us_password: 'PHONE_BOOKING', // Temporary password
+            eby: req.user.us_usid,
+            mby: req.user.us_usid
+          }, { transaction });
+          
+          // Create customer record
+          const customerNumber = `CUST${Date.now()}${Math.floor(Math.random() * 1000)}`;
+          const newCustomer = await Customer.create({
+            cu_usid: newUser.us_usid,
+            cu_custno: customerNumber,
+            cu_custtype: 'WALK_IN',
+            cu_active: 1,
+            eby: req.user.us_usid,
+            mby: req.user.us_usid
+          }, { transaction });
+          
+          customerId = newCustomer.cu_usid;
+        }
+      }
+      
+      // Create new booking with resolved customer ID
       const booking = await BookingTVL.create({
         bk_bkno: bookingNumber,
-        bk_usid: customerId || req.user.us_usid, // Use provided customer ID or current user ID
+        bk_usid: customerId, // Use resolved customer ID
+        bk_customername: customerName.trim(), // Store customer name for quick access
+        bk_phonenumber: cleanPhone, // Store phone number for quick access
         bk_fromst: fromStation,
         bk_tost: toStation,
         bk_trvldt: travelDate,
@@ -50,7 +142,8 @@ const createBooking = async (req, res) => {
         
         if (validPassengers.length > 0) {
           // Use the new Passenger model's createMultiple method
-          await Passenger.createMultiple(
+          const { Passenger: CustomPassenger } = require('../models'); // Import the custom Passenger model
+          await CustomPassenger.createMultiple(
             booking.bk_bkid, 
             validPassengers, 
             req.user.us_name || req.user.us_usid
@@ -61,15 +154,24 @@ const createBooking = async (req, res) => {
       // Commit the transaction
       await transaction.commit();
       
-      res.status(201).json(booking);
+      res.status(201).json({
+        success: true,
+        data: {
+          ...booking.toJSON(),
+          message: 'Booking created successfully with phone-based customer identification'
+        }
+      });
     } catch (error) {
       // Rollback the transaction on error
       await transaction.rollback();
       throw error;
     }
   } catch (error) {
-    console.error('Error creating booking with passengers:', error);
-    res.status(500).json({ message: error.message });
+    console.error('Error creating booking with phone-based customer:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: { code: 'SERVER_ERROR', message: error.message } 
+    });
   }
 };
 
@@ -137,7 +239,7 @@ const getAllBookings = async (req, res) => {
     
     // Import models for passenger and station lookups
     const models = require('../models');
-    const { Passenger, StationTVL: Station } = models;
+    const { PassengerTVL: Passenger, StationTVL: Station } = models;
     
     let bookings;
     
@@ -224,7 +326,7 @@ const getBookingById = async (req, res) => {
     
     // Import Passenger model to get passenger count
     const models = require('../models');
-    const Passenger = models.Passenger;
+    const Passenger = models.PassengerTVL;
     
     // Get passenger count for this booking
     const passengerCount = await Passenger.count({
@@ -275,7 +377,7 @@ const updateBooking = async (req, res) => {
       // If passenger list is provided, update passenger records
       if (passengerList && Array.isArray(passengerList)) {
         const models = require('../models');
-        const Passenger = models.Passenger;
+        const Passenger = models.PassengerTVL;
         
         // First, mark all existing passengers as inactive for this booking
         await Passenger.update(
@@ -630,7 +732,7 @@ const getBookingPassengers = async (req, res) => {
     }
     
     // Import Passenger model from main models
-    const { Passenger } = require('../models');
+    const { PassengerTVL: Passenger } = require('../models');
     
     // Get passengers for this booking
     const passengers = await Passenger.findAll({
@@ -784,7 +886,7 @@ const getAssignedBookings = async (req, res) => {
   try {
     // Import models
     const models = require('../models');
-    const { Passenger, StationTVL: Station } = models;
+    const { PassengerTVL: Passenger, StationTVL: Station } = models;
     
     // Get bookings assigned to this employee
     const bookings = await BookingTVL.findAll({

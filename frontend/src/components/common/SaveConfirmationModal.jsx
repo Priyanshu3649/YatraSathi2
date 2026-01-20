@@ -113,7 +113,7 @@ const SaveConfirmationModal = ({ isOpen, onConfirm, onCancel, message = null }) 
         </div>
       </div>
       
-      <style jsx>{`
+      <style>{`
         .save-confirmation-overlay {
           position: fixed;
           top: 0;

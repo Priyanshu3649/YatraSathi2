@@ -10,15 +10,12 @@ const BillsPayments = () => {
   const [error, setError] = useState('');
   const navigate = useNavigate();
 
-  useEffect(() => {
-    fetchData();
-  }, []);
-
-const fetchData = async () => {
+  const fetchData = async () => {
     try {
-      // Try customer-specific endpoints first
-      let billsData, paymentsData;
-      
+      setLoading(true);
+      let billsData = [];
+      let paymentsData = [];
+
       try {
         // Try customer routes
         const billsResponse = await fetch('/api/customer/bills', {
@@ -75,6 +72,10 @@ const fetchData = async () => {
     }
   };
 
+  useEffect(() => {
+    fetchData();
+  }, []);
+
   const getBillStatusColor = (status) => {
     const statusColors = {
       'UNPAID': '#e74c3c',
@@ -89,16 +90,17 @@ const fetchData = async () => {
     return new Intl.NumberFormat('en-IN', {
       style: 'currency',
       currency: 'INR'
-    }).format(amount);
+    }).format(amount || 0);
   };
 
   const formatDate = (dateString) => {
+    if (!dateString) return 'N/A';
     return new Date(dateString).toLocaleDateString('en-IN');
   };
 
   if (loading) {
     return (
-      <div className="bills-payments-loading">
+      <div className="loading-container">
         <div className="loading-spinner"></div>
         <p>Loading bills and payments...</p>
       </div>
@@ -107,9 +109,8 @@ const fetchData = async () => {
 
   if (error) {
     return (
-      <div className="bills-payments-error">
-        <h3>Error Loading Data</h3>
-        <p>{error}</p>
+      <div className="error-container">
+        <div className="error-message">{error}</div>
         <button onClick={fetchData} className="retry-btn">
           Retry
         </button>
@@ -156,20 +157,23 @@ const fetchData = async () => {
                   </div>
                   <div className="detail-item">
                     <span className="label">Total Amount:</span>
-                    <span className="value amount">{formatAmount(bill.total_amount || bill.totalAmount || 0)}</span>
-                  </div>
-                  <div className="detail-item">
-                    <span className="label">Paid Amount:</span>
-                    <span className="value amount">{formatAmount(bill.paid_amount || bill.paidAmount || 0)}</span>
-                  </div>
-                  <div className="detail-item">
-                    <span className="label">Balance:</span>
-                    <span className="value amount">{formatAmount((bill.total_amount || bill.totalAmount || 0) - (bill.paid_amount || bill.paidAmount || 0))}</span>
+                    <span className="value amount">{formatAmount(bill.total_amount || bill.totalAmount)}</span>
                   </div>
                 </div>
                 
                 <div className="bill-actions">
-                  <button className="btn-sm btn-outline">Download Invoice</button>
+                  <button 
+                    className="pay-btn"
+                    onClick={() => navigate(`/payments/new?billId=${bill.bill_id || bill.billId || bill.id}`)}
+                  >
+                    Pay Now
+                  </button>
+                  <button 
+                    className="view-btn"
+                    onClick={() => navigate(`/bills/${bill.bill_id || bill.billId || bill.id}`)}
+                  >
+                    View Details
+                  </button>
                 </div>
               </div>
             ))}
@@ -178,48 +182,42 @@ const fetchData = async () => {
       </div>
 
       <div className="payments-section">
-        <h2>Payment History</h2>
+        <h2>Recent Payments</h2>
         {payments.length === 0 ? (
           <div className="empty-state">
             <div className="empty-icon">💳</div>
-            <h3>No Payment History</h3>
-            <p>Payment history will appear here.</p>
+            <h3>No Recent Payments</h3>
+            <p>Your payment history will appear here.</p>
           </div>
         ) : (
-          <div className="payments-table-container">
-            <table className="payments-table">
-              <thead>
-                <tr>
-                  <th>Payment ID</th>
-                  <th>Bill ID</th>
-                  <th>Amount</th>
-                  <th>Mode</th>
-                  <th>Date</th>
-                  <th>Status</th>
-                  <th>Remarks</th>
-                </tr>
-              </thead>
-              <tbody>
-                {payments.map((payment, index) => (
-                  <tr 
-                    key={payment.pt_ptid || payment.paymentId || payment.id || index} 
-                    className={index % 2 === 0 ? 'even-row' : 'odd-row'}
-                  >
-                    <td>{payment.pt_ptid || payment.paymentId || payment.id || 'N/A'}</td>
-                    <td>{payment.pt_bkid || payment.billId || 'N/A'}</td>
-                    <td className="amount">{formatAmount(payment.pt_amount || payment.amount || 0)}</td>
-                    <td>{payment.pt_mode || payment.mode || 'N/A'}</td>
-                    <td>{formatDate(payment.pt_paydt || payment.date || payment.edtm)}</td>
-                    <td>
-                      <span className="status-badge payment-status">
-                        {payment.pt_status || payment.status || 'N/A'}
-                      </span>
-                    </td>
-                    <td>{payment.pt_remarks || payment.remarks || '-'}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div className="payments-list">
+            {payments.slice(0, 5).map((payment) => (
+              <div key={payment.payment_id || payment.paymentId || payment.id} className="payment-item">
+                <div className="payment-info">
+                  <div className="payment-id">Payment #{payment.payment_id || payment.paymentId || payment.id}</div>
+                  <div className="payment-date">{formatDate(payment.payment_date || payment.paymentDate || payment.created_on)}</div>
+                </div>
+                <div className="payment-amount">
+                  {formatAmount(payment.amount)}
+                </div>
+                <div className="payment-status">
+                  <span className={`status-badge ${(payment.status || 'completed').toLowerCase()}`}>
+                    {payment.status || 'Completed'}
+                  </span>
+                </div>
+              </div>
+            ))}
+            
+            {payments.length > 5 && (
+              <div className="view-all-payments">
+                <button 
+                  className="view-all-btn"
+                  onClick={() => navigate('/payments')}
+                >
+                  View All Payments ({payments.length})
+                </button>
+              </div>
+            )}
           </div>
         )}
       </div>

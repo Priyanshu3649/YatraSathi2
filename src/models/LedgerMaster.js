@@ -1,5 +1,5 @@
 // Ledger Master Model - For managing chart of accounts
-const db = require('../../config/db');
+const { mysqlPool: db } = require('../../config/db');
 
 class LedgerMaster {
   constructor(data) {

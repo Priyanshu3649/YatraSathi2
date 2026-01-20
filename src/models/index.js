@@ -35,6 +35,7 @@ const TrainTVL = require('./TrainTVL');
 const CustomerTVL = require('./CustomerTVL');
 const LoginTVL = require('./LoginTVL');
 const UserPermissionTVL = require('./UserPermissionTVL');
+const PermissionTVL = require('./PermissionTVL');
 const Ledger = require('./Ledger');
 const CustomerAdvance = require('./CustomerAdvance');
 const CustomerAdvanceTVL = require('./CustomerAdvanceTVL');
@@ -95,14 +96,14 @@ Booking.belongsTo(Customer, { foreignKey: 'bk_usid', targetKey: 'cu_usid' });
 Booking.belongsTo(Employee, { foreignKey: 'bk_agent', targetKey: 'em_usid' });
 Booking.belongsTo(Station, { foreignKey: 'bk_fromst', targetKey: 'st_stid', as: 'originStation' });
 Booking.belongsTo(Station, { foreignKey: 'bk_tost', targetKey: 'st_stid', as: 'destinationStation' });
-Booking.hasMany(Passenger, { foreignKey: 'ps_bkid', sourceKey: 'bk_bkid' });
+Booking.hasMany(PassengerTVL, { foreignKey: 'ps_bkid', sourceKey: 'bk_bkid' });
 Booking.hasMany(Pnr, { foreignKey: 'pn_bkid', sourceKey: 'bk_bkid' });
 Booking.hasOne(Account, { foreignKey: 'ac_bkid', sourceKey: 'bk_bkid' });
 
 // Passenger associations
-Passenger.belongsTo(Booking, { foreignKey: 'ps_bkid', targetKey: 'bk_bkid' });
-Passenger.belongsTo(Booking, { foreignKey: 'ps_bkid', targetKey: 'bk_bkid', as: 'booking' });
-Booking.hasMany(Passenger, { foreignKey: 'ps_bkid', sourceKey: 'bk_bkid', as: 'passengers' });
+PassengerTVL.belongsTo(Booking, { foreignKey: 'ps_bkid', targetKey: 'bk_bkid' });
+PassengerTVL.belongsTo(Booking, { foreignKey: 'ps_bkid', targetKey: 'bk_bkid', as: 'booking' });
+Booking.hasMany(PassengerTVL, { foreignKey: 'ps_bkid', sourceKey: 'bk_bkid', as: 'passengers' });
 
 // Pnr associations
 Pnr.belongsTo(Booking, { 
@@ -241,5 +242,6 @@ module.exports = {
   YearEndClosingTVL,
   PassengerTVL,
   MasterPassengerList,
-  CustomerMasterPassenger
+  CustomerMasterPassenger,
+  PermissionTVL
 };

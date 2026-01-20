@@ -308,7 +308,10 @@ const getUserProfile = async (req, res) => {
   try {
     if (!req.user) {
       console.log('No user in request object');
-      return res.status(401).json({ message: 'Unauthorized' });
+      return res.status(401).json({ 
+        success: false,
+        error: { code: 'UNAUTHORIZED', message: 'Unauthorized' } 
+      });
     }
     
     // Use the user from the request object that was already fetched by middleware
@@ -346,7 +349,10 @@ const getUserProfile = async (req, res) => {
     });
   } catch (error) {
     console.error('Error in getUserProfile:', error);
-    res.status(500).json({ message: 'Internal server error' });
+    res.status(500).json({ 
+      success: false,
+      error: { code: 'SERVER_ERROR', message: error.message } 
+    });
   }
 };
 

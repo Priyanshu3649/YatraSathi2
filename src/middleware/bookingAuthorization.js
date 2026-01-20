@@ -7,12 +7,28 @@ const { BookingTVL } = require('../models');
  */
 const canEditBooking = async (req, res, next) => {
   try {
+    if (!req.user) {
+      return res.status(401).json({
+        success: false,
+        error: { code: 'UNAUTHORIZED', message: 'Authentication required' }
+      });
+    }
+
     // Handle both 'id' and 'bookingId' parameter names
     const bookingId = req.params.id || req.params.bookingId;
+    
+    if (!bookingId) {
+      return res.status(400).json({
+        success: false,
+        error: { code: 'BAD_REQUEST', message: 'Booking ID is required' }
+      });
+    }
+
     const userId = req.user.us_usid;
     const userRole = req.user.us_roid;
 
     // If user is admin or employee, allow editing
+    // Using hardcoded roles for now, matching TVL conventions
     const isAdminOrEmployee = ['ADM', 'AGT', 'ACC', 'HR', 'CC', 'MKT', 'MGT'].includes(userRole);
     if (isAdminOrEmployee) {
       return next();
@@ -73,8 +89,23 @@ const canEditBooking = async (req, res, next) => {
  */
 const canViewBooking = async (req, res, next) => {
   try {
+    if (!req.user) {
+      return res.status(401).json({
+        success: false,
+        error: { code: 'UNAUTHORIZED', message: 'Authentication required' }
+      });
+    }
+
     // Handle both 'id' and 'bookingId' parameter names
     const bookingId = req.params.id || req.params.bookingId;
+
+    if (!bookingId) {
+      return res.status(400).json({
+        success: false,
+        error: { code: 'BAD_REQUEST', message: 'Booking ID is required' }
+      });
+    }
+
     const userId = req.user.us_usid;
     const userRole = req.user.us_roid;
 
@@ -128,8 +159,23 @@ const canViewBooking = async (req, res, next) => {
  */
 const canCancelBooking = async (req, res, next) => {
   try {
+    if (!req.user) {
+      return res.status(401).json({
+        success: false,
+        error: { code: 'UNAUTHORIZED', message: 'Authentication required' }
+      });
+    }
+
     // Handle both 'id' and 'bookingId' parameter names
     const bookingId = req.params.id || req.params.bookingId;
+
+    if (!bookingId) {
+      return res.status(400).json({
+        success: false,
+        error: { code: 'BAD_REQUEST', message: 'Booking ID is required' }
+      });
+    }
+
     const userId = req.user.us_usid;
     const userRole = req.user.us_roid;
 

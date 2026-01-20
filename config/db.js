@@ -1,4 +1,5 @@
 const { Sequelize } = require('sequelize');
+const mysql = require('mysql2/promise');
 const path = require('path');
 const dotenv = require('dotenv');
 
@@ -137,4 +138,15 @@ const connectDB = async () => {
   }
 };
 
-module.exports = { sequelize, sequelizeTVL, connectDB };
+// Create MySQL connection pool for raw queries
+const mysqlPool = mysql.createPool({
+  host: process.env.DB_HOST,
+  user: process.env.DB_USER,
+  password: process.env.DB_PASSWORD || '',
+  database: process.env.DB_NAME_TVL || 'TVL_001',
+  waitForConnections: true,
+  connectionLimit: 10,
+  queueLimit: 0
+});
+
+module.exports = { sequelize, sequelizeTVL, connectDB, mysqlPool };

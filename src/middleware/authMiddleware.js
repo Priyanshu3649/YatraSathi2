@@ -1,22 +1,15 @@
 const jwt = require('jsonwebtoken');
-const { User, Role, UserTVL } = require('../models');
+const { User, Role, UserTVL, RoleTVL } = require('../models');
 
 const auth = async (req, res, next) => {
   try {
-    console.log('=== Auth Middleware Execution ===');
-    console.log('Request headers:', req.headers);
     const token = req.header('Authorization')?.replace('Bearer ', '');
-    console.log('Token from header:', token);
     
     if (!token) {
-      console.log('No token provided');
       return res.status(401).json({ message: 'Access denied. No token provided.' });
     }
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET || 'default_secret');
-    console.log('Decoded token:', decoded);
-    
-    console.log('Looking for user with ID:', decoded.id);
     
     // Check if this is a TVL user by ID prefix
     const isTVLUser = decoded.id.startsWith('ADM') || decoded.id.startsWith('EMP') || 
@@ -24,37 +17,25 @@ const auth = async (req, res, next) => {
     
     let user = null;
     if (isTVLUser) {
-      console.log('This is a TVL user, checking TVL database');
       user = await UserTVL.findByPk(decoded.id);
     } else {
-      console.log('This is a regular user, checking main database');
       user = await User.findByPk(decoded.id);
     }
     
-    console.log('User from database:', user ? user.toJSON() : 'User not found');
-    
     if (!user) {
-      console.log('User not found in database');
-      return res.status(401).json({ message: 'Token is not valid' });
+      return res.status(401).json({ message: 'Token is not valid. User not found.' });
     }
 
     // Get user's role information
-    // For TVL users, the role is stored in us_roid field
     if (!isTVLUser && user.us_roid) {
       const role = await Role.findByPk(user.us_roid);
       user.role = role;
-    } else if (isTVLUser) {
-      // For TVL users, ensure us_roid is available for role-based checks
-      // The role should already be in the us_roid field
-      if (user.us_roid) {
-        user.role = { ro_name: user.us_roid };
-      }
+    } else if (isTVLUser && user.us_roid) {
+      const role = await RoleTVL.findByPk(user.us_roid);
+      user.role = role;
     }
 
     req.user = user;
-    console.log('Auth successful, user type:', user.us_usertype);
-    console.log('Full user object:', user.toJSON());
-    console.log('Calling next()');
     next();
   } catch (error) {
     console.error('Auth error:', error.message);
