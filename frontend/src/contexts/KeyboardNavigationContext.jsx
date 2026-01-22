@@ -110,6 +110,21 @@ export const KeyboardNavigationProvider = ({ children }) => {
     }
   }, [keyboardState.activeFormId]);
 
+  // HANDLE MANUAL FOCUS (USER CLICKS FIELD)
+  const handleManualFocus = useCallback((fieldName) => {
+    const activeForm = registeredForms.current.get(keyboardState.activeFormId);
+    if (!activeForm) return;
+
+    const fieldIndex = activeForm.fields.indexOf(fieldName);
+    if (fieldIndex >= 0 && fieldIndex !== keyboardState.focusedFieldIndex) {
+      console.log(`Manual focus detected: ${fieldName} (Index: ${fieldIndex})`);
+      setKeyboardState(prev => ({
+        ...prev,
+        focusedFieldIndex: fieldIndex
+      }));
+    }
+  }, [keyboardState.activeFormId, keyboardState.focusedFieldIndex]);
+
   // MOVE TO NEXT FIELD (TAB BEHAVIOR)
   const moveNext = useCallback(() => {
     const activeForm = registeredForms.current.get(keyboardState.activeFormId);
@@ -230,6 +245,11 @@ export const KeyboardNavigationProvider = ({ children }) => {
 
   // GLOBAL KEYBOARD EVENT HANDLER (MANDATORY PRIMITIVES ONLY)
   const handleGlobalKeyDown = useCallback((event) => {
+    // If modal is open, allow it to handle events exclusively
+    if (keyboardState.isModalOpen) {
+      return;
+    }
+
     // ONLY Tab, Shift+Tab, Enter are allowed navigation primitives
     switch (event.key) {
       case 'Tab':
@@ -341,6 +361,7 @@ export const KeyboardNavigationProvider = ({ children }) => {
     
     // UTILITY METHODS
     focusField,
+    handleManualFocus,
     detectDoubleTab,
     
     // LEGACY COMPATIBILITY (DEPRECATED - DO NOT USE)

@@ -17,7 +17,8 @@ export const useKeyboardForm = (options = {}) => {
     unregisterForm,
     setActiveForm,
     isModalOpen,
-    closeModal
+    closeModal,
+    handleManualFocus
   } = useKeyboardNavigation();
 
   // MANDATORY: Form definition MUST be memoized
@@ -69,7 +70,8 @@ export const useKeyboardForm = (options = {}) => {
 
   return {
     formId,
-    isModalOpen
+    isModalOpen,
+    handleManualFocus
   };
 };
 

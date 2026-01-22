@@ -1,44 +1,105 @@
-/**
- * PASSENGER FUNCTIONALITY TEST
- * Tests the simplified passenger entry system
- */
+// TEST: Passenger Entry Functionality Verification
+// This test will verify the complete passenger entry flow
 
-console.log('🧪 PASSENGER FUNCTIONALITY TEST');
-console.log('=' .repeat(50));
+const { execSync } = require('child_process');
+const fs = require('fs');
 
-console.log('\n📋 EXPECTED BEHAVIOR:');
-console.log('1. When quota type is selected, passenger entry should be available');
-console.log('2. Tab key after quota type should show passenger entry form');
-console.log('3. "Add Passenger" button should show passenger entry form');
-console.log('4. Passengers should be displayed in grid below the entry form');
-console.log('5. No debug buttons or console logs should be visible');
+console.log('🧪 TESTING: Passenger Entry Functionality');
+console.log('=' .repeat(60));
 
-console.log('\n🧪 TEST STEPS:');
-console.log('1. Open Bookings page and click "New"');
-console.log('2. Fill in customer details (name, phone)');
-console.log('3. Fill in journey details (from, to, date, class)');
-console.log('4. Select a quota type from dropdown');
-console.log('5. Press Tab key - should show passenger entry form');
-console.log('6. OR click "Add Passenger" button');
-console.log('7. Fill passenger details and click "Add" button');
-console.log('8. Passenger should appear in grid below');
-console.log('9. Add more passengers and verify they appear in grid');
-console.log('10. Click "Done" to exit passenger entry mode');
+// Test 1: Verify the state flow
+console.log('\n1. VERIFYING STATE FLOW...');
 
-console.log('\n✅ SUCCESS CRITERIA:');
-console.log('- Passenger entry form appears when expected');
-console.log('- Form has Name, Age, Gender, Berth Preference fields');
-console.log('- "Add" button adds passenger to grid');
-console.log('- "Done" button exits passenger entry mode');
-console.log('- Grid shows all added passengers');
-console.log('- Total passengers count updates automatically');
-console.log('- No debug buttons or console logs visible');
+// Check if enterPassengerLoop properly sets isPassengerLoopActive to true
+const contextFile = 'frontend/src/contexts/KeyboardNavigationContext.jsx';
+const contextContent = fs.readFileSync(contextFile, 'utf8');
 
-console.log('\n🔧 IMPLEMENTATION DETAILS:');
-console.log('- Removed debug button and console logs');
-console.log('- Simplified passenger entry with Add/Done buttons');
-console.log('- Passengers display in existing grid table');
-console.log('- Tab after quota type triggers passenger mode');
-console.log('- Manual "Add Passenger" button as alternative');
+// Look for the enterPassengerLoop implementation
+const enterLoopMatch = contextContent.match(/const enterPassengerLoop = useCallback\(\(\) => \{([^}]+)\}/s);
+if (enterLoopMatch) {
+  const enterLoopCode = enterLoopMatch[1];
+  const setsStateToTrue = enterLoopCode.includes('isPassengerLoopActive: true');
+  console.log(`✅ enterPassengerLoop sets state to true: ${setsStateToTrue}`);
+} else {
+  console.log('❌ enterPassengerLoop function not found');
+}
 
-console.log('\n🚀 Ready for testing!');
+// Test 2: Check the hook mapping
+console.log('\n2. CHECKING HOOK MAPPING...');
+
+const hookFile = 'frontend/src/hooks/usePassengerEntry.js';
+const hookContent = fs.readFileSync(hookFile, 'utf8');
+
+// Check if isInLoop is properly mapped from isPassengerLoopActive
+const mappingMatch = hookContent.match(/isInLoop: isPassengerLoopActive/);
+console.log(`✅ isInLoop properly mapped: ${!!mappingMatch}`);
+
+// Test 3: Check the conditional rendering
+console.log('\n3. CHECKING CONDITIONAL RENDERING...');
+
+const bookingsFile = 'frontend/src/pages/Bookings.jsx';
+const bookingsContent = fs.readFileSync(bookingsFile, 'utf8');
+
+// Check if the conditional rendering uses the correct variable
+const conditionalMatch = bookingsContent.match(/{isInLoop &&/);
+console.log(`✅ Conditional rendering uses isInLoop: ${!!conditionalMatch}`);
+
+// Test 4: Check for potential issues
+console.log('\n4. IDENTIFYING POTENTIAL ISSUES...');
+
+// Issue 1: Check if there are multiple enterPassengerLoop calls that might conflict
+const enterLoopCalls = bookingsContent.match(/enterPassengerLoop\(\)/g);
+console.log(`📊 Number of enterPassengerLoop calls: ${enterLoopCalls ? enterLoopCalls.length : 0}`);
+
+// Issue 2: Check if the quota type handler is properly implemented
+const quotaHandlerMatch = bookingsContent.match(/if \(name === 'quotaType' && value && isEditing\)/);
+console.log(`✅ Quota type handler exists: ${!!quotaHandlerMatch}`);
+
+// Issue 3: Check if the Tab key handler is properly implemented
+const tabHandlerMatch = bookingsContent.match(/if \(e\.key === 'Tab' && !e\.shiftKey && isEditing && formData\.quotaType\)/);
+console.log(`✅ Tab key handler exists: ${!!tabHandlerMatch}`);
+
+// Test 5: Check for timing issues
+console.log('\n5. CHECKING FOR TIMING ISSUES...');
+
+// Look for setTimeout usage which might indicate timing issues
+const setTimeoutMatches = bookingsContent.match(/setTimeout/g);
+console.log(`📊 Number of setTimeout calls: ${setTimeoutMatches ? setTimeoutMatches.length : 0}`);
+
+// Check if there are any race conditions
+const raceConditionIndicators = [
+  'setTimeout.*enterPassengerLoop',
+  'useEffect.*isInLoop',
+  'useEffect.*enterPassengerLoop'
+];
+
+raceConditionIndicators.forEach((pattern, index) => {
+  const regex = new RegExp(pattern, 's');
+  const hasPattern = regex.test(bookingsContent);
+  console.log(`📊 Potential race condition ${index + 1}: ${hasPattern}`);
+});
+
+console.log('\n' + '='.repeat(60));
+console.log('🔍 DIAGNOSIS:');
+
+console.log('\nThe passenger entry section should appear when:');
+console.log('1. User is in editing mode (isEditing = true)');
+console.log('2. User selects a quota type from dropdown');
+console.log('3. The handleInputChange function calls enterPassengerLoop()');
+console.log('4. enterPassengerLoop() sets isPassengerLoopActive to true');
+console.log('5. usePassengerEntry hook maps isPassengerLoopActive to isInLoop');
+console.log('6. The conditional {isInLoop && ...} renders the passenger entry section');
+
+console.log('\n💡 LIKELY ISSUES:');
+console.log('1. State update timing - enterPassengerLoop() might not immediately update state');
+console.log('2. Multiple calls to enterPassengerLoop() might cause conflicts');
+console.log('3. The useEffect dependency array might be missing dependencies');
+console.log('4. The keyboard navigation context might not be properly providing the state');
+
+console.log('\n🔧 RECOMMENDED FIXES:');
+console.log('1. Add debug logging to track state changes');
+console.log('2. Ensure enterPassengerLoop() is called only once per quota selection');
+console.log('3. Add a useEffect to log isInLoop state changes');
+console.log('4. Verify that the keyboard navigation context is properly wrapped around the component');
+
+console.log('\n🧪 TEST COMPLETED');

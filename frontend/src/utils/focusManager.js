@@ -2,6 +2,329 @@
 // Provides utilities for managing focus in keyboard-first applications
 
 /**
+ * Enhanced Focus Manager Class for Complex Form Navigation
+ * Implements WCAG 2.1 AA compliant focus management with manual focus tracking
+ */
+export class EnhancedFocusManager {
+  constructor() {
+    this.fieldOrder = [];
+    this.currentFieldIndex = -1;
+    this.manualFocusOverride = false;
+    this.passengerEntryContext = {
+      isActive: false,
+      currentPassengerIndex: 0,
+      passengerFieldIndex: 0
+    };
+    this.focusHistory = [];
+    this.maxHistorySize = 10;
+    this.performanceMetrics = {
+      startTime: performance.now(),
+      focusOperations: 0
+    };
+    // Define passenger fields sequence
+    this.passengerFields = ['passenger_name', 'passenger_age', 'passenger_gender', 'passenger_berth'];
+  }
+
+  // Initialize field order for the booking form
+  initializeFieldOrder(fieldOrder) {
+    this.fieldOrder = fieldOrder;
+    this.currentFieldIndex = 0;
+    console.log('🎯 Focus manager initialized with field order:', fieldOrder);
+  }
+
+  // Track manual focus changes (mouse clicks, programmatic focus)
+  trackManualFocus(fieldName) {
+    const startTime = performance.now();
+    
+    // Check if it's a main field
+    const fieldIndex = this.fieldOrder.indexOf(fieldName);
+    if (fieldIndex !== -1) {
+      this.currentFieldIndex = fieldIndex;
+      this.manualFocusOverride = true;
+      
+      // IMPORTANT: If clicking a main field, we should exit passenger mode
+      // unless the field is part of the passenger entry context
+      if (this.passengerEntryContext.isActive) {
+        this.exitPassengerMode();
+      }
+      
+      this.addToHistory(fieldName, 'manual');
+      console.log(`🎯 Manual focus tracked: ${fieldName} (index: ${fieldIndex})`);
+    } else {
+      // Check if it's a passenger field
+      const passengerIndex = this.passengerFields.indexOf(fieldName);
+      
+      if (passengerIndex !== -1) {
+        // If it is a passenger field, ensure we are in passenger mode
+        if (!this.passengerEntryContext.isActive) {
+          this.enterPassengerMode();
+        }
+        
+        this.passengerEntryContext.passengerFieldIndex = passengerIndex;
+        this.addToHistory(fieldName, 'manual_passenger');
+        console.log(`🎯 Manual passenger focus tracked: ${fieldName} (p-index: ${passengerIndex})`);
+      }
+    }
+    
+    this.performanceMetrics.focusOperations++;
+    const endTime = performance.now();
+    if (endTime - startTime > 5) {
+      console.warn(`Focus tracking took ${endTime - startTime}ms - performance threshold exceeded`);
+    }
+  }
+
+  // Get the next field in logical sequence (regardless of manual focus)
+  getNextField() {
+    if (this.passengerEntryContext.isActive) {
+      return this.getNextPassengerField();
+    }
+
+    const nextIndex = this.currentFieldIndex + 1;
+    if (nextIndex < this.fieldOrder.length) {
+      return this.fieldOrder[nextIndex];
+    }
+    return null; // End of form
+  }
+
+  // Get the previous field in logical sequence
+  getPreviousField() {
+    if (this.passengerEntryContext.isActive) {
+      return this.getPreviousPassengerField();
+    }
+
+    const prevIndex = this.currentFieldIndex - 1;
+    if (prevIndex >= 0) {
+      return this.fieldOrder[prevIndex];
+    }
+    return null; // Beginning of form
+  }
+
+  // Handle Tab key navigation with manual focus correction
+  handleTabNavigation(direction = 'forward') {
+    const targetField = direction === 'forward' ? this.getNextField() : this.getPreviousField();
+    
+    if (targetField) {
+      this.focusField(targetField);
+      this.manualFocusOverride = false;
+      return true;
+    }
+    return false;
+  }
+
+  // Focus a specific field and update tracking
+  focusField(fieldName) {
+    const element = this.getFieldElement(fieldName);
+    if (element && this.isElementFocusable(element)) {
+      element.focus();
+      const fieldIndex = this.fieldOrder.indexOf(fieldName);
+      if (fieldIndex !== -1) {
+        this.currentFieldIndex = fieldIndex;
+      }
+      this.addToHistory(fieldName, 'programmatic');
+      this.announceToScreenReader(`Focused on ${this.getFieldLabel(fieldName) || fieldName}`);
+      console.log(`✅ Focused field: ${fieldName}`);
+      return true;
+    }
+    console.warn(`❌ Field not found or not focusable: ${fieldName}`);
+    return false;
+  }
+
+  // Get field element by name or data-field attribute
+  getFieldElement(fieldName) {
+    return document.querySelector(`[name="${fieldName}"], [data-field="${fieldName}"]`);
+  }
+
+  // Get field label for accessibility announcements
+  getFieldLabel(fieldName) {
+    const element = this.getFieldElement(fieldName);
+    if (!element) return null;
+
+    // Try to find associated label
+    const label = document.querySelector(`label[for="${element.id}"]`) || 
+                 element.closest('label') ||
+                 document.querySelector(`label[for="${element.name}"]`);
+    
+    if (label) return label.textContent.trim();
+    
+    // Try aria-label
+    if (element.getAttribute('aria-label')) {
+      return element.getAttribute('aria-label');
+    }
+    
+    // Try placeholder
+    if (element.placeholder) {
+      return element.placeholder;
+    }
+    
+    return null;
+  }
+
+  // Passenger entry context management
+  enterPassengerMode() {
+    this.passengerEntryContext.isActive = true;
+    this.passengerEntryContext.currentPassengerIndex = 0;
+    this.passengerEntryContext.passengerFieldIndex = 0;
+    this.announceToScreenReader('Entered passenger entry mode');
+    console.log('🎯 Entered passenger entry mode');
+  }
+
+  exitPassengerMode() {
+    this.passengerEntryContext.isActive = false;
+    this.passengerEntryContext.currentPassengerIndex = 0;
+    this.passengerEntryContext.passengerFieldIndex = 0;
+    this.announceToScreenReader('Exited passenger entry mode');
+    console.log('🎯 Exited passenger entry mode');
+  }
+
+  // Get next passenger field in sequence
+  getNextPassengerField() {
+    const currentIndex = this.passengerEntryContext.passengerFieldIndex;
+    
+    if (currentIndex < this.passengerFields.length - 1) {
+      this.passengerEntryContext.passengerFieldIndex++;
+      return this.passengerFields[this.passengerEntryContext.passengerFieldIndex];
+    }
+    
+    // End of passenger fields - return to passenger_name for next passenger
+    this.passengerEntryContext.passengerFieldIndex = 0;
+    return 'passenger_name';
+  }
+
+  // Get previous passenger field in sequence
+  getPreviousPassengerField() {
+    const currentIndex = this.passengerEntryContext.passengerFieldIndex;
+    
+    if (currentIndex > 0) {
+      this.passengerEntryContext.passengerFieldIndex--;
+      return this.passengerFields[this.passengerEntryContext.passengerFieldIndex];
+    }
+    
+    // Beginning of passenger fields - go to previous form field
+    this.exitPassengerMode();
+    return this.fieldOrder[this.fieldOrder.indexOf('quotaType')];
+  }
+
+  // Add to focus history for debugging and analytics
+  addToHistory(fieldName, type) {
+    this.focusHistory.push({
+      fieldName,
+      type,
+      timestamp: Date.now(),
+      fieldIndex: this.fieldOrder.indexOf(fieldName)
+    });
+    
+    // Maintain history size
+    if (this.focusHistory.length > this.maxHistorySize) {
+      this.focusHistory.shift();
+    }
+  }
+
+  // Get focus history for debugging
+  getFocusHistory() {
+    return this.focusHistory;
+  }
+
+  // Reset focus manager state
+  reset() {
+    this.currentFieldIndex = 0;
+    this.manualFocusOverride = false;
+    this.passengerEntryContext = {
+      isActive: false,
+      currentPassengerIndex: 0,
+      passengerFieldIndex: 0
+    };
+    this.focusHistory = [];
+    this.performanceMetrics = {
+      startTime: performance.now(),
+      focusOperations: 0
+    };
+  }
+
+  // WCAG 2.1 AA compliance utilities
+  announceToScreenReader(message) {
+    const announcement = document.createElement('div');
+    announcement.setAttribute('aria-live', 'polite');
+    announcement.setAttribute('aria-atomic', 'true');
+    announcement.className = 'sr-only';
+    announcement.textContent = message;
+    document.body.appendChild(announcement);
+    
+    setTimeout(() => {
+      if (document.body.contains(announcement)) {
+        document.body.removeChild(announcement);
+      }
+    }, 1000);
+  }
+
+  // Check if element is currently visible and focusable
+  isElementFocusable(element) {
+    if (!element) return false;
+    
+    // Check if element is disabled
+    if (element.disabled) return false;
+    
+    // Check if element is hidden
+    if (element.offsetParent === null) return false;
+    
+    // Check if element has tabindex="-1"
+    if (element.tabIndex === -1) return false;
+    
+    // Check if element is in a hidden container
+    const style = window.getComputedStyle(element);
+    if (style.display === 'none' || style.visibility === 'hidden') return false;
+    
+    return true;
+  }
+
+  // Validate field accessibility
+  validateFieldAccessibility(fieldName) {
+    const element = this.getFieldElement(fieldName);
+    if (!element) return false;
+
+    const issues = [];
+    
+    // Check for label association
+    const label = document.querySelector(`label[for="${element.id}"]`) || 
+                 element.closest('label') ||
+                 document.querySelector(`label[for="${element.name}"]`);
+    if (!label) {
+      issues.push('Missing label association');
+    }
+
+    // Check for aria-label or aria-labelledby
+    if (!element.getAttribute('aria-label') && !element.getAttribute('aria-labelledby') && !label) {
+      issues.push('Missing accessible name');
+    }
+
+    // Check tabindex
+    const tabIndex = element.getAttribute('tabindex');
+    if (tabIndex && parseInt(tabIndex) > 0) {
+      issues.push('Positive tabindex detected (should use 0 or -1)');
+    }
+
+    if (issues.length > 0) {
+      console.warn(`Accessibility issues for ${fieldName}:`, issues);
+      return false;
+    }
+
+    return true;
+  }
+
+  // Get performance metrics
+  getPerformanceMetrics() {
+    const currentTime = performance.now();
+    return {
+      ...this.performanceMetrics,
+      totalTime: currentTime - this.performanceMetrics.startTime,
+      averageOperationTime: (currentTime - this.performanceMetrics.startTime) / this.performanceMetrics.focusOperations
+    };
+  }
+}
+
+// Create singleton instance
+export const enhancedFocusManager = new EnhancedFocusManager();
+
+/**
  * Set initial focus on form load
  * @param {React.RefObject} formRef - Reference to form container
  * @param {string} firstFieldName - Name of first field to focus
