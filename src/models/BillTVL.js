@@ -15,6 +15,11 @@ const BillTVL = sequelizeTVL.define('billXbill', {
     unique: true,
     comment: 'Bill Number'
   },
+  booking_id: {
+    type: DataTypes.BIGINT,
+    allowNull: true, // Can be null for ad-hoc bills if allowed, but requirement says "Billing cannot be created manually", implying linkage. Keeping true for safety unless strict.
+    comment: 'Booking ID (Foreign Key)'
+  },
   customer_id: {
     type: DataTypes.STRING(15),
     allowNull: false,

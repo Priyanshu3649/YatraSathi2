@@ -518,23 +518,28 @@ export const bookingAPI = {
   
   // Get passengers for a specific booking
   getBookingPassengers: async (bookingId) => {
-    // First try the customer route
-    let response;
-    let url = `${API_BASE_URL}/customer/bookings/${bookingId}/passengers`;
+    // Determine user role to use correct endpoint
+    let userRole = 'CUS'; // default to customer
+    try {
+      const userStr = localStorage.getItem('user');
+      if (userStr) {
+        const user = JSON.parse(userStr);
+        userRole = user.us_roid || user.role || 'CUS';
+      }
+    } catch (e) {
+      console.warn('Could not determine user role for passenger endpoint');
+    }
     
-    response = await fetch(url, {
+    // Use appropriate endpoint based on user role
+    const isEmployee = ['AGT', 'ACC', 'HR', 'CC', 'MKT', 'MGT', 'ADM'].includes(userRole);
+    const url = isEmployee 
+      ? `${API_BASE_URL}/bookings/${bookingId}/passengers`  // Employee/Admin route
+      : `${API_BASE_URL}/customer/bookings/${bookingId}/passengers`; // Customer route
+    
+    const response = await fetch(url, {
       method: 'GET',
       headers: getHeaders(true)
     });
-    
-    // If customer route fails, try the general booking route
-    if (!response.ok) {
-      url = `${API_BASE_URL}/bookings/${bookingId}/passengers`;
-      response = await fetch(url, {
-        method: 'GET',
-        headers: getHeaders(true)
-      });
-    }
     
     const data = await response.json();
     

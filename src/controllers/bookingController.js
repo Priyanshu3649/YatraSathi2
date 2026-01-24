@@ -87,7 +87,9 @@ const createBooking = async (req, res) => {
           const lastName = nameParts.slice(1).join(' ') || '';
           
           // Create user record first
+          const userPrimaryId = `US${Math.floor(Math.random() * 1000000)}`;
           const newUser = await UserTVL.create({
+            us_usid: userPrimaryId,
             us_fname: firstName,
             us_lname: lastName,
             us_phone: cleanPhone,
@@ -102,7 +104,10 @@ const createBooking = async (req, res) => {
           
           // Create customer record
           const customerNumber = `CUST${Date.now()}${Math.floor(Math.random() * 1000)}`;
+          const customerPrimaryId = `CU${Math.floor(Math.random() * 1000000)}`;
+          
           const newCustomer = await Customer.create({
+            cu_cusid: customerPrimaryId,
             cu_usid: newUser.us_usid,
             cu_custno: customerNumber,
             cu_custtype: 'WALK_IN',
@@ -497,18 +502,55 @@ const deleteBooking = async (req, res) => {
       });
     }
     
-    // First, delete related records in the account table that reference this booking
-    const Account = require('../models/AccountTVL');
-    await Account.destroy({ where: { ac_bkid: booking.bk_bkid } });
+    // Use transaction to ensure all deletions succeed or fail together
+    const transaction = await sequelize.transaction();
     
-    // Then delete the booking
-    await booking.destroy();
-    
-    res.json({ 
-      success: true, 
-      data: { message: 'Booking deleted successfully' } 
-    });
+    try {
+      // First, delete related passenger records using Sequelize model
+      const models = require('../models');
+      const PassengerTVL = models.PassengerTVL;
+      
+      if (PassengerTVL) {
+        await PassengerTVL.destroy({ 
+          where: { ps_bkid: booking.bk_bkid }, 
+          transaction 
+        });
+      }
+      
+      // Also delete from custom passenger table if it exists
+      try {
+        const { Passenger } = require('../models');
+        await Passenger.deleteByBookingId(booking.bk_bkid, transaction);
+      } catch (customPassengerError) {
+        console.warn('Custom passenger deletion failed (this may be OK):', customPassengerError.message);
+      }
+      
+      // Delete related records in the account table that reference this booking
+      try {
+        const Account = require('../models/AccountTVL');
+        await Account.destroy({ where: { ac_bkid: booking.bk_bkid }, transaction });
+      } catch (accountError) {
+        console.warn('Account deletion failed (this may be OK):', accountError.message);
+      }
+      
+      // Then delete the booking
+      await booking.destroy({ transaction });
+      
+      // Commit the transaction
+      await transaction.commit();
+      
+      res.json({ 
+        success: true, 
+        data: { message: 'Booking deleted successfully' } 
+      });
+    } catch (transactionError) {
+      // Rollback the transaction on error
+      await transaction.rollback();
+      throw transactionError;
+    }
   } catch (error) {
+    console.error('Delete booking error:', error);
+    
     // Handle foreign key constraint errors
     if (error.name === 'SequelizeForeignKeyConstraintError') {
       return res.status(400).json({ 
@@ -519,6 +561,7 @@ const deleteBooking = async (req, res) => {
         } 
       });
     }
+    
     res.status(500).json({ 
       success: false, 
       error: { code: 'SERVER_ERROR', message: error.message } 
@@ -709,10 +752,10 @@ const getBookingsByStatus = async (req, res) => {
 // Get passengers for a specific booking
 const getBookingPassengers = async (req, res) => {
   try {
-    const bookingId = req.params.bookingId;
+    const bookingId = req.params.bookingId || req.params.id;
     
     // Check if user has permission to view this booking's passengers
-    const booking = await (require('../models')).Booking.findByPk(bookingId);
+    const booking = await BookingTVL.findByPk(bookingId);
     
     if (!booking) {
       return res.status(404).json({ 
@@ -731,20 +774,21 @@ const getBookingPassengers = async (req, res) => {
       });
     }
     
-    // Import Passenger model from main models
-    const { PassengerTVL: Passenger } = require('../models');
+    // Use the custom Passenger model (not Sequelize model)
+    const { Passenger } = require('../models');
     
-    // Get passengers for this booking
-    const passengers = await Passenger.findAll({
-      where: { 
-        ps_bkid: bookingId,
-        ps_active: 1  // Only active passengers
-      },
-      order: [['ps_psid', 'ASC']]  // Order by passenger ID
-    });
+    // Get passengers for this booking using custom model
+    const passengerResult = await Passenger.getByBookingId(bookingId);
+    
+    if (!passengerResult.success) {
+      return res.status(500).json({ 
+        success: false, 
+        error: { code: 'SERVER_ERROR', message: 'Failed to fetch passengers' } 
+      });
+    }
     
     // Transform passenger data to match frontend expectations
-    const transformedPassengers = passengers.map(passenger => {
+    const transformedPassengers = passengerResult.passengers.map(passenger => {
       return {
         firstName: passenger.ps_fname,
         lastName: passenger.ps_lname,

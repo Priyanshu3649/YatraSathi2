@@ -1,4 +1,4 @@
-const { BillTVL, UserTVL, CustomerTVL: Customer } = require('../models');
+const { BillTVL, UserTVL, CustomerTVL: Customer, BookingTVL } = require('../models');
 const { Sequelize } = require('sequelize');
 const { sequelizeTVL } = require('../models/baseModel');
 
@@ -6,6 +6,7 @@ const { sequelizeTVL } = require('../models/baseModel');
 const createBill = async (req, res) => {
   try {
     const {
+      bookingId,
       customerId,
       customerName,
       trainNumber,
@@ -22,6 +23,28 @@ const createBill = async (req, res) => {
       status,
       remarks
     } = req.body;
+
+    // Validate bookingId
+    if (!bookingId) {
+      return res.status(400).json({ message: 'Booking ID is required for billing.' });
+    }
+
+    // Check booking status and existence
+    const booking = await BookingTVL.findByPk(bookingId);
+    if (!booking) {
+      return res.status(404).json({ message: 'Booking not found.' });
+    }
+
+    // Billing is generated only from confirmed Bookings
+    if (!booking.bk_status || booking.bk_status.toUpperCase() !== 'CONFIRMED') {
+      return res.status(400).json({ message: 'Billing can only be generated for confirmed bookings.' });
+    }
+
+    // Check if bill already exists for this booking
+    const existingBill = await BillTVL.findOne({ where: { booking_id: bookingId } });
+    if (existingBill) {
+      return res.status(400).json({ message: 'A bill already exists for this booking.' });
+    }
 
     // Generate bill number
     const billNumber = `BILL${Date.now()}${Math.floor(Math.random() * 1000)}`;
@@ -61,6 +84,7 @@ const createBill = async (req, res) => {
     // Create new bill
     const bill = await BillTVL.create({
       bill_no: billNumber,
+      booking_id: bookingId,
       customer_id: customerId,
       customer_name: customerName,
       train_number: trainNumber,

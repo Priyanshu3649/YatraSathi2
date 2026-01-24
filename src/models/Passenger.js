@@ -1,7 +1,7 @@
 // Passenger Model - psXpassenger table
 // Handles passenger data for bookings as per YatraSathi specification
 
-const db = require('../../config/db');
+const { mysqlPool: db } = require('../../config/db');
 
 class Passenger {
   constructor(data) {
@@ -163,49 +163,51 @@ class Passenger {
     }
   }
 
-  // Create multiple passengers for a booking (batch insert)
-  static async createMultiple(bookingId, passengersList, createdBy = 'system') {
-    if (!passengersList || passengersList.length === 0) {
-      return { success: true, passengers: [], message: 'No passengers to create' };
+  // Create multiple passengers
+  static async createMultiple(bookingId, passengers, createdBy) {
+    if (!passengers || passengers.length === 0) {
+      return { success: true, count: 0 };
     }
 
-    const query = `
-      INSERT INTO psXpassenger (
-        ps_bkid, ps_fname, ps_lname, ps_age, ps_gender, 
-        ps_berthpref, ps_berthalloc, ps_seatno, ps_coach, 
-        ps_active, edtm, eby, mdtm, mby
-      ) VALUES ?
-    `;
+    // Create passengers one by one to avoid SQL syntax issues
+    let successCount = 0;
+    const errors = [];
 
-    const values = passengersList.map(passenger => [
-      bookingId,
-      passenger.name || passenger.ps_fname,
-      passenger.lastName || passenger.ps_lname || null,
-      passenger.age || passenger.ps_age,
-      passenger.gender || passenger.ps_gender,
-      passenger.berthPreference || passenger.ps_berthpref || null,
-      passenger.ps_berthalloc || null,
-      passenger.ps_seatno || null,
-      passenger.ps_coach || null,
-      1, // ps_active
-      new Date(), // edtm
-      createdBy, // eby
-      new Date(), // mdtm
-      createdBy // mby
-    ]);
+    for (const passenger of passengers) {
+      try {
+        const passengerData = {
+          ps_bkid: bookingId,
+          ps_fname: passenger.name || passenger.firstName || '',
+          ps_lname: null, // We'll store full name in ps_fname for simplicity
+          ps_age: parseInt(passenger.age) || 0,
+          ps_gender: passenger.gender || 'M',
+          ps_berthpref: passenger.berthPreference || passenger.berth || null,
+          ps_berthalloc: null,
+          ps_seatno: null,
+          ps_coach: null,
+          ps_active: 1,
+          eby: createdBy || 'system',
+          mby: createdBy || 'system'
+        };
 
-    try {
-      const [result] = await db.query(query, [values]);
-      return {
-        success: true,
-        insertedCount: result.affectedRows,
-        firstInsertId: result.insertId,
-        message: `${result.affectedRows} passengers created successfully`
-      };
-    } catch (error) {
-      console.error('Error creating multiple passengers:', error);
-      throw new Error('Failed to create passengers: ' + error.message);
+        await this.create(passengerData);
+        successCount++;
+      } catch (error) {
+        console.error(`Error creating passenger ${passenger.name}:`, error);
+        errors.push(`Failed to create passenger ${passenger.name}: ${error.message}`);
+      }
     }
+
+    if (errors.length > 0) {
+      console.warn('Some passengers failed to create:', errors);
+    }
+
+    return {
+      success: successCount > 0,
+      count: successCount,
+      errors: errors,
+      message: `${successCount} of ${passengers.length} passengers created successfully`
+    };
   }
 
   // Get passenger count for a booking
@@ -256,6 +258,27 @@ class Passenger {
     } catch (error) {
       console.error('Error searching passengers:', error);
       throw new Error('Failed to search passengers: ' + error.message);
+    }
+  }
+
+  // Delete all passengers for a booking (for booking deletion)
+  static async deleteByBookingId(bookingId, transaction = null) {
+    const query = `
+      UPDATE psXpassenger SET 
+        ps_active = 0, mdtm = NOW(), mby = ?
+      WHERE ps_bkid = ? AND ps_active = 1
+    `;
+
+    try {
+      const [result] = await db.execute(query, ['system', bookingId]);
+      return {
+        success: true,
+        count: result.affectedRows,
+        message: `${result.affectedRows} passengers deleted for booking ${bookingId}`
+      };
+    } catch (error) {
+      console.error('Error deleting passengers by booking ID:', error);
+      throw new Error('Failed to delete passengers: ' + error.message);
     }
   }
 

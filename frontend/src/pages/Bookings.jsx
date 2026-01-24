@@ -219,14 +219,15 @@ const Bookings = () => {
   const { 
     lookupCustomerByPhone, 
     validatePhoneNumber, 
-    formatPhoneNumber,
     isLookingUp,
     clearLookupCache
   } = usePhoneLookup();
   
-  // Define handleSave function
+  // Define handleSave function with proper error handling and database commit
   const handleSave = useCallback(async () => {
     try {
+      console.log('🔄 Starting save operation...');
+      
       // MANDATORY: Validate phone number before saving
       if (!formData.phoneNumber) {
         throw new Error('Phone number is required');
@@ -241,21 +242,29 @@ const Bookings = () => {
       if (!formData.customerName || formData.customerName.trim() === '') {
         throw new Error('Customer name is required');
       }
+      
+      // Validate passengers
+      const activePassengers = passengerList.filter(p => p.name && p.name.trim() !== '');
+      if (activePassengers.length === 0) {
+        throw new Error('At least one passenger is required');
+      }
 
+      // Prepare booking data with all required fields
       const bookingData = {
         ...formData,
-        passengerList,
-        totalPassengers: passengerList.filter(p => p.name && p.name.trim() !== '').length,
+        passengerList: activePassengers, // Only include valid passengers
+        totalPassengers: activePassengers.length,
         // MANDATORY: Use phone-based customer model
         phoneNumber: phoneValidation.cleanPhone,
         customerName: formData.customerName.trim(),
-        internalCustomerId: formData.internalCustomerId || null, // May be null for new customers
+        internalCustomerId: formData.internalCustomerId || null,
         // Map fields to match backend expectations
         fromStation: formData.fromStation,
         toStation: formData.toStation,
         travelDate: formData.travelDate,
         travelClass: formData.travelClass,
         berthPreference: formData.berthPreference,
+        quotaType: formData.quotaType,
         remarks: formData.remarks,
         status: formData.status,
         createdOn: formData.createdOn || new Date().toISOString(),
@@ -264,25 +273,41 @@ const Bookings = () => {
         modifiedOn: new Date().toISOString()
       };
       
+      console.log('📝 Booking data prepared:', bookingData);
+      
+      let savedBooking;
       if (selectedBooking) {
-        // Identify the correct booking ID field from the selected booking
+        // Update existing booking
         const bookingId = selectedBooking.bk_bkid || selectedBooking.id || selectedBooking.bookingId;
         if (!bookingId) {
           throw new Error('Booking ID is missing');
         }
-        await bookingAPI.updateBooking(bookingId, bookingData);
+        console.log('🔄 Updating booking:', bookingId);
+        savedBooking = await bookingAPI.updateBooking(bookingId, bookingData);
       } else {
-        // MANDATORY: Create booking with atomic customer creation
-        await bookingAPI.createBooking(bookingData);
+        // Create new booking
+        console.log('🔄 Creating new booking...');
+        savedBooking = await bookingAPI.createBooking(bookingData);
       }
       
-      // Refresh the data list in background
+      console.log('✅ Booking saved successfully:', savedBooking);
+      
+      // Refresh the data list to show updated information
       await fetchBookings();
+      
+      // Show success message
+      announceToScreenReader('Booking saved successfully');
+      
+      // Set editing to false but don't reset form yet (will be done in handleSaveConfirmed)
       setIsEditing(false);
+      
+      return savedBooking;
     } catch (error) {
+      console.error('❌ Save failed:', error);
       setError(error.message || 'Failed to save booking');
+      throw error; // Re-throw to be handled by caller
     }
-  }, [formData, passengerList, passengerList.length, selectedBooking, user?.us_name, fetchBookings]);
+  }, [formData, passengerList, selectedBooking, user?.us_name, fetchBookings, validatePhoneNumber]);
   
   // Store the handleSave function in the ref
   useEffect(() => {
@@ -333,12 +358,17 @@ const Bookings = () => {
     // Focus will be handled automatically by keyboard engine
   }, [user?.us_name, clearLookupCache]);
 
-  // Enhanced save confirmation handler
+  // Enhanced save confirmation handler - commits to database before form reset (MOVED AFTER handleNew)
   const handleSaveConfirmed = useCallback(async () => {
     try {
-      await handleSaveRef.current();
+      console.log('🔄 Save confirmed - committing to database...');
       
-      // Success - reset form and show notification
+      // First, commit the changes to the database
+      const savedBooking = await handleSaveRef.current();
+      
+      console.log('✅ Database commit successful');
+      
+      // Only after successful database commit, reset the form
       setShowSaveModal(false);
       setIsEditing(false);
       
@@ -346,7 +376,7 @@ const Bookings = () => {
       handleNew();
       
       // Show success notification
-      announceToScreenReader('Booking saved successfully');
+      announceToScreenReader('Booking saved successfully and form reset');
       
       // Focus initial field
       setTimeout(() => {
@@ -354,9 +384,10 @@ const Bookings = () => {
       }, 100);
       
     } catch (error) {
-      console.error('Save failed:', error);
+      console.error('❌ Save confirmation failed:', error);
       setError(error.message || 'Failed to save booking');
       setShowSaveModal(false);
+      // Don't reset form on error - keep user data
     }
   }, [handleNew]);
 
@@ -368,6 +399,28 @@ const Bookings = () => {
       enhancedFocusManager.focusField('status');
     }, 100);
   }, []);
+
+  // Direct save handler for save button (bypasses modal)
+  const handleDirectSave = useCallback(async () => {
+    try {
+      console.log('🔄 Direct save initiated...');
+      
+      // Commit to database
+      const savedBooking = await handleSave();
+      
+      console.log('✅ Direct save successful');
+      
+      // Show success notification but don't reset form
+      announceToScreenReader('Booking saved successfully');
+      
+      // Keep form in current state for continued editing
+      setIsEditing(false);
+      
+    } catch (error) {
+      console.error('❌ Direct save failed:', error);
+      // Error is already set in handleSave
+    }
+  }, [handleSave]);
 
   // MANDATORY: Initialize keyboard navigation (COMPLIANT)
   const { isModalOpen, handleManualFocus } = useKeyboardForm({
@@ -391,7 +444,179 @@ const Bookings = () => {
   const [actionMenuPosition, setActionMenuPosition] = useState({ top: 0, left: 0 });
   const [focusedOnGrid, setFocusedOnGrid] = useState(false);
   const gridRef = useRef(null);
+  
+  // Enter key dropdown menu state
+  const [enterMenuOpen, setEnterMenuOpen] = useState(false);
+  const [enterMenuPosition, setEnterMenuPosition] = useState({ top: 0, left: 0 });
+  const [enterMenuSelectedIndex, setEnterMenuSelectedIndex] = useState(0);
     
+  // Enter key dropdown menu options
+  const getEnterMenuOptions = useCallback((record) => {
+    if (!record) return [];
+    
+    const options = [];
+    const status = record.bk_status?.toUpperCase() || 'DRAFT';
+    
+    // Generate Bill - Only for CONFIRMED bookings without existing billing
+    options.push({
+      id: 'generate_bill',
+      label: 'Generate Bill',
+      enabled: status === 'CONFIRMED' && !record.hasBilling,
+      reason: status !== 'CONFIRMED' ? 'Only confirmed bookings can be billed' : 
+              record.hasBilling ? 'Billing already exists' : null
+    });
+    
+    // View Bill - Only if billing exists
+    options.push({
+      id: 'view_bill',
+      label: 'View Bill',
+      enabled: !!record.hasBilling,
+      reason: !record.hasBilling ? 'No billing record exists' : null
+    });
+    
+    // Edit Booking - Available unless cancelled or completed
+    options.push({
+      id: 'edit_booking',
+      label: 'Edit Booking',
+      enabled: status !== 'CANCELLED' && status !== 'COMPLETED',
+      reason: (status === 'CANCELLED' || status === 'COMPLETED') ? 'Cannot edit cancelled or completed bookings' : null
+    });
+    
+    // Cancel Booking - Available unless already cancelled or completed
+    options.push({
+      id: 'cancel_booking',
+      label: 'Cancel Booking',
+      enabled: status !== 'CANCELLED' && status !== 'COMPLETED',
+      reason: (status === 'CANCELLED' || status === 'COMPLETED') ? 'Booking is already cancelled or completed' : null
+    });
+    
+    return options;
+  }, []);
+
+  // Define handleRecordSelect before functions that depend on it
+  const handleRecordSelect = useCallback(async (record) => {
+    setSelectedBooking(record);
+    setFormData({
+      bookingId: record.bk_bkid || '',
+      bookingDate: record.bk_bookingdt ? new Date(record.bk_bookingdt).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
+      // CUSTOMER ID REMOVED - System managed only
+      customerName: record.customerName || record.bk_customername || '',
+      phoneNumber: record.phoneNumber || record.bk_phonenumber || record.bk_phone || '',
+      internalCustomerId: record.customerId || record.bk_customerid || record.cu_usid || '',
+      totalPassengers: record.totalPassengers || 0,
+      fromStation: record.fromStation?.st_stname || record.bk_fromstation || record.bk_fromst || '',
+      toStation: record.toStation?.st_stname || record.bk_tostation || record.bk_tost || '',
+      travelDate: record.bk_trvldt ? new Date(record.bk_trvldt).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
+      travelClass: record.bk_class || record.bk_travelclass || '3A',
+      berthPreference: record.bk_birthpreference || record.bk_berthpreference || '',
+      quotaType: record.quotaType || record.bk_quotatype || '',
+      remarks: record.bk_remarks || '',
+      status: record.bk_status || 'Draft',
+      createdBy: record.createdBy || record.bk_createdby || 'system',
+      createdOn: record.createdOn || record.bk_createdon || new Date().toISOString(),
+      modifiedBy: record.modifiedBy || record.bk_modifiedby || '',
+      modifiedOn: record.modifiedOn || record.bk_modifiedon || '',
+      closedBy: record.closedBy || record.bk_closedby || '',
+      closedOn: record.closedOn || record.bk_closedon || ''
+    });
+    
+    // Initialize with empty list first
+    setPassengerList([]);
+    setIsEditing(false);
+
+    // Fetch passengers for the selected booking
+    try {
+      const response = await bookingAPI.getBookingPassengers(record.bk_bkid || record.id);
+      if (response.success && response.passengers) {
+        const mappedPassengers = response.passengers.map(p => ({
+          id: p.ps_psid,
+          name: (p.ps_fname + ' ' + (p.ps_lname || '')).trim(),
+          age: p.ps_age,
+          gender: p.ps_gender,
+          berthPreference: p.ps_berthpref
+        }));
+        setPassengerList(mappedPassengers);
+      }
+    } catch (error) {
+      console.warn('Failed to fetch passengers for selected record:', error);
+      // Keep empty list if fetch fails
+    }
+  }, []);
+
+  // Handle Enter key dropdown menu actions
+  const handleEnterMenuAction = useCallback(async (actionId, record) => {
+    setEnterMenuOpen(false);
+    setEnterMenuSelectedIndex(0);
+    
+    try {
+      switch (actionId) {
+        case 'generate_bill':
+          console.log('🔄 Generating bill for booking:', record.bk_bkid);
+          navigate('/billing', { 
+            state: { 
+              bookingId: record.bk_bkid,
+              mode: 'generate',
+              bookingData: record
+            }
+          });
+          break;
+          
+        case 'view_bill':
+          console.log('🔄 Viewing bill for booking:', record.bk_bkid);
+          navigate('/billing', { 
+            state: { 
+              bookingId: record.bk_bkid,
+              mode: 'view'
+            }
+          });
+          break;
+          
+        case 'edit_booking':
+          console.log('🔄 Editing booking:', record.bk_bkid);
+          handleRecordSelect(record);
+          setIsEditing(true);
+          break;
+          
+        case 'cancel_booking':
+          console.log('🔄 Cancelling booking:', record.bk_bkid);
+          if (window.confirm('Are you sure you want to cancel this booking?')) {
+            await bookingAPI.cancelBooking(record.bk_bkid);
+            await fetchBookings(); // Refresh data
+            announceToScreenReader('Booking cancelled successfully');
+          }
+          break;
+          
+        default:
+          console.warn('Unknown action:', actionId);
+          break;
+      }
+    } catch (error) {
+      console.error('❌ Enter menu action failed:', error);
+      setError(error.message || `Failed to ${actionId.replace('_', ' ')}`);
+    }
+  }, [navigate, handleRecordSelect, fetchBookings]);
+
+  // Open Enter key dropdown menu
+  const openEnterMenu = useCallback((event, record) => {
+    if (!record) return;
+    
+    const rect = event.target.getBoundingClientRect();
+    setEnterMenuPosition({
+      top: rect.bottom + window.scrollY + 5,
+      left: rect.left + window.scrollX
+    });
+    setEnterMenuSelectedIndex(0);
+    setEnterMenuOpen(true);
+    
+    console.log('📋 Enter menu opened for booking:', record.bk_bkid);
+  }, []);
+
+  // Close Enter key dropdown menu
+  const closeEnterMenu = useCallback(() => {
+    setEnterMenuOpen(false);
+    setEnterMenuSelectedIndex(0);
+  }, []);
+  
   // Filter state for inline grid filtering
   const [inlineFilters, setInlineFilters] = useState({});
   
@@ -693,35 +918,6 @@ const Bookings = () => {
     return filteredBookings.slice(startIndex, endIndex);
   }, [filteredBookings, currentPage, recordsPerPage]);
     
-  const handleRecordSelect = useCallback((record) => {
-    setSelectedBooking(record);
-    setFormData({
-      bookingId: record.bk_bkid || '',
-      bookingDate: record.bk_bookingdt ? new Date(record.bk_bookingdt).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
-      // CUSTOMER ID REMOVED - System managed only
-      customerName: record.customerName || record.bk_customername || '',
-      phoneNumber: record.phoneNumber || record.bk_phonenumber || record.bk_phone || '',
-      internalCustomerId: record.customerId || record.bk_customerid || record.cu_usid || '',
-      totalPassengers: record.totalPassengers || 0,
-      fromStation: record.fromStation?.st_stname || record.bk_fromstation || record.bk_fromst || '',
-      toStation: record.toStation?.st_stname || record.bk_tostation || record.bk_tost || '',
-      travelDate: record.bk_trvldt ? new Date(record.bk_trvldt).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
-      travelClass: record.bk_class || record.bk_travelclass || '3A',
-      berthPreference: record.bk_birthpreference || record.bk_berthpreference || '',
-      quotaType: record.quotaType || record.bk_quotatype || '',
-      remarks: record.bk_remarks || '',
-      status: record.bk_status || 'Draft',
-      createdBy: record.createdBy || record.bk_createdby || 'system',
-      createdOn: record.createdOn || record.bk_createdon || new Date().toISOString(),
-      modifiedBy: record.modifiedBy || record.bk_modifiedby || '',
-      modifiedOn: record.modifiedOn || record.bk_modifiedon || '',
-      closedBy: record.closedBy || record.bk_closedby || '',
-      closedOn: record.closedOn || record.bk_closedon || ''
-    });
-    setPassengerList(record.passengerList || []);
-    setIsEditing(false);
-  }, []);
-  
   // Navigation functions
   const handleNavigation = useCallback((direction) => {
     const paginatedData = getPaginatedData();
@@ -848,21 +1044,47 @@ const Bookings = () => {
     }
   }, [selectedBooking, user]);
     
-  // Function to fetch and show passenger details
+  // Enhanced function to fetch and show comprehensive passenger details
   const showPassengerDetails = useCallback(async (bookingId) => {
     try {
+      console.log('🔄 Fetching passenger details for booking:', bookingId);
       setLoadingPassengers(true);
-      const response = await bookingAPI.getBookingPassengers(bookingId);
-      const passengers = response.passengers || [];
+      
+      // Try to get passenger details from API
+      let passengers = [];
+      try {
+        const response = await bookingAPI.getBookingPassengers(bookingId);
+        passengers = response.passengers || response.data || [];
+      } catch (apiError) {
+        console.warn('API passenger fetch failed, using form data:', apiError);
+        // Fallback to current passenger list if selected booking matches
+        if (selectedBooking && (selectedBooking.bk_bkid === bookingId || selectedBooking.id === bookingId)) {
+          passengers = passengerList.filter(p => p.name && p.name.trim() !== '');
+        }
+      }
+      
+      // If no passengers found, create a placeholder
+      if (passengers.length === 0) {
+        passengers = [{
+          name: 'No passenger details available',
+          age: '-',
+          gender: '-',
+          berthPreference: '-',
+          idProofType: '-',
+          idProofNumber: '-'
+        }];
+      }
+      
+      console.log('✅ Passenger details loaded:', passengers);
       setPassengerDetails(passengers);
       setShowPassengerModal(true);
     } catch (error) {
-      console.error('Error fetching passenger details:', error);
-      alert(`Error fetching passenger details: ${error.message}`);
+      console.error('❌ Error fetching passenger details:', error);
+      setError(`Error fetching passenger details: ${error.message}`);
     } finally {
       setLoadingPassengers(false);
     }
-  }, []);
+  }, [selectedBooking, passengerList]);
   
   const handleDelete = useCallback(async () => {
     if (!selectedBooking) {
@@ -1009,10 +1231,24 @@ const Bookings = () => {
       if (!isInFormField || focusedOnGrid) {
         const currentPaginatedData = getPaginatedData();
         
+        // Ctrl+S for Save
+        if (e.ctrlKey && e.key === 's') {
+          e.preventDefault();
+          if (isEditing) {
+            handleSave();
+          }
+          return;
+        }
+
         switch (e.key) {
           case 'ArrowUp':
             e.preventDefault();
-            if (selectedRecordIndex > 0) {
+            if (enterMenuOpen) {
+              // Navigate up in dropdown menu
+              const options = getEnterMenuOptions(selectedBooking);
+              const enabledOptions = options.filter(opt => opt.enabled);
+              setEnterMenuSelectedIndex(prev => prev > 0 ? prev - 1 : enabledOptions.length - 1);
+            } else if (selectedRecordIndex > 0) {
               setSelectedRecordIndex(prev => prev - 1);
               const newRecord = currentPaginatedData[selectedRecordIndex - 1];
               if (newRecord) {
@@ -1022,7 +1258,12 @@ const Bookings = () => {
             break;
           case 'ArrowDown':
             e.preventDefault();
-            if (selectedRecordIndex < currentPaginatedData.length - 1) {
+            if (enterMenuOpen) {
+              // Navigate down in dropdown menu
+              const options = getEnterMenuOptions(selectedBooking);
+              const enabledOptions = options.filter(opt => opt.enabled);
+              setEnterMenuSelectedIndex(prev => prev < enabledOptions.length - 1 ? prev + 1 : 0);
+            } else if (selectedRecordIndex < currentPaginatedData.length - 1) {
               setSelectedRecordIndex(prev => prev + 1);
               const newRecord = currentPaginatedData[selectedRecordIndex + 1];
               if (newRecord) {
@@ -1032,20 +1273,36 @@ const Bookings = () => {
             break;
           case 'ArrowLeft':
             e.preventDefault();
-            if (currentPage > 1) {
+            if (!enterMenuOpen && currentPage > 1) {
               setCurrentPage(prev => prev - 1);
             }
             break;
           case 'ArrowRight':
             e.preventDefault();
-            if (currentPage < totalPages) {
+            if (!enterMenuOpen && currentPage < totalPages) {
               setCurrentPage(prev => prev + 1);
+            }
+            break;
+          case 'Escape':
+            if (enterMenuOpen) {
+              e.preventDefault();
+              closeEnterMenu();
             }
             break;
           case 'Enter':
             if (focusedOnGrid && selectedBooking) {
               e.preventDefault();
-              openActionMenu(e);
+              // Open Enter key dropdown menu instead of action menu
+              openEnterMenu(e, selectedBooking);
+            } else if (enterMenuOpen) {
+              // Handle Enter key in dropdown menu
+              e.preventDefault();
+              const options = getEnterMenuOptions(selectedBooking);
+              const enabledOptions = options.filter(opt => opt.enabled);
+              if (enabledOptions.length > 0 && enterMenuSelectedIndex < enabledOptions.length) {
+                const selectedOption = enabledOptions[enterMenuSelectedIndex];
+                handleEnterMenuAction(selectedOption.id, selectedBooking);
+              }
             }
             break;
           default:
@@ -1104,7 +1361,7 @@ const Bookings = () => {
 
     document.addEventListener('keydown', handleGlobalKeyDown);
     return () => document.removeEventListener('keydown', handleGlobalKeyDown);
-  }, [selectedRecordIndex, getPaginatedData, currentPage, totalPages, selectedBooking, focusedOnGrid, isEditing, handleEdit, handleDelete, handleNew, handleSave, handleRecordSelect, openActionMenu]);
+  }, [selectedRecordIndex, getPaginatedData, currentPage, totalPages, selectedBooking, focusedOnGrid, isEditing, handleEdit, handleDelete, handleNew, handleSave, handleRecordSelect, openActionMenu, enterMenuOpen, enterMenuSelectedIndex, getEnterMenuOptions, handleEnterMenuAction, openEnterMenu, closeEnterMenu]);
 
   return (
     <div className="booking-layout">
@@ -1126,7 +1383,7 @@ const Bookings = () => {
          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
              <button className="erp-button primary" onClick={handleNew} title="New (Ctrl+N)">New</button>
              <button className="erp-button" onClick={() => selectedBooking && handleEdit()} disabled={!selectedBooking} title="Edit (F2)">Edit</button>
-             <button className="erp-button" onClick={handleSave} disabled={!isEditing} title="Save (F10)">Save</button>
+             <button className="erp-button" onClick={handleDirectSave} disabled={!isEditing} title="Save (F10)">Save</button>
              <button className="erp-button danger" onClick={() => selectedBooking && handleDelete()} disabled={!selectedBooking} title="Delete (F4)">Delete</button>
              <button className="erp-button" onClick={() => setIsEditing(false)} title="Cancel (Esc)">Cancel</button>
              <div className="action-divider" style={{ borderLeft: '1px solid #ccc', margin: '0 8px', height: '20px' }}></div>
@@ -1402,20 +1659,114 @@ const Bookings = () => {
                   </div>
               )}
 
-              {/* Passenger List Grid */}
-              <div className="passenger-grid-container" style={{ flex: 1, minHeight: '100px', overflowY: 'auto', border: '1px solid #999' }}>
-                  <div className="passenger-grid-header" style={{ gridTemplateColumns: '1fr 50px 60px 80px 30px' }}>
-                      <div>Name</div><div>Age</div><div>Sex</div><div>Berth</div><div>X</div>
+              {/* Enhanced Passenger List Grid */}
+              <div className="passenger-grid-container" style={{ flex: 1, minHeight: '120px', overflowY: 'auto', border: '1px solid #999' }}>
+                  <div className="passenger-grid-header" style={{ 
+                    display: 'grid', 
+                    gridTemplateColumns: '1fr 50px 60px 80px 100px 30px', 
+                    gap: '2px', 
+                    padding: '4px', 
+                    backgroundColor: '#f0f0f0', 
+                    borderBottom: '1px solid #999',
+                    fontSize: '11px',
+                    fontWeight: 'bold'
+                  }}>
+                      <div>Name</div>
+                      <div>Age</div>
+                      <div>Sex</div>
+                      <div>Berth</div>
+                      <div>ID Type</div>
+                      <div>Del</div>
                   </div>
-                  {passengerList.map(p => (
-                      <div className="passenger-grid-row" key={p.id} style={{ gridTemplateColumns: '1fr 50px 60px 80px 30px' }}>
-                          <input value={p.name} readOnly />
-                          <input value={p.age} readOnly />
-                          <input value={p.gender} readOnly />
-                          <input value={p.berthPreference} readOnly />
-                          <button onClick={() => removePassenger(p.id)} disabled={!isEditing} style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: 'red' }}>×</button>
-                      </div>
-                  ))}
+                  {passengerList.length === 0 ? (
+                    <div style={{ 
+                      padding: '20px', 
+                      textAlign: 'center', 
+                      color: '#666', 
+                      fontSize: '12px',
+                      fontStyle: 'italic'
+                    }}>
+                      {selectedBooking ? 'No passenger details available for this booking' : 'No passengers added yet'}
+                    </div>
+                  ) : (
+                    passengerList.map(p => (
+                        <div className="passenger-grid-row" key={p.id} style={{ 
+                          display: 'grid', 
+                          gridTemplateColumns: '1fr 50px 60px 80px 100px 30px', 
+                          gap: '2px', 
+                          padding: '2px', 
+                          borderBottom: '1px solid #eee',
+                          fontSize: '11px',
+                          alignItems: 'center'
+                        }}>
+                            <input 
+                              value={p.name || p.firstName || ''} 
+                              readOnly 
+                              style={{ 
+                                border: 'none', 
+                                background: 'transparent', 
+                                fontSize: '11px',
+                                fontWeight: 'bold'
+                              }} 
+                            />
+                            <input 
+                              value={p.age || ''} 
+                              readOnly 
+                              style={{ 
+                                border: 'none', 
+                                background: 'transparent', 
+                                fontSize: '11px',
+                                textAlign: 'center'
+                              }} 
+                            />
+                            <input 
+                              value={p.gender || ''} 
+                              readOnly 
+                              style={{ 
+                                border: 'none', 
+                                background: 'transparent', 
+                                fontSize: '11px',
+                                textAlign: 'center'
+                              }} 
+                            />
+                            <input 
+                              value={p.berthPreference || p.berth || ''} 
+                              readOnly 
+                              style={{ 
+                                border: 'none', 
+                                background: 'transparent', 
+                                fontSize: '11px',
+                                textAlign: 'center'
+                              }} 
+                            />
+                            <input 
+                              value={p.idProofType || ''} 
+                              readOnly 
+                              style={{ 
+                                border: 'none', 
+                                background: 'transparent', 
+                                fontSize: '11px',
+                                textAlign: 'center'
+                              }} 
+                            />
+                            <button 
+                              onClick={() => removePassenger(p.id)} 
+                              disabled={!isEditing} 
+                              style={{ 
+                                border: 'none', 
+                                background: 'transparent', 
+                                cursor: isEditing ? 'pointer' : 'not-allowed', 
+                                color: isEditing ? 'red' : '#ccc',
+                                fontSize: '14px',
+                                fontWeight: 'bold'
+                              }}
+                              title={isEditing ? 'Remove passenger' : 'Cannot remove - not editing'}
+                            >
+                              ×
+                            </button>
+                        </div>
+                    ))
+                  )}
               </div>
 
               {/* Remarks & Status */}
@@ -1476,11 +1827,12 @@ const Bookings = () => {
                       <th style={{ width: '100px' }}>Travel Dt</th>
                       <th style={{ width: '50px' }}>Cls</th>
                       <th style={{ width: '80px' }}>Status</th>
+                      <th style={{ width: '150px' }}>Remarks</th>
                     </tr>
                   </thead>
                   <tbody>
                     {paginatedData.length === 0 ? (
-                      <tr><td colSpan="11" style={{ textAlign: 'center' }}>No records found</td></tr>
+                      <tr><td colSpan="12" style={{ textAlign: 'center' }}>No records found</td></tr>
                     ) : (
                       paginatedData.map((record, idx) => {
                         const isSelected = selectedBooking && selectedBooking.bk_bkid === record.bk_bkid;
@@ -1510,13 +1862,38 @@ const Bookings = () => {
                             <td>{record.bk_bkid}</td>
                             <td>{new Date(record.bk_bookingdt || record.createdOn || new Date()).toLocaleDateString()}</td>
                             <td>{record.customerName || record.bk_customername || 'N/A'}</td>
-                            <td>{formatPhoneNumber(record.phoneNumber || record.bk_phonenumber || record.bk_phone || 'N/A')}</td>
-                            <td>{record.totalPassengers || passengerList.filter(p => p.name.trim() !== '').length || 0}</td>
+                            <td>{record.phoneNumber || record.bk_phonenumber || record.bk_phone || 'N/A'}</td>
+                            <td 
+                              onClick={(e) => { 
+                                e.stopPropagation(); 
+                                showPassengerDetails(record.bk_bkid || record.id); 
+                              }} 
+                              style={{
+                                cursor: 'pointer', 
+                                textDecoration: 'underline', 
+                                color: 'blue', 
+                                textAlign: 'center'
+                              }} 
+                              title="View Passenger Details"
+                            >
+                              {isSelected ? (passengerList.filter(p => p.name.trim() !== '').length || record.totalPassengers || 0) : (record.totalPassengers || 0)}
+                            </td>
                             <td>{record.fromStation?.st_stname || record.bk_fromstation || record.bk_fromst || 'N/A'}</td>
                             <td>{record.toStation?.st_stname || record.bk_tostation || record.bk_tost || 'N/A'}</td>
                             <td>{new Date(record.bk_trvldt || record.bk_travelldate || new Date()).toLocaleDateString()}</td>
                             <td>{record.bk_class || record.bk_travelclass || 'N/A'}</td>
                             <td>{record.bk_status || 'Draft'}</td>
+                            <td 
+                              style={{ 
+                                maxWidth: '150px', 
+                                overflow: 'hidden', 
+                                textOverflow: 'ellipsis', 
+                                whiteSpace: 'nowrap' 
+                              }}
+                              title={record.bk_remarks || record.remarks || ''}
+                            >
+                              {record.bk_remarks || record.remarks || '-'}
+                            </td>
                           </tr>
                         );
                       })
@@ -1565,31 +1942,79 @@ const Bookings = () => {
       </div>
       </div>
 
-      {/* Modals */}
+      {/* Enhanced Passenger Details Modal */}
       {showPassengerModal && (
         <div className="erp-modal-overlay" onClick={() => setShowPassengerModal(false)}>
-          <div className="erp-modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '600px', width: '90%' }}>
+          <div 
+            className="erp-modal" 
+            onClick={(e) => e.stopPropagation()} 
+            style={{ maxWidth: '800px', width: '95%' }}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="passenger-modal-title"
+          >
             <div className="erp-modal-title">
-              <span>Passenger Details</span>
+              <span id="passenger-modal-title">Passenger Details - {selectedBooking ? `Booking ${selectedBooking.bk_bkid}` : 'Current Booking'}</span>
               <button className="erp-modal-close" onClick={() => setShowPassengerModal(false)}>×</button>
             </div>
             <div className="erp-modal-body">
               {loadingPassengers ? (
-                <div>Loading...</div>
+                <div style={{ textAlign: 'center', padding: '20px' }}>
+                  <div>Loading passenger details...</div>
+                </div>
               ) : (
-                <table className="erp-table">
-                  <thead>
-                    <tr><th>Name</th><th>Age</th><th>Gender</th><th>Berth</th></tr>
-                  </thead>
-                  <tbody>
-                    {passengerDetails.map((p, i) => (
-                      <tr key={i}>
-                        <td>{p.firstName}</td><td>{p.age}</td><td>{p.gender}</td><td>{p.berthPreference}</td>
+                <div>
+                  <div style={{ marginBottom: '15px', fontSize: '14px', color: '#666' }}>
+                    Total Passengers: <strong>{passengerDetails.length}</strong>
+                  </div>
+                  <table className="erp-table" style={{ width: '100%' }}>
+                    <thead>
+                      <tr>
+                        <th style={{ width: '25%' }}>Name</th>
+                        <th style={{ width: '10%' }}>Age</th>
+                        <th style={{ width: '10%' }}>Gender</th>
+                        <th style={{ width: '15%' }}>Berth Pref</th>
+                        <th style={{ width: '15%' }}>ID Type</th>
+                        <th style={{ width: '25%' }}>ID Number</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody>
+                      {passengerDetails.map((passenger, index) => (
+                        <tr key={index}>
+                          <td style={{ fontWeight: 'bold' }}>
+                            {passenger.firstName || passenger.name || 'N/A'}
+                            {passenger.lastName && ` ${passenger.lastName}`}
+                          </td>
+                          <td>{passenger.age || '-'}</td>
+                          <td>{passenger.gender || '-'}</td>
+                          <td>{passenger.berthPreference || passenger.berth || '-'}</td>
+                          <td>{passenger.idProofType || '-'}</td>
+                          <td>{passenger.idProofNumber || '-'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  
+                  {/* Additional booking information */}
+                  {selectedBooking && (
+                    <div style={{ marginTop: '20px', padding: '15px', backgroundColor: '#f8f9fa', borderRadius: '4px' }}>
+                      <h4 style={{ margin: '0 0 10px 0', fontSize: '14px', color: '#333' }}>Booking Information</h4>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', fontSize: '12px' }}>
+                        <div><strong>Journey:</strong> {selectedBooking.bk_fromstation || selectedBooking.fromStation?.st_stname || 'N/A'} → {selectedBooking.bk_tostation || selectedBooking.toStation?.st_stname || 'N/A'}</div>
+                        <div><strong>Travel Date:</strong> {new Date(selectedBooking.bk_trvldt || selectedBooking.travelDate).toLocaleDateString()}</div>
+                        <div><strong>Class:</strong> {selectedBooking.bk_class || selectedBooking.travelClass || 'N/A'}</div>
+                        <div><strong>Status:</strong> {selectedBooking.bk_status || selectedBooking.status || 'N/A'}</div>
+                        {selectedBooking.bk_remarks && (
+                          <div style={{ gridColumn: 'span 2' }}><strong>Remarks:</strong> {selectedBooking.bk_remarks}</div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
               )}
+            </div>
+            <div className="erp-modal-footer">
+              <button className="erp-button" onClick={() => setShowPassengerModal(false)}>Close</button>
             </div>
           </div>
         </div>
@@ -1597,6 +2022,7 @@ const Bookings = () => {
       
       {showSaveModal && (
          <SaveConfirmationModal 
+           isOpen={true}
            onConfirm={handleSaveConfirmed}
            onCancel={handleSaveCancel}
          />
@@ -1604,11 +2030,93 @@ const Bookings = () => {
 
       {actionMenuOpen && selectedBooking && (
         <RecordActionMenu
+          isOpen={true}
+          record={selectedBooking}
           position={actionMenuPosition}
           actions={getActionMenuItems(selectedBooking)}
-          onSelect={(action) => handleActionSelect(action, selectedBooking)}
+          onActionSelect={(action) => handleActionSelect(action, selectedBooking)}
           onClose={closeActionMenu}
         />
+      )}
+
+      {/* Enter Key Dropdown Menu */}
+      {enterMenuOpen && selectedBooking && (
+        <div 
+          className="enter-dropdown-overlay" 
+          onClick={closeEnterMenu}
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            zIndex: 1000,
+            background: 'transparent'
+          }}
+        >
+          <div 
+            className="enter-dropdown-menu"
+            role="menu"
+            aria-label="Booking Actions Menu"
+            style={{
+              position: 'absolute',
+              top: enterMenuPosition.top,
+              left: enterMenuPosition.left,
+              background: 'white',
+              border: '2px solid #333',
+              borderRadius: '4px',
+              boxShadow: '0 4px 12px rgba(0, 0, 0, 0.3)',
+              minWidth: '200px',
+              zIndex: 1001,
+              fontFamily: 'monospace',
+              fontSize: '12px'
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ padding: '8px 0' }}>
+              {getEnterMenuOptions(selectedBooking).map((option, index) => {
+                const enabledOptions = getEnterMenuOptions(selectedBooking).filter(opt => opt.enabled);
+                const enabledIndex = enabledOptions.findIndex(opt => opt.id === option.id);
+                const isSelected = enabledIndex === enterMenuSelectedIndex && option.enabled;
+                
+                return (
+                  <div
+                    key={option.id}
+                    className={`enter-dropdown-item ${isSelected ? 'selected' : ''} ${!option.enabled ? 'disabled' : ''}`}
+                    role="menuitem"
+                    aria-disabled={!option.enabled}
+                    tabIndex={option.enabled ? 0 : -1}
+                    style={{
+                      padding: '8px 16px',
+                      cursor: option.enabled ? 'pointer' : 'not-allowed',
+                      backgroundColor: isSelected ? '#007acc' : 'transparent',
+                      color: isSelected ? 'white' : option.enabled ? '#333' : '#999',
+                      borderLeft: isSelected ? '3px solid #0056b3' : '3px solid transparent'
+                    }}
+                    onClick={() => option.enabled && handleEnterMenuAction(option.id, selectedBooking)}
+                    title={option.reason || option.label}
+                  >
+                    {option.label}
+                    {!option.enabled && option.reason && (
+                      <div style={{ fontSize: '10px', fontStyle: 'italic', marginTop: '2px' }}>
+                        {option.reason}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+            <div style={{ 
+              padding: '8px 16px', 
+              borderTop: '1px solid #eee', 
+              fontSize: '10px', 
+              color: '#666',
+              backgroundColor: '#f8f9fa'
+            }}>
+              Use ↑↓ to navigate, Enter to select, Esc to close
+            </div>
+          </div>
+        </div>
       )}
 
     </div>
