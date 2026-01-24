@@ -53,7 +53,7 @@
 
 .customer-lookup-label {
   font-weight: normal;
-  color: var(--erp-text);
+  color: var(--erp-text)x;
   margin-bottom: 3px;
   font-size: 11px;
   text-align: right;

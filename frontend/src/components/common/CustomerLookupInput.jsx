@@ -1,4 +1,4 @@
-import React, { useRef, useEffect } from 'react';
+x`import React, { useRef, useEffect } from 'react';
 import useCustomerLookup from '../../hooks/useCustomerLookup';
 import './CustomerLookupInput.css';
 

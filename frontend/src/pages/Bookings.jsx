@@ -628,10 +628,6 @@ const Bookings = () => {
   // State for save modal
   const [showSaveModal, setShowSaveModal] = useState(false);
   
-  // REMOVED: Special Tab key handler on quota type field
-  // Normal Tab navigation should work naturally through all fields
-  // No special handling needed since passenger entry is visible by default
-
   // MANDATORY: Phone number auto-fetch handler (COMPLIANT)
   const handlePhoneBlur = useCallback(async (phoneNumber) => {
     if (!phoneNumber || !isEditing) return;
@@ -1111,779 +1107,380 @@ const Bookings = () => {
   }, [selectedRecordIndex, getPaginatedData, currentPage, totalPages, selectedBooking, focusedOnGrid, isEditing, handleEdit, handleDelete, handleNew, handleSave, handleRecordSelect, openActionMenu]);
 
   return (
-    <div className="erp-admin-container">
-      {/* Top Menu Bar - Static */}
-      <div className="erp-menu-bar">
-        <div className="erp-menu-item">File</div>
-        <div className="erp-menu-item">Edit</div>
-        <div className="erp-menu-item">View</div>
-        <div className="erp-menu-item">Booking</div>
-        <div className="erp-menu-item">Reports</div>
-        <div className="erp-menu-item">Help</div>
-        <div className="erp-user-info">USER: {user?.us_name || 'ADMIN'} ⚙</div>
+    <div className="booking-layout">
+      {/* 1. Header Row */}
+      <div className="layout-header">
+        <div className="erp-menu-bar">
+          <div className="erp-menu-item">File</div>
+          <div className="erp-menu-item">Edit</div>
+          <div className="erp-menu-item">View</div>
+          <div className="erp-menu-item">Booking</div>
+          <div className="erp-menu-item">Reports</div>
+          <div className="erp-menu-item">Help</div>
+          <div className="erp-user-info">USER: {user?.us_name || 'ADMIN'} ⚙</div>
+        </div>
       </div>
 
-      {/* Top Menu Bar - Static */}
-      <div className="erp-menu-bar">
-        <div className="erp-menu-item">File</div>
-        <div className="erp-menu-item">Edit</div>
-        <div className="erp-menu-item">View</div>
-        <div className="erp-menu-item">Booking</div>
-        <div className="erp-menu-item">Reports</div>
-        <div className="erp-menu-item">Help</div>
-        <div className="erp-user-info">USER: {user?.us_name || 'ADMIN'} ⚙</div>
+      {/* 2. Action Bar & Navigation */}
+      <div className="layout-action-bar">
+         <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+             <button className="erp-button primary" onClick={handleNew} title="New (Ctrl+N)">New</button>
+             <button className="erp-button" onClick={() => selectedBooking && handleEdit()} disabled={!selectedBooking} title="Edit (F2)">Edit</button>
+             <button className="erp-button" onClick={handleSave} disabled={!isEditing} title="Save (F10)">Save</button>
+             <button className="erp-button danger" onClick={() => selectedBooking && handleDelete()} disabled={!selectedBooking} title="Delete (F4)">Delete</button>
+             <button className="erp-button" onClick={() => setIsEditing(false)} title="Cancel (Esc)">Cancel</button>
+             <div className="action-divider" style={{ borderLeft: '1px solid #ccc', margin: '0 8px', height: '20px' }}></div>
+             <button className="erp-button" onClick={() => handleNavigation('first')} disabled={isFirstRecord} title="First">|&lt;</button>
+             <button className="erp-button" onClick={() => handleNavigation('prev')} disabled={isFirstRecord} title="Prev">&lt;</button>
+             <button className="erp-button" onClick={() => handleNavigation('next')} disabled={isLastRecord} title="Next">&gt;</button>
+             <button className="erp-button" onClick={() => handleNavigation('last')} disabled={isLastRecord} title="Last">&gt;|</button>
+         </div>
+         <div style={{ flex: 1 }}></div>
+         <div style={{ fontWeight: 'bold', fontSize: '12px' }}>
+             {isEditing ? 'EDIT MODE' : 'READY'} | Records: {filteredBookings.length}
+         </div>
       </div>
 
-      {/* Toolbar - Static */}
-      <div className="erp-toolbar">
-        <button className="erp-icon-button" onClick={() => navigate('/dashboard')} title="Home">🏠</button>
-        <button 
-          className="erp-icon-button" 
-          onClick={() => handleNavigation('first')} 
-          disabled={!selectedBooking || isFirstRecord}
-          title="First"
-        >
-          |◀
-        </button>
-        <button 
-          className="erp-icon-button" 
-          onClick={() => handleNavigation('prev')} 
-          disabled={!selectedBooking || isFirstRecord}
-          title="Previous"
-        >
-          ◀
-        </button>
-        <button 
-          className="erp-icon-button" 
-          onClick={() => handleNavigation('next')} 
-          disabled={!selectedBooking || isLastRecord}
-          title="Next"
-        >
-          ▶
-        </button>
-        <button 
-          className="erp-icon-button" 
-          onClick={() => handleNavigation('last')} 
-          disabled={!selectedBooking || isLastRecord}
-          title="Last"
-        >
-          ▶|
-        </button>
-        <div className="erp-tool-separator"></div>
-        <button className="erp-button" onClick={handleNew} title="New">New</button>
-        <button className="erp-button" onClick={handleEdit} title="Edit">Edit</button>
-        <button className="erp-button" onClick={handleDelete} title="Delete">Delete</button>
-        <div className="erp-tool-separator"></div>
-        <button className="erp-button" onClick={handleSave} disabled={!isEditing} title="Save">Save</button>
-        <button className="erp-button" onClick={fetchBookings} title="Refresh">Refresh</button>
-        <div className="erp-tool-separator"></div>
-        <button className="erp-button" title="Print">Print</button>
-        <button className="erp-button" title="Export">Export</button>
-      </div>
-
-      {/* Main Content Area - Scrollable */}
-      <div className="erp-main-content">
-        {/* Center Content - Now takes full space since left sidebar is removed */}
-        <div className="erp-center-content">
-          {/* Form Panel - Static */}
-          <div className="erp-form-section">{/* KEYBOARD ENGINE HANDLES FOCUS */}
+      {/* 3. Content Wrapper */}
+      <div className="layout-content-wrapper">
+          <div className="layout-main-column">
+              <div className="layout-form-section">
+          <div className="erp-form-section section" style={{ width: '100%', overflowY: 'auto' }}>
             <div className="erp-panel-header">Booking Details</div>
-            
-            {/* Booking ID and Date Row */}
-            <div className="erp-form-row">
-              <label className="erp-form-label required">Booking ID</label>
-              <input
-                type="text"
-                name="bookingId"
-                data-field="bookingId"
-                className="erp-input"
-                value={formData.bookingId}
-                onChange={handleInputChange}
-                onFocus={() => handleFieldFocus('bookingId')}
-                onKeyDown={(e) => handleEnhancedTabNavigation(e, 'bookingId')}
-                readOnly
-                tabIndex={-1}
-                aria-label="Booking ID (auto-generated)"
-              />
-              <label className="erp-form-label required">Booking Date</label>
-              <input
-                type="date"
-                name="bookingDate"
-                data-field="bookingDate"
-                className="erp-input"
-                value={formData.bookingDate}
-                onChange={handleInputChange}
-                onFocus={() => handleFieldFocus('bookingDate')}
-                onKeyDown={(e) => handleEnhancedTabNavigation(e, 'bookingDate')}
-                disabled={!isEditing}
-                aria-label="Booking Date"
-                aria-required="true"
-              />
-            </div>
-
-            {/* Customer Name and Phone Row - MANDATORY: Phone-based identification */}
-            <div className="erp-form-row">
-              <label className="erp-form-label required">Customer Name</label>
-              <input
-                type="text"
-                name="customerName"
-                data-field="customerName"
-                className="erp-input"
-                value={formData.customerName}
-                onChange={handleInputChange}
-                onFocus={() => handleFieldFocus('customerName')}
-                onKeyDown={(e) => handleEnhancedTabNavigation(e, 'customerName')}
-                disabled={!isEditing}
-                placeholder="Enter customer name..."
-                required
-                aria-label="Customer Name"
-                aria-required="true"
-              />
-              <label className="erp-form-label required">Phone Number</label>
-              <div style={{ position: 'relative' }}>
-                <input
-                  type="tel"
-                  name="phoneNumber"
-                  data-field="phoneNumber"
-                  className="erp-input"
-                  value={formData.phoneNumber}
-                  onChange={handleInputChange}
-                  onBlur={(e) => handlePhoneBlur(e.target.value)}
-                  onFocus={() => handleFieldFocus('phoneNumber')}
-                  onKeyDown={(e) => handleEnhancedTabNavigation(e, 'phoneNumber')}
-                  disabled={!isEditing}
-                  placeholder="Enter phone number (10-15 digits)..."
-                  required
-                  aria-label="Phone Number"
-                  aria-required="true"
-                  aria-describedby="phone-help"
-                />
-                <div id="phone-help" className="sr-only">
-                  Enter 10 to 15 digit phone number. Customer details will be auto-filled if found.
-                </div>
-                {isLookingUp && (
-                  <span style={{ 
-                    position: 'absolute', 
-                    right: '8px', 
-                    top: '50%', 
-                    transform: 'translateY(-50%)',
-                    fontSize: '12px'
-                  }} aria-label="Looking up customer">
-                    🔄
-                  </span>
-                )}
+            <div style={{ padding: '4px' }}>
+              {/* Booking ID & Date */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                  <div className="field">
+                      <label className="label">Booking ID</label>
+                      <input
+                        type="text"
+                        name="bookingId"
+                        className="erp-input"
+                        value={formData.bookingId}
+                        readOnly
+                        tabIndex={-1}
+                      />
+                  </div>
+                  <div className="field">
+                      <label className="label">Date</label>
+                      <input
+                        type="date"
+                        name="bookingDate"
+                        data-field="bookingDate"
+                        className="erp-input"
+                        value={formData.bookingDate}
+                        onChange={handleInputChange}
+                        onFocus={() => handleFieldFocus('bookingDate')}
+                        onKeyDown={(e) => handleEnhancedTabNavigation(e, 'bookingDate')}
+                        disabled={!isEditing}
+                      />
+                  </div>
               </div>
-            </div>
-            
-            {/* Alternate Phone Number Row */}
-            <div className="erp-form-row">
-              <label className="erp-form-label">Alternate Phone Number</label>
-              <input
-                type="tel"
-                name="contactNumber"
-                data-field="contactNumber"
-                className="erp-input"
-                value={formData.contactNumber || ''}
-                onChange={handleInputChange}
-                disabled={!isEditing}
-                placeholder="Enter alternate phone number (optional)..."
-              />
-              <div></div> {/* Empty div to maintain grid layout */}
-              <div></div> {/* Empty div to maintain grid layout */}
-            </div>
 
-            {/* Journey Details Row */}
-            <div className="erp-form-row">
-              <label className="erp-form-label required">From Station</label>
-              <input
-                type="text"
-                name="fromStation"
-                data-field="fromStation"
-                className="erp-input"
-                value={formData.fromStation}
-                onChange={handleInputChange}
-                onFocus={() => handleFieldFocus('fromStation')}
-                onKeyDown={(e) => handleEnhancedTabNavigation(e, 'fromStation')}
-                disabled={!isEditing}
-                aria-label="From Station"
-                aria-required="true"
-              />
-              <label className="erp-form-label required">To Station</label>
-              <input
-                type="text"
-                name="toStation"
-                data-field="toStation"
-                className="erp-input"
-                value={formData.toStation}
-                onChange={handleInputChange}
-                onFocus={() => handleFieldFocus('toStation')}
-                onKeyDown={(e) => handleEnhancedTabNavigation(e, 'toStation')}
-                disabled={!isEditing}
-                aria-label="To Station"
-                aria-required="true"
-              />
-            </div>
-
-            {/* Travel Date and Class Row */}
-            <div className="erp-form-row">
-              <label className="erp-form-label required">Travel Date</label>
-              <input
-                type="date"
-                name="travelDate"
-                data-field="travelDate"
-                className="erp-input"
-                value={formData.travelDate}
-                onChange={handleInputChange}
-                onFocus={() => handleFieldFocus('travelDate')}
-                onKeyDown={(e) => handleEnhancedTabNavigation(e, 'travelDate')}
-                disabled={!isEditing}
-                aria-label="Travel Date"
-                aria-required="true"
-              />
-              <label className="erp-form-label required">Travel Class</label>
-              <select
-                name="travelClass"
-                data-field="travelClass"
-                className="erp-input"
-                value={formData.travelClass}
-                onChange={handleInputChange}
-                onFocus={() => handleFieldFocus('travelClass')}
-                onKeyDown={(e) => handleEnhancedTabNavigation(e, 'travelClass')}
-                disabled={!isEditing}
-                aria-label="Travel Class"
-                aria-required="true"
-              >
-                <option value="SL">Sleeper (SL)</option>
-                <option value="3A">3rd AC (3A)</option>
-                <option value="2A">2nd AC (2A)</option>
-                <option value="1A">1st AC (1A)</option>
-                <option value="CC">Chair Car (CC)</option>
-                <option value="EC">Executive Chair (EC)</option>
-              </select>
-            </div>
-
-            {/* Berth Preference and Quota Type Row */}
-            <div className="erp-form-row">
-              <label className="erp-form-label">Berth Preference</label>
-              <select
-                name="berthPreference"
-                data-field="berthPreference"
-                className="erp-input"
-                value={formData.berthPreference}
-                onChange={handleInputChange}
-                onFocus={() => handleFieldFocus('berthPreference')}
-                onKeyDown={(e) => handleEnhancedTabNavigation(e, 'berthPreference')}
-                disabled={!isEditing}
-                aria-label="Berth Preference"
-              >
-                <option value="">Any</option>
-                <option value="LB">Lower Berth</option>
-                <option value="UB">Upper Berth</option>
-                <option value="MB">Middle Berth</option>
-                <option value="SL">Side Lower</option>
-                <option value="SU">Side Upper</option>
-              </select>
-              <label className="erp-form-label">Quota Type</label>
-              <select
-                ref={quotaTypeRef}
-                name="quotaType"
-                data-field="quotaType"
-                className="erp-input"
-                value={formData.quotaType}
-                onChange={handleInputChange}
-                onFocus={() => handleFieldFocus('quotaType')}
-                onKeyDown={(e) => handleEnhancedTabNavigation(e, 'quotaType')}
-                disabled={!isEditing}
-                aria-label="Quota Type"
-              >
-                <option value="GN">General (GN)</option>
-                <option value="TQ">Tatkal (TQ)</option>
-                <option value="LD">Ladies (LD)</option>
-                <option value="DF">Defence (DF)</option>
-                <option value="FT">Foreign Tourist (FT)</option>
-              </select>
-            </div>
-
-            {/* Passenger Details Section */}
-            <div className="erp-form-row">
-              <label className="erp-form-label" style={{ gridColumn: 'span 4' }}>
-                Passenger Details
-              </label>
-            </div>
-            
-            {/* Total Passengers Field - Moved to Passenger Details Section */}
-            <div className="erp-form-row">
-              <label className="erp-form-label">Total Passengers</label>
-              <input
-                type="text"
-                name="totalPassengers"
-                className="erp-input"
-                value={formData.totalPassengers}
-                readOnly
-                disabled
-                tabIndex={-1}
-              />
-              <div></div> {/* Empty div to maintain grid layout */}
-              <div></div> {/* Empty div to maintain grid layout */}
-            </div>
-            
-            {/* Passenger Entry Fields - SINGLE ROW LAYOUT (MODE-BASED) */}
-            {isPassengerEntryActive && (
-              <div className="passenger-entry-section" style={{ 
-                border: '3px solid #007acc', 
-                padding: '15px', 
-                marginBottom: '15px', 
-                backgroundColor: '#f0f8ff',
-                borderRadius: '5px',
-                boxShadow: '0 2px 5px rgba(0,0,0,0.1)'
-              }}>
-                <div style={{ 
-                  marginBottom: '10px', 
-                  fontSize: '14px', 
-                  fontWeight: 'bold', 
-                  color: '#007acc',
-                  textAlign: 'center',
-                  padding: '5px',
-                  backgroundColor: '#e3f2fd',
-                  borderRadius: '3px'
-                }}>
-                  🎯 PASSENGER ENTRY MODE ACTIVE
-                </div>
-                <div style={{ marginBottom: '8px', fontSize: '12px', color: '#555', textAlign: 'center' }}>
-                  Fill passenger details and press Tab on last field to add passenger, or Escape to exit
-                </div>
-                
-                {/* SINGLE ROW LAYOUT - MANDATORY */}
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 80px 120px 150px', gap: '10px', marginBottom: '2px' }}>
-                  <label className="erp-form-label">Name</label>
-                  <label className="erp-form-label">Age</label>
-                  <label className="erp-form-label">Gender</label>
-                  <label className="erp-form-label">Berth Preference</label>
-                </div>
-                
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 80px 120px 150px', gap: '10px', marginBottom: '5px' }}>
-                  <input
-                    type="text"
-                    name="passenger_name"
-                    data-field="passenger_name"
-                    className="erp-input"
-                    value={currentPassengerDraft.name}
-                    onChange={(e) => updatePassengerDraft('name', e.target.value)}
-                    onFocus={() => {
-                      handleFieldFocus('passenger_name');
-                      enhancedFocusManager.enterPassengerMode();
-                    }}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Escape') {
-                        exitPassengerEntryMode();
-                      } else {
-                        handlePassengerTabNavigation(e, 'passenger_name');
-                      }
-                    }}
-                    disabled={!isEditing}
-                    placeholder="Enter passenger name"
-                    aria-label="Passenger Name"
-                    aria-required="true"
-                  />
-                  <input
-                    type="number"
-                    name="passenger_age"
-                    data-field="passenger_age"
-                    className="erp-input"
-                    value={currentPassengerDraft.age}
-                    onChange={(e) => updatePassengerDraft('age', e.target.value)}
-                    onFocus={() => handleFieldFocus('passenger_age')}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Escape') {
-                        exitPassengerEntryMode();
-                      } else {
-                        handlePassengerTabNavigation(e, 'passenger_age');
-                      }
-                    }}
-                    disabled={!isEditing}
-                    placeholder="Age"
-                    min="1"
-                    max="120"
-                    aria-label="Passenger Age"
-                    aria-required="true"
-                  />
-                  <select
-                    name="passenger_gender"
-                    data-field="passenger_gender"
-                    className="erp-input"
-                    value={currentPassengerDraft.gender}
-                    onChange={(e) => updatePassengerDraft('gender', e.target.value)}
-                    onFocus={() => handleFieldFocus('passenger_gender')}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Escape') {
-                        exitPassengerEntryMode();
-                      } else {
-                        handlePassengerTabNavigation(e, 'passenger_gender');
-                      }
-                    }}
-                    disabled={!isEditing}
-                    aria-label="Passenger Gender"
-                  >
-                    <option value="M">Male</option>
-                    <option value="F">Female</option>
-                    <option value="O">Other</option>
-                  </select>
-                  <select
-                    name="passenger_berth"
-                    data-field="passenger_berth"
-                    className="erp-input"
-                    value={currentPassengerDraft.berth}
-                    onChange={(e) => updatePassengerDraft('berth', e.target.value)}
-                    onFocus={() => handleFieldFocus('passenger_berth')}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Escape') {
-                        exitPassengerEntryMode();
-                      } else {
-                        handlePassengerTabNavigation(e, 'passenger_berth');
-                      }
-                    }}
-                    disabled={!isEditing}
-                    aria-label="Passenger Berth Preference"
-                  >
-                    <option value="">Any</option>
-                    <option value="LB">Lower Berth</option>
-                    <option value="UB">Upper Berth</option>
-                    <option value="MB">Middle Berth</option>
-                  </select>
-                </div>
+              {/* Customer & Phone */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                  <div className="field">
+                      <label className="label">Customer</label>
+                      <input
+                        type="text"
+                        name="customerName"
+                        data-field="customerName"
+                        className="erp-input"
+                        value={formData.customerName}
+                        onChange={handleInputChange}
+                        onFocus={() => handleFieldFocus('customerName')}
+                        onKeyDown={(e) => handleEnhancedTabNavigation(e, 'customerName')}
+                        disabled={!isEditing}
+                        placeholder="Enter name"
+                      />
+                  </div>
+                  <div className="field">
+                      <label className="label">Phone</label>
+                      <input
+                        type="tel"
+                        name="phoneNumber"
+                        data-field="phoneNumber"
+                        className="erp-input"
+                        value={formData.phoneNumber}
+                        onChange={handleInputChange}
+                        onBlur={(e) => handlePhoneBlur(e.target.value)}
+                        onFocus={() => handleFieldFocus('phoneNumber')}
+                        onKeyDown={(e) => handleEnhancedTabNavigation(e, 'phoneNumber')}
+                        disabled={!isEditing}
+                        placeholder="Phone lookup..."
+                      />
+                  </div>
               </div>
-            )}
-            
-            {/* Passenger Grid Display */}
-            <div style={{ border: '1px solid var(--border-gray)', padding: '5px', maxHeight: '150px', overflowY: 'auto', marginBottom: '10px' }}>
-              <table className="grid-table" style={{ width: '100%', fontSize: '11px' }}>
-                <thead>
-                  <tr>
-                    <th style={{ width: '15%' }}>Name</th>
-                    <th style={{ width: '8%' }}>Age</th>
-                    <th style={{ width: '8%' }}>Gender</th>
-                    <th style={{ width: '12%' }}>Berth</th>
-                    <th style={{ width: '15%' }}>ID Type</th>
-                    <th style={{ width: '20%' }}>ID Number</th>
-                    <th style={{ width: '12%' }}>Action</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {passengerList.map((passenger) => (
-                    <tr key={passenger.id}>
-                      <td>
-                        <input 
-                          type="text" 
-                          value={passenger.name} 
-                          onChange={(e) => updatePassenger(passenger.id, 'name', e.target.value)} 
-                          className="erp-input" 
-                          style={{ padding: '2px', fontSize: '11px', width: '100%' }} 
-                          disabled={!isEditing}
-                          tabIndex={-1}
-                        />
-                      </td>
-                      <td>
-                        <input 
-                          type="number" 
-                          value={passenger.age} 
-                          onChange={(e) => updatePassenger(passenger.id, 'age', e.target.value)} 
-                          className="erp-input" 
-                          style={{ padding: '2px', fontSize: '11px', width: '100%' }} 
-                          disabled={!isEditing}
-                          tabIndex={-1}
-                        />
-                      </td>
-                      <td>
-                        <select 
-                          value={passenger.gender} 
-                          onChange={(e) => updatePassenger(passenger.id, 'gender', e.target.value)} 
-                          className="erp-input" 
-                          style={{ padding: '2px', fontSize: '11px', width: '100%' }}
-                          disabled={!isEditing}
-                          tabIndex={-1}
-                        >
-                          <option value="">-</option>
-                          <option value="M">M</option>
-                          <option value="F">F</option>
-                          <option value="O">O</option>
-                        </select>
-                      </td>
-                      <td>
-                        <select 
-                          value={passenger.berthPreference} 
-                          onChange={(e) => updatePassenger(passenger.id, 'berthPreference', e.target.value)} 
-                          className="erp-input" 
-                          style={{ padding: '2px', fontSize: '11px', width: '100%' }}
-                          disabled={!isEditing}
-                          tabIndex={-1}
-                        >
-                          <option value="">-</option>
-                          <option value="LB">LB</option>
-                          <option value="UB">UB</option>
-                          <option value="MB">MB</option>
-                        </select>
-                      </td>
-                      <td>
-                        <select 
-                          value={passenger.idProofType} 
-                          onChange={(e) => updatePassenger(passenger.id, 'idProofType', e.target.value)} 
-                          className="erp-input" 
-                          style={{ padding: '2px', fontSize: '11px', width: '100%' }}
-                          disabled={!isEditing}
-                          tabIndex={-1}
-                        >
-                          <option value="">-</option>
-                          <option value="ADHAAR">ADHAAR</option>
-                          <option value="PAN">PAN</option>
-                          <option value="PASSPORT">PASSPORT</option>
-                        </select>
-                      </td>
-                      <td>
-                        <input 
-                          type="text" 
-                          value={passenger.idProofNumber} 
-                          onChange={(e) => updatePassenger(passenger.id, 'idProofNumber', e.target.value)} 
-                          className="erp-input" 
-                          style={{ padding: '2px', fontSize: '11px', width: '100%' }} 
-                          disabled={!isEditing}
-                          tabIndex={-1}
-                        />
-                      </td>
-                      <td>
-                        <button 
-                          type="button" 
-                          className="erp-button" 
-                          style={{ padding: '2px 6px', fontSize: '11px' }} 
-                          onClick={() => removePassenger(passenger.id)}
-                          disabled={!isEditing}
-                          tabIndex={-1}
-                        >
-                          Del
-                        </button>
-                      </td>
-                    </tr>
+
+              {/* From/To Station */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                  <div className="field">
+                      <label className="label">From</label>
+                      <input
+                        type="text"
+                        name="fromStation"
+                        data-field="fromStation"
+                        className="erp-input"
+                        value={formData.fromStation}
+                        onChange={handleInputChange}
+                        onFocus={() => handleFieldFocus('fromStation')}
+                        onKeyDown={(e) => handleEnhancedTabNavigation(e, 'fromStation')}
+                        disabled={!isEditing}
+                      />
+                  </div>
+                  <div className="field">
+                      <label className="label">To</label>
+                      <input
+                        type="text"
+                        name="toStation"
+                        data-field="toStation"
+                        className="erp-input"
+                        value={formData.toStation}
+                        onChange={handleInputChange}
+                        onFocus={() => handleFieldFocus('toStation')}
+                        onKeyDown={(e) => handleEnhancedTabNavigation(e, 'toStation')}
+                        disabled={!isEditing}
+                      />
+                  </div>
+              </div>
+
+              {/* Travel Date/Class */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                  <div className="field">
+                      <label className="label">Travel Date</label>
+                      <input
+                        type="date"
+                        name="travelDate"
+                        data-field="travelDate"
+                        className="erp-input"
+                        value={formData.travelDate}
+                        onChange={handleInputChange}
+                        onFocus={() => handleFieldFocus('travelDate')}
+                        onKeyDown={(e) => handleEnhancedTabNavigation(e, 'travelDate')}
+                        disabled={!isEditing}
+                      />
+                  </div>
+                  <div className="field">
+                      <label className="label">Class</label>
+                      <select
+                        name="travelClass"
+                        data-field="travelClass"
+                        className="erp-input"
+                        value={formData.travelClass}
+                        onChange={handleInputChange}
+                        onFocus={() => handleFieldFocus('travelClass')}
+                        onKeyDown={(e) => handleEnhancedTabNavigation(e, 'travelClass')}
+                        disabled={!isEditing}
+                      >
+                        <option value="SL">Sleeper (SL)</option>
+                        <option value="3A">3rd AC (3A)</option>
+                        <option value="2A">2nd AC (2A)</option>
+                        <option value="1A">1st AC (1A)</option>
+                        <option value="CC">Chair Car (CC)</option>
+                      </select>
+                  </div>
+              </div>
+
+              {/* Berth/Quota */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                  <div className="field">
+                      <label className="label">Berth Pref</label>
+                      <select
+                        name="berthPreference"
+                        data-field="berthPreference"
+                        className="erp-input"
+                        value={formData.berthPreference}
+                        onChange={handleInputChange}
+                        onFocus={() => handleFieldFocus('berthPreference')}
+                        onKeyDown={(e) => handleEnhancedTabNavigation(e, 'berthPreference')}
+                        disabled={!isEditing}
+                      >
+                        <option value="">Any</option>
+                        <option value="LB">Lower</option>
+                        <option value="UB">Upper</option>
+                        <option value="MB">Middle</option>
+                        <option value="SL">Side Lower</option>
+                        <option value="SU">Side Upper</option>
+                      </select>
+                  </div>
+                  <div className="field">
+                      <label className="label">Quota</label>
+                      <select
+                        ref={quotaTypeRef}
+                        name="quotaType"
+                        data-field="quotaType"
+                        className="erp-input"
+                        value={formData.quotaType}
+                        onChange={handleInputChange}
+                        onFocus={() => handleFieldFocus('quotaType')}
+                        onKeyDown={(e) => handleEnhancedTabNavigation(e, 'quotaType')}
+                        disabled={!isEditing}
+                      >
+                        <option value="GN">General</option>
+                        <option value="TQ">Tatkal</option>
+                        <option value="LD">Ladies</option>
+                      </select>
+                  </div>
+              </div>
+
+              {/* Passenger Section */}
+              <div className="erp-panel-header" style={{ marginTop: '10px' }}>Passenger Details</div>
+              
+              {/* Passenger Entry Row (Grid) */}
+              {isPassengerEntryActive && (
+                  <div className="passenger-entry-section" style={{ padding: '4px', background: '#e0e0e0', marginBottom: '4px', border: '1px solid #999' }}>
+                      <div className="passenger-grid-header" style={{ gridTemplateColumns: '1fr 50px 60px 80px' }}>
+                          <div>Name</div><div>Age</div><div>Gender</div><div>Berth</div>
+                      </div>
+                      <div className="passenger-grid-row" style={{ gridTemplateColumns: '1fr 50px 60px 80px' }}>
+                          <input
+                            type="text"
+                            name="passenger_name"
+                            data-field="passenger_name"
+                            value={currentPassengerDraft.name}
+                            onChange={(e) => updatePassengerDraft('name', e.target.value)}
+                            onFocus={() => {
+                              handleFieldFocus('passenger_name');
+                              enhancedFocusManager.enterPassengerMode();
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Escape') exitPassengerEntryMode();
+                              else handlePassengerTabNavigation(e, 'passenger_name');
+                            }}
+                            disabled={!isEditing}
+                            placeholder="Passenger Name"
+                          />
+                          <input
+                            type="number"
+                            name="passenger_age"
+                            data-field="passenger_age"
+                            value={currentPassengerDraft.age}
+                            onChange={(e) => updatePassengerDraft('age', e.target.value)}
+                            onFocus={() => handleFieldFocus('passenger_age')}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Escape') exitPassengerEntryMode();
+                              else handlePassengerTabNavigation(e, 'passenger_age');
+                            }}
+                            disabled={!isEditing}
+                          />
+                          <select
+                            name="passenger_gender"
+                            data-field="passenger_gender"
+                            value={currentPassengerDraft.gender}
+                            onChange={(e) => updatePassengerDraft('gender', e.target.value)}
+                            onFocus={() => handleFieldFocus('passenger_gender')}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Escape') exitPassengerEntryMode();
+                              else handlePassengerTabNavigation(e, 'passenger_gender');
+                            }}
+                            disabled={!isEditing}
+                            style={{ padding: 0 }}
+                          >
+                            <option value="M">M</option>
+                            <option value="F">F</option>
+                            <option value="O">O</option>
+                          </select>
+                          <select
+                            name="passenger_berth"
+                            data-field="passenger_berth"
+                            value={currentPassengerDraft.berth}
+                            onChange={(e) => updatePassengerDraft('berth', e.target.value)}
+                            onFocus={() => handleFieldFocus('passenger_berth')}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Escape') exitPassengerEntryMode();
+                              else handlePassengerTabNavigation(e, 'passenger_berth');
+                            }}
+                            disabled={!isEditing}
+                            style={{ padding: 0 }}
+                          >
+                            <option value="">Any</option>
+                            <option value="LB">LB</option>
+                            <option value="UB">UB</option>
+                            <option value="MB">MB</option>
+                          </select>
+                      </div>
+                  </div>
+              )}
+
+              {/* Passenger List Grid */}
+              <div className="passenger-grid-container" style={{ flex: 1, minHeight: '100px', overflowY: 'auto', border: '1px solid #999' }}>
+                  <div className="passenger-grid-header" style={{ gridTemplateColumns: '1fr 50px 60px 80px 30px' }}>
+                      <div>Name</div><div>Age</div><div>Sex</div><div>Berth</div><div>X</div>
+                  </div>
+                  {passengerList.map(p => (
+                      <div className="passenger-grid-row" key={p.id} style={{ gridTemplateColumns: '1fr 50px 60px 80px 30px' }}>
+                          <input value={p.name} readOnly />
+                          <input value={p.age} readOnly />
+                          <input value={p.gender} readOnly />
+                          <input value={p.berthPreference} readOnly />
+                          <button onClick={() => removePassenger(p.id)} disabled={!isEditing} style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: 'red' }}>×</button>
+                      </div>
                   ))}
-                </tbody>
-              </table>
-            </div>
+              </div>
 
-            {/* Remarks Row */}
-            <div className="erp-form-row">
-              <label className="erp-form-label">Remarks</label>
-              <textarea
-                name="remarks"
-                data-field="remarks"
-                className="erp-input"
-                value={formData.remarks}
-                onChange={handleInputChange}
-                onFocus={() => handleFieldFocus('remarks')}
-                onKeyDown={(e) => handleEnhancedTabNavigation(e, 'remarks')}
-                rows="2"
-                disabled={!isEditing}
-                style={{ height: '40px' }}
-                aria-label="Remarks"
-              ></textarea>
-            </div>
-
-            {/* Status Row */}
-            <div className="erp-form-row">
-              <label className="erp-form-label">Status</label>
-              <select
-                name="status"
-                data-field="status"
-                className="erp-input"
-                value={formData.status}
-                onChange={handleInputChange}
-                onFocus={() => handleFieldFocus('status')}
-                onKeyDown={(e) => handleEnhancedTabNavigation(e, 'status')}
-                disabled={!isEditing}
-                aria-label="Booking Status"
-              >
-                <option value="Draft">Draft</option>
-                <option value="Confirmed">Confirmed</option>
-                <option value="Waitlisted">Waitlisted</option>
-                <option value="Cancelled">Cancelled</option>
-              </select>
-            </div>
-            
-            {/* Audit Section */}
-            <div className="erp-audit-section">
-              <div className="erp-audit-row">
-                <label className="erp-audit-label">Entered On</label>
-                <input type="text" className="erp-audit-input" value={new Date(formData.createdOn).toLocaleString()} readOnly />
-                <label className="erp-audit-label">Entered By</label>
-                <input type="text" className="erp-audit-input" value={formData.createdBy} readOnly />
-              </div>
-              <div className="erp-audit-row">
-                <label className="erp-audit-label">Modified On</label>
-                <input type="text" className="erp-audit-input" value={formData.modifiedOn ? new Date(formData.modifiedOn).toLocaleString() : '-'} readOnly />
-                <label className="erp-audit-label">Modified By</label>
-                <input type="text" className="erp-audit-input" value={formData.modifiedBy || '-'} readOnly />
-              </div>
-              <div className="erp-audit-row">
-                <label className="erp-audit-label">Closed On</label>
-                <input type="text" className="erp-audit-input" value={formData.closedOn ? new Date(formData.closedOn).toLocaleString() : '-'} readOnly />
-                <label className="erp-audit-label">Closed By</label>
-                <input type="text" className="erp-audit-input" value={formData.closedBy || '-'} readOnly />
-              </div>
+              {/* Remarks & Status */}
+               <div className="field wide-label" style={{ marginTop: '8px' }}>
+                  <label className="label">Remarks</label>
+                  <textarea
+                    name="remarks"
+                    data-field="remarks"
+                    className="erp-input"
+                    value={formData.remarks}
+                    onChange={handleInputChange}
+                    onFocus={() => handleFieldFocus('remarks')}
+                    onKeyDown={(e) => handleEnhancedTabNavigation(e, 'remarks')}
+                    rows="2"
+                    disabled={!isEditing}
+                  />
+               </div>
+               <div className="field">
+                  <label className="label">Status</label>
+                  <select
+                    name="status"
+                    data-field="status"
+                    className="erp-input"
+                    value={formData.status}
+                    onChange={handleInputChange}
+                    onFocus={() => handleFieldFocus('status')}
+                    onKeyDown={(e) => handleEnhancedTabNavigation(e, 'status')}
+                    disabled={!isEditing}
+                  >
+                    <option value="Draft">Draft</option>
+                    <option value="Confirmed">Confirmed</option>
+                    <option value="Waitlisted">Waitlisted</option>
+                    <option value="Cancelled">Cancelled</option>
+                  </select>
+               </div>
             </div>
           </div>
+          </div>
+          
 
-          {/* Data Grid - Scrollable */}
-          <div className="erp-grid-section">
-            <div className="erp-panel-header">Booking Records</div>
-            <div className="grid-toolbar">
-              <input
-                type="text"
-                placeholder="Quick search..."
-                className="filter-input"
-                style={{ width: '200px' }}
-              />
-              <button className="erp-button">Filter</button>
-              <button className="erp-button">Clear</button>
-            </div>
-            {loading ? (
-              <div style={{ padding: '20px', textAlign: 'center' }}>Loading...</div>
-            ) : (
-              <div className="erp-grid-container" style={{ maxHeight: 'calc(100vh - 450px)', overflowY: 'auto' }}>
+
+      {/* 4. Grid Container */}
+      <div className="layout-grid-container">
+
+          <div className="erp-grid-section" style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+            <div className="erp-grid-container" style={{ flex: 1, overflowY: 'auto' }}>
                 <table className="erp-table">
                   <thead>
                     <tr>
                       <th style={{ width: '30px' }}><input type="checkbox" /></th>
-                      <th style={{ width: '100px' }}>Booking ID</th>
-                      <th style={{ width: '150px' }}>Booking Date</th>
-                      <th style={{ width: '200px' }}>Customer Name</th>
-                      <th style={{ width: '150px' }}>Phone Number</th>
-                      <th style={{ width: '120px' }}>Total Passengers</th>
-                      <th style={{ width: '150px' }}>From Station</th>
-                      <th style={{ width: '150px' }}>To Station</th>
-                      <th style={{ width: '150px' }}>Travel Date</th>
-                      <th style={{ width: '100px' }}>Travel Class</th>
-                      <th style={{ width: '100px' }}>Status</th>
-                      <th style={{ width: '150px' }}>Created By</th>
-                    </tr>
-                    {/* Inline Filter Row */}
-                    <tr className="inline-filter-row">
-                      <td></td>
-                      <td>
-                        <input
-                          type="text"
-                          className="inline-filter-input"
-                          value={inlineFilters['bk_bkid'] || ''}
-                          onChange={(e) => handleInlineFilterChange('bk_bkid', e.target.value)}
-                          placeholder="Filter ID..."
-                          style={{ width: '100%', padding: '2px', fontSize: '11px', backgroundColor: '#f0f0f0' }}
-                        />
-                      </td>
-                      <td>
-                        <input
-                          type="date"
-                          className="inline-filter-input"
-                          value={inlineFilters['bk_bookingdt'] || ''}
-                          onChange={(e) => handleInlineFilterChange('bk_bookingdt', e.target.value)}
-                          style={{ width: '100%', padding: '2px', fontSize: '11px', backgroundColor: '#f0f0f0' }}
-                        />
-                      </td>
-                      <td>
-                        <input
-                          type="text"
-                          className="inline-filter-input"
-                          value={inlineFilters['customerName'] || ''}
-                          onChange={(e) => handleInlineFilterChange('customerName', e.target.value)}
-                          placeholder="Filter customer..."
-                          style={{ width: '100%', padding: '2px', fontSize: '11px', backgroundColor: '#f0f0f0' }}
-                        />
-                      </td>
-                      <td>
-                        <input
-                          type="tel"
-                          className="inline-filter-input"
-                          value={inlineFilters['phoneNumber'] || ''}
-                          onChange={(e) => handleInlineFilterChange('phoneNumber', e.target.value)}
-                          placeholder="Filter phone..."
-                          style={{ width: '100%', padding: '2px', fontSize: '11px', backgroundColor: '#f0f0f0' }}
-                        />
-                      </td>
-                      <td>
-                        <input
-                          type="number"
-                          className="inline-filter-input"
-                          value={inlineFilters['totalPassengers'] || ''}
-                          onChange={(e) => handleInlineFilterChange('totalPassengers', e.target.value)}
-                          placeholder="Filter passengers..."
-                          style={{ width: '100%', padding: '2px', fontSize: '11px', backgroundColor: '#f0f0f0' }}
-                        />
-                      </td>
-                      <td>
-                        <input
-                          type="text"
-                          className="inline-filter-input"
-                          value={inlineFilters['fromStation'] || ''}
-                          onChange={(e) => handleInlineFilterChange('fromStation', e.target.value)}
-                          placeholder="Filter from..."
-                          style={{ width: '100%', padding: '2px', fontSize: '11px', backgroundColor: '#f0f0f0' }}
-                        />
-                      </td>
-                      <td>
-                        <input
-                          type="text"
-                          className="inline-filter-input"
-                          value={inlineFilters['toStation'] || ''}
-                          onChange={(e) => handleInlineFilterChange('toStation', e.target.value)}
-                          placeholder="Filter to..."
-                          style={{ width: '100%', padding: '2px', fontSize: '11px', backgroundColor: '#f0f0f0' }}
-                        />
-                      </td>
-                      <td>
-                        <input
-                          type="date"
-                          className="inline-filter-input"
-                          value={inlineFilters['bk_trvldt'] || ''}
-                          onChange={(e) => handleInlineFilterChange('bk_trvldt', e.target.value)}
-                          style={{ width: '100%', padding: '2px', fontSize: '11px', backgroundColor: '#f0f0f0' }}
-                        />
-                      </td>
-                      <td>
-                        <select
-                          className="inline-filter-input"
-                          value={inlineFilters['bk_class'] || ''}
-                          onChange={(e) => handleInlineFilterChange('bk_class', e.target.value)}
-                          style={{ width: '100%', padding: '2px', fontSize: '11px', backgroundColor: '#f0f0f0' }}
-                        >
-                          <option value="">All</option>
-                          <option value="SL">SL</option>
-                          <option value="3A">3A</option>
-                          <option value="2A">2A</option>
-                        </select>
-                      </td>
-                      <td>
-                        <select
-                          className="inline-filter-input"
-                          value={inlineFilters['bk_status'] || ''}
-                          onChange={(e) => handleInlineFilterChange('bk_status', e.target.value)}
-                          style={{ width: '100%', padding: '2px', fontSize: '11px', backgroundColor: '#f0f0f0' }}
-                        >
-                          <option value="">All</option>
-                          <option value="Draft">Draft</option>
-                          <option value="Confirmed">Confirmed</option>
-                          <option value="Cancelled">Cancelled</option>
-                        </select>
-                      </td>
-                      <td>
-                        <input
-                          type="text"
-                          className="inline-filter-input"
-                          value={inlineFilters['createdBy'] || ''}
-                          onChange={(e) => handleInlineFilterChange('createdBy', e.target.value)}
-                          placeholder="Filter user..."
-                          style={{ width: '100%', padding: '2px', fontSize: '11px', backgroundColor: '#f0f0f0' }}
-                        />
-                      </td>
+                      <th style={{ width: '80px' }}>ID</th>
+                      <th style={{ width: '100px' }}>Date</th>
+                      <th style={{ width: '150px' }}>Customer</th>
+                      <th style={{ width: '100px' }}>Phone</th>
+                      <th style={{ width: '50px' }}>Pax</th>
+                      <th style={{ width: '100px' }}>From</th>
+                      <th style={{ width: '100px' }}>To</th>
+                      <th style={{ width: '100px' }}>Travel Dt</th>
+                      <th style={{ width: '50px' }}>Cls</th>
+                      <th style={{ width: '80px' }}>Status</th>
                     </tr>
                   </thead>
                   <tbody>
                     {paginatedData.length === 0 ? (
-                      <tr><td colSpan="12" style={{ textAlign: 'center' }}>No records found</td></tr>
+                      <tr><td colSpan="11" style={{ textAlign: 'center' }}>No records found</td></tr>
                     ) : (
                       paginatedData.map((record, idx) => {
                         const isSelected = selectedBooking && selectedBooking.bk_bkid === record.bk_bkid;
@@ -1914,303 +1511,106 @@ const Bookings = () => {
                             <td>{new Date(record.bk_bookingdt || record.createdOn || new Date()).toLocaleDateString()}</td>
                             <td>{record.customerName || record.bk_customername || 'N/A'}</td>
                             <td>{formatPhoneNumber(record.phoneNumber || record.bk_phonenumber || record.bk_phone || 'N/A')}</td>
-                            <td>
-                              <button 
-                                className="erp-button" 
-                                style={{ padding: '2px 6px', fontSize: '11px', cursor: 'pointer' }} 
-                                onClick={(e) => {
-                                  e.stopPropagation(); // Prevent row selection
-                                  showPassengerDetails(record.bk_bkid);
-                                }}
-                              >
-                                {record.totalPassengers || passengerList.filter(p => p.name.trim() !== '').length || 0}
-                              </button>
-                            </td>
+                            <td>{record.totalPassengers || passengerList.filter(p => p.name.trim() !== '').length || 0}</td>
                             <td>{record.fromStation?.st_stname || record.bk_fromstation || record.bk_fromst || 'N/A'}</td>
                             <td>{record.toStation?.st_stname || record.bk_tostation || record.bk_tost || 'N/A'}</td>
                             <td>{new Date(record.bk_trvldt || record.bk_travelldate || new Date()).toLocaleDateString()}</td>
                             <td>{record.bk_class || record.bk_travelclass || 'N/A'}</td>
                             <td>{record.bk_status || 'Draft'}</td>
-                            <td>{record.createdBy || record.bk_createdby || 'system'}</td>
                           </tr>
                         );
                       })
                     )}
                   </tbody>
                 </table>
-              </div>
-            )}
+            </div>
           </div>
-        </div>
-
-        {/* Right Filter Panel */}
-        <div className="erp-filter-panel">
-          <div className="erp-filter-header">
-            Filter Criteria
-            {(filteredBookings.length !== bookings.length) && (
-              <span className="erp-filter-indicator">{filteredBookings.length}/{bookings.length}</span>
-            )}
-          </div>
-          
-          <div className="erp-form-row">
-            <label className="erp-form-label">Booking ID</label>
-            <input 
-              type="text" 
-              className="erp-input"
-              value={inlineFilters['bk_bkid'] || ''}
-              onChange={(e) => handleInlineFilterChange('bk_bkid', e.target.value)}
-              placeholder="Search ID..."
-            />
-          </div>
-          <div className="erp-form-row">
-            <label className="erp-form-label">Booking Date</label>
-            <input 
-              type="date" 
-              className="erp-input"
-              value={inlineFilters['bk_bookingdt'] || ''}
-              onChange={(e) => handleInlineFilterChange('bk_bookingdt', e.target.value)}
-              placeholder="Search date..."
-            />
-          </div>
-          <div className="erp-form-row">
-            <label className="erp-form-label">Customer Name</label>
-            <input 
-              type="text" 
-              className="erp-input"
-              value={inlineFilters['customerName'] || ''}
-              onChange={(e) => handleInlineFilterChange('customerName', e.target.value)}
-              placeholder="Search customer..."
-            />
-          </div>
-          <div className="erp-form-row">
-            <label className="erp-form-label">Phone Number</label>
-            <input 
-              type="tel" 
-              className="erp-input"
-              value={inlineFilters['phoneNumber'] || ''}
-              onChange={(e) => handleInlineFilterChange('phoneNumber', e.target.value)}
-              placeholder="Search phone..."
-            />
-          </div>
-          <div className="erp-form-row">
-            <label className="erp-form-label">Total Passengers</label>
-            <input 
-              type="number" 
-              className="erp-input"
-              value={inlineFilters['totalPassengers'] || ''}
-              onChange={(e) => handleInlineFilterChange('totalPassengers', e.target.value)}
-              placeholder="Search passengers..."
-            />
-          </div>
-          <div className="erp-form-row">
-            <label className="erp-form-label">From Station</label>
-            <input 
-              type="text" 
-              className="erp-input"
-              value={inlineFilters['fromStation'] || ''}
-              onChange={(e) => handleInlineFilterChange('fromStation', e.target.value)}
-              placeholder="Search from..."
-            />
-          </div>
-          <div className="erp-form-row">
-            <label className="erp-form-label">To Station</label>
-            <input 
-              type="text" 
-              className="erp-input"
-              value={inlineFilters['toStation'] || ''}
-              onChange={(e) => handleInlineFilterChange('toStation', e.target.value)}
-              placeholder="Search to..."
-            />
-          </div>
-          <div className="erp-form-row">
-            <label className="erp-form-label">Travel Date</label>
-            <input 
-              type="date" 
-              className="erp-input"
-              value={inlineFilters['bk_trvldt'] || ''}
-              onChange={(e) => handleInlineFilterChange('bk_trvldt', e.target.value)}
-              placeholder="Search date..."
-            />
-          </div>
-          <div className="erp-form-row">
-            <label className="erp-form-label">Travel Class</label>
-            <select 
-              className="erp-input"
-              value={inlineFilters['bk_class'] || ''}
-              onChange={(e) => handleInlineFilterChange('bk_class', e.target.value)}
-            >
-              <option value="">All Classes</option>
-              <option value="SL">Sleeper (SL)</option>
-              <option value="3A">3rd AC (3A)</option>
-              <option value="2A">2nd AC (2A)</option>
-              <option value="1A">1st AC (1A)</option>
-              <option value="CC">Chair Car (CC)</option>
-            </select>
-          </div>
-          <div className="erp-form-row">
-            <label className="erp-form-label">Status</label>
-            <select 
-              className="erp-input"
-              value={inlineFilters['bk_status'] || ''}
-              onChange={(e) => handleInlineFilterChange('bk_status', e.target.value)}
-            >
-              <option value="">All Statuses</option>
-              <option value="Draft">Draft</option>
-              <option value="Confirmed">Confirmed</option>
-              <option value="Waitlisted">Waitlisted</option>
-              <option value="Cancelled">Cancelled</option>
-            </select>
-          </div>
-          
-          <div style={{ marginTop: '12px', display: 'flex', gap: '4px' }}>
-            <button 
-              className="erp-button" 
-              style={{ flex: 1 }}
-              onClick={() => {
-                setInlineFilters({});
-                fetchBookings();
-              }}
-            >
-              Clear Filters
-            </button>
-          </div>
-        </div>
+      </div>
       </div>
 
-      {/* Passenger Details Modal */}
+      {/* Right Sidebar: Filters */}
+      <div className="layout-right-sidebar">
+         <div className="layout-filters-content">
+             <div className="section-title">FILTERS</div>
+             <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                <div className="field small-label">
+                   <label className="label">ID</label>
+                   <input type="text" className="erp-input" value={inlineFilters['bk_bkid']||''} onChange={(e)=>handleInlineFilterChange('bk_bkid', e.target.value)} />
+                </div>
+                <div className="field small-label">
+                   <label className="label">Date</label>
+                   <input type="date" className="erp-input" value={inlineFilters['bk_bookingdt']||''} onChange={(e)=>handleInlineFilterChange('bk_bookingdt', e.target.value)} />
+                </div>
+                <div className="field small-label">
+                   <label className="label">Cust</label>
+                   <input type="text" className="erp-input" value={inlineFilters['customerName']||''} onChange={(e)=>handleInlineFilterChange('customerName', e.target.value)} />
+                </div>
+                <div className="field small-label">
+                   <label className="label">From</label>
+                   <input type="text" className="erp-input" value={inlineFilters['fromStation']||''} onChange={(e)=>handleInlineFilterChange('fromStation', e.target.value)} />
+                </div>
+                <div className="field small-label">
+                   <label className="label">To</label>
+                   <input type="text" className="erp-input" value={inlineFilters['toStation']||''} onChange={(e)=>handleInlineFilterChange('toStation', e.target.value)} />
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '4px' }}>
+                    <button onClick={() => {setInlineFilters({}); fetchBookings();}} className="erp-button small">Clear</button>
+                </div>
+             </div>
+             <div style={{ flex: 1 }}></div>
+             <div style={{ padding: '4px', borderTop: '1px solid #ccc' }}>
+                <input type="text" placeholder="Quick search..." className="filter-input" style={{ width: '100%' }} />
+             </div>
+         </div>
+      </div>
+      </div>
+
+      {/* Modals */}
       {showPassengerModal && (
         <div className="erp-modal-overlay" onClick={() => setShowPassengerModal(false)}>
           <div className="erp-modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '600px', width: '90%' }}>
             <div className="erp-modal-title">
               <span>Passenger Details</span>
-              <button 
-                className="erp-modal-close" 
-                onClick={() => setShowPassengerModal(false)}
-              >
-                ×
-              </button>
+              <button className="erp-modal-close" onClick={() => setShowPassengerModal(false)}>×</button>
             </div>
             <div className="erp-modal-body">
               {loadingPassengers ? (
-                <div style={{ textAlign: 'center', padding: '20px' }}>Loading passenger details...</div>
-              ) : passengerDetails.length > 0 ? (
-                <table className="erp-table" style={{ width: '100%', fontSize: '12px' }}>
+                <div>Loading...</div>
+              ) : (
+                <table className="erp-table">
                   <thead>
-                    <tr>
-                      <th>Name</th>
-                      <th>Age</th>
-                      <th>Gender</th>
-                      <th>Berth Pref</th>
-                      <th>Berth Alloc</th>
-                      <th>Coach</th>
-                      <th>Seat No</th>
-                      <th>ID Type</th>
-                      <th>ID Number</th>
-                    </tr>
+                    <tr><th>Name</th><th>Age</th><th>Gender</th><th>Berth</th></tr>
                   </thead>
                   <tbody>
-                    {passengerDetails.map((passenger, index) => (
-                      <tr key={index}>
-                        <td>{passenger.firstName} {passenger.lastName || ''}</td>
-                        <td>{passenger.age || ''}</td>
-                        <td>{passenger.gender || ''}</td>
-                        <td>{passenger.berthPreference || ''}</td>
-                        <td>{passenger.berthAllocated || ''}</td>
-                        <td>{passenger.coach || ''}</td>
-                        <td>{passenger.seatNo || ''}</td>
-                        <td>{passenger.idProofType || ''}</td>
-                        <td>{passenger.idProofNumber || ''}</td>
+                    {passengerDetails.map((p, i) => (
+                      <tr key={i}>
+                        <td>{p.firstName}</td><td>{p.age}</td><td>{p.gender}</td><td>{p.berthPreference}</td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
-              ) : (
-                <div style={{ textAlign: 'center', padding: '20px' }}>No passenger details available</div>
               )}
-            </div>
-            <div className="erp-modal-footer">
-              <button 
-                className="erp-button" 
-                onClick={() => setShowPassengerModal(false)}
-              >
-                Close
-              </button>
             </div>
           </div>
         </div>
       )}
+      
+      {showSaveModal && (
+         <SaveConfirmationModal 
+           onConfirm={handleSaveConfirmed}
+           onCancel={handleSaveCancel}
+         />
+      )}
 
-      {/* Status Bar - Static */}
-      <div className="erp-status-bar">
-        <div className="erp-status-item">{isEditing ? 'Editing' : 'Ready'}</div>
-        <div className="erp-status-item">
-          Records: {filteredBookings.length !== bookings.length ? `${filteredBookings.length}/${bookings.length}` : filteredBookings.length}
-        </div>
-        <div className="erp-status-item">
-          Showing: {paginatedData.length > 0 ? `${((currentPage - 1) * recordsPerPage) + 1}-${Math.min(currentPage * recordsPerPage, filteredBookings.length)}` : '0'} of {filteredBookings.length}
-        </div>
-        <div className="erp-status-item" style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '4px' }}>
-          <button 
-            className="erp-icon-button" 
-            onClick={() => setCurrentPage(1)}
-            disabled={currentPage === 1}
-            title="First Page"
-          >
-            |◀
-          </button>
-          <button 
-            className="erp-icon-button" 
-            onClick={() => setCurrentPage(currentPage - 1)}
-            disabled={currentPage === 1}
-            title="Previous Page"
-          >
-            ◀
-          </button>
-          <span style={{ margin: '0 4px', fontSize: '11px' }}>Page {currentPage}/{totalPages || 1}</span>
-          <button 
-            className="erp-icon-button" 
-            onClick={() => setCurrentPage(currentPage + 1)}
-            disabled={currentPage === totalPages || totalPages === 0}
-            title="Next Page"
-          >
-            ▶
-          </button>
-          <button 
-            className="erp-icon-button" 
-            onClick={() => setCurrentPage(totalPages)}
-            disabled={currentPage === totalPages || totalPages === 0}
-            title="Last Page"
-          >
-            ▶|
-          </button>
-        </div>
-      </div>
+      {actionMenuOpen && selectedBooking && (
+        <RecordActionMenu
+          position={actionMenuPosition}
+          actions={getActionMenuItems(selectedBooking)}
+          onSelect={(action) => handleActionSelect(action, selectedBooking)}
+          onClose={closeActionMenu}
+        />
+      )}
 
-      {/* Enhanced Save Confirmation Modal with Enter Key Support */}
-      <SaveConfirmationModal
-        isOpen={showSaveModal}
-        onConfirm={handleSaveConfirmed}
-        onCancel={handleSaveCancel}
-        message="You have reached the end of the form. Save this booking record?"
-      />
-
-      {/* Record Action Menu */}
-      <RecordActionMenu
-        isOpen={actionMenuOpen}
-        onClose={closeActionMenu}
-        position={actionMenuPosition}
-        record={selectedBooking}
-        actions={selectedBooking ? getActionMenuItems(selectedBooking) : []}
-        onActionSelect={handleActionSelect}
-      />
-
-      {/* Keyboard Shortcuts Help */}
-      <div className="keyboard-shortcuts-help">
-        <div style={{ fontWeight: 'bold', marginBottom: '5px' }}>Keyboard Shortcuts:</div>
-        <div>↑↓ Navigate Records | ←→ Navigate Pages</div>
-        <div>Enter: Action Menu | Ctrl+N: New | Ctrl+E: Edit | Ctrl+D: Delete</div>
-        <div>F2: Edit | F4: Delete | F10: Save | Esc: Cancel</div>
-      </div>
     </div>
   );
 };
