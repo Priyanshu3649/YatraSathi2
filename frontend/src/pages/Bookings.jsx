@@ -273,28 +273,32 @@ const Bookings = () => {
         throw new Error('At least one passenger is required');
       }
 
-      // Prepare booking data with all required fields
+      // Prepare booking data with all required fields - MAP TO BACKEND MODEL FIELDS
       const bookingData = {
-        ...formData,
+        // Core booking fields that match the BookingTVL model
+        bk_fromst: formData.fromStation,
+        bk_tost: formData.toStation,
+        bk_trvldt: formData.travelDate,
+        bk_class: formData.travelClass,
+        bk_quota: formData.quotaType || 'GENERAL',
+        bk_berthpref: formData.berthPreference || null,
+        bk_totalpass: activePassengers.length,
+        bk_remarks: formData.remarks || null,
+        bk_status: normalizeStatus(formData.status), // ✓ Normalize status to uppercase
+        bk_pnr: formData.pnrNumber || null,
+        
+        // MANDATORY: Phone-based customer model fields
+        bk_phonenumber: phoneValidation.cleanPhone,
+        bk_customername: formData.customerName.trim(),
+        
+        // Passenger data for backend processing
         passengerList: activePassengers, // Only include valid passengers
-        totalPassengers: activePassengers.length,
-        // MANDATORY: Use phone-based customer model
-        phoneNumber: phoneValidation.cleanPhone,
-        customerName: formData.customerName.trim(),
-        internalCustomerId: formData.internalCustomerId || null,
-        // Map fields to match backend expectations
-        fromStation: formData.fromStation,
-        toStation: formData.toStation,
-        travelDate: formData.travelDate,
-        travelClass: formData.travelClass,
-        quotaType: formData.quotaType,
-        pnrNumber: formData.pnrNumber, // NEW: PNR field
-        remarks: formData.remarks,
-        status: normalizeStatus(formData.status), // ✓ Normalize status to uppercase
-        createdOn: formData.createdOn || new Date().toISOString(),
-        createdBy: formData.createdBy || user?.us_name || 'system',
-        modifiedBy: user?.us_name || 'system',
-        modifiedOn: new Date().toISOString()
+        
+        // Audit fields (match BookingTVL model)
+        mby: user?.us_name || 'system', // Modified by
+        
+        // Include original form data for any additional processing
+        ...formData
       };
       
       console.log('📝 Booking data prepared:', bookingData);
@@ -318,19 +322,21 @@ const Bookings = () => {
       
       // PERFORMANCE OPTIMIZATION: Instead of refetching all bookings, 
       // just update the local state with the new/updated booking
+      // Handle both response structures: { data: booking } or direct booking object
+      const savedBookingData = savedBooking.data || savedBooking;
+      
       if (selectedBooking) {
         // Update existing booking in the list
         setBookings(prev => prev.map(booking => 
-          booking.bk_bkid === savedBooking.data.bk_bkid ? savedBooking.data : booking
+          booking.bk_bkid === savedBookingData.bk_bkid ? savedBookingData : booking
         ));
         setFilteredBookings(prev => prev.map(booking => 
-          booking.bk_bkid === savedBooking.data.bk_bkid ? savedBooking.data : booking
+          booking.bk_bkid === savedBookingData.bk_bkid ? savedBookingData : booking
         ));
       } else {
         // Add new booking to the list
-        const newBooking = savedBooking.data;
-        setBookings(prev => [newBooking, ...prev]);
-        setFilteredBookings(prev => [newBooking, ...prev]);
+        setBookings(prev => [savedBookingData, ...prev]);
+        setFilteredBookings(prev => [savedBookingData, ...prev]);
       }
       
       // Show success message

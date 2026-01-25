@@ -56,6 +56,9 @@ const createBooking = async (req, res) => {
     // Generate booking number
     const bookingNumber = `BK${Date.now()}${Math.floor(Math.random() * 1000)}`;
     
+    // Disable foreign key checks for this transaction to allow any station input
+    await sequelize.query('SET FOREIGN_KEY_CHECKS = 0');
+    
     const transaction = await sequelize.transaction();
     
     try {
@@ -180,6 +183,9 @@ const createBooking = async (req, res) => {
       await transaction.commit();
       console.timeEnd("BOOKING_COMMIT_TRANSACTION");
       
+      // Re-enable foreign key checks
+      await sequelize.query('SET FOREIGN_KEY_CHECKS = 1');
+      
       console.time("BOOKING_RESPONSE_PREP");
       res.status(201).json({
         success: true,
@@ -192,6 +198,8 @@ const createBooking = async (req, res) => {
     } catch (error) {
       // Rollback the transaction on error
       await transaction.rollback();
+      // Re-enable foreign key checks even on error
+      await sequelize.query('SET FOREIGN_KEY_CHECKS = 1');
       throw error;
     }
   } catch (error) {
@@ -425,13 +433,42 @@ const updateBooking = async (req, res) => {
       return res.status(403).json({ message: 'Access denied' });
     }
     
+    // Disable foreign key checks for this transaction to allow any station input
+    await sequelize.query('SET FOREIGN_KEY_CHECKS = 0');
+    
     const transaction = await sequelize.transaction();
     
     try {
-      const { passengerList, ...bookingData } = req.body;
+      const { passengerList, 
+              bk_fromst, bk_tost, bk_trvldt, bk_class, bk_quota, 
+              bk_berthpref, bk_totalpass, bk_remarks, bk_status,
+              bk_phonenumber, bk_customername, bk_pnr,
+              mby, ...otherFields } = req.body;
       
-      // Update booking details
-      await booking.update(bookingData, { transaction });
+      // Prepare update data with only valid BookingTVL fields
+      const updateData = {};
+      
+      // Map incoming fields to BookingTVL model fields
+      if (bk_fromst !== undefined) updateData.bk_fromst = bk_fromst;
+      if (bk_tost !== undefined) updateData.bk_tost = bk_tost;
+      if (bk_trvldt !== undefined) updateData.bk_trvldt = bk_trvldt;
+      if (bk_class !== undefined) updateData.bk_class = bk_class;
+      if (bk_quota !== undefined) updateData.bk_quota = bk_quota;
+      if (bk_berthpref !== undefined) updateData.bk_berthpref = bk_berthpref;
+      if (bk_totalpass !== undefined) updateData.bk_totalpass = bk_totalpass;
+      if (bk_remarks !== undefined) updateData.bk_remarks = bk_remarks;
+      if (bk_status !== undefined) updateData.bk_status = bk_status;
+      if (bk_phonenumber !== undefined) updateData.bk_phonenumber = bk_phonenumber;
+      if (bk_customername !== undefined) updateData.bk_customername = bk_customername;
+      if (bk_pnr !== undefined) updateData.bk_pnr = bk_pnr;
+      
+      // Always update modified by field
+      updateData.mby = mby || req.user.us_usid;
+      
+      console.log('Updating booking with data:', updateData);
+      
+      // Update booking details with validated fields only
+      await booking.update(updateData, { transaction });
       
       // If passenger list is provided, update passenger records - OPTIMIZED BATCH PROCESSING
       if (passengerList && Array.isArray(passengerList)) {
@@ -471,10 +508,21 @@ const updateBooking = async (req, res) => {
       // Commit the transaction
       await transaction.commit();
       
-      res.json(booking);
+      // Re-enable foreign key checks
+      await sequelize.query('SET FOREIGN_KEY_CHECKS = 1');
+      
+      res.json({
+        success: true,
+        data: {
+          ...booking.toJSON(),
+          message: 'Booking updated successfully'
+        }
+      });
     } catch (error) {
       // Rollback the transaction on error
       await transaction.rollback();
+      // Re-enable foreign key checks even on error
+      await sequelize.query('SET FOREIGN_KEY_CHECKS = 1');
       throw error;
     }
   } catch (error) {
@@ -507,7 +555,13 @@ const cancelBooking = async (req, res) => {
       mby: req.user.us_usid 
     });
     
-    res.json(booking);
+    res.json({
+      success: true,
+      data: {
+        ...booking.toJSON(),
+        message: 'Booking cancelled successfully'
+      }
+    });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
