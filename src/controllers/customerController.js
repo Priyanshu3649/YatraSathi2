@@ -191,9 +191,10 @@ const createBooking = async (req, res) => {
         mby: userId
       }, { transaction });
 
-      // Create passenger records in the passenger table
-      for (const passenger of passengers) {
-        await Passenger.create({
+      // Create passenger records in the passenger table - OPTIMIZED BATCH CREATION
+      if (passengers && passengers.length > 0) {
+        // Prepare batch data for all passengers
+        const passengerDataBatch = passengers.map(passenger => ({
           ps_bkid: booking.bk_bkid, // Link to the newly created booking
           ps_fname: passenger.name.split(' ')[0] || '', // First name
           ps_lname: passenger.name.split(' ').slice(1).join(' ') || null, // Last name (if any)
@@ -203,7 +204,10 @@ const createBooking = async (req, res) => {
           ps_active: 1, // Active passenger
           eby: userId,
           mby: userId
-        }, { transaction });
+        }));
+        
+        // Batch insert all passengers at once
+        await Passenger.bulkCreate(passengerDataBatch, { transaction });
       }
       
       // Commit the transaction
@@ -342,7 +346,7 @@ const getBookingDetails = async (req, res) => {
 
     // Import Passenger model to get passenger count
     const models = require('../models');
-    const Passenger = models.Passenger;
+    const Passenger = models.PassengerTVL;
     
     const booking = await Booking.findOne({
       where: { 
@@ -715,7 +719,7 @@ const getBookingPassengers = async (req, res) => {
     }
     
     // Get passenger details for this booking
-    const Passenger = models.Passenger;
+    const Passenger = models.PassengerTVL;
     
     const passengers = await Passenger.findAll({
       where: { 

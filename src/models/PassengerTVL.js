@@ -9,10 +9,10 @@ const PassengerTVL = sequelizeTVL.define('psXpassenger', {
     allowNull: false,
     comment: 'Passenger ID'
   },
-  ps_bkno: {
-    type: DataTypes.STRING(20),
+  ps_bkid: {
+    type: DataTypes.BIGINT,
     allowNull: false,
-    comment: 'Booking Number'
+    comment: 'Booking ID'
   },
   ps_fname: {
     type: DataTypes.STRING(50),

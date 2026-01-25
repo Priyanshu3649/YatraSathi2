@@ -5,6 +5,7 @@ const {
   getAllBookings,
   getBookingById,
   updateBooking,
+  updateBookingStatus, // ✓ Add new import
   cancelBooking,
   deleteBooking,
   assignBooking,
@@ -40,6 +41,7 @@ router.get('/:id/passengers', getBookingPassengers);
 // Parameterized routes last (less specific paths) - with authorization middleware
 router.get('/:id', canViewBooking, getBookingById);
 router.put('/:id', canEditBooking, updateBooking);
+router.put('/:id/status', updateBookingStatus); // ✓ Add status update route
 router.post('/:id/cancel', canCancelBooking, cancelBooking);
 router.delete('/:id', canEditBooking, deleteBooking);
 

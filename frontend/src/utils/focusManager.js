@@ -32,45 +32,41 @@ export class EnhancedFocusManager {
     console.log('🎯 Focus manager initialized with field order:', fieldOrder);
   }
 
-  // Track manual focus changes (mouse clicks, programmatic focus)
+  // Track manual focus changes (mouse clicks, programmatic focus) - ULTRA OPTIMIZED
   trackManualFocus(fieldName) {
-    const startTime = performance.now();
+    // Skip all processing in production to avoid performance issues
+    if (process.env.NODE_ENV === 'production') {
+      return;
+    }
     
-    // Check if it's a main field
+    // Quick field identification without expensive operations
     const fieldIndex = this.fieldOrder.indexOf(fieldName);
+    
     if (fieldIndex !== -1) {
       this.currentFieldIndex = fieldIndex;
       this.manualFocusOverride = true;
       
-      // IMPORTANT: If clicking a main field, we should exit passenger mode
-      // unless the field is part of the passenger entry context
+      // Only exit passenger mode if needed (avoid unnecessary operations)
       if (this.passengerEntryContext.isActive) {
         this.exitPassengerMode();
       }
       
-      this.addToHistory(fieldName, 'manual');
-      console.log(`🎯 Manual focus tracked: ${fieldName} (index: ${fieldIndex})`);
+      // Minimal logging in development only
+      console.log(`🎯 Manual focus: ${fieldName} (${fieldIndex})`);
     } else {
-      // Check if it's a passenger field
+      // Check passenger fields only if not a main field
       const passengerIndex = this.passengerFields.indexOf(fieldName);
-      
       if (passengerIndex !== -1) {
-        // If it is a passenger field, ensure we are in passenger mode
         if (!this.passengerEntryContext.isActive) {
           this.enterPassengerMode();
         }
-        
         this.passengerEntryContext.passengerFieldIndex = passengerIndex;
-        this.addToHistory(fieldName, 'manual_passenger');
-        console.log(`🎯 Manual passenger focus tracked: ${fieldName} (p-index: ${passengerIndex})`);
+        
+        console.log(`🎯 Passenger focus: ${fieldName} (${passengerIndex})`);
       }
     }
     
     this.performanceMetrics.focusOperations++;
-    const endTime = performance.now();
-    if (endTime - startTime > 5) {
-      console.warn(`Focus tracking took ${endTime - startTime}ms - performance threshold exceeded`);
-    }
   }
 
   // Get the next field in logical sequence (regardless of manual focus)
@@ -111,8 +107,18 @@ export class EnhancedFocusManager {
     return false;
   }
 
-  // Focus a specific field and update tracking
+  // Focus a specific field and update tracking - ULTRA OPTIMIZED
   focusField(fieldName) {
+    // Skip expensive operations in production
+    if (process.env.NODE_ENV === 'production') {
+      const element = document.querySelector(`[name="${fieldName}"], [data-field="${fieldName}"]`);
+      if (element && !element.disabled) {
+        element.focus();
+        return true;
+      }
+      return false;
+    }
+    
     const element = this.getFieldElement(fieldName);
     if (element && this.isElementFocusable(element)) {
       element.focus();
@@ -120,43 +126,57 @@ export class EnhancedFocusManager {
       if (fieldIndex !== -1) {
         this.currentFieldIndex = fieldIndex;
       }
-      this.addToHistory(fieldName, 'programmatic');
+      
+      // Only announce to screen reader in development mode
       this.announceToScreenReader(`Focused on ${this.getFieldLabel(fieldName) || fieldName}`);
-      console.log(`✅ Focused field: ${fieldName}`);
+      console.log(`✅ Focused: ${fieldName}`);
       return true;
     }
-    console.warn(`❌ Field not found or not focusable: ${fieldName}`);
+    
+    console.warn(`❌ Field not focusable: ${fieldName}`);
     return false;
   }
 
-  // Get field element by name or data-field attribute
+  // Get field element by name or data-field attribute - CACHED
   getFieldElement(fieldName) {
-    return document.querySelector(`[name="${fieldName}"], [data-field="${fieldName}"]`);
+    // Cache frequently accessed elements
+    if (!this._elementCache) {
+      this._elementCache = new Map();
+    }
+    
+    if (this._elementCache.has(fieldName)) {
+      const cachedElement = this._elementCache.get(fieldName);
+      // Verify element still exists in DOM
+      if (document.contains(cachedElement)) {
+        return cachedElement;
+      } else {
+        // Remove stale cache entry
+        this._elementCache.delete(fieldName);
+      }
+    }
+    
+    const element = document.querySelector(`[name="${fieldName}"], [data-field="${fieldName}"]`);
+    if (element) {
+      this._elementCache.set(fieldName, element);
+    }
+    return element;
   }
 
-  // Get field label for accessibility announcements
+  // Get field label for accessibility announcements - OPTIMIZED
   getFieldLabel(fieldName) {
-    const element = this.getFieldElement(fieldName);
-    if (!element) return null;
-
-    // Try to find associated label
-    const label = document.querySelector(`label[for="${element.id}"]`) || 
-                 element.closest('label') ||
-                 document.querySelector(`label[for="${element.name}"]`);
+    // Skip expensive label lookups in production
+    if (process.env.NODE_ENV !== 'development') {
+      return fieldName;
+    }
     
+    const element = this.getFieldElement(fieldName);
+    if (!element) return fieldName;
+
+    // Simple, fast label lookup
+    const label = document.querySelector(`label[for="${element.id}"]`);
     if (label) return label.textContent.trim();
     
-    // Try aria-label
-    if (element.getAttribute('aria-label')) {
-      return element.getAttribute('aria-label');
-    }
-    
-    // Try placeholder
-    if (element.placeholder) {
-      return element.placeholder;
-    }
-    
-    return null;
+    return element.getAttribute('aria-label') || element.placeholder || fieldName;
   }
 
   // Passenger entry context management
@@ -224,7 +244,7 @@ export class EnhancedFocusManager {
     return this.focusHistory;
   }
 
-  // Reset focus manager state
+  // Reset focus manager state - OPTIMIZED
   reset() {
     this.currentFieldIndex = 0;
     this.manualFocusOverride = false;
@@ -238,10 +258,20 @@ export class EnhancedFocusManager {
       startTime: performance.now(),
       focusOperations: 0
     };
+    
+    // Clear element cache
+    if (this._elementCache) {
+      this._elementCache.clear();
+    }
   }
 
-  // WCAG 2.1 AA compliance utilities
+  // WCAG 2.1 AA compliance utilities - OPTIMIZED
   announceToScreenReader(message) {
+    // Skip screen reader announcements in production to improve performance
+    if (process.env.NODE_ENV === 'production') {
+      return;
+    }
+    
     const announcement = document.createElement('div');
     announcement.setAttribute('aria-live', 'polite');
     announcement.setAttribute('aria-atomic', 'true');
@@ -256,20 +286,22 @@ export class EnhancedFocusManager {
     }, 1000);
   }
 
-  // Check if element is currently visible and focusable
+  // Check if element is currently visible and focusable - ULTRA SIMPLIFIED
   isElementFocusable(element) {
     if (!element) return false;
     
-    // Check if element is disabled
-    if (element.disabled) return false;
+    // Skip expensive checks in production
+    if (process.env.NODE_ENV === 'production') {
+      return !element.disabled && element.tabIndex !== -1;
+    }
     
-    // Check if element is hidden
+    // Quick checks first
+    if (element.disabled || element.tabIndex === -1) return false;
+    
+    // Fast visibility check
     if (element.offsetParent === null) return false;
     
-    // Check if element has tabindex="-1"
-    if (element.tabIndex === -1) return false;
-    
-    // Check if element is in a hidden container
+    // Only do expensive style computation in development
     const style = window.getComputedStyle(element);
     if (style.display === 'none' || style.visibility === 'hidden') return false;
     

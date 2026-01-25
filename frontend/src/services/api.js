@@ -332,19 +332,24 @@ export const dashboardAPI = {
 export const bookingAPI = {
   // Create a new booking
   createBooking: async (bookingData) => {
-    const response = await fetch(`${API_BASE_URL}/bookings`, {
-      method: 'POST',
-      headers: getHeaders(true),
-      body: JSON.stringify(bookingData)
-    });
-    
-    const data = await response.json();
-    
-    if (!response.ok) {
-      throw new Error(data.message || 'Failed to create booking');
+    console.time('API_BOOKING_CREATE');
+    try {
+      const response = await fetch(`${API_BASE_URL}/bookings`, {
+        method: 'POST',
+        headers: getHeaders(true),
+        body: JSON.stringify(bookingData)
+      });
+      
+      const data = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(data.message || 'Failed to create booking');
+      }
+      
+      return data;
+    } finally {
+      console.timeEnd('API_BOOKING_CREATE');
     }
-    
-    return data;
   },
   
   // Get all bookings for current user
@@ -419,16 +424,38 @@ export const bookingAPI = {
   
   // Update booking
   updateBooking: async (id, bookingData) => {
-    const response = await fetch(`${API_BASE_URL}/bookings/${id}`, {
+    console.time('API_BOOKING_UPDATE');
+    try {
+      const response = await fetch(`${API_BASE_URL}/bookings/${id}`, {
+        method: 'PUT',
+        headers: getHeaders(true),
+        body: JSON.stringify(bookingData)
+      });
+      
+      const data = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(data.message || 'Failed to update booking');
+      }
+      
+      return data;
+    } finally {
+      console.timeEnd('API_BOOKING_UPDATE');
+    }
+  },
+  
+  // Update booking status
+  updateBookingStatus: async (id, status) => {
+    const response = await fetch(`${API_BASE_URL}/bookings/${id}/status`, {
       method: 'PUT',
       headers: getHeaders(true),
-      body: JSON.stringify(bookingData)
+      body: JSON.stringify({ status })
     });
     
     const data = await response.json();
     
     if (!response.ok) {
-      throw new Error(data.message || 'Failed to update booking');
+      throw new Error(data.message || 'Failed to update booking status');
     }
     
     return data;
@@ -533,7 +560,7 @@ export const bookingAPI = {
     // Use appropriate endpoint based on user role
     const isEmployee = ['AGT', 'ACC', 'HR', 'CC', 'MKT', 'MGT', 'ADM'].includes(userRole);
     const url = isEmployee 
-      ? `${API_BASE_URL}/bookings/${bookingId}/passengers`  // Employee/Admin route
+      ? `${API_BASE_URL}/employee/bookings/${bookingId}/passengers`  // Employee/Admin route
       : `${API_BASE_URL}/customer/bookings/${bookingId}/passengers`; // Customer route
     
     const response = await fetch(url, {

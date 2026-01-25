@@ -163,51 +163,103 @@ class Passenger {
     }
   }
 
-  // Create multiple passengers
+  // Create multiple passengers (OPTIMIZED BATCH INSERT)
   static async createMultiple(bookingId, passengers, createdBy) {
     if (!passengers || passengers.length === 0) {
       return { success: true, count: 0 };
     }
 
-    // Create passengers one by one to avoid SQL syntax issues
-    let successCount = 0;
-    const errors = [];
+    // Filter valid passengers
+    const validPassengers = passengers.filter(p => p.name && p.name.trim() !== '');
+    if (validPassengers.length === 0) {
+      return { success: true, count: 0 };
+    }
 
-    for (const passenger of passengers) {
-      try {
-        const passengerData = {
-          ps_bkid: bookingId,
-          ps_fname: passenger.name || passenger.firstName || '',
-          ps_lname: null, // We'll store full name in ps_fname for simplicity
-          ps_age: parseInt(passenger.age) || 0,
-          ps_gender: passenger.gender || 'M',
-          ps_berthpref: passenger.berthPreference || passenger.berth || null,
-          ps_berthalloc: null,
-          ps_seatno: null,
-          ps_coach: null,
-          ps_active: 1,
-          eby: createdBy || 'system',
-          mby: createdBy || 'system'
-        };
+    // Prepare batch data
+    const passengerDataBatch = validPassengers.map(passenger => ({
+      ps_bkid: bookingId,
+      ps_fname: passenger.name || passenger.firstName || '',
+      ps_lname: null,
+      ps_age: parseInt(passenger.age) || 0,
+      ps_gender: passenger.gender || 'M',
+      ps_berthpref: passenger.berthPreference || passenger.berth || null,
+      ps_berthalloc: null,
+      ps_seatno: null,
+      ps_coach: null,
+      ps_active: 1,
+      eby: createdBy || 'system',
+      mby: createdBy || 'system'
+    }));
 
-        await this.create(passengerData);
-        successCount++;
-      } catch (error) {
-        console.error(`Error creating passenger ${passenger.name}:`, error);
-        errors.push(`Failed to create passenger ${passenger.name}: ${error.message}`);
+    try {
+      // Build batch insert query
+      const placeholders = passengerDataBatch.map(() => 
+        '(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), ?, NOW(), ?)'
+      ).join(',');
+
+      const query = `
+        INSERT INTO psXpassenger (
+          ps_bkid, ps_fname, ps_lname, ps_age, ps_gender, 
+          ps_berthpref, ps_berthalloc, ps_seatno, ps_coach, 
+          ps_active, edtm, eby, mdtm, mby
+        ) VALUES ${placeholders}
+      `;
+
+      // Flatten values array
+      const values = passengerDataBatch.flatMap(p => [
+        p.ps_bkid, p.ps_fname, p.ps_lname, p.ps_age, p.ps_gender,
+        p.ps_berthpref, p.ps_berthalloc, p.ps_seatno, p.ps_coach,
+        p.ps_active, p.eby, p.mby
+      ]);
+
+      // Execute batch insert
+      const [result] = await db.execute(query, values);
+
+      return {
+        success: true,
+        count: result.affectedRows,
+        message: `${result.affectedRows} passengers created successfully`
+      };
+    } catch (error) {
+      console.error('Error batch creating passengers:', error);
+      
+      // Fallback to individual inserts if batch fails
+      console.log('Falling back to individual passenger creation...');
+      let successCount = 0;
+      const errors = [];
+
+      for (const passenger of validPassengers) {
+        try {
+          const passengerData = {
+            ps_bkid: bookingId,
+            ps_fname: passenger.name || passenger.firstName || '',
+            ps_lname: null,
+            ps_age: parseInt(passenger.age) || 0,
+            ps_gender: passenger.gender || 'M',
+            ps_berthpref: passenger.berthPreference || passenger.berth || null,
+            ps_berthalloc: null,
+            ps_seatno: null,
+            ps_coach: null,
+            ps_active: 1,
+            eby: createdBy || 'system',
+            mby: createdBy || 'system'
+          };
+
+          await this.create(passengerData);
+          successCount++;
+        } catch (individualError) {
+          console.error(`Error creating passenger ${passenger.name}:`, individualError);
+          errors.push(`Failed to create passenger ${passenger.name}: ${individualError.message}`);
+        }
       }
-    }
 
-    if (errors.length > 0) {
-      console.warn('Some passengers failed to create:', errors);
+      return {
+        success: successCount > 0,
+        count: successCount,
+        errors: errors,
+        message: `${successCount} of ${validPassengers.length} passengers created successfully (fallback mode)`
+      };
     }
-
-    return {
-      success: successCount > 0,
-      count: successCount,
-      errors: errors,
-      message: `${successCount} of ${passengers.length} passengers created successfully`
-    };
   }
 
   // Get passenger count for a booking

@@ -41,10 +41,10 @@ const sequelize = new Sequelize(
     dialect: 'mysql',
     logging: false,
     pool: {
-      max: 10,
-      min: 0,
-      acquire: 30000,
-      idle: 10000
+      max: 20, // Increased pool size for better concurrency
+      min: 5,  // Maintain minimum connections
+      acquire: 60000, // Increased timeout
+      idle: 30000    // Longer idle time
     },
     define: {
       timestamps: false,
@@ -63,10 +63,10 @@ const sequelizeTVL = new Sequelize(
     dialect: 'mysql',
     logging: false,
     pool: {
-      max: 5,
-      min: 0,
-      acquire: 30000,
-      idle: 10000
+      max: 15, // Increased pool size for TVL connection
+      min: 3,  // Maintain minimum connections
+      acquire: 60000, // Increased timeout
+      idle: 30000    // Longer idle time
     },
     define: {
       timestamps: false,
@@ -145,8 +145,9 @@ const mysqlPool = mysql.createPool({
   password: process.env.DB_PASSWORD || '',
   database: process.env.DB_NAME_TVL || 'TVL_001',
   waitForConnections: true,
-  connectionLimit: 10,
-  queueLimit: 0
+  connectionLimit: 20,  // Increased for better performance
+  queueLimit: 0,
+  acquireTimeout: 60000  // Connection acquisition timeout in ms
 });
 
 module.exports = { sequelize, sequelizeTVL, connectDB, mysqlPool };

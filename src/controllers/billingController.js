@@ -35,9 +35,9 @@ const createBill = async (req, res) => {
       return res.status(404).json({ message: 'Booking not found.' });
     }
 
-    // Billing is generated only from confirmed Bookings
-    if (!booking.bk_status || booking.bk_status.toUpperCase() !== 'CONFIRMED') {
-      return res.status(400).json({ message: 'Billing can only be generated for confirmed bookings.' });
+    // Billing can be generated for draft bookings only
+    if (!booking.bk_status || booking.bk_status.toUpperCase() !== 'DRAFT') {
+      return res.status(400).json({ message: 'Billing can only be generated for draft bookings.' });
     }
 
     // Check if bill already exists for this booking
@@ -81,31 +81,53 @@ const createBill = async (req, res) => {
     // Ensure total amount is not negative
     totalAmount = Math.max(0, totalAmount);
 
-    // Create new bill
-    const bill = await BillTVL.create({
-      bill_no: billNumber,
-      booking_id: bookingId,
-      customer_id: customerId,
-      customer_name: customerName,
-      train_number: trainNumber,
-      reservation_class: reservationClass,
-      ticket_type: ticketType,
-      pnr_numbers: JSON.stringify(pnrNumbers || []),
-      net_fare: netFare || 0,
-      service_charges: serviceCharges || 0,
-      platform_fees: platformFees || 0,
-      agent_fees: agentFees || 0,
-      extra_charges: JSON.stringify(extraCharges || []),
-      discounts: JSON.stringify(discounts || []),
-      total_amount: totalAmount,
-      bill_date: billDate,
-      status: status || 'DRAFT',
-      remarks: remarks || null,
-      created_by: req.user.us_usid,
-      modified_by: req.user.us_usid
-    });
-
-    res.status(201).json(bill);
+    // Use transaction to ensure atomicity of bill creation and booking status update
+    const transaction = await sequelizeTVL.transaction();
+    
+    try {
+      // Create new bill
+      const bill = await BillTVL.create({
+        bill_no: billNumber,
+        booking_id: bookingId,
+        customer_id: customerId,
+        customer_name: customerName,
+        train_number: trainNumber,
+        reservation_class: reservationClass,
+        ticket_type: ticketType,
+        pnr_numbers: JSON.stringify(pnrNumbers || []),
+        net_fare: netFare || 0,
+        service_charges: serviceCharges || 0,
+        platform_fees: platformFees || 0,
+        agent_fees: agentFees || 0,
+        extra_charges: JSON.stringify(extraCharges || []),
+        discounts: JSON.stringify(discounts || []),
+        total_amount: totalAmount,
+        bill_date: billDate,
+        status: status || 'DRAFT',
+        remarks: remarks || null,
+        created_by: req.user.us_usid,
+        modified_by: req.user.us_usid
+      }, { transaction });
+      
+      // Update booking status from 'DRAFT' to 'CONFIRMED'
+      await BookingTVL.update({
+        bk_status: 'CONFIRMED',
+        mby: req.user.us_usid,
+        mdtm: new Date()
+      }, {
+        where: { bk_bkid: bookingId },
+        transaction
+      });
+      
+      // Commit transaction
+      await transaction.commit();
+      
+      res.status(201).json(bill);
+    } catch (error) {
+      // Rollback transaction on error
+      await transaction.rollback();
+      throw error;
+    }
   } catch (error) {
     console.error('Error creating bill:', error);
     res.status(500).json({ message: error.message });

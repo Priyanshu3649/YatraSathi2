@@ -144,8 +144,7 @@ const Bookings = () => {
     'toStation',
     'travelDate',
     'travelClass',      // Travel Class (same row as travel date)
-    'berthPreference',  // Berth Preference (next row)
-    'quotaType',        // Quota Type (same row as berth preference)
+    'quotaType',        // Quota Type (after travel class)
     // Passenger fields - visible by default
     'passenger_name',
     'passenger_age', 
@@ -155,29 +154,29 @@ const Bookings = () => {
     'status'
   ], []);
 
-  // Initialize enhanced focus manager with performance monitoring
+  // Initialize enhanced focus manager - OPTIMIZED
   useEffect(() => {
-    const startTime = performance.now();
-    
     try {
       enhancedFocusManager.initializeFieldOrder(fieldOrder);
       
-      const initTime = performance.now() - startTime;
-      if (initTime > 10) {
-        console.warn(`Focus manager initialization took ${initTime.toFixed(2)}ms - performance threshold exceeded`);
+      // Only log in development mode
+      if (process.env.NODE_ENV === 'development') {
+        console.log('🎯 Focus manager initialized');
       }
-      
-      console.log(`🎯 Enhanced focus manager initialized in ${initTime.toFixed(2)}ms`);
     } catch (error) {
-      console.error('Focus manager initialization failed:', error);
-      // Graceful degradation - continue without enhanced focus management
+      if (process.env.NODE_ENV === 'development') {
+        console.warn('Focus manager init failed:', error.message);
+      }
     }
     
     return () => {
       try {
         enhancedFocusManager.reset();
       } catch (error) {
-        console.error('Focus manager cleanup failed:', error);
+        // Silent cleanup in production
+        if (process.env.NODE_ENV === 'development') {
+          console.warn('Focus cleanup failed:', error.message);
+        }
       }
     };
   }, [fieldOrder]);
@@ -223,10 +222,35 @@ const Bookings = () => {
     clearLookupCache
   } = usePhoneLookup();
   
+  // Status normalization function
+  const normalizeStatus = useCallback((status) => {
+    const statusMap = {
+      'Draft': 'DRAFT',
+      'Confirmed': 'CONFIRMED',
+      'Waitlisted': 'PENDING',
+      'Cancelled': 'CANCELLED'
+    };
+    return statusMap[status] || 'DRAFT';
+  }, []);
+  
+  // Ref to track if save is in progress
+  const isSavingRef = useRef(false);
+  
   // Define handleSave function with proper error handling and database commit
   const handleSave = useCallback(async () => {
+    // Prevent multiple simultaneous saves
+    if (isSavingRef.current) {
+      console.log('⚠️ Save already in progress, skipping duplicate call');
+      return;
+    }
+    
+    isSavingRef.current = true;
+    
     try {
       console.log('🔄 Starting save operation...');
+      
+      // Show optimistic UI feedback
+      announceToScreenReader('Saving booking...');
       
       // MANDATORY: Validate phone number before saving
       if (!formData.phoneNumber) {
@@ -263,10 +287,10 @@ const Bookings = () => {
         toStation: formData.toStation,
         travelDate: formData.travelDate,
         travelClass: formData.travelClass,
-        berthPreference: formData.berthPreference,
         quotaType: formData.quotaType,
+        pnrNumber: formData.pnrNumber, // NEW: PNR field
         remarks: formData.remarks,
-        status: formData.status,
+        status: normalizeStatus(formData.status), // ✓ Normalize status to uppercase
         createdOn: formData.createdOn || new Date().toISOString(),
         createdBy: formData.createdBy || user?.us_name || 'system',
         modifiedBy: user?.us_name || 'system',
@@ -292,8 +316,22 @@ const Bookings = () => {
       
       console.log('✅ Booking saved successfully:', savedBooking);
       
-      // Refresh the data list to show updated information
-      await fetchBookings();
+      // PERFORMANCE OPTIMIZATION: Instead of refetching all bookings, 
+      // just update the local state with the new/updated booking
+      if (selectedBooking) {
+        // Update existing booking in the list
+        setBookings(prev => prev.map(booking => 
+          booking.bk_bkid === savedBooking.data.bk_bkid ? savedBooking.data : booking
+        ));
+        setFilteredBookings(prev => prev.map(booking => 
+          booking.bk_bkid === savedBooking.data.bk_bkid ? savedBooking.data : booking
+        ));
+      } else {
+        // Add new booking to the list
+        const newBooking = savedBooking.data;
+        setBookings(prev => [newBooking, ...prev]);
+        setFilteredBookings(prev => [newBooking, ...prev]);
+      }
       
       // Show success message
       announceToScreenReader('Booking saved successfully');
@@ -305,7 +343,11 @@ const Bookings = () => {
     } catch (error) {
       console.error('❌ Save failed:', error);
       setError(error.message || 'Failed to save booking');
+      announceToScreenReader(`Save failed: ${error.message || 'Failed to save booking'}`);
       throw error; // Re-throw to be handled by caller
+    } finally {
+      // Reset the saving flag
+      isSavingRef.current = false;
     }
   }, [formData, passengerList, selectedBooking, user?.us_name, fetchBookings, validatePhoneNumber]);
   
@@ -329,10 +371,10 @@ const Bookings = () => {
       toStation: '',
       travelDate: new Date().toISOString().split('T')[0],
       travelClass: '3A',
-      berthPreference: '',
       quotaType: '',
+      pnrNumber: '', // NEW: PNR field
       remarks: '',
-      status: 'Draft',
+      status: 'DRAFT', // ✓ Use uppercase DRAFT as default
       createdBy: user?.us_name || 'system',
       createdOn: new Date().toISOString(),
       modifiedBy: '',
@@ -358,8 +400,19 @@ const Bookings = () => {
     // Focus will be handled automatically by keyboard engine
   }, [user?.us_name, clearLookupCache]);
 
+  // Ref to track if save confirmation is in progress
+  const isSaveConfirmingRef = useRef(false);
+  
   // Enhanced save confirmation handler - commits to database before form reset (MOVED AFTER handleNew)
   const handleSaveConfirmed = useCallback(async () => {
+    // Prevent multiple simultaneous save confirmations
+    if (isSaveConfirmingRef.current) {
+      console.log('⚠️ Save confirmation already in progress, skipping duplicate call');
+      return;
+    }
+    
+    isSaveConfirmingRef.current = true;
+    
     try {
       console.log('🔄 Save confirmed - committing to database...');
       
@@ -388,6 +441,9 @@ const Bookings = () => {
       setError(error.message || 'Failed to save booking');
       setShowSaveModal(false);
       // Don't reset form on error - keep user data
+    } finally {
+      // Reset the save confirming flag
+      isSaveConfirmingRef.current = false;
     }
   }, [handleNew]);
 
@@ -437,6 +493,7 @@ const Bookings = () => {
   const [showPassengerModal, setShowPassengerModal] = useState(false);
   const [passengerDetails, setPassengerDetails] = useState([]);
   const [loadingPassengers, setLoadingPassengers] = useState(false);
+  const [loadingPassengerDetails, setLoadingPassengerDetails] = useState(false);
   
   // Record navigation and action menu state
   const [selectedRecordIndex, setSelectedRecordIndex] = useState(-1);
@@ -457,12 +514,12 @@ const Bookings = () => {
     const options = [];
     const status = record.bk_status?.toUpperCase() || 'DRAFT';
     
-    // Generate Bill - Only for CONFIRMED bookings without existing billing
+    // Generate Bill - Available for Draft/Pending/Cancelled bookings without existing billing
     options.push({
       id: 'generate_bill',
       label: 'Generate Bill',
-      enabled: status === 'CONFIRMED' && !record.hasBilling,
-      reason: status !== 'CONFIRMED' ? 'Only confirmed bookings can be billed' : 
+      enabled: (status === 'DRAFT' || status === 'PENDING' || status === 'CANCELLED') && !record.hasBilling,
+      reason: (status !== 'DRAFT' && status !== 'PENDING' && status !== 'CANCELLED') ? 'Can only bill Draft/Pending/Cancelled bookings' : 
               record.hasBilling ? 'Billing already exists' : null
     });
     
@@ -474,7 +531,7 @@ const Bookings = () => {
       reason: !record.hasBilling ? 'No billing record exists' : null
     });
     
-    // Edit Booking - Available unless cancelled or completed
+    // Edit Booking - Available unless booking is CANCELLED or COMPLETED
     options.push({
       id: 'edit_booking',
       label: 'Edit Booking',
@@ -482,7 +539,7 @@ const Bookings = () => {
       reason: (status === 'CANCELLED' || status === 'COMPLETED') ? 'Cannot edit cancelled or completed bookings' : null
     });
     
-    // Cancel Booking - Available unless already cancelled or completed
+    // Cancel Booking - Available unless booking is already CANCELLED or COMPLETED
     options.push({
       id: 'cancel_booking',
       label: 'Cancel Booking',
@@ -508,10 +565,10 @@ const Bookings = () => {
       toStation: record.toStation?.st_stname || record.bk_tostation || record.bk_tost || '',
       travelDate: record.bk_trvldt ? new Date(record.bk_trvldt).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
       travelClass: record.bk_class || record.bk_travelclass || '3A',
-      berthPreference: record.bk_birthpreference || record.bk_berthpreference || '',
       quotaType: record.quotaType || record.bk_quotatype || '',
+      pnrNumber: record.pnrNumber || record.bk_pnr || '', // NEW: PNR field
       remarks: record.bk_remarks || '',
-      status: record.bk_status || 'Draft',
+      status: record.bk_status || 'DRAFT',
       createdBy: record.createdBy || record.bk_createdby || 'system',
       createdOn: record.createdOn || record.bk_createdon || new Date().toISOString(),
       modifiedBy: record.modifiedBy || record.bk_modifiedby || '',
@@ -522,25 +579,29 @@ const Bookings = () => {
     
     // Initialize with empty list first
     setPassengerList([]);
+    setLoadingPassengers(true);
     setIsEditing(false);
 
-    // Fetch passengers for the selected booking
-    try {
-      const response = await bookingAPI.getBookingPassengers(record.bk_bkid || record.id);
-      if (response.success && response.passengers) {
-        const mappedPassengers = response.passengers.map(p => ({
-          id: p.ps_psid,
-          name: (p.ps_fname + ' ' + (p.ps_lname || '')).trim(),
-          age: p.ps_age,
-          gender: p.ps_gender,
-          berthPreference: p.ps_berthpref
-        }));
-        setPassengerList(mappedPassengers);
-      }
-    } catch (error) {
-      console.warn('Failed to fetch passengers for selected record:', error);
-      // Keep empty list if fetch fails
-    }
+    // Fetch passengers asynchronously without blocking UI
+    bookingAPI.getBookingPassengers(record.bk_bkid || record.id)
+      .then(response => {
+        if (response.success && response.passengers) {
+          const mappedPassengers = response.passengers.map(p => ({
+            id: p.ps_psid || `api_passenger_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+            name: (p.ps_fname + ' ' + (p.ps_lname || '')).trim(),
+            age: p.ps_age,
+            gender: p.ps_gender,
+            berthPreference: p.ps_berthpref
+          }));
+          setPassengerList(mappedPassengers);
+        }
+      })
+      .catch(error => {
+        console.warn('Failed to fetch passengers for selected record:', error);
+      })
+      .finally(() => {
+        setLoadingPassengers(false);
+      });
   }, []);
 
   // Handle Enter key dropdown menu actions
@@ -552,6 +613,7 @@ const Bookings = () => {
       switch (actionId) {
         case 'generate_bill':
           console.log('🔄 Generating bill for booking:', record.bk_bkid);
+          // Navigate to billing page to generate bill
           navigate('/billing', { 
             state: { 
               bookingId: record.bk_bkid,
@@ -581,7 +643,17 @@ const Bookings = () => {
           console.log('🔄 Cancelling booking:', record.bk_bkid);
           if (window.confirm('Are you sure you want to cancel this booking?')) {
             await bookingAPI.cancelBooking(record.bk_bkid);
-            await fetchBookings(); // Refresh data
+            // PERFORMANCE OPTIMIZATION: Update local state instead of refetching all bookings
+            setBookings(prev => prev.map(booking => 
+              booking.bk_bkid === record.bk_bkid 
+                ? { ...booking, bk_status: 'CANCELLED' }
+                : booking
+            ));
+            setFilteredBookings(prev => prev.map(booking => 
+              booking.bk_bkid === record.bk_bkid 
+                ? { ...booking, bk_status: 'CANCELLED' }
+                : booking
+            ));
             announceToScreenReader('Booking cancelled successfully');
           }
           break;
@@ -620,93 +692,112 @@ const Bookings = () => {
   // Filter state for inline grid filtering
   const [inlineFilters, setInlineFilters] = useState({});
   
-  // Enhanced field focus handler with error handling
+  // Enhanced field focus handler - ULTRA OPTIMIZED
   const handleFieldFocus = useCallback((fieldName) => {
+    // Skip all focus tracking in production to avoid performance issues
+    if (process.env.NODE_ENV === 'production') {
+      return;
+    }
+      
     try {
       enhancedFocusManager.trackManualFocus(fieldName);
       // Also update context state for global tracking
       if (handleManualFocus) {
         handleManualFocus(fieldName);
       }
-      
-      // Performance monitoring
-      const metrics = enhancedFocusManager.getPerformanceMetrics();
-      if (metrics.averageOperationTime > 5) {
-        console.warn(`Focus operations averaging ${metrics.averageOperationTime.toFixed(2)}ms - consider optimization`);
+        
+      // Only monitor performance in development mode
+      const metrics = enhancedFocusManager.getPerformanceMetrics(); 
+      if (metrics.averageOperationTime > 10) {
+        console.warn(`Focus ops avg ${metrics.averageOperationTime.toFixed(2)}ms - threshold exceeded`);
       }
     } catch (error) {
-      console.error('Manual focus tracking failed:', error);
-      console.warn('Field not found or not accessible - using graceful degradation');
-      // Graceful degradation - continue without tracking
+      // Silent fail in production, verbose in development
+      console.warn('Focus tracking degraded:', error.message);
     }
   }, [handleManualFocus]);
 
-  // Effect to track focus changes and update keyboard navigation state
+  // Effect to track focus changes - ULTRA OPTIMIZED
   useEffect(() => {
+    // Skip focus tracking in production to avoid performance issues
+    if (process.env.NODE_ENV === 'production') {
+      return;
+    }
+    
     const handleFocusChange = (event) => {
-      // This helps the keyboard navigation system track actual focus position
-      // when focus is changed manually (via mouse or programmatically)
       const activeElement = document.activeElement;
-      if (activeElement && activeElement.dataset && activeElement.dataset.field) {
+      if (activeElement?.dataset?.field) {
         const fieldName = activeElement.dataset.field;
         try {
           enhancedFocusManager.trackManualFocus(fieldName);
-          if (handleManualFocus) {
-            handleManualFocus(fieldName);
-          }
+          handleManualFocus?.(fieldName);
         } catch (error) {
-          console.warn(`Could not track manual focus change to field: ${fieldName}`, error);
+          // Silent fail in production
+          console.warn(`Focus tracking failed for: ${fieldName}`, error.message);
         }
       }
     };
     
     document.addEventListener('focusin', handleFocusChange);
-    
-    return () => {
-      document.removeEventListener('focusin', handleFocusChange);
-    };
+    return () => document.removeEventListener('focusin', handleFocusChange);
   }, [handleManualFocus]);
 
-  // Enhanced Tab navigation handler with graceful degradation
+  // Enhanced Tab navigation handler - ULTRA OPTIMIZED
   const handleEnhancedTabNavigation = useCallback((event, currentFieldName) => {
-    if (event.key === 'Tab') {
-      event.preventDefault();
-      event.stopPropagation(); // Ensure no other handlers interfere
-      
-      try {
-        // Update current field in focus manager
-        enhancedFocusManager.trackManualFocus(currentFieldName);
-        
-        // Handle Tab navigation based on direction
-        const direction = event.shiftKey ? 'backward' : 'forward';
-        const success = enhancedFocusManager.handleTabNavigation(direction);
-        
-        if (!success) {
-          // End of form - trigger save modal for forward navigation
-          if (direction === 'forward' && isEditing) {
-            setShowSaveModal(true);
-          } else {
-            // Graceful degradation - use browser default Tab behavior
-            console.warn('Enhanced focus manager failed, falling back to default Tab behavior');
-            event.target.blur();
-            const nextElement = direction === 'forward' 
-              ? event.target.nextElementSibling 
-              : event.target.previousElementSibling;
-            if (nextElement && nextElement.focus) {
-              nextElement.focus();
-            }
-          }
+    if (event.key !== 'Tab') return false;
+    
+    // Skip expensive focus management in production
+    if (process.env.NODE_ENV === 'production') {
+      // Simple tab handling without focus manager
+      if (event.shiftKey) {
+        // Shift+Tab - go to previous field
+        const currentElement = event.target;
+        const form = currentElement.closest('form') || document;
+        const focusableElements = form.querySelectorAll('input:not([disabled]), select:not([disabled]), textarea:not([disabled]), button:not([disabled])');
+        const currentIndex = Array.from(focusableElements).indexOf(currentElement);
+        if (currentIndex > 0) {
+          event.preventDefault();
+          focusableElements[currentIndex - 1].focus();
+          return true;
         }
-        
-        return success;
-      } catch (error) {
-        console.error('Tab navigation error:', error);
-        // Graceful degradation - allow default browser behavior
-        event.preventDefault = () => {}; // Disable preventDefault
-        return false;
+      } else {
+        // Tab - go to next field or show save modal at end
+        const currentElement = event.target;
+        const form = currentElement.closest('form') || document;
+        const focusableElements = form.querySelectorAll('input:not([disabled]), select:not([disabled]), textarea:not([disabled]), button:not([disabled])');
+        const currentIndex = Array.from(focusableElements).indexOf(currentElement);
+        if (currentIndex < focusableElements.length - 1) {
+          event.preventDefault();
+          focusableElements[currentIndex + 1].focus();
+          return true;
+        } else if (isEditing) {
+          event.preventDefault();
+          setShowSaveModal(true);
+          return true;
+        }
       }
+      return false;
     }
-    return false;
+    
+    event.preventDefault();
+    event.stopPropagation();
+    
+    try {
+      enhancedFocusManager.trackManualFocus(currentFieldName);
+      
+      const direction = event.shiftKey ? 'backward' : 'forward';
+      const success = enhancedFocusManager.handleTabNavigation(direction);
+      
+      if (!success && direction === 'forward' && isEditing) {
+        setShowSaveModal(true);
+      }
+      
+      return success;
+    } catch (error) {
+      // Minimal error handling in production
+      console.warn('Tab nav failed:', error.message);
+      return false;
+    }
   }, [isEditing]);
 
   // VALIDATE AND ADD PASSENGER with enhanced error handling (DEFINE BEFORE USE)
@@ -727,7 +818,7 @@ const Bookings = () => {
       
       // Add passenger to list
       const newPassenger = {
-        id: Date.now(),
+        id: `passenger_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
         name: currentPassengerDraft.name.trim(),
         age: parseInt(currentPassengerDraft.age),
         gender: currentPassengerDraft.gender,
@@ -867,7 +958,7 @@ const Bookings = () => {
       const result = await lookupCustomerByPhone(phoneNumber);
       
       if (result.found && result.customer) {
-        // Customer found - auto-populate name (silent background fetch)
+        // Customer found - auto-populate name and other details
         setFormData(prev => ({
           ...prev,
           customerName: result.customer.customerName,
@@ -876,12 +967,12 @@ const Bookings = () => {
         }));
         setError(''); // Clear any previous errors
       } else {
-        // Customer not found - clear name field for manual entry
+        // Customer not found - preserve existing customer name if user has entered one
+        // Only update the phone number to cleaned version
         setFormData(prev => ({
           ...prev,
-          customerName: '',
-          phoneNumber: validation.cleanPhone,
-          internalCustomerId: ''
+          phoneNumber: validation.cleanPhone
+          // Don't clear customerName if user has manually entered one
         }));
         setError(''); // Clear any previous errors (not an error condition)
       }
@@ -890,8 +981,7 @@ const Bookings = () => {
       // Don't show error to user - fail gracefully
       setFormData(prev => ({
         ...prev,
-        phoneNumber: validation.cleanPhone,
-        internalCustomerId: ''
+        phoneNumber: validation.cleanPhone
       }));
     }
   }, [validatePhoneNumber, lookupCustomerByPhone, isEditing]);
@@ -961,16 +1051,52 @@ const Bookings = () => {
     handleNew();
   }, [handleNew]);
       
-  // Apply filters
+  // Apply filters with proper field mapping
   useEffect(() => {
     let filtered = [...bookings];
         
-    // Apply inline filters
+    // Apply inline filters with proper field mapping
     Object.entries(inlineFilters).forEach(([column, value]) => {
       if (value !== undefined && value !== '') {
-        filtered = filtered.filter(record => 
-          record[column]?.toString().toLowerCase().includes(value.toLowerCase())
-        );
+        const searchValue = value.toLowerCase();
+        filtered = filtered.filter(record => {
+          switch (column) {
+            case 'id':
+              return record.bk_bkid?.toString().toLowerCase().includes(searchValue);
+            case 'date':
+              const bookingDate = new Date(record.bk_bookingdt || record.createdOn || new Date()).toLocaleDateString();
+              return bookingDate.toLowerCase().includes(searchValue);
+            case 'customer':
+              const customerName = record.customerName || record.bk_customername || '';
+              return customerName.toLowerCase().includes(searchValue);
+            case 'phone':
+              const phone = record.phoneNumber || record.bk_phonenumber || record.bk_phone || '';
+              return phone.toLowerCase().includes(searchValue);
+            case 'pax':
+              const pax = record.totalPassengers || record.bk_totalpass || 0;
+              return pax.toString().includes(searchValue);
+            case 'from':
+              const fromStation = record.fromStation?.st_stname || record.bk_fromstation || record.bk_fromst || '';
+              return fromStation.toLowerCase().includes(searchValue);
+            case 'to':
+              const toStation = record.toStation?.st_stname || record.bk_tostation || record.bk_tost || '';
+              return toStation.toLowerCase().includes(searchValue);
+            case 'travelDate':
+              const travelDate = new Date(record.bk_trvldt || record.bk_travelldate || new Date()).toLocaleDateString();
+              return travelDate.toLowerCase().includes(searchValue);
+            case 'class':
+              const travelClass = record.bk_class || record.bk_travelclass || '';
+              return travelClass.toLowerCase().includes(searchValue);
+            case 'status':
+              const status = record.bk_status || 'Draft';
+              return status.toLowerCase().includes(searchValue);
+            case 'remarks':
+              const remarks = record.bk_remarks || record.remarks || '';
+              return remarks.toLowerCase().includes(searchValue);
+            default:
+              return record[column]?.toString().toLowerCase().includes(searchValue);
+          }
+        });
       }
     });
         
@@ -1048,7 +1174,7 @@ const Bookings = () => {
   const showPassengerDetails = useCallback(async (bookingId) => {
     try {
       console.log('🔄 Fetching passenger details for booking:', bookingId);
-      setLoadingPassengers(true);
+      setLoadingPassengerDetails(true);
       
       // Try to get passenger details from API
       let passengers = [];
@@ -1059,13 +1185,17 @@ const Bookings = () => {
         console.warn('API passenger fetch failed, using form data:', apiError);
         // Fallback to current passenger list if selected booking matches
         if (selectedBooking && (selectedBooking.bk_bkid === bookingId || selectedBooking.id === bookingId)) {
-          passengers = passengerList.filter(p => p.name && p.name.trim() !== '');
+          passengers = passengerList.filter(p => p.name && p.name.trim() !== '').map((p, index) => ({
+            ...p,
+            id: p.id || `modal_passenger_${index}_${Date.now()}`
+          }));
         }
       }
       
       // If no passengers found, create a placeholder
       if (passengers.length === 0) {
         passengers = [{
+          id: 'placeholder-passenger',
           name: 'No passenger details available',
           age: '-',
           gender: '-',
@@ -1082,7 +1212,7 @@ const Bookings = () => {
       console.error('❌ Error fetching passenger details:', error);
       setError(`Error fetching passenger details: ${error.message}`);
     } finally {
-      setLoadingPassengers(false);
+      setLoadingPassengerDetails(false);
     }
   }, [selectedBooking, passengerList]);
   
@@ -1095,7 +1225,10 @@ const Bookings = () => {
     if (window.confirm('Are you sure you want to delete this record?')) {
       try {
         await bookingAPI.deleteBooking(selectedBooking.bk_bkid);
-        fetchBookings();
+        // PERFORMANCE OPTIMIZATION: Update local state instead of refetching all bookings
+        setBookings(prev => prev.filter(booking => booking.bk_bkid !== selectedBooking.bk_bkid));
+        setFilteredBookings(prev => prev.filter(booking => booking.bk_bkid !== selectedBooking.bk_bkid));
+        setSelectedBooking(null); // Clear selection after deletion
       } catch (error) {
         setError(error.message || 'Failed to delete booking');
       }
@@ -1169,7 +1302,17 @@ const Bookings = () => {
         if (window.confirm('Are you sure you want to cancel this booking?')) {
           try {
             await bookingAPI.cancelBooking(record.bk_bkid);
-            fetchBookings(); // Refresh data
+            // PERFORMANCE OPTIMIZATION: Update local state instead of refetching all bookings
+            setBookings(prev => prev.map(booking => 
+              booking.bk_bkid === record.bk_bkid 
+                ? { ...booking, bk_status: 'CANCELLED' }
+                : booking
+            ));
+            setFilteredBookings(prev => prev.map(booking => 
+              booking.bk_bkid === record.bk_bkid 
+                ? { ...booking, bk_status: 'CANCELLED' }
+                : booking
+            ));
           } catch (error) {
             setError(error.message || 'Failed to cancel booking');
           }
@@ -1184,13 +1327,13 @@ const Bookings = () => {
   const getActionMenuItems = useCallback((record) => {
     const items = [];
     
-    // Generate Bill
-    const canGenerateBill = record.bk_status === 'CONFIRMED' && !record.hasBilling;
+    // Generate Bill - Available for Draft/Pending/Cancelled bookings without existing billing
+    const canGenerateBill = (record.bk_status === 'DRAFT' || record.bk_status === 'PENDING' || record.bk_status === 'CANCELLED') && !record.hasBilling;
     items.push({
       action: 'generate_bill',
       label: 'Generate Bill',
       disabled: !canGenerateBill,
-      reason: !canGenerateBill ? 'Billing can only be generated for confirmed bookings' : null
+      reason: !canGenerateBill ? (record.hasBilling ? 'Billing already exists' : 'Can only bill Draft/Pending/Cancelled bookings') : null
     });
     
     // View Bill
@@ -1538,28 +1681,8 @@ const Bookings = () => {
                   </div>
               </div>
 
-              {/* Berth/Quota */}
+              {/* Quota/PNR */}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-                  <div className="field">
-                      <label className="label">Berth Pref</label>
-                      <select
-                        name="berthPreference"
-                        data-field="berthPreference"
-                        className="erp-input"
-                        value={formData.berthPreference}
-                        onChange={handleInputChange}
-                        onFocus={() => handleFieldFocus('berthPreference')}
-                        onKeyDown={(e) => handleEnhancedTabNavigation(e, 'berthPreference')}
-                        disabled={!isEditing}
-                      >
-                        <option value="">Any</option>
-                        <option value="LB">Lower</option>
-                        <option value="UB">Upper</option>
-                        <option value="MB">Middle</option>
-                        <option value="SL">Side Lower</option>
-                        <option value="SU">Side Upper</option>
-                      </select>
-                  </div>
                   <div className="field">
                       <label className="label">Quota</label>
                       <select
@@ -1577,6 +1700,18 @@ const Bookings = () => {
                         <option value="TQ">Tatkal</option>
                         <option value="LD">Ladies</option>
                       </select>
+                  </div>
+                  <div className="field">
+                      <label className="label">PNR</label>
+                      <input
+                        type="text"
+                        name="pnrNumber"
+                        className="erp-input"
+                        value={formData.pnrNumber || ''}
+                        onChange={handleInputChange}
+                        disabled={!isEditing} // Read-only when viewing existing bookings
+                        placeholder="PNR will be populated after billing"
+                      />
                   </div>
               </div>
 
@@ -1678,7 +1813,20 @@ const Bookings = () => {
                       <div>ID Type</div>
                       <div>Del</div>
                   </div>
-                  {passengerList.length === 0 ? (
+                  {loadingPassengers ? (
+                    <div style={{ 
+                      padding: '20px', 
+                      textAlign: 'center', 
+                      color: '#666',
+                      backgroundColor: '#f9f9f9',
+                      border: '1px solid #ddd',
+                      borderRadius: '4px',
+                      fontSize: '12px'
+                    }}>
+                      <div style={{ marginBottom: '10px' }}>Loading passenger details...</div>
+                      <div style={{ fontSize: '10px', color: '#999' }}>Please wait...</div>
+                    </div>
+                  ) : passengerList.length === 0 ? (
                     <div style={{ 
                       padding: '20px', 
                       textAlign: 'center', 
@@ -1689,8 +1837,8 @@ const Bookings = () => {
                       {selectedBooking ? 'No passenger details available for this booking' : 'No passengers added yet'}
                     </div>
                   ) : (
-                    passengerList.map(p => (
-                        <div className="passenger-grid-row" key={p.id} style={{ 
+                    passengerList.map((p, index) => (
+                        <div className="passenger-grid-row" key={p.id || `passenger-${index}`} style={{ 
                           display: 'grid', 
                           gridTemplateColumns: '1fr 50px 60px 80px 100px 30px', 
                           gap: '2px', 
@@ -1700,7 +1848,7 @@ const Bookings = () => {
                           alignItems: 'center'
                         }}>
                             <input 
-                              value={p.name || p.firstName || ''} 
+                              value={p?.name || p?.firstName || (p?.ps_fname ? (p.ps_fname + ' ' + (p.ps_lname || '')).trim() : 'N/A')} 
                               readOnly 
                               style={{ 
                                 border: 'none', 
@@ -1710,7 +1858,7 @@ const Bookings = () => {
                               }} 
                             />
                             <input 
-                              value={p.age || ''} 
+                              value={p?.age || p?.ps_age || 'N/A'} 
                               readOnly 
                               style={{ 
                                 border: 'none', 
@@ -1720,7 +1868,7 @@ const Bookings = () => {
                               }} 
                             />
                             <input 
-                              value={p.gender || ''} 
+                              value={p?.gender || p?.ps_gender || 'N/A'} 
                               readOnly 
                               style={{ 
                                 border: 'none', 
@@ -1730,7 +1878,7 @@ const Bookings = () => {
                               }} 
                             />
                             <input 
-                              value={p.berthPreference || p.berth || ''} 
+                              value={p?.berthPreference || p?.berth || p?.ps_berthpref || 'N/A'} 
                               readOnly 
                               style={{ 
                                 border: 'none', 
@@ -1740,7 +1888,7 @@ const Bookings = () => {
                               }} 
                             />
                             <input 
-                              value={p.idProofType || ''} 
+                              value={p?.idProofType || p?.ps_idtype || 'N/A'} 
                               readOnly 
                               style={{ 
                                 border: 'none', 
@@ -1796,10 +1944,10 @@ const Bookings = () => {
                     onKeyDown={(e) => handleEnhancedTabNavigation(e, 'status')}
                     disabled={!isEditing}
                   >
-                    <option value="Draft">Draft</option>
-                    <option value="Confirmed">Confirmed</option>
-                    <option value="Waitlisted">Waitlisted</option>
-                    <option value="Cancelled">Cancelled</option>
+                    <option value="DRAFT">Draft</option>
+                    <option value="CONFIRMED">Confirmed</option>
+                    <option value="PENDING">Pending</option>
+                    <option value="CANCELLED">Cancelled</option>
                   </select>
                </div>
             </div>
@@ -1826,8 +1974,121 @@ const Bookings = () => {
                       <th style={{ width: '100px' }}>To</th>
                       <th style={{ width: '100px' }}>Travel Dt</th>
                       <th style={{ width: '50px' }}>Cls</th>
+                      <th style={{ width: '80px' }}>Quota</th>
                       <th style={{ width: '80px' }}>Status</th>
                       <th style={{ width: '150px' }}>Remarks</th>
+                    </tr>
+                    {/* Inline Filter Row */}
+                    <tr style={{ backgroundColor: '#f8f9fa' }}>
+                      <td><input type="checkbox" disabled style={{ opacity: 0.3 }} /></td>
+                      <td>
+                        <input 
+                          type="text" 
+                          placeholder="Filter ID..."
+                          value={inlineFilters.id || ''}
+                          onChange={(e) => setInlineFilters(prev => ({...prev, id: e.target.value}))}
+                          style={{ width: '100%', padding: '2px 4px', fontSize: '11px', border: '1px solid #ddd' }}
+                        />
+                      </td>
+                      <td>
+                        <input 
+                          type="text" 
+                          placeholder="Filter Date..."
+                          value={inlineFilters.date || ''}
+                          onChange={(e) => setInlineFilters(prev => ({...prev, date: e.target.value}))}
+                          style={{ width: '100%', padding: '2px 4px', fontSize: '11px', border: '1px solid #ddd' }}
+                        />
+                      </td>
+                      <td>
+                        <input 
+                          type="text" 
+                          placeholder="Filter Customer..."
+                          value={inlineFilters.customer || ''}
+                          onChange={(e) => setInlineFilters(prev => ({...prev, customer: e.target.value}))}
+                          style={{ width: '100%', padding: '2px 4px', fontSize: '11px', border: '1px solid #ddd' }}
+                        />
+                      </td>
+                      <td>
+                        <input 
+                          type="text" 
+                          placeholder="Filter Phone..."
+                          value={inlineFilters.phone || ''}
+                          onChange={(e) => setInlineFilters(prev => ({...prev, phone: e.target.value}))}
+                          style={{ width: '100%', padding: '2px 4px', fontSize: '11px', border: '1px solid #ddd' }}
+                        />
+                      </td>
+                      <td>
+                        <input 
+                          type="text" 
+                          placeholder="Pax..."
+                          value={inlineFilters.pax || ''}
+                          onChange={(e) => setInlineFilters(prev => ({...prev, pax: e.target.value}))}
+                          style={{ width: '100%', padding: '2px 4px', fontSize: '11px', border: '1px solid #ddd' }}
+                        />
+                      </td>
+                      <td>
+                        <input 
+                          type="text" 
+                          placeholder="Filter From..."
+                          value={inlineFilters.from || ''}
+                          onChange={(e) => setInlineFilters(prev => ({...prev, from: e.target.value}))}
+                          style={{ width: '100%', padding: '2px 4px', fontSize: '11px', border: '1px solid #ddd' }}
+                        />
+                      </td>
+                      <td>
+                        <input 
+                          type="text" 
+                          placeholder="Filter To..."
+                          value={inlineFilters.to || ''}
+                          onChange={(e) => setInlineFilters(prev => ({...prev, to: e.target.value}))}
+                          style={{ width: '100%', padding: '2px 4px', fontSize: '11px', border: '1px solid #ddd' }}
+                        />
+                      </td>
+                      <td>
+                        <input 
+                          type="text" 
+                          placeholder="Travel..."
+                          value={inlineFilters.travelDate || ''}
+                          onChange={(e) => setInlineFilters(prev => ({...prev, travelDate: e.target.value}))}
+                          style={{ width: '100%', padding: '2px 4px', fontSize: '11px', border: '1px solid #ddd' }}
+                        />
+                      </td>
+                      <td>
+                        <input 
+                          type="text" 
+                          placeholder="Class..."
+                          value={inlineFilters.class || ''}
+                          onChange={(e) => setInlineFilters(prev => ({...prev, class: e.target.value}))}
+                          style={{ width: '100%', padding: '2px 4px', fontSize: '11px', border: '1px solid #ddd' }}
+                        />
+                      </td>
+                      <td>
+                        <input 
+                          type="text" 
+                          placeholder="Filter Quota..."
+                          value={inlineFilters.quotaType || ''}
+                          onChange={(e) => setInlineFilters(prev => ({...prev, quotaType: e.target.value}))}
+                          style={{ width: '100%', padding: '2px 4px', fontSize: '11px', border: '1px solid #ddd' }}
+                        />
+                      </td>
+                      <td>
+                        <input 
+                          type="text" 
+                          placeholder="Filter Status..."
+                          value={inlineFilters.status || ''}
+                          onChange={(e) => setInlineFilters(prev => ({...prev, status: e.target.value}))}
+                          style={{ width: '100%', padding: '2px 4px', fontSize: '11px', border: '1px solid #ddd' }}
+                        />
+                      </td>
+                      <td>
+                        <input 
+                          type="text" 
+                          placeholder="Filter Remarks..."
+                          value={inlineFilters.remarks || ''}
+                          onChange={(e) => setInlineFilters(prev => ({...prev, remarks: e.target.value}))}
+                          style={{ width: '100%', padding: '2px 4px', fontSize: '11px', border: '1px solid #ddd' }}
+                        />
+                      </td>
                     </tr>
                   </thead>
                   <tbody>
@@ -1839,7 +2100,7 @@ const Bookings = () => {
                         const isHighlighted = selectedRecordIndex === idx;
                         return (
                           <tr 
-                            key={idx}
+                            key={record.bk_bkid || record.id || idx}
                             className={`${isSelected ? 'selected' : ''} ${isHighlighted ? 'highlighted' : ''}`}
                             onClick={() => {
                               handleRecordSelect(record);
@@ -1882,6 +2143,7 @@ const Bookings = () => {
                             <td>{record.toStation?.st_stname || record.bk_tostation || record.bk_tost || 'N/A'}</td>
                             <td>{new Date(record.bk_trvldt || record.bk_travelldate || new Date()).toLocaleDateString()}</td>
                             <td>{record.bk_class || record.bk_travelclass || 'N/A'}</td>
+                            <td>{record.quotaType || record.bk_quotatype || 'N/A'}</td>
                             <td>{record.bk_status || 'Draft'}</td>
                             <td 
                               style={{ 
@@ -1931,7 +2193,7 @@ const Bookings = () => {
                    <input type="text" className="erp-input" value={inlineFilters['toStation']||''} onChange={(e)=>handleInlineFilterChange('toStation', e.target.value)} />
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '4px' }}>
-                    <button onClick={() => {setInlineFilters({}); fetchBookings();}} className="erp-button small">Clear</button>
+                    <button onClick={() => {setInlineFilters({}); /* Clear filters only - no need to refetch */}} className="erp-button small">Clear</button>
                 </div>
              </div>
              <div style={{ flex: 1 }}></div>
@@ -1958,7 +2220,7 @@ const Bookings = () => {
               <button className="erp-modal-close" onClick={() => setShowPassengerModal(false)}>×</button>
             </div>
             <div className="erp-modal-body">
-              {loadingPassengers ? (
+              {loadingPassengerDetails ? (
                 <div style={{ textAlign: 'center', padding: '20px' }}>
                   <div>Loading passenger details...</div>
                 </div>
@@ -1980,7 +2242,7 @@ const Bookings = () => {
                     </thead>
                     <tbody>
                       {passengerDetails.map((passenger, index) => (
-                        <tr key={index}>
+                        <tr key={passenger.id || `passenger-detail-${index}`}>
                           <td style={{ fontWeight: 'bold' }}>
                             {passenger.firstName || passenger.name || 'N/A'}
                             {passenger.lastName && ` ${passenger.lastName}`}
