@@ -95,7 +95,7 @@ const CustomerLedger = () => {
             <option key={customer.id || customer.us_usid} value={customer.id || customer.us_usid}>
               {customer.us_name || customer.name} 
               {customerBalances[customer.id || customer.us_usid] && 
-                ` (Due: ₹${customerBalances[customer.id || customer.us_usid].netDue?.toFixed(2) || 0})`
+                ` (Due: ₹${parseFloat(customerBalances[customer.id || customer.us_usid].netDue)?.toFixed(2) || '0.00'})`
               }
             </option>
           ))}
@@ -109,22 +109,22 @@ const CustomerLedger = () => {
             <div className="summary-grid">
               <div className="summary-item">
                 <label>Total Billed:</label>
-                <span>₹{customerBalances[selectedCustomer].totalBilled?.toFixed(2) || 0}</span>
+                <span>₹{parseFloat(customerBalances[selectedCustomer].totalBilled)?.toFixed(2) || '0.00'}</span>
               </div>
               <div className="summary-item">
                 <label>Total Received:</label>
-                <span>₹{customerBalances[selectedCustomer].totalReceived?.toFixed(2) || 0}</span>
+                <span>₹{parseFloat(customerBalances[selectedCustomer].totalReceived)?.toFixed(2) || '0.00'}</span>
               </div>
               <div className="summary-item">
                 <label>Net Due:</label>
                 <span className={customerBalances[selectedCustomer].netDue > 0 ? 'due-amount' : ''}>
-                  ₹{customerBalances[selectedCustomer].netDue?.toFixed(2) || 0}
+                  ₹{parseFloat(customerBalances[selectedCustomer].netDue)?.toFixed(2) || '0.00'}
                 </span>
               </div>
               <div className="summary-item">
                 <label>Net Advance:</label>
                 <span className={customerBalances[selectedCustomer].netAdvance > 0 ? 'advance-amount' : ''}>
-                  ₹{customerBalances[selectedCustomer].netAdvance?.toFixed(2) || 0}
+                  ₹{parseFloat(customerBalances[selectedCustomer].netAdvance)?.toFixed(2) || '0.00'}
                 </span>
               </div>
             </div>
@@ -153,9 +153,9 @@ const CustomerLedger = () => {
                   <td>{new Date(entry.date).toLocaleDateString()}</td>
                   <td>{entry.billId || entry.refId}</td>
                   <td>{entry.description}</td>
-                  <td>{entry.debit ? `₹${entry.debit.toFixed(2)}` : '-'}</td>
-                  <td>{entry.credit ? `₹${entry.credit.toFixed(2)}` : '-'}</td>
-                  <td>₹{entry.balance?.toFixed(2) || 0}</td>
+                  <td>{entry.debit ? `₹${parseFloat(entry.debit).toFixed(2)}` : '-'}</td>
+                  <td>{entry.credit ? `₹${parseFloat(entry.credit).toFixed(2)}` : '-'}</td>
+                  <td>₹{parseFloat(entry.balance)?.toFixed(2) || '0.00'}</td>
                 </tr>
               ))}
             </tbody>

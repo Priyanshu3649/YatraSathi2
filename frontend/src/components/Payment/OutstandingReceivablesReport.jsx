@@ -117,7 +117,7 @@ const OutstandingReceivablesReport = () => {
         </div>
         <div className="bg-red-50 p-4 rounded-lg">
           <div className="text-sm text-red-600">Total Outstanding Amount</div>
-          <div className="text-3xl font-bold text-red-800">₹{reportSummary.totalOutstanding.toFixed(2)}</div>
+          <div className="text-3xl font-bold text-red-800">₹{parseFloat(reportSummary.totalOutstanding)?.toFixed(2) || '0.00'}</div>
         </div>
       </div>
 

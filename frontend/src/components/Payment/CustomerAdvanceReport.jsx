@@ -143,7 +143,7 @@ const CustomerAdvanceReport = () => {
         </div>
         <div className="bg-blue-50 p-4 rounded-lg">
           <div className="text-sm text-blue-600">Total Advance Balance</div>
-          <div className="text-3xl font-bold text-blue-800">₹{totalAdvance.toFixed(2)}</div>
+          <div className="text-3xl font-bold text-blue-800">₹{parseFloat(totalAdvance)?.toFixed(2) || '0.00'}</div>
         </div>
       </div>
 
@@ -210,7 +210,7 @@ const CustomerAdvanceReport = () => {
                       {advance.financialYear}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      ₹{advance.advanceBalance.toFixed(2)}
+                      ₹{parseFloat(advance.advanceBalance)?.toFixed(2) || '0.00'}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                       {advance.advanceRecord?.ca_last_updated 

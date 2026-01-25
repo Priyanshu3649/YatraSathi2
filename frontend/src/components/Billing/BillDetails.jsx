@@ -29,16 +29,16 @@ const BillDetails = ({ bill, onClose }) => {
         
         <div className="detail-section">
           <h3>Fare & Charges</h3>
-          <p><strong>Net Journey Fare:</strong> ₹{bill.netFare?.toFixed(2)}</p>
-          <p><strong>Service Charges:</strong> ₹{bill.serviceCharges?.toFixed(2)}</p>
-          <p><strong>Platform Fees:</strong> ₹{bill.platformFees?.toFixed(2)}</p>
-          <p><strong>Agent Fees:</strong> ₹{bill.agentFees?.toFixed(2)}</p>
+          <p><strong>Net Journey Fare:</strong> ₹{parseFloat(bill.netFare)?.toFixed(2) || '0.00'}</p>
+          <p><strong>Service Charges:</strong> ₹{parseFloat(bill.serviceCharges)?.toFixed(2) || '0.00'}</p>
+          <p><strong>Platform Fees:</strong> ₹{parseFloat(bill.platformFees)?.toFixed(2) || '0.00'}</p>
+          <p><strong>Agent Fees:</strong> ₹{parseFloat(bill.agentFees)?.toFixed(2) || '0.00'}</p>
           
           {bill.extraCharges && bill.extraCharges.length > 0 && (
             <div>
               <h4>Extra Charges:</h4>
               {bill.extraCharges.map((charge, index) => (
-                <p key={index}><strong>{charge.label}:</strong> ₹{charge.amount?.toFixed(2)}</p>
+                <p key={index}><strong>{charge.label}:</strong> ₹{parseFloat(charge.amount)?.toFixed(2) || '0.00'}</p>
               ))}
             </div>
           )}
@@ -52,7 +52,7 @@ const BillDetails = ({ bill, onClose }) => {
                 <strong>{discount.label}:</strong> 
                 {discount.type === 'PERCENTAGE' 
                   ? `${discount.amount}%` 
-                  : `₹${discount.amount?.toFixed(2)}`}
+                  : `₹${parseFloat(discount.amount)?.toFixed(2) || '0.00'}`}
               </p>
             ))
           ) : (
@@ -62,7 +62,7 @@ const BillDetails = ({ bill, onClose }) => {
         
         <div className="detail-section">
           <h3>Financial Summary</h3>
-          <p><strong>Total Amount:</strong> ₹{bill.totalAmount?.toFixed(2)}</p>
+          <p><strong>Total Amount:</strong> ₹{parseFloat(bill.totalAmount)?.toFixed(2) || '0.00'}</p>
           <p><strong>Bill Date:</strong> {new Date(bill.billDate || bill.createdOn).toLocaleDateString()}</p>
           <p><strong>Status:</strong> <span className={`status-${bill.status?.toLowerCase()}`}>{bill.status}</span></p>
           <p><strong>Created By:</strong> {bill.createdBy || bill.createdBy?.us_name || 'Unknown'}</p>

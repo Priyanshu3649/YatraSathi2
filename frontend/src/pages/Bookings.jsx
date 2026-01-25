@@ -52,6 +52,7 @@ import '../styles/classic-enterprise-global.css';
 import '../styles/vintage-admin-panel.css';
 import '../styles/dynamic-admin-panel.css';
 import '../styles/vintage-erp-global.css';
+import '../dense.css';
 
 // Add inline styles for keyboard navigation
 const keyboardNavigationStyles = `
@@ -121,10 +122,27 @@ const Bookings = () => {
     closedOn: ''
   });
   const [passengerList, setPassengerList] = useState([]);
-  
-  // Keyboard navigation state
   const [isEditing, setIsEditing] = useState(false);
-  const quotaTypeRef = useRef(null);
+  
+  // Helper function to convert database quota values to frontend display values
+  const mapQuotaValueToFrontend = (dbValue) => {
+    const quotaMap = {
+      'TATKAL': 'TQ',
+      'GENERAL': 'GN',
+      'LADIES': 'LD'
+    };
+    return quotaMap[dbValue] || dbValue || '';
+  };
+  
+  // Helper function to convert frontend quota values to database values
+  const mapQuotaValueToDatabase = (frontendValue) => {
+    const quotaMap = {
+      'TQ': 'TATKAL',
+      'GN': 'GENERAL',
+      'LD': 'LADIES'
+    };
+    return quotaMap[frontendValue] || frontendValue || 'GENERAL';
+  };
   
   // PASSENGER ENTRY MODE STATE (VISIBLE BY DEFAULT)
   const [isPassengerEntryActive, setIsPassengerEntryActive] = useState(true);
@@ -280,7 +298,7 @@ const Bookings = () => {
         bk_tost: formData.toStation,
         bk_trvldt: formData.travelDate,
         bk_class: formData.travelClass,
-        bk_quota: formData.quotaType || 'GENERAL',
+        bk_quota: mapQuotaValueToDatabase(formData.quotaType) || 'GENERAL',
         bk_berthpref: formData.berthPreference || null,
         bk_totalpass: activePassengers.length,
         bk_remarks: formData.remarks || null,
@@ -408,6 +426,9 @@ const Bookings = () => {
 
   // Ref to track if save confirmation is in progress
   const isSaveConfirmingRef = useRef(false);
+  
+  // Ref for quota type select element
+  const quotaTypeRef = useRef(null);
   
   // Enhanced save confirmation handler - commits to database before form reset (MOVED AFTER handleNew)
   const handleSaveConfirmed = useCallback(async () => {
@@ -571,7 +592,7 @@ const Bookings = () => {
       toStation: record.toStation?.st_stname || record.bk_tostation || record.bk_tost || '',
       travelDate: record.bk_trvldt ? new Date(record.bk_trvldt).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
       travelClass: record.bk_class || record.bk_travelclass || '3A',
-      quotaType: record.quotaType || record.bk_quotatype || '',
+      quotaType: mapQuotaValueToFrontend(record.quotaType || record.bk_quotatype || record.bk_quota || ''),
       pnrNumber: record.pnrNumber || record.bk_pnr || '', // NEW: PNR field
       remarks: record.bk_remarks || '',
       status: record.bk_status || 'DRAFT',
@@ -1977,6 +1998,28 @@ const Bookings = () => {
                   </select>
                </div>
             </div>
+            
+            {/* Audit Section - Within the form scrollable area, outside focus flow */}
+            <div className="erp-audit-section" tabIndex={-1} style={{ marginTop: '12px', paddingTop: '8px', borderTop: '1px solid #ccc' }}>
+              <div className="erp-audit-row">
+                <label className="erp-audit-label">Entered On</label>
+                <input type="text" className="erp-audit-input" value={formData.createdOn ? new Date(formData.createdOn).toLocaleString() : '-'} readOnly />
+                <label className="erp-audit-label">Entered By</label>
+                <input type="text" className="erp-audit-input" value={formData.createdBy || '-'} readOnly />
+              </div>
+              <div className="erp-audit-row">
+                <label className="erp-audit-label">Modified On</label>
+                <input type="text" className="erp-audit-input" value={formData.modifiedOn ? new Date(formData.modifiedOn).toLocaleString() : '-'} readOnly />
+                <label className="erp-audit-label">Modified By</label>
+                <input type="text" className="erp-audit-input" value={formData.modifiedBy || '-'} readOnly />
+              </div>
+              <div className="erp-audit-row">
+                <label className="erp-audit-label">Closed On</label>
+                <input type="text" className="erp-audit-input" value={formData.closedOn ? new Date(formData.closedOn).toLocaleString() : '-'} readOnly />
+                <label className="erp-audit-label">Closed By</label>
+                <input type="text" className="erp-audit-input" value={formData.closedBy || '-'} readOnly />
+              </div>
+            </div>
           </div>
           </div>
           
@@ -2169,7 +2212,7 @@ const Bookings = () => {
                             <td>{record.toStation?.st_stname || record.bk_tostation || record.bk_tost || 'N/A'}</td>
                             <td>{new Date(record.bk_trvldt || record.bk_travelldate || new Date()).toLocaleDateString()}</td>
                             <td>{record.bk_class || record.bk_travelclass || 'N/A'}</td>
-                            <td>{record.quotaType || record.bk_quotatype || 'N/A'}</td>
+                            <td>{mapQuotaValueToFrontend(record.quotaType || record.bk_quotatype || record.bk_quota) || 'N/A'}</td>
                             <td>{record.bk_status || 'Draft'}</td>
                             <td 
                               style={{ 
@@ -2188,6 +2231,7 @@ const Bookings = () => {
                     )}
                   </tbody>
                 </table>
+              {/* Removed the duplicate audit section from the end of the page */}
             </div>
           </div>
       </div>

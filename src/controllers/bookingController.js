@@ -133,6 +133,7 @@ const createBooking = async (req, res) => {
         bk_tost: toStation,
         bk_trvldt: travelDate,
         bk_class: travelClass,
+        bk_quota: req.body.bk_quota || 'GENERAL', // ✓ Add quota field with default
         bk_berthpref: berthPreference,
         bk_totalpass: totalPassengers || 1,
         bk_remarks: remarks,
@@ -270,6 +271,7 @@ const getCustomerBookings = async (req, res) => {
         bk_tost: booking.bk_tost,        // Keep original station code
         bk_travelldate: booking.bk_trvldt,
         bk_travelclass: booking.bk_class,
+        bk_quota: booking.bk_quota,      // ✓ Add quota information
         bk_pax: passengerCount  // Override with actual passenger count from passenger table
       };
     });
@@ -410,6 +412,7 @@ const getBookingById = async (req, res) => {
       bk_tostation: booking.bk_tost,
       bk_travelldate: booking.bk_trvldt,
       bk_travelclass: booking.bk_class,
+      bk_quota: booking.bk_quota,        // ✓ Add quota information
       bk_pax: passengerCount  // Override with actual passenger count from passenger table
     };
     
