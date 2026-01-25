@@ -588,10 +588,12 @@ const Bookings = () => {
         if (response.success && response.passengers) {
           const mappedPassengers = response.passengers.map(p => ({
             id: p.ps_psid || `api_passenger_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-            name: (p.ps_fname + ' ' + (p.ps_lname || '')).trim(),
-            age: p.ps_age,
-            gender: p.ps_gender,
-            berthPreference: p.ps_berthpref
+            name: (p.ps_fname ? `${p.ps_fname} ${p.ps_lname || ''}`.trim() : p.name) || '',
+            firstName: p.ps_fname || p.firstName || '',
+            lastName: p.ps_lname || p.lastName || '',
+            age: p.ps_age || p.age || '',
+            gender: p.ps_gender || p.gender || '',
+            berthPreference: p.ps_berthpref || p.berthPreference || ''
           }));
           setPassengerList(mappedPassengers);
         }
@@ -1181,21 +1183,39 @@ const Bookings = () => {
       try {
         const response = await bookingAPI.getBookingPassengers(bookingId);
         passengers = response.passengers || response.data || [];
+        
+        // Normalize passenger data to handle both API and database field names
+        passengers = passengers.map(p => ({
+          id: p.ps_psid || p.id,
+          firstName: p.ps_fname || p.firstName || '',
+          lastName: p.ps_lname || p.lastName || '',
+          name: (p.ps_fname ? `${p.ps_fname} ${p.ps_lname || ''}`.trim() : p.name) || 'N/A',
+          age: p.ps_age || p.age || '-',
+          gender: p.ps_gender || p.gender || '-',
+          berthPreference: p.ps_berthpref || p.berthPreference || p.berth || '-',
+          idProofType: p.ps_idtype || p.idProofType || '-',
+          idProofNumber: p.ps_idno || p.idProofNumber || '-'
+        }));
       } catch (apiError) {
         console.warn('API passenger fetch failed, using form data:', apiError);
         // Fallback to current passenger list if selected booking matches
         if (selectedBooking && (selectedBooking.bk_bkid === bookingId || selectedBooking.id === bookingId)) {
           passengers = passengerList.filter(p => p.name && p.name.trim() !== '').map((p, index) => ({
             ...p,
-            id: p.id || `modal_passenger_${index}_${Date.now()}`
+            id: p.id || `modal_passenger_${index}_${Date.now()}`,
+            firstName: p.name?.split(' ')[0] || '',
+            lastName: p.name?.split(' ').slice(1).join(' ') || '',
+            name: p.name || 'N/A'
           }));
         }
       }
       
-      // If no passengers found, create a placeholder
+      // If no passengers found, create a placeholder with proper structure
       if (passengers.length === 0) {
         passengers = [{
           id: 'placeholder-passenger',
+          firstName: 'No passenger details',
+          lastName: 'available',
           name: 'No passenger details available',
           age: '-',
           gender: '-',
@@ -2244,8 +2264,9 @@ const Bookings = () => {
                       {passengerDetails.map((passenger, index) => (
                         <tr key={passenger.id || `passenger-detail-${index}`}>
                           <td style={{ fontWeight: 'bold' }}>
-                            {passenger.firstName || passenger.name || 'N/A'}
-                            {passenger.lastName && ` ${passenger.lastName}`}
+                            {passenger.name !== 'N/A' ? passenger.name : 
+                             (passenger.firstName && passenger.firstName !== 'N/A') ? 
+                             `${passenger.firstName} ${passenger.lastName || ''}`.trim() : 'N/A'}
                           </td>
                           <td>{passenger.age || '-'}</td>
                           <td>{passenger.gender || '-'}</td>
@@ -2262,8 +2283,14 @@ const Bookings = () => {
                     <div style={{ marginTop: '20px', padding: '15px', backgroundColor: '#f8f9fa', borderRadius: '4px' }}>
                       <h4 style={{ margin: '0 0 10px 0', fontSize: '14px', color: '#333' }}>Booking Information</h4>
                       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', fontSize: '12px' }}>
-                        <div><strong>Journey:</strong> {selectedBooking.bk_fromstation || selectedBooking.fromStation?.st_stname || 'N/A'} → {selectedBooking.bk_tostation || selectedBooking.toStation?.st_stname || 'N/A'}</div>
-                        <div><strong>Travel Date:</strong> {new Date(selectedBooking.bk_trvldt || selectedBooking.travelDate).toLocaleDateString()}</div>
+                        <div><strong>Journey:</strong> 
+                          {(selectedBooking.bk_fromstation || selectedBooking.fromStation?.st_stname || selectedBooking.bk_fromst || 'N/A')} → 
+                          {(selectedBooking.bk_tostation || selectedBooking.toStation?.st_stname || selectedBooking.bk_tost || 'N/A')}
+                        </div>
+                        <div><strong>Travel Date:</strong> 
+                          {selectedBooking.bk_trvldt || selectedBooking.travelDate ? 
+                           new Date(selectedBooking.bk_trvldt || selectedBooking.travelDate).toLocaleDateString() : 'N/A'}
+                        </div>
                         <div><strong>Class:</strong> {selectedBooking.bk_class || selectedBooking.travelClass || 'N/A'}</div>
                         <div><strong>Status:</strong> {selectedBooking.bk_status || selectedBooking.status || 'N/A'}</div>
                         {selectedBooking.bk_remarks && (

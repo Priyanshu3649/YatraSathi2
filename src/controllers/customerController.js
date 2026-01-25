@@ -732,17 +732,35 @@ const getBookingPassengers = async (req, res) => {
     // Transform passenger data to match frontend expectations
     const transformedPassengers = passengers.map(passenger => {
       return {
+        ps_psid: passenger.ps_psid,
+        ps_fname: passenger.ps_fname,
+        ps_lname: passenger.ps_lname,
         firstName: passenger.ps_fname,
         lastName: passenger.ps_lname,
+        name: `${passenger.ps_fname} ${passenger.ps_lname || ''}`.trim(),
         age: passenger.ps_age,
         gender: passenger.ps_gender,
         berthPreference: passenger.ps_berthpref,
         berthAllocated: passenger.ps_berthalloc,
         seatNo: passenger.ps_seatno,
         coach: passenger.ps_coach,
+        ps_idtype: passenger.ps_idtype,
+        ps_idno: passenger.ps_idno,
+        idProofType: passenger.ps_idtype,
+        idProofNumber: passenger.ps_idno,
         id: passenger.ps_psid
       };
     });
+    
+    console.log(`Found ${passengers.length} passengers for booking ${bookingId}`);
+    console.log('Raw passenger data:', passengers.map(p => ({
+      ps_psid: p.ps_psid,
+      ps_fname: p.ps_fname,
+      ps_lname: p.ps_lname,
+      ps_age: p.ps_age,
+      ps_gender: p.ps_gender
+    })));
+    console.log('Transformed passenger data:', transformedPassengers);
     
     res.json({ 
       success: true,

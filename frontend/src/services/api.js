@@ -563,6 +563,8 @@ export const bookingAPI = {
       ? `${API_BASE_URL}/employee/bookings/${bookingId}/passengers`  // Employee/Admin route
       : `${API_BASE_URL}/customer/bookings/${bookingId}/passengers`; // Customer route
     
+    console.log(`Fetching passengers for booking ${bookingId} using ${isEmployee ? 'employee' : 'customer'} endpoint: ${url}`);
+    
     const response = await fetch(url, {
       method: 'GET',
       headers: getHeaders(true)
@@ -574,6 +576,7 @@ export const bookingAPI = {
       throw new Error(data.message || 'Failed to get booking passengers');
     }
     
+    console.log('Passenger data received:', data);
     return data;
   }
 };
