@@ -54,6 +54,91 @@ fieldset {
   margin-bottom: 2px;
 }
 
+/* Compact Form Row Classes */
+.erp-form-row-compact-4 {
+  display: grid;
+  grid-template-columns: repeat(8, 1fr); /* 4 fields = 8 columns (label + input) */
+  gap: 6px;
+  margin-bottom: 6px;
+  margin-left: 0;
+  margin-right: 0;
+  padding: 0;
+  align-items: center;
+}
+
+.erp-form-row-compact-4 .erp-form-label {
+  font-size: 11px;
+  font-weight: bold;
+  color: #000;
+  white-space: nowrap;
+  text-align: left;
+  margin: 0;
+  padding: 0;
+}
+
+.erp-form-row-compact-4 .erp-input {
+  height: 22px;
+  padding: 2px 4px;
+  font-size: 12px;
+  border: 1px solid #999;
+  width: 100%;
+  box-sizing: border-box;
+  margin: 0;
+}
+
+.erp-form-row-compact-4 .erp-input:focus {
+  outline: 2px solid #005fcc;
+}
+
+.erp-form-row-compact-5 {
+  display: grid;
+  grid-template-columns: repeat(10, 1fr); /* 5 fields = 10 columns (label + input) */
+  gap: 5px;
+  margin-bottom: 6px;
+  margin-left: 0;
+  margin-right: 0;
+  padding: 0;
+  align-items: center;
+}
+
+.erp-form-row-compact-5 .erp-form-label {
+  font-size: 11px;
+  font-weight: bold;
+  color: #000;
+  white-space: nowrap;
+  text-align: left;
+  margin: 0;
+  padding: 0;
+}
+
+.erp-form-row-compact-5 .erp-input {
+  height: 22px;
+  padding: 2px 4px;
+  font-size: 12px;
+  border: 1px solid #999;
+  width: 100%;
+  box-sizing: border-box;
+  margin: 0;
+}
+
+.erp-form-row-compact-5 .erp-input:focus {
+  outline: 2px solid #005fcc;
+}
+
+.erp-form-row-compact-5 select {
+  height: 22px;
+  padding: 2px 4px;
+  font-size: 12px;
+  border: 1px solid #999;
+  width: 100%;
+  box-sizing: border-box;
+  margin: 0;
+}
+
+.erp-form-row-compact-5 select:focus {
+  outline: 2px solid #005fcc;
+}
+
 .field.wide-label {
     grid-template-columns: 120px 1fr;
 }

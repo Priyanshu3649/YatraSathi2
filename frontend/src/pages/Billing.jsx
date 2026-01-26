@@ -11,7 +11,7 @@ import '../styles/vintage-erp-global.css';
 import '../styles/bookings.css';
 import '../dense.css';
 
-// Add inline styles for keyboard navigation
+// Add inline styles for keyboard navigation and compact form layout
 const keyboardNavigationStyles = `
   .erp-table tbody tr.highlighted {
     background-color: #e3f2fd !important;
@@ -37,6 +37,61 @@ const keyboardNavigationStyles = `
     border-radius: 4px;
     font-size: 11px;
     z-index: 1000;
+  }
+  
+  /* Compact form layout styles */
+  .erp-form-row-compact {
+    display: grid;
+    grid-template-columns: 100px 1fr 100px 1fr;
+    gap: 6px;
+    align-items: center;
+    margin-bottom: 6px;
+  }
+  
+  .erp-form-row-compact-3 {
+    display: grid;
+    grid-template-columns: 100px 1fr 100px 1fr 100px 1fr;
+    gap: 6px;
+    align-items: center;
+    margin-bottom: 6px;
+  }
+  
+  .erp-form-row-compact-4 {
+    display: grid;
+    grid-template-columns: 100px 1fr 100px 1fr 100px 1fr 100px 1fr;
+    gap: 6px;
+    align-items: center;
+    margin-bottom: 6px;
+  }
+  
+  .erp-form-row-compact .erp-form-label {
+    text-align: right;
+    font-size: 11px;
+    font-weight: normal;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  
+  .erp-form-row-compact .erp-input {
+    width: 100%;
+    min-width: 0;
+    padding: 2px 4px;
+    font-size: 11px;
+  }
+  
+  .erp-form-row-compact .erp-input:focus {
+    outline: 1px solid #005fcc;
+  }
+  
+  .erp-form-row-compact select.erp-input {
+    padding: 1px 2px;
+  }
+  
+  .erp-form-row-compact textarea.erp-input {
+    padding: 2px 4px;
+    font-size: 11px;
+    resize: vertical;
   }
 `;
 
@@ -837,8 +892,8 @@ const Billing = () => {
         <div className="layout-main-column">
           {/* Form Panel - Static */}
           <div className="layout-form-section">
-            {/* Bill Header Fields - Row 1 */}
-            <div className="erp-form-row">
+            {/* Row 1: Bill ID, Bill Date, Booking ID, Sub Bill No (4 fields) */}
+            <div className="erp-form-row-compact-4">
               <label className="erp-form-label required">Bill ID</label>
               <input 
                 type="text" 
@@ -856,10 +911,6 @@ const Billing = () => {
                 onChange={(e) => setFormData({...formData, billDate: e.target.value})}
                 disabled={!isEditing}
               />
-            </div>
-            
-            {/* Booking and Customer Details - Row 2 */}
-            <div className="erp-form-row">
               <label className="erp-form-label required">Booking ID</label>
               <input 
                 type="text" 
@@ -880,8 +931,8 @@ const Billing = () => {
               />
             </div>
             
-            {/* Customer Details - Row 3 */}
-            <div className="erp-form-row">
+            {/* Row 2: Customer Name, Phone Number, Station Boy Name, From Station, To Station (5 fields) */}
+            <div className="erp-form-row-compact-5">
               <label className="erp-form-label required">Customer Name</label>
               <input 
                 type="text" 
@@ -902,16 +953,12 @@ const Billing = () => {
                 disabled={!isEditing}
                 placeholder="Enter phone number"
               />
-            </div>
-            
-            {/* Station and Journey Details - Row 4 */}
-            <div className="erp-form-row">
               <label className="erp-form-label">Station Boy Name</label>
               <input 
                 type="text" 
                 name="stationBoy" 
                 className="erp-input" 
-                value={formData.stationBoy || ''} 
+                value={formData.stationBoy || ''}
                 onChange={(e) => setFormData({...formData, stationBoy: e.target.value})}
                 disabled={!isEditing}
                 placeholder="Enter station boy name"
@@ -921,37 +968,34 @@ const Billing = () => {
                 type="text" 
                 name="fromStation" 
                 className="erp-input" 
-                value={formData.fromStation || ''} 
+                value={formData.fromStation || ''}
                 onChange={(e) => setFormData({...formData, fromStation: e.target.value})}
                 disabled={!isEditing}
                 placeholder="Enter from station"
               />
-            </div>
-            
-            <div className="erp-form-row">
               <label className="erp-form-label required">To Station</label>
               <input 
                 type="text" 
                 name="toStation" 
                 className="erp-input" 
-                value={formData.toStation || ''} 
+                value={formData.toStation || ''}
                 onChange={(e) => setFormData({...formData, toStation: e.target.value})}
                 disabled={!isEditing}
                 placeholder="Enter to station"
               />
+            </div>
+            
+            {/* Row 3: Journey Date, Train Number, Reservation Class, Ticket Type, PNR Number (5 fields) */}
+            <div className="erp-form-row-compact-5">
               <label className="erp-form-label required">Journey Date</label>
               <input 
                 type="date" 
                 name="journeyDate" 
                 className="erp-input" 
-                value={formData.journeyDate || ''} 
+                value={formData.journeyDate || ''}
                 onChange={(e) => setFormData({...formData, journeyDate: e.target.value})}
                 disabled={!isEditing}
               />
-            </div>
-            
-            {/* Train and Class Details - Row 5 */}
-            <div className="erp-form-row">
               <label className="erp-form-label required">Train Number</label>
               <input 
                 type="text" 
@@ -977,9 +1021,6 @@ const Billing = () => {
                 <option value="CC">CC</option>
                 <option value="EC">EC</option>
               </select>
-            </div>
-            
-            <div className="erp-form-row">
               <label className="erp-form-label required">Ticket Type</label>
               <select 
                 name="ticketType" 
@@ -1004,64 +1045,18 @@ const Billing = () => {
               />
             </div>
             
-            <div className="erp-form-row">
+            {/* Row 4: Seat(s) Alloted, Railway Fare, Service Charges, Platform Fees, Station Boy Incentive (5 fields) */}
+            <div className="erp-form-row-compact-5">
               <label className="erp-form-label">Seat(s) Alloted</label>
               <input 
                 type="text" 
                 name="seatsAlloted" 
                 className="erp-input" 
-                value={formData.seatsAlloted || ''} 
+                value={formData.seatsAlloted || ''}
                 onChange={(e) => setFormData({...formData, seatsAlloted: e.target.value})}
                 disabled={!isEditing}
                 placeholder="Enter seats alloted"
               />
-            </div>
-            
-            {/* Journey & Ticket Details */}
-            <div className="erp-form-row">
-              <label className="erp-form-label required">Train Number</label>
-              <input 
-                type="text" 
-                name="trainNumber" 
-                className="erp-input" 
-                value={formData.trainNumber || ''} 
-                onChange={(e) => setFormData({...formData, trainNumber: e.target.value})}
-                disabled={!isEditing}
-                placeholder="Enter train number"
-              />
-              <label className="erp-form-label required">Reservation Class</label>
-              <select 
-                name="reservationClass" 
-                className="erp-input" 
-                value={formData.reservationClass || '3A'} 
-                onChange={(e) => setFormData({...formData, reservationClass: e.target.value})}
-                disabled={!isEditing}
-              >
-                <option value="SL">SL</option>
-                <option value="3A">3A</option>
-                <option value="2A">2A</option>
-                <option value="1A">1A</option>
-                <option value="CC">CC</option>
-              </select>
-            </div>
-            
-            <div className="erp-form-row">
-              <label className="erp-form-label required">Ticket Type</label>
-              <select 
-                name="ticketType" 
-                className="erp-input" 
-                value={formData.ticketType || 'NORMAL'} 
-                onChange={(e) => setFormData({...formData, ticketType: e.target.value})}
-                disabled={!isEditing}
-              >
-                <option value="NORMAL">Normal</option>
-                <option value="TATKAL">Tatkal</option>
-                <option value="PREMIUM_TATKAL">Premium Tatkal</option>
-              </select>
-            </div>
-            
-            {/* Fare and Charges - Row 6 */}
-            <div className="erp-form-row">
               <label className="erp-form-label">Railway Fare</label>
               <input 
                 type="number" 
@@ -1072,19 +1067,6 @@ const Billing = () => {
                 disabled={!isEditing}
                 placeholder="Enter railway fare"
               />
-              <label className="erp-form-label">Station Boy Incentive</label>
-              <input 
-                type="number" 
-                name="stationBoyIncentive" 
-                className="erp-input" 
-                value={formData.stationBoyIncentive || ''} 
-                onChange={(e) => setFormData({...formData, stationBoyIncentive: e.target.value})}
-                disabled={!isEditing}
-                placeholder="Enter station boy incentive"
-              />
-            </div>
-            
-            <div className="erp-form-row">
               <label className="erp-form-label">Service Charges</label>
               <input 
                 type="number" 
@@ -1103,10 +1085,21 @@ const Billing = () => {
                 onChange={(e) => setFormData({...formData, platformFees: e.target.value})}
                 disabled={!isEditing}
               />
+              <label className="erp-form-label">Station Boy Incentive</label>
+              <input 
+                type="number" 
+                name="stationBoyIncentive" 
+                className="erp-input" 
+                value={formData.stationBoyIncentive || ''} 
+                onChange={(e) => setFormData({...formData, stationBoyIncentive: e.target.value})}
+                disabled={!isEditing}
+                placeholder="Enter station boy incentive"
+              />
             </div>
             
-            <div className="erp-form-row">
-              <label className="erp-form-label">MIsc. Charges</label>
+            {/* Row 5: Misc Charges, Delivery Charges, Cancellation Charges, GST, Surcharge (5 fields) */}
+            <div className="erp-form-row-compact-5">
+              <label className="erp-form-label">Misc. Charges</label>
               <input 
                 type="number" 
                 name="miscCharges" 
@@ -1124,9 +1117,6 @@ const Billing = () => {
                 onChange={(e) => setFormData({...formData, deliveryCharges: e.target.value})}
                 disabled={!isEditing}
               />
-            </div>
-            
-            <div className="erp-form-row">
               <label className="erp-form-label">Cancellation Charges</label>
               <input 
                 type="number" 
@@ -1145,9 +1135,6 @@ const Billing = () => {
                 onChange={(e) => setFormData({...formData, gst: e.target.value})}
                 disabled={!isEditing}
               />
-            </div>
-            
-            <div className="erp-form-row">
               <label className="erp-form-label">Surcharge</label>
               <input 
                 type="number" 
@@ -1157,6 +1144,10 @@ const Billing = () => {
                 onChange={(e) => setFormData({...formData, surcharge: e.target.value})}
                 disabled={!isEditing}
               />
+            </div>
+            
+            {/* Row 6: GST Type, Total Amount, Status, Special Request/Remarks (4 fields) */}
+            <div className="erp-form-row-compact-4">
               <label className="erp-form-label">GST Type</label>
               <select 
                 name="gstType" 
@@ -1169,10 +1160,6 @@ const Billing = () => {
                 <option value="INCLUSIVE">INCLUSIVE</option>
                 <option value="C">C</option>
               </select>
-            </div>
-            
-            {/* Total Amount - Row 7 */}
-            <div className="erp-form-row">
               <label className="erp-form-label">Total Amount</label>
               <input 
                 type="number" 
@@ -1181,6 +1168,28 @@ const Billing = () => {
                 value={formData.totalAmount ? Number(formData.totalAmount).toFixed(2) : '0.00'} 
                 readOnly 
                 disabled={true}
+              />
+              <label className="erp-form-label">Status</label>
+              <select 
+                name="status" 
+                className="erp-input" 
+                value={formData.status || 'DRAFT'} 
+                onChange={(e) => setFormData({...formData, status: e.target.value})}
+                disabled={!isEditing}
+              >
+                <option value="DRAFT">Draft</option>
+                <option value="FINAL">Final</option>
+                <option value="CANCELLED">Cancelled</option>
+              </select>
+              <label className="erp-form-label">Special Request/Remarks</label>
+              <input 
+                type="text" 
+                name="remarks" 
+                className="erp-input" 
+                value={formData.remarks || ''} 
+                onChange={(e) => setFormData({...formData, remarks: e.target.value})}
+                disabled={!isEditing}
+                placeholder="Enter special requests or remarks"
               />
             </div>
             
@@ -1316,37 +1325,6 @@ const Billing = () => {
               )}
             </div>
           </div>
-            
-            {/* Special Request/Remarks */}
-            <div className="erp-form-row">
-              <label className="erp-form-label">Special Request/Remarks</label>
-              <textarea 
-                name="remarks" 
-                className="erp-textarea" 
-                value={formData.remarks || ''} 
-                onChange={(e) => setFormData({...formData, remarks: e.target.value})}
-                disabled={!isEditing}
-                placeholder="Enter special requests or remarks"
-                rows="3"
-              />
-            </div>
-            
-            {/* Audit Details */}
-            
-            <div className="erp-form-row">
-              <label className="erp-form-label">Status</label>
-              <select 
-                name="status" 
-                className="erp-input" 
-                value={formData.status || 'DRAFT'} 
-                onChange={(e) => setFormData({...formData, status: e.target.value})}
-                disabled={!isEditing}
-              >
-                <option value="DRAFT">Draft</option>
-                <option value="FINAL">Final</option>
-                <option value="CANCELLED">Cancelled</option>
-              </select>
-            </div>
             
             {/* Audit Section */}
             <div className="erp-audit-section">
