@@ -91,7 +91,7 @@ if (typeof document !== 'undefined') {
 }
 
 const Bookings = () => {
-  const { user } = useAuth();
+  const { user, isAuthenticated } = useAuth();
   const navigate = useNavigate();
   const [bookings, setBookings] = useState([]);
   const [filteredBookings, setFilteredBookings] = useState([]);
@@ -642,6 +642,12 @@ const Bookings = () => {
       switch (actionId) {
         case 'generate_bill':
           console.log('🔄 Generating bill for booking:', record.bk_bkid);
+          // Check authentication before navigation
+          if (!isAuthenticated) {
+            console.warn('User not authenticated, redirecting to login');
+            navigate('/login');
+            return;
+          }
           // Navigate to billing page to generate bill
           navigate('/billing', { 
             state: { 
@@ -654,6 +660,12 @@ const Bookings = () => {
           
         case 'view_bill':
           console.log('🔄 Viewing bill for booking:', record.bk_bkid);
+          // Check authentication before navigation
+          if (!isAuthenticated) {
+            console.warn('User not authenticated, redirecting to login');
+            navigate('/login');
+            return;
+          }
           navigate('/billing', { 
             state: { 
               bookingId: record.bk_bkid,
@@ -1323,6 +1335,12 @@ const Bookings = () => {
     
     switch (action) {
       case 'generate_bill':
+        // Check authentication before navigation
+        if (!isAuthenticated) {
+          console.warn('User not authenticated, redirecting to login');
+          navigate('/login');
+          return;
+        }
         // Navigate to billing with booking data
         navigate('/billing', { 
           state: { 
@@ -1333,6 +1351,12 @@ const Bookings = () => {
         });
         break;
       case 'view_bill':
+        // Check authentication before navigation
+        if (!isAuthenticated) {
+          console.warn('User not authenticated, redirecting to login');
+          navigate('/login');
+          return;
+        }
         // Navigate to billing in view mode
         navigate('/billing', { 
           state: { 

@@ -183,7 +183,7 @@ function App() {
                       <Route path="/travel-plans/:id" element={<ProtectedRoute><TravelPlanDetail /></ProtectedRoute>} />
                       <Route path="/travel-plans/edit/:id" element={<ProtectedRoute><EditTravelPlan /></ProtectedRoute>} />
                       <Route path="/travel-plans/new" element={<ProtectedRoute><EditTravelPlan /></ProtectedRoute>} />
-                      <Route path="/billing" element={<ProtectedRoute><Billing /></ProtectedRoute>} />
+                      <Route path="/billing" element={<RoleBasedRoute requiredModule="billing"><Billing /></RoleBasedRoute>} />
                       <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
                       
                       {/* Unauthorized Access Route */}
@@ -209,6 +209,74 @@ function App() {
                       <Route path="/customer/master-passengers" element={<RoleBasedRoute requiredRole="CUS"><MasterPassengerList /></RoleBasedRoute>} />
                       <Route path="/customer/master-list" element={<RoleBasedRoute requiredRole="CUS"><MasterPassengerListML /></RoleBasedRoute>} />
                       <Route path="/customer/profile" element={<RoleBasedRoute requiredRole="CUS"><CustomerProfile /></RoleBasedRoute>} />
+                      
+                      {/* Catch-all route for 404 handling - MUST be LAST */}
+                      <Route path="*" element={
+                        <div style={{
+                          display: 'flex',
+                          flexDirection: 'column',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          minHeight: '60vh',
+                          textAlign: 'center',
+                          padding: '20px'
+                        }}>
+                          <div style={{
+                            backgroundColor: '#fef2f2',
+                            border: '1px solid #fecaca',
+                            borderRadius: '8px',
+                            padding: '30px',
+                            maxWidth: '500px',
+                            width: '100%'
+                          }}>
+                            <h1 style={{
+                              color: '#dc2626',
+                              fontSize: '2rem',
+                              marginBottom: '15px'
+                            }}>
+                              Page Not Found
+                            </h1>
+                            <p style={{
+                              color: '#6b7280',
+                              fontSize: '16px',
+                              marginBottom: '20px'
+                            }}>
+                              The page you're looking for doesn't exist.
+                            </p>
+                            <div style={{
+                              marginTop: '20px'
+                            }}>
+                              <Link 
+                                to="/dashboard" 
+                                style={{
+                                  backgroundColor: '#3b82f6',
+                                  color: 'white',
+                                  padding: '10px 20px',
+                                  borderRadius: '6px',
+                                  textDecoration: 'none',
+                                  marginRight: '10px',
+                                  display: 'inline-block'
+                                }}
+                              >
+                                Go to Dashboard
+                              </Link>
+                              <Link 
+                                to="/" 
+                                style={{
+                                  backgroundColor: '#6b7280',
+                                  color: 'white',
+                                  padding: '10px 20px',
+                                  borderRadius: '6px',
+                                  textDecoration: 'none',
+                                  display: 'inline-block'
+                                }}
+                              >
+                                Go Home
+                              </Link>
+                            </div>
+                          </div>
+                        </div>
+                      } />
                     </Routes>
                   </main>
                   <Footer />

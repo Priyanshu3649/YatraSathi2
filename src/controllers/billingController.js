@@ -87,26 +87,21 @@ const createBill = async (req, res) => {
     try {
       // Create new bill
       const bill = await BillTVL.create({
-        bill_no: billNumber,
-        booking_id: bookingId,
-        customer_id: customerId,
-        customer_name: customerName,
-        train_number: trainNumber,
-        reservation_class: reservationClass,
-        ticket_type: ticketType,
-        pnr_numbers: JSON.stringify(pnrNumbers || []),
-        net_fare: netFare || 0,
-        service_charges: serviceCharges || 0,
-        platform_fees: platformFees || 0,
-        agent_fees: agentFees || 0,
-        extra_charges: JSON.stringify(extraCharges || []),
-        discounts: JSON.stringify(discounts || []),
-        total_amount: totalAmount,
-        bill_date: billDate,
-        status: status || 'DRAFT',
-        remarks: remarks || null,
-        created_by: req.user.us_usid,
-        modified_by: req.user.us_usid
+        bl_entry_no: billNumber,
+        bl_bill_no: billNumber,
+        bl_booking_id: bookingId,
+        bl_customer_name: customerName,
+        bl_customer_phone: '', // Will be populated from booking data
+        bl_billing_date: billDate,
+        bl_journey_date: booking.bk_trvldt,
+        bl_train_no: trainNumber,
+        bl_class: reservationClass,
+        bl_pnr: Array.isArray(pnrNumbers) ? pnrNumbers[0] : pnrNumbers,
+        bl_railway_fare: netFare || 0,
+        bl_service_charge: serviceCharges || 0,
+        bl_platform_fee: platformFees || 0,
+        bl_total_amount: totalAmount,
+        bl_created_by: req.user.us_usid
       }, { transaction });
       
       // Update booking status from 'DRAFT' to 'CONFIRMED'
@@ -209,7 +204,7 @@ const getAllBills = async (req, res) => {
     }
     
     const bills = await BillTVL.findAll({
-      order: [['created_on', 'DESC']]
+      order: [['bl_created_at', 'DESC']]
     });
     
     // Transform data to match frontend expectations
@@ -217,26 +212,38 @@ const getAllBills = async (req, res) => {
       const billData = bill.toJSON();
       return {
         ...billData,
-        id: billData.bill_id,
-        billId: billData.bill_no,
-        customerId: billData.customer_id,
-        customerName: billData.customer_name,
-        trainNumber: billData.train_number,
-        reservationClass: billData.reservation_class,
-        ticketType: billData.ticket_type,
-        pnrNumbers: JSON.parse(billData.pnr_numbers || '[]'),
-        netFare: billData.net_fare,
-        serviceCharges: billData.service_charges,
-        platformFees: billData.platform_fees,
-        agentFees: billData.agent_fees,
-        extraCharges: JSON.parse(billData.extra_charges || '[]'),
-        discounts: JSON.parse(billData.discounts || '[]'),
-        totalAmount: billData.total_amount,
-        billDate: billData.bill_date,
-        createdOn: billData.created_on,
-        createdBy: billData.created_by,
-        modifiedOn: billData.modified_on,
-        modifiedBy: billData.modified_by
+        id: billData.bl_id,
+        billId: billData.bl_bill_no,
+        bookingId: billData.bl_booking_id,
+        subBillNo: billData.bl_sub_bill_no,
+        customerName: billData.bl_customer_name,
+        phoneNumber: billData.bl_customer_phone,
+        stationBoy: billData.bl_station_boy,
+        fromStation: billData.bl_from_station,
+        toStation: billData.bl_to_station,
+        journeyDate: billData.bl_journey_date,
+        trainNumber: billData.bl_train_no,
+        reservationClass: billData.bl_class,
+        ticketType: 'NORMAL', // Default ticket type since it's not in the model
+        pnrNumbers: billData.bl_pnr,
+        seatsAlloted: billData.bl_seats_reserved,
+        passengerList: [], // Default empty passenger list since it's not in the model
+        railwayFare: billData.bl_railway_fare,
+        stationBoyIncentive: billData.bl_sb_incentive,
+        serviceCharges: billData.bl_service_charge,
+        platformFees: billData.bl_platform_fee,
+        miscCharges: billData.bl_misc_charges,
+        deliveryCharges: billData.bl_delivery_charge,
+        cancellationCharges: billData.bl_cancellation_charge,
+        gst: billData.bl_gst,
+        surcharge: billData.bl_surcharge,
+        gstType: billData.bl_gst_type,
+        totalAmount: billData.bl_total_amount,
+        billDate: billData.bl_billing_date,
+        createdOn: billData.bl_created_at,
+        createdBy: billData.bl_created_by,
+        remarks: '', // Default empty remarks
+        status: 'DRAFT' // Default status
       };
     });
     

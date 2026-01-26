@@ -1,10 +1,10 @@
--- Migration script to update billXbill table with new field structure
+-- Migration script to update blXbilling table with new field structure
 -- Run this against the TVL_001 database
 
 USE TVL_001;
 
--- Add new columns to billXbill table
-ALTER TABLE billXbill 
+-- Add new columns to blXbilling table
+ALTER TABLE blXbilling 
 ADD COLUMN booking_number VARCHAR(50) NULL COMMENT 'Booking Number' AFTER bill_no,
 ADD COLUMN phone_no VARCHAR(20) NULL COMMENT 'Phone Number' AFTER customer_name,
 ADD COLUMN station_boy_name VARCHAR(100) NULL COMMENT 'Station Boy Name' AFTER phone_no,
@@ -12,12 +12,12 @@ ADD COLUMN pnr_number VARCHAR(20) NULL COMMENT 'PNR Number' AFTER train_number,
 ADD COLUMN berth_detail VARCHAR(50) NULL COMMENT 'Berth Detail' AFTER pnr_number;
 
 -- Rename existing columns to match new structure
-ALTER TABLE billXbill 
+ALTER TABLE blXbilling 
 CHANGE COLUMN net_fare net_journey_fare DECIMAL(15,2) DEFAULT 0 COMMENT 'Net Journey Fare',
 CHANGE COLUMN service_charges service_charge DECIMAL(15,2) DEFAULT 0 COMMENT 'Service Charge';
 
 -- Add new charge columns
-ALTER TABLE billXbill 
+ALTER TABLE blXbilling 
 ADD COLUMN station_boy_charge DECIMAL(15,2) DEFAULT 0 COMMENT 'Station Boy Charge' AFTER service_charge,
 ADD COLUMN gst DECIMAL(15,2) DEFAULT 0 COMMENT 'GST Amount' AFTER platform_fees,
 ADD COLUMN misc_charges DECIMAL(15,2) DEFAULT 0 COMMENT 'Miscellaneous Charges' AFTER gst,
@@ -29,7 +29,7 @@ ADD COLUMN gst_type VARCHAR(20) DEFAULT 'CGST+SGST' COMMENT 'GST Type (CGST+SGST
 ADD COLUMN rounded_off_amount DECIMAL(15,2) DEFAULT 0 COMMENT 'Rounded Off Amount' AFTER gst_type;
 
 -- Remove old columns that are no longer needed
-ALTER TABLE billXbill 
+ALTER TABLE blXbilling 
 DROP COLUMN IF EXISTS reservation_class,
 DROP COLUMN IF EXISTS ticket_type,
 DROP COLUMN IF EXISTS pnr_numbers,
@@ -38,10 +38,10 @@ DROP COLUMN IF EXISTS extra_charges,
 DROP COLUMN IF EXISTS discounts;
 
 -- Show the updated table structure
-DESCRIBE billXbill;
+DESCRIBE blXbilling;
 
 -- Insert some sample data for testing
-INSERT INTO billXbill (
+INSERT INTO blXbilling (
     bill_no, booking_number, customer_id, customer_name, phone_no, 
     station_boy_name, train_number, pnr_number, berth_detail,
     net_journey_fare, station_boy_charge, service_charge, platform_fees,

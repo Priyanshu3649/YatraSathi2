@@ -1,139 +1,171 @@
 const { DataTypes } = require('sequelize');
 const { sequelizeTVL } = require('../../config/db');
 
-const BillTVL = sequelizeTVL.define('billXbill', {
-  bill_id: {
-    type: DataTypes.BIGINT,
+const BillTVL = sequelizeTVL.define('blXbilling', {
+  bl_id: {
+    type: DataTypes.INTEGER,
     primaryKey: true,
     autoIncrement: true,
     allowNull: false,
     comment: 'Bill ID'
   },
-  bill_no: {
-    type: DataTypes.STRING(50),
+  bl_entry_no: {
+    type: DataTypes.STRING(20),
     allowNull: false,
-    unique: true,
+    comment: 'Entry Number'
+  },
+  bl_bill_no: {
+    type: DataTypes.STRING(30),
+    allowNull: true,
     comment: 'Bill Number'
   },
-  booking_id: {
+  bl_sub_bill_no: {
+    type: DataTypes.STRING(30),
+    allowNull: true,
+    comment: 'Sub Bill Number'
+  },
+  bl_booking_id: {
     type: DataTypes.BIGINT,
-    allowNull: true, // Can be null for ad-hoc bills if allowed, but requirement says "Billing cannot be created manually", implying linkage. Keeping true for safety unless strict.
+    allowNull: false,
     comment: 'Booking ID (Foreign Key)'
   },
-  customer_id: {
-    type: DataTypes.STRING(15),
+  bl_billing_date: {
+    type: DataTypes.DATE,
     allowNull: false,
-    comment: 'Customer ID'
+    comment: 'Billing Date'
   },
-  customer_name: {
-    type: DataTypes.STRING(100),
-    allowNull: true,
+  bl_journey_date: {
+    type: DataTypes.DATE,
+    allowNull: false,
+    comment: 'Journey Date'
+  },
+  bl_customer_name: {
+    type: DataTypes.STRING(150),
+    allowNull: false,
     comment: 'Customer Name'
   },
-  train_number: {
-    type: DataTypes.STRING(20),
+  bl_customer_phone: {
+    type: DataTypes.STRING(15),
+    allowNull: false,
+    comment: 'Customer Phone'
+  },
+  bl_station_boy: {
+    type: DataTypes.STRING(100),
+    allowNull: true,
+    comment: 'Station Boy Name'
+  },
+  bl_from_station: {
+    type: DataTypes.STRING(50),
+    allowNull: true,
+    comment: 'From Station'
+  },
+  bl_to_station: {
+    type: DataTypes.STRING(50),
+    allowNull: true,
+    comment: 'To Station'
+  },
+  bl_train_no: {
+    type: DataTypes.STRING(10),
     allowNull: true,
     comment: 'Train Number'
   },
-  reservation_class: {
+  bl_class: {
     type: DataTypes.STRING(10),
     allowNull: true,
     comment: 'Reservation Class'
   },
-  ticket_type: {
-    type: DataTypes.STRING(20),
+  bl_pnr: {
+    type: DataTypes.STRING(15),
     allowNull: true,
-    comment: 'Ticket Type (NORMAL, TATKAL, PREMIUM_TATKAL)'
+    comment: 'PNR Number'
   },
-  pnr_numbers: {
-    type: DataTypes.TEXT,
+  bl_seats_reserved: {
+    type: DataTypes.STRING(50),
     allowNull: true,
-    comment: 'PNR Numbers (JSON array)'
+    comment: 'Seats Reserved'
   },
-  net_fare: {
-    type: DataTypes.DECIMAL(15, 2),
-    defaultValue: 0,
-    comment: 'Net Journey Fare'
+  bl_railway_fare: {
+    type: DataTypes.DECIMAL(10, 2),
+    defaultValue: 0.00,
+    comment: 'Railway Fare'
   },
-  service_charges: {
-    type: DataTypes.DECIMAL(15, 2),
-    defaultValue: 0,
-    comment: 'Service Charges'
+  bl_sb_incentive: {
+    type: DataTypes.DECIMAL(10, 2),
+    defaultValue: 0.00,
+    comment: 'Station Boy Incentive'
   },
-  platform_fees: {
-    type: DataTypes.DECIMAL(15, 2),
-    defaultValue: 0,
-    comment: 'Platform Fees'
+  bl_gst: {
+    type: DataTypes.DECIMAL(10, 2),
+    defaultValue: 0.00,
+    comment: 'GST'
   },
-  agent_fees: {
-    type: DataTypes.DECIMAL(15, 2),
-    defaultValue: 0,
-    comment: 'Agent Fees'
+  bl_misc_charges: {
+    type: DataTypes.DECIMAL(10, 2),
+    defaultValue: 0.00,
+    comment: 'Miscellaneous Charges'
   },
-  extra_charges: {
-    type: DataTypes.TEXT,
-    allowNull: true,
-    comment: 'Extra Charges (JSON array)'
+  bl_platform_fee: {
+    type: DataTypes.DECIMAL(10, 2),
+    defaultValue: 0.00,
+    comment: 'Platform Fee'
   },
-  discounts: {
-    type: DataTypes.TEXT,
-    allowNull: true,
-    comment: 'Discounts (JSON array)'
+  bl_service_charge: {
+    type: DataTypes.DECIMAL(10, 2),
+    defaultValue: 0.00,
+    comment: 'Service Charge'
   },
-  total_amount: {
-    type: DataTypes.DECIMAL(15, 2),
-    defaultValue: 0,
+  bl_delivery_charge: {
+    type: DataTypes.DECIMAL(10, 2),
+    defaultValue: 0.00,
+    comment: 'Delivery Charge'
+  },
+  bl_cancellation_charge: {
+    type: DataTypes.DECIMAL(10, 2),
+    defaultValue: 0.00,
+    comment: 'Cancellation Charge'
+  },
+  bl_surcharge: {
+    type: DataTypes.DECIMAL(10, 2),
+    defaultValue: 0.00,
+    comment: 'Surcharge'
+  },
+  bl_discount: {
+    type: DataTypes.DECIMAL(10, 2),
+    defaultValue: 0.00,
+    comment: 'Discount'
+  },
+  bl_gst_type: {
+    type: DataTypes.ENUM('INCLUSIVE', 'EXCLUSIVE', 'C'),
+    defaultValue: 'EXCLUSIVE',
+    comment: 'GST Type'
+  },
+  bl_total_amount: {
+    type: DataTypes.DECIMAL(12, 2),
+    allowNull: false,
     comment: 'Total Amount'
   },
-  bill_date: {
-    type: DataTypes.DATE,
-    allowNull: false,
-    comment: 'Bill Date'
+  bl_is_split: {
+    type: DataTypes.TINYINT(1),
+    defaultValue: 0,
+    comment: 'Is Split Bill'
   },
-  status: {
-    type: DataTypes.STRING(20),
-    defaultValue: 'DRAFT',
-    comment: 'Bill Status (DRAFT, FINAL, PAID, PARTIAL)'
-  },
-  remarks: {
-    type: DataTypes.TEXT,
+  bl_parent_bill_id: {
+    type: DataTypes.INTEGER,
     allowNull: true,
-    comment: 'Remarks'
+    comment: 'Parent Bill ID'
   },
-  created_by: {
-    type: DataTypes.STRING(15),
-    allowNull: false,
+  bl_created_by: {
+    type: DataTypes.INTEGER,
+    allowNull: true,
     comment: 'Created By User ID'
   },
-  created_on: {
+  bl_created_at: {
     type: DataTypes.DATE,
     defaultValue: DataTypes.NOW,
-    allowNull: false,
-    comment: 'Created On Date Time'
-  },
-  modified_by: {
-    type: DataTypes.STRING(15),
-    allowNull: true,
-    comment: 'Modified By User ID'
-  },
-  modified_on: {
-    type: DataTypes.DATE,
-    defaultValue: DataTypes.NOW,
-    onUpdate: DataTypes.NOW,
-    comment: 'Modified On Date Time'
-  },
-  closed_by: {
-    type: DataTypes.STRING(15),
-    allowNull: true,
-    comment: 'Closed By User ID'
-  },
-  closed_on: {
-    type: DataTypes.DATE,
-    allowNull: true,
-    comment: 'Closed On Date Time'
+    comment: 'Created At'
   }
 }, {
-  tableName: 'billXbill',
+  tableName: 'blXbilling',
   timestamps: false
 });
 

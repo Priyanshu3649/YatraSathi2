@@ -237,11 +237,18 @@ const employeeLogin = async (req, res) => {
 // Login user
 const loginUser = async (req, res) => {
   try {
-    const { email, password } = req.body;
+    const { email, username, password } = req.body;
+    
+    // Handle both email and username fields
+    const loginIdentifier = email || username;
+    
+    if (!loginIdentifier) {
+      return res.status(400).json({ message: 'Email or username is required' });
+    }
 
     // Check for login in both regular and TVL databases
     let login = await Login.findOne({ 
-      where: { lg_email: email.trim().toLowerCase() }
+      where: { lg_email: loginIdentifier.trim().toLowerCase() }
     });
     
     let isTVLUser = false;
@@ -254,7 +261,7 @@ const loginUser = async (req, res) => {
     } else {
       // Check TVL database
       login = await LoginTVL.findOne({ 
-        where: { lg_email: email.trim().toLowerCase() }
+        where: { lg_email: loginIdentifier.trim().toLowerCase() }
       });
       
       if (login) {

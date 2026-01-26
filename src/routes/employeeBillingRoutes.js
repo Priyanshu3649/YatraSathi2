@@ -11,6 +11,7 @@ const {
   getCustomerLedger,
   getCustomerBalance
 } = require('../controllers/billingController');
+const { getBillingByBookingId } = require('../controllers/billingIntegrationController');
 const authMiddleware = require('../middleware/authMiddleware');
 
 const router = express.Router();
@@ -79,5 +80,8 @@ router.get('/search', searchBills);
 // Customer-specific routes
 router.get('/customer/:customerId/ledger', getCustomerLedger);
 router.get('/customer/:customerId/balance', getCustomerBalance);
+
+// Booking integration routes
+router.get('/booking/:bookingId', getBillingByBookingId);
 
 module.exports = router;

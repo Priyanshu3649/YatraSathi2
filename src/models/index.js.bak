@@ -213,7 +213,7 @@ module.exports = {
   paXpayalloc: PaymentAllocTVL,
   ptPayment: Payment,
   paPaymentAlloc: PaymentAlloc,
-  billXbill: BillTVL,
+  blXbilling: BillTVL,
   BillTVL,
   Session,
   Audit,

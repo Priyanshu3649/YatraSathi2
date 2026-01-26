@@ -16,8 +16,8 @@ const Pnr = sequelize.define('pnXpnr', {
     allowNull: false,
     comment: 'Booking ID'
   },
-  pn_pnr: {
-    type: DataTypes.STRING(15),
+  pn_pnrnum: {
+    type: DataTypes.STRING(20),
     allowNull: true,
     unique: true,
     comment: 'PNR Number'
@@ -114,7 +114,7 @@ const Pnr = sequelize.define('pnXpnr', {
   indexes: [
     {
       unique: true,
-      fields: ['pn_pnr']
+      fields: ['pn_pnrnum']
     }
   ]
 });

@@ -1,51 +1,12 @@
-import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { bookingAPI, paymentAPI, billingAPI } from '../services/api';
-import { useKeyboardNavigation } from '../contexts/KeyboardNavigationContext';
 import '../styles/vintage-erp-theme.css';
 import '../styles/classic-enterprise-global.css';
 import '../styles/vintage-admin-panel.css';
 import '../styles/dynamic-admin-panel.css';
 import '../styles/vintage-erp-global.css';
-import '../styles/bookings.css';
-import '../dense.css';
-
-// Add inline styles for keyboard navigation
-const keyboardNavigationStyles = `
-  .erp-table tbody tr.highlighted {
-    background-color: #e3f2fd !important;
-    border: 2px solid #1976d2 !important;
-  }
-  
-  .erp-table tbody tr.selected {
-    background-color: #bbdefb !important;
-  }
-  
-  .erp-table tbody tr:focus {
-    outline: 2px solid #1976d2;
-    outline-offset: -2px;
-  }
-  
-  .keyboard-shortcuts-help {
-    position: fixed;
-    bottom: 10px;
-    right: 10px;
-    background: rgba(0, 0, 0, 0.8);
-    color: white;
-    padding: 10px;
-    border-radius: 4px;
-    font-size: 11px;
-    z-index: 1000;
-  }
-`;
-
-// Inject styles
-if (typeof document !== 'undefined') {
-  const styleSheet = document.createElement('style');
-  styleSheet.textContent = keyboardNavigationStyles;
-  document.head.appendChild(styleSheet);
-}
 
 // Import billing components
 import BillCreationForm from '../components/Billing/BillCreationForm';
@@ -57,18 +18,6 @@ const Billing = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
-  const {
-    registerForm,
-    unregisterForm,
-    setActiveForm,
-    moveNext,
-    movePrevious,
-    enterAction,
-    openModal,
-    closeModal,
-    focusField,
-    handleManualFocus
-  } = useKeyboardNavigation();
   const [bills, setBills] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -81,101 +30,30 @@ const Billing = () => {
   const [bookingData, setBookingData] = useState(null);
   const [billingMode, setBillingMode] = useState('list'); // 'list', 'generate', 'view'
   
-  // MANDATORY: Define business logic field order (MEMOIZED) - MATCHES UI LAYOUT
-  const fieldOrder = useMemo(() => [
-    'billDate',
-    'bookingId',
-    'subBillNo',
-    'customerName',
-    'phoneNumber',
-    'stationBoy',
-    'fromStation',
-    'toStation',
-    'journeyDate',
-    'trainNumber',
-    'reservationClass',
-    'ticketType',
-    'pnrNumbers',
-    'seatsAlloted',
-    'railwayFare',
-    'stationBoyIncentive',
-    'serviceCharges',
-    'platformFees',
-    'miscCharges',
-    'deliveryCharges',
-    'cancellationCharges',
-    'gst',
-    'surcharge',
-    'totalAmount',
-    'passenger_name',
-    'passenger_age', 
-    'passenger_gender',
-    'passenger_berth',
-    'remarks',
-    'status'
-  ], []);
-  
   const [formData, setFormData] = useState({
     id: '',
     billDate: new Date().toISOString().split('T')[0],
-    bookingId: '', // Read-only when populated from booking
-    subBillNo: '',
+    customerId: user?.us_usertype === 'customer' ? user.us_usid : '',
     customerName: '',
-    phoneNumber: '',
-    stationBoy: '',
-    fromStation: '',
-    toStation: '',
-    journeyDate: '',
+    customerGstin: '',
+    customerBillingAddress: '',
+    bookingId: '', // NEW: Link to booking
+    pnrNumbers: [],
     trainNumber: '',
     reservationClass: '3A',
     ticketType: 'NORMAL',
-    pnrNumbers: '',
-    seatsAlloted: '',
-    railwayFare: '',
-    stationBoyIncentive: '',
+    netFare: '',
     serviceCharges: '',
     platformFees: '',
-    miscCharges: '',
-    deliveryCharges: '',
-    cancellationCharges: '',
-    gst: '',
-    surcharge: '',
-    gstType: 'EXCLUSIVE',
-    totalAmount: 0, // Auto-calculated and rounded off
-    passengerList: [],
-    remarks: '',
-    status: 'DRAFT'
+    agentFees: '',
+    extraCharges: [],
+    discounts: [],
+    totalAmount: 0, // Auto-calculated
+    taxAmount: 0,   // Auto-calculated
+    grandTotal: 0,  // Auto-calculated
+    status: 'DRAFT',
+    remarks: ''
   });
-
-  // Initialize keyboard navigation
-  useEffect(() => {
-    try {
-      registerForm('billing', fieldOrder);
-      
-      // Set active form
-      setActiveForm('billing');
-      
-      // Only log in development mode
-      if (process.env.NODE_ENV === 'development') {
-        console.log('🎯 Keyboard navigation initialized for billing form');
-      }
-    } catch (error) {
-      if (process.env.NODE_ENV === 'development') {
-        console.warn('Keyboard navigation init failed:', error.message);
-      }
-    }
-    
-    return () => {
-      try {
-        unregisterForm('billing');
-      } catch (error) {
-        // Silent cleanup in production
-        if (process.env.NODE_ENV === 'development') {
-          console.warn('Keyboard navigation cleanup failed:', error.message);
-        }
-      }
-    };
-  }, [fieldOrder, registerForm, unregisterForm, setActiveForm]);
 
   // Handle booking integration from location state
   useEffect(() => {
@@ -191,20 +69,15 @@ const Billing = () => {
           setFormData(prev => ({
             ...prev,
             bookingId: bookingId,
-            customerName: passedBookingData.bk_customername || passedBookingData.customerName || '',
-            phoneNumber: passedBookingData.bk_phonenumber || passedBookingData.phoneNumber || '',
-            fromStation: passedBookingData.bk_fromst || passedBookingData.fromStation || '',
-            toStation: passedBookingData.bk_tost || passedBookingData.toStation || '',
-            journeyDate: passedBookingData.bk_trvldt || passedBookingData.journeyDate || '',
-            trainNumber: passedBookingData.bk_trno || passedBookingData.trainNumber || '',
-            reservationClass: passedBookingData.bk_class || passedBookingData.reservationClass || '3A',
-            ticketType: passedBookingData.bk_tickettype || passedBookingData.ticketType || 'NORMAL',
-            pnrNumbers: passedBookingData.bk_pnr || passedBookingData.pnrNumber || '',
-            seatsAlloted: passedBookingData.bk_totalpass || passedBookingData.seatsAlloted || '',
+            customerId: passedBookingData.bk_usid || passedBookingData.customerId,
+            customerName: passedBookingData.customerName || passedBookingData.bk_customername,
+            trainNumber: passedBookingData.trainNumber || '',
+            reservationClass: passedBookingData.bk_class || '3A',
             // Auto-calculate amounts based on booking
-            railwayFare: calculateNetFare(passedBookingData),
+            netFare: calculateNetFare(passedBookingData),
             serviceCharges: calculateServiceCharges(passedBookingData),
-            platformFees: calculatePlatformFees(passedBookingData)
+            platformFees: calculatePlatformFees(passedBookingData),
+            agentFees: calculateAgentFees(passedBookingData)
           }));
           
           setActiveView('create');
@@ -302,7 +175,6 @@ const Billing = () => {
 
   // Editing state
   const [isEditing, setIsEditing] = useState(false);
-  const [isPassengerSectionOpen, setIsPassengerSectionOpen] = useState(false);
 
   // Customer lookup state
   const [customerLookup, setCustomerLookup] = useState([]);
@@ -445,36 +317,31 @@ const Billing = () => {
   useEffect(() => {
     if (isEditing) {
       // Calculate subtotal
-      const railwayFare = parseFloat(formData.railwayFare) || 0;
+      const netFare = parseFloat(formData.netFare) || 0;
       const serviceCharges = parseFloat(formData.serviceCharges) || 0;
       const platformFees = parseFloat(formData.platformFees) || 0;
-      const stationBoyIncentive = parseFloat(formData.stationBoyIncentive) || 0;
-      const miscCharges = parseFloat(formData.miscCharges) || 0;
-      const deliveryCharges = parseFloat(formData.deliveryCharges) || 0;
-      const cancellationCharges = parseFloat(formData.cancellationCharges) || 0;
+      const agentFees = parseFloat(formData.agentFees) || 0;
+      
+      // Calculate extra charges total
+      const extraChargesTotal = formData.extraCharges?.reduce((sum, charge) => {
+        return sum + (parseFloat(charge.amount) || 0);
+      }, 0) || 0;
       
       // Calculate subtotal (base fare + all charges)
-      const subtotal = railwayFare + serviceCharges + platformFees + stationBoyIncentive + miscCharges + deliveryCharges + cancellationCharges;
+      const subtotal = netFare + serviceCharges + platformFees + agentFees + extraChargesTotal;
       
-      // Calculate GST
-      const gstRate = parseFloat(formData.gst) || 0;
-      const surcharge = parseFloat(formData.surcharge) || 0;
+      // Calculate discount total
+      const discountTotal = formData.discounts?.reduce((sum, disc) => {
+        return sum + (parseFloat(disc.amount) || 0);
+      }, 0) || 0;
       
-      // Calculate tax based on GST type
-      let taxAmount = 0;
-      let grandTotal = 0;
+      // Calculate tax (assuming 5% GST for demonstration)
+      const taxRate = 0.05; // 5% GST
+      const taxableAmount = subtotal - discountTotal;
+      const taxAmount = taxableAmount * taxRate;
       
-      if (formData.gstType === 'EXCLUSIVE') {
-        taxAmount = (subtotal * gstRate) / 100;
-        grandTotal = subtotal + taxAmount + surcharge;
-      } else if (formData.gstType === 'INCLUSIVE') {
-        // If GST is inclusive, the GST is already included in the subtotal
-        taxAmount = (subtotal * gstRate) / (100 + gstRate);
-        grandTotal = subtotal + surcharge;
-      } else { // C type
-        taxAmount = (subtotal * gstRate) / 100;
-        grandTotal = subtotal + taxAmount + surcharge;
-      }
+      // Calculate grand total
+      const grandTotal = taxableAmount + taxAmount;
       
       // Calculate balance due (assuming amount received is tracked separately)
       const amountReceived = parseFloat(formData.amountReceived) || 0;
@@ -483,10 +350,14 @@ const Billing = () => {
       // Update form data with calculated values
       setFormData(prev => ({
         ...prev,
-        totalAmount: Math.round(grandTotal * 100) / 100 // Round to 2 decimal places
+        calculatedSubtotal: subtotal,
+        calculatedDiscountTotal: discountTotal,
+        calculatedTaxAmount: taxAmount,
+        calculatedGrandTotal: grandTotal,
+        calculatedBalanceDue: balanceDue
       }));
     }
-  }, [formData.railwayFare, formData.serviceCharges, formData.platformFees, formData.stationBoyIncentive, formData.miscCharges, formData.deliveryCharges, formData.cancellationCharges, formData.gst, formData.gstType, formData.surcharge, formData.amountReceived, isEditing]);
+  }, [formData.netFare, formData.serviceCharges, formData.platformFees, formData.agentFees, formData.extraCharges, formData.discounts, formData.amountReceived, isEditing]);
 
   const fetchBills = async () => {
     try {
@@ -504,23 +375,7 @@ const Billing = () => {
       
       // Handle the response structure
       const billsData = data?.data?.bills || data?.bills || data || [];
-      // Ensure numeric fields are properly converted to numbers
-      const processedBills = Array.isArray(billsData) ? billsData.map(bill => ({
-        ...bill,
-        totalAmount: bill.totalAmount ? Number(bill.totalAmount) : 0,
-        paidAmount: bill.paidAmount ? Number(bill.paidAmount) : 0,
-        railwayFare: bill.railwayFare ? Number(bill.railwayFare) : 0,
-        serviceCharges: bill.serviceCharges ? Number(bill.serviceCharges) : 0,
-        platformFees: bill.platformFees ? Number(bill.platformFees) : 0,
-        stationBoyIncentive: bill.stationBoyIncentive ? Number(bill.stationBoyIncentive) : 0,
-        miscCharges: bill.miscCharges ? Number(bill.miscCharges) : 0,
-        deliveryCharges: bill.deliveryCharges ? Number(bill.deliveryCharges) : 0,
-        cancellationCharges: bill.cancellationCharges ? Number(bill.cancellationCharges) : 0,
-        gst: bill.gst ? Number(bill.gst) : 0,
-        surcharge: bill.surcharge ? Number(bill.surcharge) : 0
-      })) : [];
-      setBills(processedBills);
-      setFilteredBills(processedBills);
+      setBills(Array.isArray(billsData) ? billsData : []);
       setError('');
     } catch (err) {
       setError(err.message || 'Failed to fetch bills');
@@ -699,63 +554,6 @@ const Billing = () => {
   const isLastRecord = selectedBill && paginatedData.length > 0 && 
     paginatedData[paginatedData.length - 1].id === selectedBill.id;
 
-  // Keyboard navigation handler
-  const handleKeyDown = (e) => {
-    if (!showForm || !isEditing) return;
-    
-    switch(e.key) {
-      case 'Escape':
-        e.preventDefault();
-        // Close form without saving
-        setShowForm(false);
-        setActiveView('view');
-        break;
-      case 'F2':
-        e.preventDefault();
-        // Toggle edit mode
-        setIsEditing(!isEditing);
-        break;
-      case 'F3':
-        e.preventDefault();
-        // Save form
-        if (isEditing) {
-          handleSave();
-        }
-        break;
-      case 'F4':
-        e.preventDefault();
-        // New form
-        handleNew();
-        break;
-      case 'F5':
-        e.preventDefault();
-        // Refresh data
-        fetchBills();
-        break;
-      case 'Tab':
-        // Handle tab navigation within form
-        // Note: Default browser tab behavior will be used
-        break;
-      case 'Enter':
-        e.preventDefault();
-        // Save form on Enter
-        if (isEditing) {
-          handleSave();
-        }
-        break;
-      default:
-        break;
-    }
-  };
-
-  // Add event listener for keyboard shortcuts
-  useEffect(() => {
-    document.addEventListener('keydown', handleKeyDown);
-    return () => {
-      document.removeEventListener('keydown', handleKeyDown);
-    };
-  }, [showForm, isEditing]);
-
   if (loading) {
     return (
       <div className="erp-admin-container">
@@ -765,7 +563,7 @@ const Billing = () => {
   }
 
   return (
-    <div className="erp-admin-container booking-layout">
+    <div className="erp-admin-container">
       {/* Toolbar - Static */}
       <div className="erp-toolbar">
         <button className="erp-icon-button" onClick={() => navigate('/dashboard')} title="Home">🏠</button>
@@ -832,11 +630,11 @@ const Billing = () => {
       </div>
 
       {/* Main Content Area - Scrollable */}
-      <div className="layout-content-wrapper">
+      <div className="erp-main-content">
         {/* Center Content */}
-        <div className="layout-main-column">
+        <div className="erp-center-content">
           {/* Form Panel - Static */}
-          <div className="layout-form-section">
+          <div className="erp-form-section">
             {/* Bill Header Fields - Row 1 */}
             <div className="erp-form-row">
               <label className="erp-form-label required">Bill ID</label>
@@ -858,162 +656,145 @@ const Billing = () => {
               />
             </div>
             
-            {/* Booking and Customer Details - Row 2 */}
+            {/* Customer Details - Row 2 */}
             <div className="erp-form-row">
-              <label className="erp-form-label required">Booking ID</label>
-              <input 
-                type="text" 
-                name="bookingId" 
-                className="erp-input" 
-                value={formData.bookingId || ''} 
-                readOnly 
-                disabled={true}
-              />
-              <label className="erp-form-label">Sub Bill No</label>
-              <input 
-                type="text" 
-                name="subBillNo" 
-                className="erp-input" 
-                value={formData.subBillNo || ''} 
-                onChange={(e) => setFormData({...formData, subBillNo: e.target.value})}
-                disabled={!isEditing}
-              />
-            </div>
-            
-            {/* Customer Details - Row 3 */}
-            <div className="erp-form-row">
+              <label className="erp-form-label required">Customer ID</label>
+              <div style={{ position: 'relative', display: 'inline-block', width: '100%' }}>
+                <input 
+                  type="text" 
+                  name="customerId" 
+                  className="erp-input" 
+                  value={formData.customerId || ''} 
+                  onChange={handleCustomerIdChange}
+                  disabled={!isEditing}
+                  placeholder="Enter customer ID"
+                />
+                {showCustomerDropdown && (
+                  <div className="erp-dropdown" style={{
+                    position: 'absolute',
+                    top: '100%',
+                    left: 0,
+                    right: 0,
+                    backgroundColor: 'white',
+                    border: '1px solid #ccc',
+                    zIndex: 1000,
+                    maxHeight: '150px',
+                    overflowY: 'auto',
+                    boxShadow: '0 2px 5px rgba(0,0,0,0.2)'
+                  }}>
+                    {customerLookup.map(customer => (
+                      <div 
+                        key={customer.id}
+                        className="erp-dropdown-item"
+                        style={{
+                          padding: '4px 8px',
+                          cursor: 'pointer',
+                          borderBottom: '1px solid #eee'
+                        }}
+                        onMouseDown={() => handleCustomerSelect(customer)}
+                      >
+                        {customer.id} - {customer.name}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
               <label className="erp-form-label required">Customer Name</label>
-              <input 
-                type="text" 
-                name="customerName" 
-                className="erp-input" 
-                value={formData.customerName || ''} 
-                onChange={(e) => setFormData({...formData, customerName: e.target.value})}
-                disabled={!isEditing}
-                placeholder="Enter customer name"
-              />
-              <label className="erp-form-label required">Phone Number</label>
-              <input 
-                type="text" 
-                name="phoneNumber" 
-                className="erp-input" 
-                value={formData.phoneNumber || ''} 
-                onChange={(e) => setFormData({...formData, phoneNumber: e.target.value})}
-                disabled={!isEditing}
-                placeholder="Enter phone number"
-              />
+              <div style={{ position: 'relative', display: 'inline-block', width: '100%' }}>
+                <input 
+                  type="text" 
+                  name="customerName" 
+                  className="erp-input" 
+                  value={formData.customerName || ''} 
+                  onChange={handleCustomerNameChange}
+                  disabled={!isEditing}
+                  placeholder="Enter customer name"
+                />
+                {showCustomerDropdown && (
+                  <div className="erp-dropdown" style={{
+                    position: 'absolute',
+                    top: '100%',
+                    left: 0,
+                    right: 0,
+                    backgroundColor: 'white',
+                    border: '1px solid #ccc',
+                    zIndex: 1000,
+                    maxHeight: '150px',
+                    overflowY: 'auto',
+                    boxShadow: '0 2px 5px rgba(0,0,0,0.2)'
+                  }}>
+                    {customerLookup.map(customer => (
+                      <div 
+                        key={customer.id}
+                        className="erp-dropdown-item"
+                        style={{
+                          padding: '4px 8px',
+                          cursor: 'pointer',
+                          borderBottom: '1px solid #eee'
+                        }}
+                        onMouseDown={() => handleCustomerSelect(customer)}
+                      >
+                        {customer.id} - {customer.name}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
             
-            {/* Station and Journey Details - Row 4 */}
+            {/* Bill Charges - Row 3 */}
             <div className="erp-form-row">
-              <label className="erp-form-label">Station Boy Name</label>
-              <input 
-                type="text" 
-                name="stationBoy" 
-                className="erp-input" 
-                value={formData.stationBoy || ''} 
-                onChange={(e) => setFormData({...formData, stationBoy: e.target.value})}
-                disabled={!isEditing}
-                placeholder="Enter station boy name"
-              />
-              <label className="erp-form-label required">From Station</label>
-              <input 
-                type="text" 
-                name="fromStation" 
-                className="erp-input" 
-                value={formData.fromStation || ''} 
-                onChange={(e) => setFormData({...formData, fromStation: e.target.value})}
-                disabled={!isEditing}
-                placeholder="Enter from station"
-              />
-            </div>
-            
-            <div className="erp-form-row">
-              <label className="erp-form-label required">To Station</label>
-              <input 
-                type="text" 
-                name="toStation" 
-                className="erp-input" 
-                value={formData.toStation || ''} 
-                onChange={(e) => setFormData({...formData, toStation: e.target.value})}
-                disabled={!isEditing}
-                placeholder="Enter to station"
-              />
-              <label className="erp-form-label required">Journey Date</label>
-              <input 
-                type="date" 
-                name="journeyDate" 
-                className="erp-input" 
-                value={formData.journeyDate || ''} 
-                onChange={(e) => setFormData({...formData, journeyDate: e.target.value})}
-                disabled={!isEditing}
-              />
-            </div>
-            
-            {/* Train and Class Details - Row 5 */}
-            <div className="erp-form-row">
-              <label className="erp-form-label required">Train Number</label>
-              <input 
-                type="text" 
-                name="trainNumber" 
-                className="erp-input" 
-                value={formData.trainNumber || ''} 
-                onChange={(e) => setFormData({...formData, trainNumber: e.target.value})}
-                disabled={!isEditing}
-                placeholder="Enter train number"
-              />
-              <label className="erp-form-label required">Reservation Class</label>
-              <select 
-                name="reservationClass" 
-                className="erp-input" 
-                value={formData.reservationClass || '3A'} 
-                onChange={(e) => setFormData({...formData, reservationClass: e.target.value})}
-                disabled={!isEditing}
-              >
-                <option value="SL">SL</option>
-                <option value="3A">3A</option>
-                <option value="2A">2A</option>
-                <option value="1A">1A</option>
-                <option value="CC">CC</option>
-                <option value="EC">EC</option>
-              </select>
-            </div>
-            
-            <div className="erp-form-row">
-              <label className="erp-form-label required">Ticket Type</label>
-              <select 
-                name="ticketType" 
-                className="erp-input" 
-                value={formData.ticketType || 'NORMAL'} 
-                onChange={(e) => setFormData({...formData, ticketType: e.target.value})}
-                disabled={!isEditing}
-              >
-                <option value="NORMAL">NORMAL</option>
-                <option value="TATKAL">TATKAL</option>
-                <option value="PREMIUM_TATKAL">PREMIUM TATKAL</option>
-              </select>
-              <label className="erp-form-label">PNR Number(s)</label>
+              <label className="erp-form-label required">PNR Number(s)</label>
               <input 
                 type="text" 
                 name="pnrNumbers" 
                 className="erp-input" 
-                value={formData.pnrNumbers || ''} 
-                onChange={(e) => setFormData({...formData, pnrNumbers: e.target.value})}
+                value={formData.pnrNumbers?.join(', ') || ''} 
+                onChange={(e) => setFormData({...formData, pnrNumbers: e.target.value.split(',').map(pnr => pnr.trim())})}
                 disabled={!isEditing}
                 placeholder="Enter PNR numbers separated by commas"
+              />
+              <label className="erp-form-label required">Net Journey Fare</label>
+              <input 
+                type="number" 
+                name="netFare" 
+                className="erp-input" 
+                value={formData.netFare || ''} 
+                onChange={(e) => setFormData({...formData, netFare: e.target.value})}
+                disabled={!isEditing}
               />
             </div>
             
             <div className="erp-form-row">
-              <label className="erp-form-label">Seat(s) Alloted</label>
+              <label className="erp-form-label">Service Charges</label>
               <input 
-                type="text" 
-                name="seatsAlloted" 
+                type="number" 
+                name="serviceCharges" 
                 className="erp-input" 
-                value={formData.seatsAlloted || ''} 
-                onChange={(e) => setFormData({...formData, seatsAlloted: e.target.value})}
+                value={formData.serviceCharges || ''} 
+                onChange={(e) => setFormData({...formData, serviceCharges: e.target.value})}
                 disabled={!isEditing}
-                placeholder="Enter seats alloted"
+              />
+              <label className="erp-form-label">Platform Fees</label>
+              <input 
+                type="number" 
+                name="platformFees" 
+                className="erp-input" 
+                value={formData.platformFees || ''} 
+                onChange={(e) => setFormData({...formData, platformFees: e.target.value})}
+                disabled={!isEditing}
+              />
+            </div>
+            
+            <div className="erp-form-row">
+              <label className="erp-form-label">Agent Fees</label>
+              <input 
+                type="number" 
+                name="agentFees" 
+                className="erp-input" 
+                value={formData.agentFees || ''} 
+                onChange={(e) => setFormData({...formData, agentFees: e.target.value})}
+                disabled={!isEditing}
               />
             </div>
             
@@ -1060,274 +841,250 @@ const Billing = () => {
               </select>
             </div>
             
-            {/* Fare and Charges - Row 6 */}
+            {/* Additional Charges & Discounts - Row 4 */}
             <div className="erp-form-row">
-              <label className="erp-form-label">Railway Fare</label>
-              <input 
-                type="number" 
-                name="railwayFare" 
-                className="erp-input" 
-                value={formData.railwayFare || ''} 
-                onChange={(e) => setFormData({...formData, railwayFare: e.target.value})}
-                disabled={!isEditing}
-                placeholder="Enter railway fare"
-              />
-              <label className="erp-form-label">Station Boy Incentive</label>
-              <input 
-                type="number" 
-                name="stationBoyIncentive" 
-                className="erp-input" 
-                value={formData.stationBoyIncentive || ''} 
-                onChange={(e) => setFormData({...formData, stationBoyIncentive: e.target.value})}
-                disabled={!isEditing}
-                placeholder="Enter station boy incentive"
-              />
-            </div>
-            
-            <div className="erp-form-row">
-              <label className="erp-form-label">Service Charges</label>
-              <input 
-                type="number" 
-                name="serviceCharges" 
-                className="erp-input" 
-                value={formData.serviceCharges || ''} 
-                onChange={(e) => setFormData({...formData, serviceCharges: e.target.value})}
-                disabled={!isEditing}
-              />
-              <label className="erp-form-label">Platform Fees</label>
-              <input 
-                type="number" 
-                name="platformFees" 
-                className="erp-input" 
-                value={formData.platformFees || ''} 
-                onChange={(e) => setFormData({...formData, platformFees: e.target.value})}
-                disabled={!isEditing}
-              />
-            </div>
-            
-            <div className="erp-form-row">
-              <label className="erp-form-label">MIsc. Charges</label>
-              <input 
-                type="number" 
-                name="miscCharges" 
-                className="erp-input" 
-                value={formData.miscCharges || ''} 
-                onChange={(e) => setFormData({...formData, miscCharges: e.target.value})}
-                disabled={!isEditing}
-              />
-              <label className="erp-form-label">Delivery Charges</label>
-              <input 
-                type="number" 
-                name="deliveryCharges" 
-                className="erp-input" 
-                value={formData.deliveryCharges || ''} 
-                onChange={(e) => setFormData({...formData, deliveryCharges: e.target.value})}
-                disabled={!isEditing}
-              />
-            </div>
-            
-            <div className="erp-form-row">
-              <label className="erp-form-label">Cancellation Charges</label>
-              <input 
-                type="number" 
-                name="cancellationCharges" 
-                className="erp-input" 
-                value={formData.cancellationCharges || ''} 
-                onChange={(e) => setFormData({...formData, cancellationCharges: e.target.value})}
-                disabled={!isEditing}
-              />
-              <label className="erp-form-label">GST</label>
-              <input 
-                type="number" 
-                name="gst" 
-                className="erp-input" 
-                value={formData.gst || ''} 
-                onChange={(e) => setFormData({...formData, gst: e.target.value})}
-                disabled={!isEditing}
-              />
-            </div>
-            
-            <div className="erp-form-row">
-              <label className="erp-form-label">Surcharge</label>
-              <input 
-                type="number" 
-                name="surcharge" 
-                className="erp-input" 
-                value={formData.surcharge || ''} 
-                onChange={(e) => setFormData({...formData, surcharge: e.target.value})}
-                disabled={!isEditing}
-              />
-              <label className="erp-form-label">GST Type</label>
-              <select 
-                name="gstType" 
-                className="erp-input" 
-                value={formData.gstType || 'EXCLUSIVE'} 
-                onChange={(e) => setFormData({...formData, gstType: e.target.value})}
-                disabled={!isEditing}
-              >
-                <option value="EXCLUSIVE">EXCLUSIVE</option>
-                <option value="INCLUSIVE">INCLUSIVE</option>
-                <option value="C">C</option>
-              </select>
-            </div>
-            
-            {/* Total Amount - Row 7 */}
-            <div className="erp-form-row">
-              <label className="erp-form-label">Total Amount</label>
-              <input 
-                type="number" 
-                name="totalAmount" 
-                className="erp-input" 
-                value={formData.totalAmount ? Number(formData.totalAmount).toFixed(2) : '0.00'} 
-                readOnly 
-                disabled={true}
-              />
-            </div>
-            
-            {/* Passenger List - Expandable Section */}
-            <div className="layout-grid-container">
-              <div className="erp-expandable-section">
-                <div className="erp-section-header" onClick={() => setIsPassengerSectionOpen(!isPassengerSectionOpen)}>
-                  <h4>Passenger List</h4>
-                  <span className="erp-toggle-icon">{isPassengerSectionOpen ? '−' : '+'}</span>
-                </div>
-                {isPassengerSectionOpen && (
-                  <div className="erp-section-content">
-                    <div className="erp-grid-container" style={{ maxHeight: '200px', overflowY: 'auto', border: '1px solid #ccc', margin: '5px 0' }}>
-                      <table className="erp-table" style={{ fontSize: '11px' }}>
-                        <thead>
-                          <tr>
-                            <th style={{ width: '30px' }}>Sr</th>
-                            <th style={{ width: '120px' }}>Name</th>
-                            <th style={{ width: '80px' }}>Age</th>
-                            <th style={{ width: '80px' }}>Gender</th>
-                            <th style={{ width: '100px' }}>Berth</th>
-                            <th style={{ width: '100px' }}>Action</th>
+              <div style={{ flex: 1, marginRight: '10px' }}>
+                <div className="erp-grid-container" style={{ maxHeight: '100px', overflowY: 'auto', border: '1px solid #ccc', margin: '5px 0' }}>
+                  <table className="erp-table" style={{ fontSize: '11px' }}>
+                    <thead>
+                      <tr>
+                        <th style={{ width: '100px' }}>Type</th>
+                        <th style={{ width: '70px' }}>Amount</th>
+                        <th style={{ width: '40px' }}>Action</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {formData.extraCharges && formData.extraCharges.length > 0 ? (
+                        formData.extraCharges.map((charge, index) => (
+                          <tr key={index}>
+                            <td>{charge.type || ''}</td>
+                            <td>{charge.amount || ''}</td>
+                            <td>
+                              <button 
+                                className="erp-button" 
+                                style={{ padding: '2px 6px', fontSize: '10px' }}
+                                onClick={() => {
+                                  if (isEditing) {
+                                    const updatedCharges = [...formData.extraCharges];
+                                    updatedCharges.splice(index, 1);
+                                    setFormData({
+                                      ...formData,
+                                      extraCharges: updatedCharges
+                                    });
+                                  }
+                                }}
+                                disabled={!isEditing}
+                              >
+                                Del
+                              </button>
+                            </td>
                           </tr>
-                        </thead>
-                        <tbody>
-                          {formData.passengerList && formData.passengerList.length > 0 ? (
-                            formData.passengerList.map((passenger, index) => (
-                              <tr key={index}>
-                                <td>{index + 1}</td>
-                                <td>{passenger.name || ''}</td>
-                                <td>{passenger.age || ''}</td>
-                                <td>{passenger.gender || ''}</td>
-                                <td>{passenger.berth || ''}</td>
-                                <td>
-                                  <button 
-                                    className="erp-button" 
-                                    style={{ padding: '2px 6px', fontSize: '10px' }}
-                                    onClick={() => {
-                                      if (isEditing) {
-                                        const updatedPassengers = [...formData.passengerList];
-                                        updatedPassengers.splice(index, 1);
-                                        setFormData({
-                                          ...formData,
-                                          passengerList: updatedPassengers
-                                        });
-                                      }
-                                    }}
-                                    disabled={!isEditing}
-                                  >
-                                    Del
-                                  </button>
-                                </td>
-                              </tr>
-                            ))
-                          ) : (
-                            <tr>
-                              <td colSpan="6" style={{ textAlign: 'center' }}>No passengers added</td>
-                            </tr>
-                          )}
-                        </tbody>
-                      </table>
-                    </div>
-                  
-                  {isEditing && (
-                    <div style={{ display: 'flex', gap: '5px', marginTop: '5px' }}>
-                      <input 
-                        type="text" 
-                        name="newPassengerName" 
-                        className="erp-input" 
-                        value={formData.newPassengerName || ''} 
-                        onChange={(e) => setFormData({...formData, newPassengerName: e.target.value})}
-                        placeholder="Name"
-                        style={{ flex: 1, padding: '2px', fontSize: '11px' }}
-                      />
-                      <input 
-                        type="number" 
-                        name="newPassengerAge" 
-                        className="erp-input" 
-                        value={formData.newPassengerAge || ''} 
-                        onChange={(e) => setFormData({...formData, newPassengerAge: e.target.value})}
-                        placeholder="Age"
-                        style={{ flex: 1, padding: '2px', fontSize: '11px' }}
-                      />
-                      <select 
-                        name="newPassengerGender" 
-                        className="erp-input" 
-                        value={formData.newPassengerGender || ''} 
-                        onChange={(e) => setFormData({...formData, newPassengerGender: e.target.value})}
-                        style={{ flex: 1, padding: '2px', fontSize: '11px' }}
-                      >
-                        <option value="">Select</option>
-                        <option value="Male">Male</option>
-                        <option value="Female">Female</option>
-                        <option value="Other">Other</option>
-                      </select>
-                      <input 
-                        type="text" 
-                        name="newPassengerBerth" 
-                        className="erp-input" 
-                        value={formData.newPassengerBerth || ''} 
-                        onChange={(e) => setFormData({...formData, newPassengerBerth: e.target.value})}
-                        placeholder="Berth"
-                        style={{ flex: 1, padding: '2px', fontSize: '11px' }}
-                      />
-                      <button 
-                        className="erp-button" 
-                        style={{ padding: '2px 8px', fontSize: '11px', height: '24px' }}
-                        onClick={() => {
-                          if (formData.newPassengerName) {
-                            const newPassenger = {
-                              name: formData.newPassengerName,
-                              age: formData.newPassengerAge,
-                              gender: formData.newPassengerGender,
-                              berth: formData.newPassengerBerth
-                            };
-                            
-                            setFormData({
-                              ...formData,
-                              passengerList: [...(formData.passengerList || []), newPassenger],
-                              newPassengerName: '',
-                              newPassengerAge: '',
-                              newPassengerGender: '',
-                              newPassengerBerth: ''
-                            });
-                          }
-                        }}
-                      >
-                        Add
-                      </button>
-                    </div>
-                  )}
+                        ))
+                      ) : (
+                        <tr>
+                          <td colSpan="3" style={{ textAlign: 'center' }}></td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
                 </div>
-              )}
+                
+                {isEditing && (
+                  <div style={{ display: 'flex', gap: '5px', marginTop: '5px' }}>
+                    <input 
+                      type="text" 
+                      name="newChargeType" 
+                      className="erp-input" 
+                      value={formData.newChargeType || ''} 
+                      onChange={(e) => setFormData({...formData, newChargeType: e.target.value})}
+                      placeholder="Type"
+                      style={{ flex: 1, padding: '2px', fontSize: '11px' }}
+                    />
+                    <input 
+                      type="number" 
+                      name="newChargeAmount" 
+                      className="erp-input" 
+                      value={formData.newChargeAmount || ''} 
+                      onChange={(e) => setFormData({...formData, newChargeAmount: e.target.value})}
+                      placeholder="Amt"
+                      style={{ flex: 1, padding: '2px', fontSize: '11px' }}
+                    />
+                    <button 
+                      className="erp-button" 
+                      style={{ padding: '2px 8px', fontSize: '11px', height: '24px' }}
+                      onClick={() => {
+                        if (formData.newChargeType && formData.newChargeAmount) {
+                          const newCharge = {
+                            type: formData.newChargeType,
+                            amount: formData.newChargeAmount
+                          };
+                          
+                          setFormData({
+                            ...formData,
+                            extraCharges: [...(formData.extraCharges || []), newCharge],
+                            newChargeType: '',
+                            newChargeAmount: ''
+                          });
+                        }
+                      }}
+                    >
+                      Add
+                    </button>
+                  </div>
+                )}
+              </div>
+              
+              <div style={{ flex: 1 }}>
+                <div className="erp-grid-container" style={{ maxHeight: '100px', overflowY: 'auto', border: '1px solid #ccc', margin: '5px 0' }}>
+                  <table className="erp-table" style={{ fontSize: '11px' }}>
+                    <thead>
+                      <tr>
+                        <th style={{ width: '70px' }}>Type</th>
+                        <th style={{ width: '70px' }}>Value</th>
+                        <th style={{ width: '70px' }}>Amt</th>
+                        <th style={{ width: '40px' }}>Action</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {formData.discounts && formData.discounts.length > 0 ? (
+                        formData.discounts.map((discount, index) => (
+                          <tr key={index}>
+                            <td>{discount.type || ''}</td>
+                            <td>{discount.value || ''}</td>
+                            <td>{discount.amount || ''}</td>
+                            <td>
+                              <button 
+                                className="erp-button" 
+                                style={{ padding: '2px 6px', fontSize: '10px' }}
+                                onClick={() => {
+                                  if (isEditing) {
+                                    const updatedDiscounts = [...formData.discounts];
+                                    updatedDiscounts.splice(index, 1);
+                                    setFormData({
+                                      ...formData,
+                                      discounts: updatedDiscounts
+                                    });
+                                  }
+                                }}
+                                disabled={!isEditing}
+                              >
+                                Del
+                              </button>
+                            </td>
+                          </tr>
+                        ))
+                      ) : (
+                        <tr>
+                          <td colSpan="4" style={{ textAlign: 'center' }}></td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+                
+                {isEditing && (
+                  <div style={{ display: 'flex', gap: '5px', marginTop: '5px' }}>
+                    <select 
+                      name="newDiscountType" 
+                      className="erp-input" 
+                      value={formData.newDiscountType || ''} 
+                      onChange={(e) => setFormData({...formData, newDiscountType: e.target.value})}
+                      style={{ flex: 1, padding: '2px', fontSize: '11px' }}
+                    >
+                      <option value="FIXED">Fixed</option>
+                      <option value="PERCENTAGE">%</option>
+                    </select>
+                    <input 
+                      type="number" 
+                      name="newDiscountValue" 
+                      className="erp-input" 
+                      value={formData.newDiscountValue || ''} 
+                      onChange={(e) => setFormData({...formData, newDiscountValue: e.target.value})}
+                      placeholder="Value"
+                      style={{ flex: 1, padding: '2px', fontSize: '11px' }}
+                    />
+                    <button 
+                      className="erp-button" 
+                      style={{ padding: '2px 8px', fontSize: '11px', height: '24px' }}
+                      onClick={() => {
+                        if (formData.newDiscountType && formData.newDiscountValue) {
+                          const newDiscount = {
+                            type: formData.newDiscountType,
+                            value: formData.newDiscountValue,
+                            amount: formData.newDiscountType === 'PERCENTAGE' ? 
+                              (parseFloat(formData.netFare || 0) * parseFloat(formData.newDiscountValue)) / 100 : 
+                              formData.newDiscountValue
+                          };
+                          
+                          setFormData({
+                            ...formData,
+                            discounts: [...(formData.discounts || []), newDiscount],
+                            newDiscountType: '',
+                            newDiscountValue: ''
+                          });
+                        }
+                      }}
+                    >
+                      Add
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
-          </div>
             
-            {/* Special Request/Remarks */}
+            {/* Bill Total Summary */}
+            
+            {/* Bill Total Summary with calculated values */}
             <div className="erp-form-row">
-              <label className="erp-form-label">Special Request/Remarks</label>
-              <textarea 
-                name="remarks" 
-                className="erp-textarea" 
-                value={formData.remarks || ''} 
-                onChange={(e) => setFormData({...formData, remarks: e.target.value})}
+              <label className="erp-form-label">Subtotal</label>
+              <input 
+                type="number" 
+                className="erp-input" 
+                value={formData.calculatedSubtotal ? formData.calculatedSubtotal.toFixed(2) : '0.00'} 
+                readOnly 
+              />
+              <label className="erp-form-label">(-) Discounts</label>
+              <input 
+                type="number" 
+                className="erp-input" 
+                value={formData.calculatedDiscountTotal ? formData.calculatedDiscountTotal.toFixed(2) : '0.00'} 
+                readOnly 
+              />
+            </div>
+            
+            <div className="erp-form-row">
+              <label className="erp-form-label">(+) Taxes</label>
+              <input 
+                type="number" 
+                className="erp-input" 
+                value={formData.calculatedTaxAmount ? formData.calculatedTaxAmount.toFixed(2) : '0.00'} 
+                readOnly 
+              />
+              <label className="erp-form-label">Grand Total</label>
+              <input 
+                type="number" 
+                className="erp-input" 
+                value={formData.calculatedGrandTotal ? formData.calculatedGrandTotal.toFixed(2) : '0.00'} 
+                readOnly 
+              />
+            </div>
+            
+            <div className="erp-form-row">
+              <label className="erp-form-label">Amount Received</label>
+              <input 
+                type="number" 
+                name="amountReceived" 
+                className="erp-input" 
+                value={formData.amountReceived || 0} 
+                onChange={(e) => setFormData({...formData, amountReceived: e.target.value})}
                 disabled={!isEditing}
-                placeholder="Enter special requests or remarks"
-                rows="3"
+              />
+              <label className="erp-form-label">Balance Due</label>
+              <input 
+                type="number" 
+                className="erp-input" 
+                value={formData.calculatedBalanceDue ? formData.calculatedBalanceDue.toFixed(2) : '0.00'} 
+                readOnly 
               />
             </div>
             
@@ -1372,7 +1129,7 @@ const Billing = () => {
           </div>
 
           {/* Data Grid - Scrollable */}
-          <div className="layout-grid-section">
+          <div className="erp-grid-section">
             <div className="erp-panel-header">Billing Records</div>
             {loading ? (
               <div style={{ padding: '20px', textAlign: 'center' }}>Loading...</div>
@@ -1383,23 +1140,19 @@ const Billing = () => {
                     <tr>
                       <th style={{ width: '30px' }}></th>
                       <th style={{ width: '100px' }}>Bill ID</th>
-                      <th style={{ width: '100px' }}>Bill Date</th>
-                      <th style={{ width: '100px' }}>Booking ID</th>
-                      <th style={{ width: '100px' }}>Sub bill number</th>
-                      <th style={{ width: '150px' }}>Customer Name</th>
-                      <th style={{ width: '120px' }}>Phone number</th>
-                      <th style={{ width: '120px' }}>Station boy name</th>
-                      <th style={{ width: '120px' }}>From station</th>
-                      <th style={{ width: '120px' }}>To station</th>
-                      <th style={{ width: '100px' }}>Journey date</th>
-                      <th style={{ width: '100px' }}>Train Number</th>
-                      <th style={{ width: '120px' }}>Reservation Class</th>
-                      <th style={{ width: '100px' }}>Ticket Type</th>
-                      <th style={{ width: '150px' }}>PNR Number(s)</th>
-                      <th style={{ width: '120px' }}>Total amount</th>
-                      <th style={{ width: '150px' }}>Passenger List</th>
-                      <th style={{ width: '150px' }}>Special Request/Remarks</th>
-                      <th style={{ width: '150px' }}>Audit details</th>
+                      <th style={{ width: '150px' }}>Bill Date</th>
+                      <th style={{ width: '200px' }}>Customer Name</th>
+                      <th style={{ width: '150px' }}>PNR(s)</th>
+                      <th style={{ width: '120px' }}>Net Fare</th>
+                      <th style={{ width: '120px' }}>Service Charges</th>
+                      <th style={{ width: '120px' }}>Platform Fees</th>
+                      <th style={{ width: '120px' }}>Agent Fees</th>
+                      <th style={{ width: '120px' }}>Total Amount</th>
+                      <th style={{ width: '120px' }}>Paid Amount</th>
+                      <th style={{ width: '120px' }}>Balance Due</th>
+                      <th style={{ width: '100px' }}>Status</th>
+                      <th style={{ width: '150px' }}>Entered On</th>
+                      <th style={{ width: '150px' }}>Modified On</th>
                     </tr>
                     {/* Inline Filter Row */}
                     <tr className="inline-filter-row">
@@ -1428,26 +1181,6 @@ const Billing = () => {
                         <input
                           type="text"
                           className="inline-filter-input"
-                          value={inlineFilters.bookingId || ''}
-                          onChange={(e) => setInlineFilters({...inlineFilters, bookingId: e.target.value})}
-                          placeholder="Filter Booking ID..."
-                          style={{ width: '100%', padding: '2px', fontSize: '12px', backgroundColor: '#f0f0f0' }}
-                        />
-                      </td>
-                      <td>
-                        <input
-                          type="text"
-                          className="inline-filter-input"
-                          value={inlineFilters.subBillNo || ''}
-                          onChange={(e) => setInlineFilters({...inlineFilters, subBillNo: e.target.value})}
-                          placeholder="Filter Sub Bill No..."
-                          style={{ width: '100%', padding: '2px', fontSize: '12px', backgroundColor: '#f0f0f0' }}
-                        />
-                      </td>
-                      <td>
-                        <input
-                          type="text"
-                          className="inline-filter-input"
                           value={inlineFilters.customerName || ''}
                           onChange={(e) => setInlineFilters({...inlineFilters, customerName: e.target.value})}
                           placeholder="Filter Name..."
@@ -1458,97 +1191,49 @@ const Billing = () => {
                         <input
                           type="text"
                           className="inline-filter-input"
-                          value={inlineFilters.phoneNumber || ''}
-                          onChange={(e) => setInlineFilters({...inlineFilters, phoneNumber: e.target.value})}
-                          placeholder="Filter Phone..."
+                          value={inlineFilters.pnr || ''}
+                          onChange={(e) => setInlineFilters({...inlineFilters, pnr: e.target.value})}
+                          placeholder="Filter PNR..."
                           style={{ width: '100%', padding: '2px', fontSize: '12px', backgroundColor: '#f0f0f0' }}
                         />
                       </td>
                       <td>
                         <input
-                          type="text"
+                          type="number"
                           className="inline-filter-input"
-                          value={inlineFilters.stationBoy || ''}
-                          onChange={(e) => setInlineFilters({...inlineFilters, stationBoy: e.target.value})}
-                          placeholder="Filter Station Boy..."
+                          value={inlineFilters.netFare || ''}
+                          onChange={(e) => setInlineFilters({...inlineFilters, netFare: e.target.value})}
+                          placeholder="Filter Amount..."
                           style={{ width: '100%', padding: '2px', fontSize: '12px', backgroundColor: '#f0f0f0' }}
                         />
                       </td>
                       <td>
                         <input
-                          type="text"
+                          type="number"
                           className="inline-filter-input"
-                          value={inlineFilters.fromStation || ''}
-                          onChange={(e) => setInlineFilters({...inlineFilters, fromStation: e.target.value})}
-                          placeholder="Filter From Station..."
+                          value={inlineFilters.serviceCharges || ''}
+                          onChange={(e) => setInlineFilters({...inlineFilters, serviceCharges: e.target.value})}
+                          placeholder="Filter Amount..."
                           style={{ width: '100%', padding: '2px', fontSize: '12px', backgroundColor: '#f0f0f0' }}
                         />
                       </td>
                       <td>
                         <input
-                          type="text"
+                          type="number"
                           className="inline-filter-input"
-                          value={inlineFilters.toStation || ''}
-                          onChange={(e) => setInlineFilters({...inlineFilters, toStation: e.target.value})}
-                          placeholder="Filter To Station..."
+                          value={inlineFilters.platformFees || ''}
+                          onChange={(e) => setInlineFilters({...inlineFilters, platformFees: e.target.value})}
+                          placeholder="Filter Amount..."
                           style={{ width: '100%', padding: '2px', fontSize: '12px', backgroundColor: '#f0f0f0' }}
                         />
                       </td>
                       <td>
                         <input
-                          type="date"
+                          type="number"
                           className="inline-filter-input"
-                          value={inlineFilters.journeyDate || ''}
-                          onChange={(e) => setInlineFilters({...inlineFilters, journeyDate: e.target.value})}
-                          placeholder="Filter Journey Date..."
-                          style={{ width: '100%', padding: '2px', fontSize: '12px', backgroundColor: '#f0f0f0' }}
-                        />
-                      </td>
-                      <td>
-                        <input
-                          type="text"
-                          className="inline-filter-input"
-                          value={inlineFilters.trainNumber || ''}
-                          onChange={(e) => setInlineFilters({...inlineFilters, trainNumber: e.target.value})}
-                          placeholder="Filter Train Number..."
-                          style={{ width: '100%', padding: '2px', fontSize: '12px', backgroundColor: '#f0f0f0' }}
-                        />
-                      </td>
-                      <td>
-                        <select
-                          className="inline-filter-input"
-                          value={inlineFilters.reservationClass || ''}
-                          onChange={(e) => setInlineFilters({...inlineFilters, reservationClass: e.target.value})}
-                          style={{ width: '100%', padding: '2px', fontSize: '12px', backgroundColor: '#f0f0f0' }}
-                        >
-                          <option value="">All</option>
-                          <option value="SL">SL</option>
-                          <option value="3A">3A</option>
-                          <option value="2A">2A</option>
-                          <option value="1A">1A</option>
-                          <option value="CC">CC</option>
-                        </select>
-                      </td>
-                      <td>
-                        <select
-                          className="inline-filter-input"
-                          value={inlineFilters.ticketType || ''}
-                          onChange={(e) => setInlineFilters({...inlineFilters, ticketType: e.target.value})}
-                          style={{ width: '100%', padding: '2px', fontSize: '12px', backgroundColor: '#f0f0f0' }}
-                        >
-                          <option value="">All</option>
-                          <option value="NORMAL">NORMAL</option>
-                          <option value="TATKAL">TATKAL</option>
-                          <option value="PREMIUM_TATKAL">PREMIUM_TATKAL</option>
-                        </select>
-                      </td>
-                      <td>
-                        <input
-                          type="text"
-                          className="inline-filter-input"
-                          value={inlineFilters.pnrNumbers || ''}
-                          onChange={(e) => setInlineFilters({...inlineFilters, pnrNumbers: e.target.value})}
-                          placeholder="Filter PNR Numbers..."
+                          value={inlineFilters.agentFees || ''}
+                          onChange={(e) => setInlineFilters({...inlineFilters, agentFees: e.target.value})}
+                          placeholder="Filter Amount..."
                           style={{ width: '100%', padding: '2px', fontSize: '12px', backgroundColor: '#f0f0f0' }}
                         />
                       </td>
@@ -1564,31 +1249,54 @@ const Billing = () => {
                       </td>
                       <td>
                         <input
-                          type="text"
+                          type="number"
                           className="inline-filter-input"
-                          value={inlineFilters.passengerList || ''}
-                          onChange={(e) => setInlineFilters({...inlineFilters, passengerList: e.target.value})}
-                          placeholder="Filter Passengers..."
+                          value={inlineFilters.paidAmount || ''}
+                          onChange={(e) => setInlineFilters({...inlineFilters, paidAmount: e.target.value})}
+                          placeholder="Filter Paid..."
                           style={{ width: '100%', padding: '2px', fontSize: '12px', backgroundColor: '#f0f0f0' }}
                         />
                       </td>
                       <td>
                         <input
-                          type="text"
+                          type="number"
                           className="inline-filter-input"
-                          value={inlineFilters.remarks || ''}
-                          onChange={(e) => setInlineFilters({...inlineFilters, remarks: e.target.value})}
-                          placeholder="Filter Remarks..."
+                          value={inlineFilters.balanceDue || ''}
+                          onChange={(e) => setInlineFilters({...inlineFilters, balanceDue: e.target.value})}
+                          placeholder="Filter Balance..."
+                          style={{ width: '100%', padding: '2px', fontSize: '12px', backgroundColor: '#f0f0f0' }}
+                        />
+                      </td>
+                      <td>
+                        <select
+                          className="inline-filter-input"
+                          value={inlineFilters.status || ''}
+                          onChange={(e) => setInlineFilters({...inlineFilters, status: e.target.value})}
+                          style={{ width: '100%', padding: '2px', fontSize: '12px', backgroundColor: '#f0f0f0' }}
+                        >
+                          <option value="">All</option>
+                          <option value="DRAFT">Draft</option>
+                          <option value="FINAL">Final</option>
+                          <option value="CANCELLED">Cancelled</option>
+                        </select>
+                      </td>
+                      <td>
+                        <input
+                          type="date"
+                          className="inline-filter-input"
+                          value={inlineFilters.enteredOn || ''}
+                          onChange={(e) => setInlineFilters({...inlineFilters, enteredOn: e.target.value})}
+                          placeholder="Filter Date..."
                           style={{ width: '100%', padding: '2px', fontSize: '12px', backgroundColor: '#f0f0f0' }}
                         />
                       </td>
                       <td>
                         <input
-                          type="text"
+                          type="date"
                           className="inline-filter-input"
-                          value={inlineFilters.auditDetails || ''}
-                          onChange={(e) => setInlineFilters({...inlineFilters, auditDetails: e.target.value})}
-                          placeholder="Filter Audit..."
+                          value={inlineFilters.modifiedOn || ''}
+                          onChange={(e) => setInlineFilters({...inlineFilters, modifiedOn: e.target.value})}
+                          placeholder="Filter Date..."
                           style={{ width: '100%', padding: '2px', fontSize: '12px', backgroundColor: '#f0f0f0' }}
                         />
                       </td>
@@ -1596,11 +1304,11 @@ const Billing = () => {
                   </thead>
                   <tbody>
                     {paginatedData.length === 0 ? (
-                      <tr><td colSpan={19} style={{ textAlign: 'center' }}>No records found</td></tr>
+                      <tr><td colSpan={15} style={{ textAlign: 'center' }}>No records found</td></tr>
                     ) : (
                       paginatedData.map((bill, idx) => {
                         const isSelected = selectedBill && selectedBill.id === bill.id;
-                        const balanceDue = (Number(bill.totalAmount) || 0) - (Number(bill.paidAmount) || 0);
+                        const balanceDue = (bill.totalAmount || 0) - (bill.paidAmount || 0);
                         return (
                           <tr 
                             key={bill.id || idx}
@@ -1610,22 +1318,18 @@ const Billing = () => {
                             <td><input type="checkbox" checked={!!isSelected} onChange={() => {}} /></td>
                             <td>{bill.id || 'N/A'}</td>
                             <td>{bill.billDate || 'N/A'}</td>
-                            <td>{bill.bookingId || 'N/A'}</td>
-                            <td>{bill.subBillNo || 'N/A'}</td>
                             <td>{bill.customerName || 'N/A'}</td>
-                            <td>{bill.phoneNumber || 'N/A'}</td>
-                            <td>{bill.stationBoy || 'N/A'}</td>
-                            <td>{bill.fromStation || 'N/A'}</td>
-                            <td>{bill.toStation || 'N/A'}</td>
-                            <td>{bill.journeyDate || 'N/A'}</td>
-                            <td>{bill.trainNumber || 'N/A'}</td>
-                            <td>{bill.reservationClass || 'N/A'}</td>
-                            <td>{bill.ticketType || 'N/A'}</td>
-                            <td>{bill.pnrNumbers || 'N/A'}</td>
-                            <td>{bill.totalAmount ? Number(bill.totalAmount).toFixed(2) : '0.00'}</td>
-                            <td>{bill.passengerList ? bill.passengerList.length + ' passengers' : '0'}</td>
-                            <td>{bill.remarks || 'N/A'}</td>
-                            <td>{bill.status || 'N/A'}</td>
+                            <td>{bill.pnrNumbers?.join(', ') || 'N/A'}</td>
+                            <td>{bill.netFare || 0}</td>
+                            <td>{bill.serviceCharges || 0}</td>
+                            <td>{bill.platformFees || 0}</td>
+                            <td>{bill.agentFees || 0}</td>
+                            <td>{bill.totalAmount || 0}</td>
+                            <td>{bill.paidAmount || 0}</td>
+                            <td>{balanceDue}</td>
+                            <td>{bill.status || 'DRAFT'}</td>
+                            <td>{bill.createdOn || 'N/A'}</td>
+                            <td>{bill.modifiedOn || 'N/A'}</td>
                           </tr>
                         );
                       })
@@ -1638,14 +1342,15 @@ const Billing = () => {
         </div>
 
         {/* Right Filter Panel */}
-        <div className="layout-right-sidebar">
-          <div className="layout-header">
-            Filter Criteria
-            {(bills.length !== getPaginatedData().length) && (
-              <span className="erp-filter-count">{getPaginatedData().length}/{bills.length}</span>
-            )}
+        <div className="erp-filter-panel">
+          <div className="erp-filter-header">
+            <div className="erp-filter-title">
+              Filter Criteria
+              {(bills.length !== getPaginatedData().length) && (
+                <span className="erp-filter-count">{getPaginatedData().length}/{bills.length}</span>
+              )}
+            </div>
           </div>
-          <div className="layout-filters-content">
           
           <div className="erp-filter-section">
             <div className="erp-filter-row">
@@ -1859,8 +1564,6 @@ const Billing = () => {
             </button>
           </div>
         </div>
-      </div>
-    </div>
 
       {/* Status Bar - Static */}
       <div className="erp-status-bar">
@@ -1907,6 +1610,7 @@ const Billing = () => {
           </button>
         </div>
       </div>
+    </div>
     </div>
   );
 };

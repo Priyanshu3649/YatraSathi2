@@ -12,7 +12,7 @@ const Pnr = require('./Pnr');
  * NON-NEGOTIABLE: This table is the source of truth for payment allocation.
  * Never delete allocations - only create new ones for adjustments.
  */
-const PaymentAlloc = sequelize.define('paPaymentAlloc', {
+const PaymentAlloc = sequelize.define('paXpayalloc', {
   pa_paid: {
     type: DataTypes.BIGINT,
     primaryKey: true,
@@ -30,29 +30,24 @@ const PaymentAlloc = sequelize.define('paPaymentAlloc', {
     allowNull: false,
     comment: 'PNR ID (Foreign Key to pnXpnr)'
   },
-  pa_pnr: {
-    type: DataTypes.STRING(15),
-    allowNull: false,
-    comment: 'PNR Number (for quick reference and validation)'
-  },
-  pa_amount: {
-    type: DataTypes.DECIMAL(15, 2),
+
+  pa_allocamt: {
+    type: DataTypes.DECIMAL(12, 2),
     allowNull: false,
     comment: 'Allocated Amount (must be <= PNR pending amount)'
   },
-  pa_alloctn_date: {
+  pa_allocdt: {
     type: DataTypes.DATE,
-    defaultValue: DataTypes.NOW,
     allowNull: false,
     comment: 'Allocation Date'
   },
-  pa_alloctn_type: {
-    type: DataTypes.STRING(10),
-    defaultValue: 'MANUAL',
+  pa_status: {
+    type: DataTypes.STRING(15),
+    defaultValue: 'ALLOCATED',
     allowNull: false,
-    comment: 'Allocation Type: AUTO (FIFO) | MANUAL (user selected)'
+    comment: 'Allocation Status'
   },
-  pa_remarks: {
+  pa_rmrks: {
     type: DataTypes.TEXT,
     allowNull: true,
     comment: 'Allocation Remarks'
@@ -70,13 +65,12 @@ const PaymentAlloc = sequelize.define('paPaymentAlloc', {
     comment: 'Entered By (User ID who made the allocation)'
   }
 }, {
-  tableName: 'paPaymentAlloc',
+  tableName: 'paXpayalloc',
   timestamps: false,
   indexes: [
     { fields: ['pa_ptid'] },
     { fields: ['pa_pnid'] },
-    { fields: ['pa_pnr'] },
-    { fields: ['pa_alloctn_date'] }
+    { fields: ['pa_allocdt'] }
   ]
 });
 

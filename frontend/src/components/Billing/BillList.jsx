@@ -66,12 +66,19 @@ const BillList = ({ bills, loading, onEdit, onDelete, onFinalize, onExport, onVi
     <table className="grid-table">
       <thead>
         <tr>
-          <th>Bill ID</th>
+          <th>Bill No</th>
+          <th>Booking No</th>
           <th>Customer Name</th>
+          <th>Phone</th>
+          <th>From Station</th>
+          <th>To Station</th>
+          <th>PNR Number</th>
+          <th>Ticket Type</th>
+          <th>Train No</th>
+          <th>Class</th>
+          <th>Journey Date</th>
           <th>Total Amount</th>
-          <th>Bill Date</th>
-          <th>Status</th>
-          <th>Created By</th>
+          <th>Billing Date</th>
           <th>Actions</th>
         </tr>
       </thead>
@@ -85,12 +92,19 @@ const BillList = ({ bills, loading, onEdit, onDelete, onFinalize, onExport, onVi
             tabIndex={0}
             style={{ cursor: 'pointer' }}
           >
-            <td>{bill.id || bill.billId}</td>
-            <td>{bill.customerName || bill.customer?.us_name || bill.customerId}</td>
-            <td>₹{parseFloat(bill.totalAmount)?.toFixed(2) || '0.00'}</td>
+            <td>{bill.billNo || bill.id || bill.billId}</td>
+            <td>{bill.bookingId || bill.booking_no || '-'}</td>
+            <td>{bill.customerName || bill.customer?.us_name || bill.customerId || '-'}</td>
+            <td>{bill.customerPhone || bill.phone || '-'}</td>
+            <td>{bill.fromStation || bill.from_station || '-'}</td>
+            <td>{bill.toStation || bill.to_station || '-'}</td>
+            <td>{bill.pnrNumber || bill.pnr || bill.pnrNumbers?.join(', ') || '-'}</td>
+            <td>{bill.ticketType || bill.ticket_type || '-'}</td>
+            <td>{bill.trainNo || bill.train_number || '-'}</td>
+            <td>{bill.class || bill.reservationClass || '-'}</td>
+            <td>{new Date(bill.journeyDate || bill.travelDate || '').toLocaleDateString() || '-'}</td>
+            <td>₹{parseFloat(bill.totalAmount || bill.total_amount)?.toFixed(2) || '0.00'}</td>
             <td>{new Date(bill.billDate || bill.createdOn).toLocaleDateString()}</td>
-            <td>{bill.status}</td>
-            <td>{bill.createdBy || bill.createdBy?.us_name || 'Unknown'}</td>
             <td>
               <div className="action-buttons">
                 {canEdit(bill) && (

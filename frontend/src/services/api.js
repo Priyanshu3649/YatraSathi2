@@ -1334,6 +1334,30 @@ export const billingAPI = {
     }
     
     return data;
+  },
+  
+  // Get bill by booking ID
+  getBillByBookingId: async (bookingId) => {
+    const userRole = getUserRole();
+    
+    // Use employee-specific endpoint for employee roles
+    const isEmployee = ['AGT', 'ACC', 'HR', 'CC', 'MKT', 'MGT', 'ADM'].includes(userRole);
+    const url = isEmployee 
+      ? `${API_BASE_URL}/employee/billing/booking/${bookingId}`
+      : `${API_BASE_URL}/billing/booking/${bookingId}`;
+    
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: getHeaders(true)
+    });
+    
+    const data = await response.json();
+    
+    if (!response.ok) {
+      throw new Error(data.message || 'Failed to get bill by booking ID');
+    }
+    
+    return data;
   }
 };
 
