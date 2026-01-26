@@ -1619,171 +1619,139 @@ const Bookings = () => {
           <div className="erp-form-section section" style={{ width: '100%', overflowY: 'auto' }}>
             <div className="erp-panel-header">Booking Details</div>
             <div style={{ padding: '4px' }}>
-              {/* Booking ID & Date */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-                  <div className="field">
-                      <label className="label">Booking ID</label>
-                      <input
-                        type="text"
-                        name="bookingId"
-                        className="erp-input"
-                        value={formData.bookingId}
-                        readOnly
-                        tabIndex={-1}
-                      />
-                  </div>
-                  <div className="field">
-                      <label className="label">Date</label>
-                      <input
-                        type="date"
-                        name="bookingDate"
-                        data-field="bookingDate"
-                        className="erp-input"
-                        value={formData.bookingDate}
-                        onChange={handleInputChange}
-                        onFocus={() => handleFieldFocus('bookingDate')}
-                        onKeyDown={(e) => handleEnhancedTabNavigation(e, 'bookingDate')}
-                        disabled={!isEditing}
-                      />
-                  </div>
+              {/* Row 1: Booking ID, Date, Customer Name, Phone Number, PNR Number (5 fields) */}
+              <div className="erp-form-row-compact-5">
+                  <label className="erp-form-label">Booking ID</label>
+                  <input
+                    type="text"
+                    name="bookingId"
+                    className="erp-input"
+                    value={formData.bookingId}
+                    readOnly
+                    tabIndex={-1}
+                  />
+                  <label className="erp-form-label">Date</label>
+                  <input
+                    type="date"
+                    name="bookingDate"
+                    data-field="bookingDate"
+                    className="erp-input"
+                    value={formData.bookingDate}
+                    onChange={handleInputChange}
+                    onFocus={() => handleFieldFocus('bookingDate')}
+                    onKeyDown={(e) => handleEnhancedTabNavigation(e, 'bookingDate')}
+                    disabled={!isEditing}
+                  />
+                  <label className="erp-form-label">Customer Name</label>
+                  <input
+                    type="text"
+                    name="customerName"
+                    data-field="customerName"
+                    className="erp-input"
+                    value={formData.customerName}
+                    onChange={handleInputChange}
+                    onFocus={() => handleFieldFocus('customerName')}
+                    onKeyDown={(e) => handleEnhancedTabNavigation(e, 'customerName')}
+                    disabled={!isEditing}
+                    placeholder="Enter name"
+                  />
+                  <label className="erp-form-label">Phone Number</label>
+                  <input
+                    type="tel"
+                    name="phoneNumber"
+                    data-field="phoneNumber"
+                    className="erp-input"
+                    value={formData.phoneNumber}
+                    onChange={handleInputChange}
+                    onBlur={(e) => handlePhoneBlur(e.target.value)}
+                    onFocus={() => handleFieldFocus('phoneNumber')}
+                    onKeyDown={(e) => handleEnhancedTabNavigation(e, 'phoneNumber')}
+                    disabled={!isEditing}
+                    placeholder="Phone lookup..."
+                  />
+                  <label className="erp-form-label">PNR Number</label>
+                  <input
+                    type="text"
+                    name="pnrNumber"
+                    className="erp-input"
+                    value={formData.pnrNumber || ''}
+                    onChange={handleInputChange}
+                    disabled={!isEditing} // Read-only when viewing existing bookings
+                    placeholder="PNR will be populated after billing"
+                  />
               </div>
 
-              {/* Customer & Phone */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-                  <div className="field">
-                      <label className="label">Customer</label>
-                      <input
-                        type="text"
-                        name="customerName"
-                        data-field="customerName"
-                        className="erp-input"
-                        value={formData.customerName}
-                        onChange={handleInputChange}
-                        onFocus={() => handleFieldFocus('customerName')}
-                        onKeyDown={(e) => handleEnhancedTabNavigation(e, 'customerName')}
-                        disabled={!isEditing}
-                        placeholder="Enter name"
-                      />
-                  </div>
-                  <div className="field">
-                      <label className="label">Phone</label>
-                      <input
-                        type="tel"
-                        name="phoneNumber"
-                        data-field="phoneNumber"
-                        className="erp-input"
-                        value={formData.phoneNumber}
-                        onChange={handleInputChange}
-                        onBlur={(e) => handlePhoneBlur(e.target.value)}
-                        onFocus={() => handleFieldFocus('phoneNumber')}
-                        onKeyDown={(e) => handleEnhancedTabNavigation(e, 'phoneNumber')}
-                        disabled={!isEditing}
-                        placeholder="Phone lookup..."
-                      />
-                  </div>
-              </div>
-
-              {/* From/To Station */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-                  <div className="field">
-                      <label className="label">From</label>
-                      <input
-                        type="text"
-                        name="fromStation"
-                        data-field="fromStation"
-                        className="erp-input"
-                        value={formData.fromStation}
-                        onChange={handleInputChange}
-                        onFocus={() => handleFieldFocus('fromStation')}
-                        onKeyDown={(e) => handleEnhancedTabNavigation(e, 'fromStation')}
-                        disabled={!isEditing}
-                      />
-                  </div>
-                  <div className="field">
-                      <label className="label">To</label>
-                      <input
-                        type="text"
-                        name="toStation"
-                        data-field="toStation"
-                        className="erp-input"
-                        value={formData.toStation}
-                        onChange={handleInputChange}
-                        onFocus={() => handleFieldFocus('toStation')}
-                        onKeyDown={(e) => handleEnhancedTabNavigation(e, 'toStation')}
-                        disabled={!isEditing}
-                      />
-                  </div>
-              </div>
-
-              {/* Travel Date/Class */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-                  <div className="field">
-                      <label className="label">Travel Date</label>
-                      <input
-                        type="date"
-                        name="travelDate"
-                        data-field="travelDate"
-                        className="erp-input"
-                        value={formData.travelDate}
-                        onChange={handleInputChange}
-                        onFocus={() => handleFieldFocus('travelDate')}
-                        onKeyDown={(e) => handleEnhancedTabNavigation(e, 'travelDate')}
-                        disabled={!isEditing}
-                      />
-                  </div>
-                  <div className="field">
-                      <label className="label">Class</label>
-                      <select
-                        name="travelClass"
-                        data-field="travelClass"
-                        className="erp-input"
-                        value={formData.travelClass}
-                        onChange={handleInputChange}
-                        onFocus={() => handleFieldFocus('travelClass')}
-                        onKeyDown={(e) => handleEnhancedTabNavigation(e, 'travelClass')}
-                        disabled={!isEditing}
-                      >
-                        <option value="SL">Sleeper (SL)</option>
-                        <option value="3A">3rd AC (3A)</option>
-                        <option value="2A">2nd AC (2A)</option>
-                        <option value="1A">1st AC (1A)</option>
-                        <option value="CC">Chair Car (CC)</option>
-                      </select>
-                  </div>
-              </div>
-
-              {/* Quota/PNR */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-                  <div className="field">
-                      <label className="label">Quota</label>
-                      <select
-                        ref={quotaTypeRef}
-                        name="quotaType"
-                        data-field="quotaType"
-                        className="erp-input"
-                        value={formData.quotaType}
-                        onChange={handleInputChange}
-                        onFocus={() => handleFieldFocus('quotaType')}
-                        onKeyDown={(e) => handleEnhancedTabNavigation(e, 'quotaType')}
-                        disabled={!isEditing}
-                      >
-                        <option value="GN">General</option>
-                        <option value="TQ">Tatkal</option>
-                        <option value="LD">Ladies</option>
-                      </select>
-                  </div>
-                  <div className="field">
-                      <label className="label">PNR</label>
-                      <input
-                        type="text"
-                        name="pnrNumber"
-                        className="erp-input"
-                        value={formData.pnrNumber || ''}
-                        onChange={handleInputChange}
-                        disabled={!isEditing} // Read-only when viewing existing bookings
-                        placeholder="PNR will be populated after billing"
-                      />
-                  </div>
+              {/* Row 2: From, To, Travel Date, Class, Quota (5 fields) */}
+              <div className="erp-form-row-compact-5">
+                  <label className="erp-form-label">From Station</label>
+                  <input
+                    type="text"
+                    name="fromStation"
+                    data-field="fromStation"
+                    className="erp-input"
+                    value={formData.fromStation}
+                    onChange={handleInputChange}
+                    onFocus={() => handleFieldFocus('fromStation')}
+                    onKeyDown={(e) => handleEnhancedTabNavigation(e, 'fromStation')}
+                    disabled={!isEditing}
+                  />
+                  <label className="erp-form-label">To Station</label>
+                  <input
+                    type="text"
+                    name="toStation"
+                    data-field="toStation"
+                    className="erp-input"
+                    value={formData.toStation}
+                    onChange={handleInputChange}
+                    onFocus={() => handleFieldFocus('toStation')}
+                    onKeyDown={(e) => handleEnhancedTabNavigation(e, 'toStation')}
+                    disabled={!isEditing}
+                  />
+                  <label className="erp-form-label">Travel Date</label>
+                  <input
+                    type="date"
+                    name="travelDate"
+                    data-field="travelDate"
+                    className="erp-input"
+                    value={formData.travelDate}
+                    onChange={handleInputChange}
+                    onFocus={() => handleFieldFocus('travelDate')}
+                    onKeyDown={(e) => handleEnhancedTabNavigation(e, 'travelDate')}
+                    disabled={!isEditing}
+                  />
+                  <label className="erp-form-label">Class</label>
+                  <select
+                    name="travelClass"
+                    data-field="travelClass"
+                    className="erp-input"
+                    value={formData.travelClass}
+                    onChange={handleInputChange}
+                    onFocus={() => handleFieldFocus('travelClass')}
+                    onKeyDown={(e) => handleEnhancedTabNavigation(e, 'travelClass')}
+                    disabled={!isEditing}
+                  >
+                    <option value="SL">Sleeper (SL)</option>
+                    <option value="3A">3rd AC (3A)</option>
+                    <option value="2A">2nd AC (2A)</option>
+                    <option value="1A">1st AC (1A)</option>
+                    <option value="CC">Chair Car (CC)</option>
+                  </select>
+                  <label className="erp-form-label">Quota</label>
+                  <select
+                    ref={quotaTypeRef}
+                    name="quotaType"
+                    data-field="quotaType"
+                    className="erp-input"
+                    value={formData.quotaType}
+                    onChange={handleInputChange}
+                    onFocus={() => handleFieldFocus('quotaType')}
+                    onKeyDown={(e) => handleEnhancedTabNavigation(e, 'quotaType')}
+                    disabled={!isEditing}
+                  >
+                    <option value="GN">General</option>
+                    <option value="TQ">Tatkal</option>
+                    <option value="LD">Ladies</option>
+                  </select>
               </div>
 
               {/* Passenger Section */}

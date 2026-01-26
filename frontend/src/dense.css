@@ -71,7 +71,7 @@ fieldset {
   font-weight: bold;
   color: #000;
   white-space: nowrap;
-  text-align: left;
+  text-align: left !important;
   margin: 0;
   padding: 0;
 }
@@ -106,7 +106,7 @@ fieldset {
   font-weight: bold;
   color: #000;
   white-space: nowrap;
-  text-align: left;
+  text-align: left !important;
   margin: 0;
   padding: 0;
 }
@@ -137,6 +137,13 @@ fieldset {
 
 .erp-form-row-compact-5 select:focus {
   outline: 2px solid #005fcc;
+}
+
+/* Override conflicting global styles */
+.erp-form-row-compact-4 .erp-form-label,
+.erp-form-row-compact-5 .erp-form-label {
+  text-align: left !important;
+  padding-right: 0 !important;
 }
 
 .field.wide-label {
