@@ -332,24 +332,19 @@ export const dashboardAPI = {
 export const bookingAPI = {
   // Create a new booking
   createBooking: async (bookingData) => {
-    console.time('API_BOOKING_CREATE');
-    try {
-      const response = await fetch(`${API_BASE_URL}/bookings`, {
-        method: 'POST',
-        headers: getHeaders(true),
-        body: JSON.stringify(bookingData)
-      });
-      
-      const data = await response.json();
-      
-      if (!response.ok) {
-        throw new Error(data.message || 'Failed to create booking');
-      }
-      
-      return data;
-    } finally {
-      console.timeEnd('API_BOOKING_CREATE');
+    const response = await fetch(`${API_BASE_URL}/bookings`, {
+      method: 'POST',
+      headers: getHeaders(true),
+      body: JSON.stringify(bookingData)
+    });
+    
+    const data = await response.json();
+    
+    if (!response.ok) {
+      throw new Error(data.message || 'Failed to create booking');
     }
+    
+    return data;
   },
   
   // Get all bookings for current user
@@ -424,24 +419,19 @@ export const bookingAPI = {
   
   // Update booking
   updateBooking: async (id, bookingData) => {
-    console.time('API_BOOKING_UPDATE');
-    try {
-      const response = await fetch(`${API_BASE_URL}/bookings/${id}`, {
-        method: 'PUT',
-        headers: getHeaders(true),
-        body: JSON.stringify(bookingData)
-      });
-      
-      const data = await response.json();
-      
-      if (!response.ok) {
-        throw new Error(data.message || 'Failed to update booking');
-      }
-      
-      return data;
-    } finally {
-      console.timeEnd('API_BOOKING_UPDATE');
+    const response = await fetch(`${API_BASE_URL}/bookings/${id}`, {
+      method: 'PUT',
+      headers: getHeaders(true),
+      body: JSON.stringify(bookingData)
+    });
+    
+    const data = await response.json();
+    
+    if (!response.ok) {
+      throw new Error(data.message || 'Failed to update booking');
     }
+    
+    return data;
   },
   
   // Update booking status

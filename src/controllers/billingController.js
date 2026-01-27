@@ -1,32 +1,73 @@
 const { BillTVL, UserTVL, CustomerTVL: Customer, BookingTVL } = require('../models');
 const { Sequelize } = require('sequelize');
-const { sequelizeTVL } = require('../models/baseModel');
+const { sequelizeTVL } = require('../../config/db');
 
 // Create a new bill
 const createBill = async (req, res) => {
   try {
+    // Validate required fields
+    if (!req.body) {
+      return res.status(400).json({ message: 'Request body is required' });
+    }
+    
     const {
       bookingId,
-      customerId,
       customerName,
+      phoneNumber,
+      stationBoy,
+      fromStation,
+      toStation,
+      journeyDate,
       trainNumber,
       reservationClass,
       ticketType,
       pnrNumbers,
-      netFare,
+      seatsAlloted,
+      railwayFare,
+      stationBoyIncentive,
       serviceCharges,
       platformFees,
-      agentFees,
-      extraCharges,
-      discounts,
+      miscCharges,
+      deliveryCharges,
+      cancellationCharges,
+      gst,
+      surcharge,
+      discount,
+      gstType,
+      totalAmount,
       billDate,
       status,
       remarks
     } = req.body;
 
+    // Log incoming request data for debugging
+    console.log('📥 Billing creation request data:', {
+      bookingId,
+      customerName,
+      phoneNumber,
+      journeyDate,
+      billDate: req.body.billDate
+    });
+    
     // Validate bookingId
     if (!bookingId) {
       return res.status(400).json({ message: 'Booking ID is required for billing.' });
+    }
+    
+    // Validate required fields
+    if (!customerName || !phoneNumber) {
+      return res.status(400).json({ message: 'Customer name and phone number are required.' });
+    }
+    
+    // Validate journey date is provided
+    if (!journeyDate) {
+      return res.status(400).json({ message: 'Journey date is required.' });
+    }
+    
+    // Validate sequelizeTVL is available
+    if (!sequelizeTVL) {
+      console.error('sequelizeTVL is undefined');
+      return res.status(500).json({ message: 'Database connection error' });
     }
 
     // Check booking status and existence
@@ -41,7 +82,7 @@ const createBill = async (req, res) => {
     }
 
     // Check if bill already exists for this booking
-    const existingBill = await BillTVL.findOne({ where: { booking_id: bookingId } });
+    const existingBill = await BillTVL.findOne({ where: { bl_booking_id: bookingId } });
     if (existingBill) {
       return res.status(400).json({ message: 'A bill already exists for this booking.' });
     }
@@ -49,37 +90,25 @@ const createBill = async (req, res) => {
     // Generate bill number
     const billNumber = `BILL${Date.now()}${Math.floor(Math.random() * 1000)}`;
 
-    // Calculate total amount
-    let totalAmount = parseFloat(netFare) || 0;
-    totalAmount += parseFloat(serviceCharges) || 0;
-    totalAmount += parseFloat(platformFees) || 0;
-    totalAmount += parseFloat(agentFees) || 0;
-
-    // Add extra charges
-    if (extraCharges && Array.isArray(extraCharges)) {
-      extraCharges.forEach(charge => {
-        if (charge.amount) {
-          totalAmount += parseFloat(charge.amount) || 0;
-        }
-      });
-    }
-
-    // Apply discounts
-    if (discounts && Array.isArray(discounts)) {
-      discounts.forEach(discount => {
-        if (discount.amount) {
-          if (discount.type === 'PERCENTAGE') {
-            const discountAmount = (totalAmount * parseFloat(discount.amount)) / 100;
-            totalAmount -= discountAmount;
-          } else {
-            totalAmount -= parseFloat(discount.amount) || 0;
-          }
-        }
-      });
-    }
-
-    // Ensure total amount is not negative
-    totalAmount = Math.max(0, totalAmount);
+    // Calculate total amount based on provided financial fields
+    let calculatedTotal = parseFloat(railwayFare) || 0;
+    calculatedTotal += parseFloat(stationBoyIncentive) || 0;
+    calculatedTotal += parseFloat(serviceCharges) || 0;
+    calculatedTotal += parseFloat(platformFees) || 0;
+    calculatedTotal += parseFloat(gst) || 0;
+    calculatedTotal += parseFloat(miscCharges) || 0;
+    calculatedTotal += parseFloat(deliveryCharges) || 0;
+    calculatedTotal += parseFloat(cancellationCharges) || 0;
+    calculatedTotal += parseFloat(surcharge) || 0;
+    
+    // Apply discount
+    calculatedTotal -= parseFloat(discount) || 0;
+    
+    // Ensure calculated total is not negative
+    calculatedTotal = Math.max(0, calculatedTotal);
+    
+    // Use provided totalAmount if available, otherwise use calculated
+    const finalTotalAmount = totalAmount !== undefined ? parseFloat(totalAmount) : calculatedTotal;
 
     // Use transaction to ensure atomicity of bill creation and booking status update
     const transaction = await sequelizeTVL.transaction();
@@ -90,17 +119,29 @@ const createBill = async (req, res) => {
         bl_entry_no: billNumber,
         bl_bill_no: billNumber,
         bl_booking_id: bookingId,
+        bl_billing_date: new Date(), // Add required billing date
         bl_customer_name: customerName,
-        bl_customer_phone: '', // Will be populated from booking data
-        bl_billing_date: billDate,
-        bl_journey_date: booking.bk_trvldt,
+        bl_customer_phone: phoneNumber || '',
+        bl_station_boy: stationBoy || '',
+        bl_from_station: fromStation || '',
+        bl_to_station: toStation || '',
+        bl_journey_date: journeyDate || booking.bk_trvldt,
         bl_train_no: trainNumber,
         bl_class: reservationClass,
-        bl_pnr: Array.isArray(pnrNumbers) ? pnrNumbers[0] : pnrNumbers,
-        bl_railway_fare: netFare || 0,
+        bl_pnr: pnrNumbers || '',
+        bl_seats_reserved: seatsAlloted || '',
+        bl_railway_fare: railwayFare || 0,
+        bl_sb_incentive: stationBoyIncentive || 0,
         bl_service_charge: serviceCharges || 0,
         bl_platform_fee: platformFees || 0,
-        bl_total_amount: totalAmount,
+        bl_misc_charges: miscCharges || 0,
+        bl_delivery_charge: deliveryCharges || 0,
+        bl_cancellation_charge: cancellationCharges || 0,
+        bl_gst: gst || 0,
+        bl_surcharge: surcharge || 0,
+        bl_discount: discount || 0,
+        bl_gst_type: gstType || 'EXCLUSIVE',
+        bl_total_amount: finalTotalAmount,
         bl_created_by: req.user.us_usid
       }, { transaction });
       
@@ -133,8 +174,8 @@ const createBill = async (req, res) => {
 const getCustomerBills = async (req, res) => {
   try {
     const bills = await BillTVL.findAll({ 
-      where: { customer_id: req.user.us_usid },
-      order: [['created_on', 'DESC']]
+      where: { bl_created_by: req.user.us_usid },
+      order: [['bl_created_at', 'DESC']]
     });
     
     // Transform data to match frontend expectations
@@ -269,7 +310,7 @@ const getBillById = async (req, res) => {
     
     // Check if user has permission to view this bill
     if (req.user.us_usertype !== 'admin' && 
-        bill.customer_id !== req.user.us_usid) {
+        bill.bl_created_by !== req.user.us_usid) {
       return res.status(403).json({ message: 'Access denied' });
     }
     
@@ -277,26 +318,38 @@ const getBillById = async (req, res) => {
     const billData = bill.toJSON();
     const transformedBill = {
       ...billData,
-      id: billData.bill_id,
-      billId: billData.bill_no,
-      customerId: billData.customer_id,
-      customerName: billData.customer_name,
-      trainNumber: billData.train_number,
-      reservationClass: billData.reservation_class,
-      ticketType: billData.ticket_type,
-      pnrNumbers: JSON.parse(billData.pnr_numbers || '[]'),
-      netFare: billData.net_fare,
-      serviceCharges: billData.service_charges,
-      platformFees: billData.platform_fees,
-      agentFees: billData.agent_fees,
-      extraCharges: JSON.parse(billData.extra_charges || '[]'),
-      discounts: JSON.parse(billData.discounts || '[]'),
-      totalAmount: billData.total_amount,
-      billDate: billData.bill_date,
-      createdOn: billData.created_on,
-      createdBy: billData.created_by,
-      modifiedOn: billData.modified_on,
-      modifiedBy: billData.modified_by
+      id: billData.bl_id,
+      billId: billData.bl_bill_no,
+      bookingId: billData.bl_booking_id,
+      subBillNo: billData.bl_sub_bill_no,
+      customerName: billData.bl_customer_name,
+      phoneNumber: billData.bl_customer_phone,
+      stationBoy: billData.bl_station_boy,
+      fromStation: billData.bl_from_station,
+      toStation: billData.bl_to_station,
+      journeyDate: billData.bl_journey_date,
+      trainNumber: billData.bl_train_no,
+      reservationClass: billData.bl_class,
+      ticketType: 'NORMAL', // Default ticket type since it's not in the model
+      pnrNumbers: billData.bl_pnr,
+      seatsAlloted: billData.bl_seats_reserved,
+      passengerList: [], // Default empty passenger list since it's not in the model
+      railwayFare: billData.bl_railway_fare,
+      stationBoyIncentive: billData.bl_sb_incentive,
+      serviceCharges: billData.bl_service_charge,
+      platformFees: billData.bl_platform_fee,
+      miscCharges: billData.bl_misc_charges,
+      deliveryCharges: billData.bl_delivery_charge,
+      cancellationCharges: billData.bl_cancellation_charge,
+      gst: billData.bl_gst,
+      surcharge: billData.bl_surcharge,
+      gstType: billData.bl_gst_type,
+      totalAmount: billData.bl_total_amount,
+      billDate: billData.bl_billing_date,
+      createdOn: billData.bl_created_at,
+      createdBy: billData.bl_created_by,
+      remarks: '', // Default empty remarks
+      status: 'DRAFT' // Default status
     };
     
     res.json(transformedBill);
@@ -315,20 +368,20 @@ const updateBill = async (req, res) => {
     }
     
     // Check if user has permission to update this bill
-    if (req.user.us_usertype !== 'admin' && bill.customer_id !== req.user.us_usid) {
+    if (req.user.us_usertype !== 'admin' && bill.bl_created_by !== req.user.us_usid) {
       return res.status(403).json({ message: 'Access denied' });
     }
     
     // Check if bill is already finalized/paid - cannot update
-    if (bill.status === 'FINAL' || bill.status === 'PAID') {
+    if (bill.bl_status === 'FINAL' || bill.bl_status === 'PAID') {
       return res.status(400).json({ message: 'Cannot update a finalized or paid bill' });
     }
     
     // Calculate total amount if needed
-    let totalAmount = req.body.netFare ? parseFloat(req.body.netFare) : parseFloat(bill.net_fare) || 0;
-    totalAmount += req.body.serviceCharges ? parseFloat(req.body.serviceCharges) : parseFloat(bill.service_charges) || 0;
-    totalAmount += req.body.platformFees ? parseFloat(req.body.platformFees) : parseFloat(bill.platform_fees) || 0;
-    totalAmount += req.body.agentFees ? parseFloat(req.body.agentFees) : parseFloat(bill.agent_fees) || 0;
+    let totalAmount = req.body.railwayFare ? parseFloat(req.body.railwayFare) : parseFloat(bill.bl_railway_fare) || 0;
+    totalAmount += req.body.serviceCharges ? parseFloat(req.body.serviceCharges) : parseFloat(bill.bl_service_charge) || 0;
+    totalAmount += req.body.platformFees ? parseFloat(req.body.platformFees) : parseFloat(bill.bl_platform_fee) || 0;
+    totalAmount += req.body.agentFees ? parseFloat(req.body.agentFees) : parseFloat(bill.bl_agent_fees) || 0;
 
     // Add extra charges
     const extraCharges = req.body.extraCharges || JSON.parse(bill.extra_charges || '[]');
@@ -361,35 +414,47 @@ const updateBill = async (req, res) => {
     // Update the bill
     await bill.update({
       ...req.body,
-      total_amount: totalAmount,
-      modified_by: req.user.us_usid,
-      modified_on: new Date()
+      bl_total_amount: totalAmount,
+      bl_modified_by: req.user.us_usid,
+      bl_modified_at: new Date()
     });
     
     // Transform data to match frontend expectations
     const billData = bill.toJSON();
     const transformedBill = {
       ...billData,
-      id: billData.bill_id,
-      billId: billData.bill_no,
-      customerId: billData.customer_id,
-      customerName: billData.customer_name,
-      trainNumber: billData.train_number,
-      reservationClass: billData.reservation_class,
-      ticketType: billData.ticket_type,
-      pnrNumbers: JSON.parse(billData.pnr_numbers || '[]'),
-      netFare: billData.net_fare,
-      serviceCharges: billData.service_charges,
-      platformFees: billData.platform_fees,
-      agentFees: billData.agent_fees,
-      extraCharges: JSON.parse(billData.extra_charges || '[]'),
-      discounts: JSON.parse(billData.discounts || '[]'),
-      totalAmount: billData.total_amount,
-      billDate: billData.bill_date,
-      createdOn: billData.created_on,
-      createdBy: billData.created_by,
-      modifiedOn: billData.modified_on,
-      modifiedBy: billData.modified_by
+      id: billData.bl_id,
+      billId: billData.bl_bill_no,
+      bookingId: billData.bl_booking_id,
+      subBillNo: billData.bl_sub_bill_no,
+      customerName: billData.bl_customer_name,
+      phoneNumber: billData.bl_customer_phone,
+      stationBoy: billData.bl_station_boy,
+      fromStation: billData.bl_from_station,
+      toStation: billData.bl_to_station,
+      journeyDate: billData.bl_journey_date,
+      trainNumber: billData.bl_train_no,
+      reservationClass: billData.bl_class,
+      ticketType: 'NORMAL', // Default ticket type since it's not in the model
+      pnrNumbers: billData.bl_pnr,
+      seatsAlloted: billData.bl_seats_reserved,
+      passengerList: [], // Default empty passenger list since it's not in the model
+      railwayFare: billData.bl_railway_fare,
+      stationBoyIncentive: billData.bl_sb_incentive,
+      serviceCharges: billData.bl_service_charge,
+      platformFees: billData.bl_platform_fee,
+      miscCharges: billData.bl_misc_charges,
+      deliveryCharges: billData.bl_delivery_charge,
+      cancellationCharges: billData.bl_cancellation_charge,
+      gst: billData.bl_gst,
+      surcharge: billData.bl_surcharge,
+      gstType: billData.bl_gst_type,
+      totalAmount: billData.bl_total_amount,
+      billDate: billData.bl_billing_date,
+      createdOn: billData.bl_created_at,
+      createdBy: billData.bl_created_by,
+      remarks: '', // Default empty remarks
+      status: 'DRAFT' // Default status
     };
     
     res.json(transformedBill);
@@ -413,40 +478,52 @@ const finalizeBill = async (req, res) => {
     }
     
     // Check if bill is already finalized/paid
-    if (bill.status === 'FINAL' || bill.status === 'PAID') {
+    if (bill.bl_status === 'FINAL' || bill.bl_status === 'PAID') {
       return res.status(400).json({ message: 'Bill is already finalized or paid' });
     }
     
     await bill.update({ 
-      status: 'FINAL',
-      modified_by: req.user.us_usid,
-      modified_on: new Date()
+      bl_status: 'FINAL',
+      bl_modified_by: req.user.us_usid,
+      bl_modified_at: new Date()
     });
     
     // Transform data to match frontend expectations
     const billData = bill.toJSON();
     const transformedBill = {
       ...billData,
-      id: billData.bill_id,
-      billId: billData.bill_no,
-      customerId: billData.customer_id,
-      customerName: billData.customer_name,
-      trainNumber: billData.train_number,
-      reservationClass: billData.reservation_class,
-      ticketType: billData.ticket_type,
-      pnrNumbers: JSON.parse(billData.pnr_numbers || '[]'),
-      netFare: billData.net_fare,
-      serviceCharges: billData.service_charges,
-      platformFees: billData.platform_fees,
-      agentFees: billData.agent_fees,
-      extraCharges: JSON.parse(billData.extra_charges || '[]'),
-      discounts: JSON.parse(billData.discounts || '[]'),
-      totalAmount: billData.total_amount,
-      billDate: billData.bill_date,
-      createdOn: billData.created_on,
-      createdBy: billData.created_by,
-      modifiedOn: billData.modified_on,
-      modifiedBy: billData.modified_by
+      id: billData.bl_id,
+      billId: billData.bl_bill_no,
+      bookingId: billData.bl_booking_id,
+      subBillNo: billData.bl_sub_bill_no,
+      customerName: billData.bl_customer_name,
+      phoneNumber: billData.bl_customer_phone,
+      stationBoy: billData.bl_station_boy,
+      fromStation: billData.bl_from_station,
+      toStation: billData.bl_to_station,
+      journeyDate: billData.bl_journey_date,
+      trainNumber: billData.bl_train_no,
+      reservationClass: billData.bl_class,
+      ticketType: 'NORMAL', // Default ticket type since it's not in the model
+      pnrNumbers: billData.bl_pnr,
+      seatsAlloted: billData.bl_seats_reserved,
+      passengerList: [], // Default empty passenger list since it's not in the model
+      railwayFare: billData.bl_railway_fare,
+      stationBoyIncentive: billData.bl_sb_incentive,
+      serviceCharges: billData.bl_service_charge,
+      platformFees: billData.bl_platform_fee,
+      miscCharges: billData.bl_misc_charges,
+      deliveryCharges: billData.bl_delivery_charge,
+      cancellationCharges: billData.bl_cancellation_charge,
+      gst: billData.bl_gst,
+      surcharge: billData.bl_surcharge,
+      gstType: billData.bl_gst_type,
+      totalAmount: billData.bl_total_amount,
+      billDate: billData.bl_billing_date,
+      createdOn: billData.bl_created_at,
+      createdBy: billData.bl_created_by,
+      remarks: '', // Default empty remarks
+      status: 'DRAFT' // Default status
     };
     
     res.json(transformedBill);
@@ -470,7 +547,7 @@ const deleteBill = async (req, res) => {
     }
     
     // Cannot delete finalized or paid bills
-    if (bill.status === 'FINAL' || bill.status === 'PAID') {
+    if (bill.bl_status === 'FINAL' || bill.bl_status === 'PAID') {
       return res.status(400).json({ message: 'Cannot delete a finalized or paid bill' });
     }
     
@@ -510,7 +587,7 @@ const searchBills = async (req, res) => {
 
     // Status filter
     if (status) {
-      whereConditions.status = status;
+      whereConditions.bl_status = status;
     }
 
     // Date range filter
@@ -549,14 +626,14 @@ const searchBills = async (req, res) => {
     // Apply user-specific filters
     if (req.user.us_usertype === 'customer') {
       // Customers can only see their own bills
-      whereConditions.customer_id = req.user.us_usid;
+      whereConditions.bl_created_by = req.user.us_usid;
     }
 
     // Build query
     const offset = (page - 1) * limit;
     const { count, rows: bills } = await BillTVL.findAndCountAll({
       where: whereConditions,
-      order: [[sortBy, sortOrder]],
+      order: [[sortBy === 'created_on' ? 'bl_created_at' : sortBy, sortOrder]],
       limit: parseInt(limit),
       offset: parseInt(offset)
     });
@@ -566,26 +643,38 @@ const searchBills = async (req, res) => {
       const billData = bill.toJSON();
       return {
         ...billData,
-        id: billData.bill_id,
-        billId: billData.bill_no,
-        customerId: billData.customer_id,
-        customerName: billData.customer_name,
-        trainNumber: billData.train_number,
-        reservationClass: billData.reservation_class,
-        ticketType: billData.ticket_type,
-        pnrNumbers: JSON.parse(billData.pnr_numbers || '[]'),
-        netFare: billData.net_fare,
-        serviceCharges: billData.service_charges,
-        platformFees: billData.platform_fees,
-        agentFees: billData.agent_fees,
-        extraCharges: JSON.parse(billData.extra_charges || '[]'),
-        discounts: JSON.parse(billData.discounts || '[]'),
-        totalAmount: billData.total_amount,
-        billDate: billData.bill_date,
-        createdOn: billData.created_on,
-        createdBy: billData.created_by,
-        modifiedOn: billData.modified_on,
-        modifiedBy: billData.modified_by
+        id: billData.bl_id,
+        billId: billData.bl_bill_no,
+        bookingId: billData.bl_booking_id,
+        subBillNo: billData.bl_sub_bill_no,
+        customerName: billData.bl_customer_name,
+        phoneNumber: billData.bl_customer_phone,
+        stationBoy: billData.bl_station_boy,
+        fromStation: billData.bl_from_station,
+        toStation: billData.bl_to_station,
+        journeyDate: billData.bl_journey_date,
+        trainNumber: billData.bl_train_no,
+        reservationClass: billData.bl_class,
+        ticketType: 'NORMAL', // Default ticket type since it's not in the model
+        pnrNumbers: billData.bl_pnr,
+        seatsAlloted: billData.bl_seats_reserved,
+        passengerList: [], // Default empty passenger list since it's not in the model
+        railwayFare: billData.bl_railway_fare,
+        stationBoyIncentive: billData.bl_sb_incentive,
+        serviceCharges: billData.bl_service_charge,
+        platformFees: billData.bl_platform_fee,
+        miscCharges: billData.bl_misc_charges,
+        deliveryCharges: billData.bl_delivery_charge,
+        cancellationCharges: billData.bl_cancellation_charge,
+        gst: billData.bl_gst,
+        surcharge: billData.bl_surcharge,
+        gstType: billData.bl_gst_type,
+        totalAmount: billData.bl_total_amount,
+        billDate: billData.bl_billing_date,
+        createdOn: billData.bl_created_at,
+        createdBy: billData.bl_created_by,
+        remarks: '', // Default empty remarks
+        status: 'DRAFT' // Default status
       };
     });
 
@@ -614,8 +703,8 @@ const getCustomerLedger = async (req, res) => {
 
     // Get all bills for the customer
     const bills = await BillTVL.findAll({
-      where: { customer_id: customerId },
-      order: [['bill_date', 'ASC']]
+      where: { bl_created_by: customerId },
+      order: [['bl_billing_date', 'ASC']]
     });
 
     // Get all payments for the customer
@@ -631,10 +720,10 @@ const getCustomerLedger = async (req, res) => {
     // Add bills as debit entries
     bills.forEach(bill => {
       ledgerEntries.push({
-        date: bill.bill_date,
-        billId: bill.bill_no,
-        description: `Bill #${bill.bill_no} - ${bill.reservation_class || ''} - ${bill.train_number || ''}`,
-        debit: parseFloat(bill.total_amount),
+        date: bill.bl_billing_date,
+        billId: bill.bl_bill_no,
+        description: `Bill #${bill.bl_bill_no} - ${bill.bl_class || ''} - ${bill.bl_train_no || ''}`,
+        debit: parseFloat(bill.bl_total_amount),
         credit: 0,
         balance: 0 // Will calculate later
       });
@@ -686,14 +775,14 @@ const getCustomerBalance = async (req, res) => {
     // Get total billed amount for the customer
     const bills = await BillTVL.findAll({
       where: { 
-        customer_id: customerId,
-        status: { [Sequelize.Op.in]: ['FINAL', 'PAID'] } // Only finalized/paid bills
+        bl_created_by: customerId,
+        bl_status: { [Sequelize.Op.in]: ['FINAL', 'PAID'] } // Only finalized/paid bills
       }
     });
 
     let totalBilled = 0;
     bills.forEach(bill => {
-      totalBilled += parseFloat(bill.total_amount) || 0;
+      totalBilled += parseFloat(bill.bl_total_amount) || 0;
     });
 
     // Get total received payments for the customer

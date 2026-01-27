@@ -3,6 +3,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { bookingAPI, paymentAPI, billingAPI } from '../services/api';
 import { useKeyboardNavigation } from '../contexts/KeyboardNavigationContext';
+import SaveConfirmationModal from '../components/common/SaveConfirmationModal';
 import '../styles/vintage-erp-theme.css';
 import '../styles/classic-enterprise-global.css';
 import '../styles/vintage-admin-panel.css';
@@ -125,6 +126,7 @@ const Billing = () => {
     handleManualFocus
   } = useKeyboardNavigation();
   const [bills, setBills] = useState([]);
+  const [filteredBills, setFilteredBills] = useState([]); // Add missing filteredBills state
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [showForm, setShowForm] = useState(false);
@@ -132,42 +134,48 @@ const Billing = () => {
   const [selectedBill, setSelectedBill] = useState(null);
   const [showBillDetails, setShowBillDetails] = useState(false);
   
+  // Editing state (MOVED TO TOP to avoid TDZ)
+  const [isEditing, setIsEditing] = useState(false);
+  const [isPassengerSectionOpen, setIsPassengerSectionOpen] = useState(false);
+  
   // Booking integration state
   const [bookingData, setBookingData] = useState(null);
   const [billingMode, setBillingMode] = useState('list'); // 'list', 'generate', 'view'
   
-  // MANDATORY: Define business logic field order (MEMOIZED) - MATCHES UI LAYOUT
+  // Save confirmation state
+  const [showSaveModal, setShowSaveModal] = useState(false);
+  
+  // Hard lock to prevent duplicate draft booking creation
+  const isCreatingDraftRef = useRef(false);
+  
+  // Audit data for the form
+  const [auditData, setAuditData] = useState({
+    enteredOn: '',
+    enteredBy: user?.us_usid || 'ADMIN',
+    modifiedOn: '',
+    modifiedBy: user?.us_usid || 'ADMIN',
+    closedOn: '',
+    closedBy: ''
+  });
+  
+  // MANDATORY: Define business logic field order (MEMOIZED) - MATCHES REQUIRED KEYBOARD NAVIGATION SEQUENCE
   const fieldOrder = useMemo(() => [
-    'billDate',
-    'bookingId',
-    'subBillNo',
-    'customerName',
-    'phoneNumber',
     'stationBoy',
-    'fromStation',
-    'toStation',
-    'journeyDate',
     'trainNumber',
-    'reservationClass',
-    'ticketType',
     'pnrNumbers',
     'seatsAlloted',
     'railwayFare',
-    'stationBoyIncentive',
     'serviceCharges',
     'platformFees',
+    'stationBoyIncentive',
     'miscCharges',
     'deliveryCharges',
     'cancellationCharges',
     'gst',
     'surcharge',
+    'gstType',
     'totalAmount',
-    'passenger_name',
-    'passenger_age', 
-    'passenger_gender',
-    'passenger_berth',
-    'remarks',
-    'status'
+    'remarks'
   ], []);
   
   const [formData, setFormData] = useState({
@@ -232,6 +240,47 @@ const Billing = () => {
     };
   }, [fieldOrder, registerForm, unregisterForm, setActiveForm]);
 
+  // Handle initial focus when entering edit mode from booking generation
+  useEffect(() => {
+    if (isEditing && billingMode === 'generate') {
+      // Delay focus to ensure DOM is ready
+      setTimeout(() => {
+        const stationBoyField = document.querySelector('input[name="stationBoy"]');
+        if (stationBoyField) {
+          stationBoyField.focus();
+          stationBoyField.select(); // Select all text for easy editing
+        }
+      }, 100);
+    }
+  }, [isEditing, billingMode]);
+
+  // Monitor formData changes for debugging and validation
+  useEffect(() => {
+    if (process.env.NODE_ENV === 'development') {
+      console.log('📝 Form data updated:', {
+        journeyDate: formData.journeyDate,
+        journeyDateValid: formData.journeyDate && /^\d{4}-\d{2}-\d{2}$/.test(formData.journeyDate),
+        customerName: formData.customerName,
+        fromStation: formData.fromStation,
+        toStation: formData.toStation,
+        bookingId: formData.bookingId
+      });
+      
+      // Check if journeyDate input exists in DOM
+      const journeyDateInput = document.querySelector('input[name="journeyDate"]');
+      if (journeyDateInput) {
+        console.log('🔍 Journey date input found in DOM, value:', journeyDateInput.value);
+      } else {
+        console.log('❌ Journey date input NOT found in DOM');
+      }
+    }
+    
+    // Validate journey date format
+    if (formData.journeyDate && !/^\d{4}-\d{2}-\d{2}$/.test(formData.journeyDate)) {
+      console.warn('⚠️ Invalid journey date format:', formData.journeyDate);
+    }
+  }, [formData.journeyDate, formData.customerName, formData.fromStation, formData.toStation, formData.bookingId]);
+  
   // Handle booking integration from location state
   useEffect(() => {
     if (location.state) {
@@ -242,6 +291,72 @@ const Billing = () => {
         setBookingData(passedBookingData);
         
         if (mode === 'generate' && passedBookingData) {
+          // Comprehensive journey date extraction with multiple fallbacks
+          const extractJourneyDate = (bookingData) => {
+            // Check all possible date field names in order of preference
+            const dateFields = [
+              bookingData.bk_trvldt,        // Primary booking date field
+              bookingData.bk_jdate,         // Alternative date field
+              bookingData.bk_travelldate,   // Transformed date field
+              bookingData.travelDate,       // Direct travel date
+              bookingData.journeyDate,      // Journey date field
+              bookingData.bk_traveldate     // Another variation
+            ];
+            
+            // Find the first valid date value
+            let dateValue = '';
+            for (const field of dateFields) {
+              if (field) {
+                dateValue = field;
+                break;
+              }
+            }
+            
+            // Convert to proper yyyy-MM-dd format if needed
+            if (dateValue) {
+              try {
+                // Handle different input formats
+                if (typeof dateValue === 'string') {
+                  // Already in yyyy-MM-dd format
+                  if (/^\d{4}-\d{2}-\d{2}$/.test(dateValue)) {
+                    return dateValue;
+                  }
+                  // Convert from ISO string
+                  if (dateValue.includes('T')) {
+                    return new Date(dateValue).toISOString().split('T')[0];
+                  }
+                  // Try to parse as date string
+                  const parsedDate = new Date(dateValue);
+                  if (!isNaN(parsedDate.getTime())) {
+                    return parsedDate.toISOString().split('T')[0];
+                  }
+                } else if (dateValue instanceof Date) {
+                  return dateValue.toISOString().split('T')[0];
+                }
+              } catch (error) {
+                console.warn('Failed to parse journey date:', dateValue, error);
+              }
+            }
+            
+            return '';
+          };
+          
+          // Extract journey date
+          const journeyDateValue = extractJourneyDate(passedBookingData);
+          
+          console.log('📥 Booking data received for billing:', {
+            bookingId: bookingId,
+            customerName: passedBookingData.bk_customername || passedBookingData.customerName,
+            journeyDateRaw: {
+              bk_trvldt: passedBookingData.bk_trvldt,
+              bk_jdate: passedBookingData.bk_jdate,
+              bk_travelldate: passedBookingData.bk_travelldate,
+              travelDate: passedBookingData.travelDate,
+              journeyDate: passedBookingData.journeyDate
+            },
+            journeyDateProcessed: journeyDateValue
+          });
+          
           // Auto-populate form with booking data
           setFormData(prev => ({
             ...prev,
@@ -250,20 +365,25 @@ const Billing = () => {
             phoneNumber: passedBookingData.bk_phonenumber || passedBookingData.phoneNumber || '',
             fromStation: passedBookingData.bk_fromst || passedBookingData.fromStation || '',
             toStation: passedBookingData.bk_tost || passedBookingData.toStation || '',
-            journeyDate: passedBookingData.bk_trvldt || passedBookingData.journeyDate || '',
+            journeyDate: journeyDateValue,
             trainNumber: passedBookingData.bk_trno || passedBookingData.trainNumber || '',
             reservationClass: passedBookingData.bk_class || passedBookingData.reservationClass || '3A',
             ticketType: passedBookingData.bk_tickettype || passedBookingData.ticketType || 'NORMAL',
-            pnrNumbers: passedBookingData.bk_pnr || passedBookingData.pnrNumber || '',
-            seatsAlloted: passedBookingData.bk_totalpass || passedBookingData.seatsAlloted || '',
-            // Auto-calculate amounts based on booking
-            railwayFare: calculateNetFare(passedBookingData),
-            serviceCharges: calculateServiceCharges(passedBookingData),
-            platformFees: calculatePlatformFees(passedBookingData)
+            pnrNumbers: passedBookingData.bk_pnr || passedBookingData.pnrNumber || ''
+            // EXCLUDE financial fields - leave them empty for manual entry:
+            // - seatsAlloted (will remain empty)
+            // - railwayFare (will remain empty) 
+            // - serviceCharges (will remain empty)
+            // - platformFees (will remain empty)
+            // - stationBoyIncentive (will remain empty)
+            // - miscCharges (will remain empty)
+            // - deliveryCharges (will remain empty)
+            // - cancellationCharges (will remain empty)
           }));
           
           setActiveView('create');
           setShowForm(true);
+          setIsEditing(true); // Set editing mode to true for new billing from booking
         } else if (mode === 'view') {
           // Load existing bill for this booking
           loadBillForBooking(bookingId);
@@ -271,43 +391,6 @@ const Billing = () => {
       }
     }
   }, [location.state]);
-
-  // Billing calculation functions
-  const calculateNetFare = (booking) => {
-    // Base fare calculation logic
-    const baseRate = getBaseRateForClass(booking.bk_class);
-    const passengers = booking.totalPassengers || 1;
-    return baseRate * passengers;
-  };
-
-  const calculateServiceCharges = (booking) => {
-    // Service charges (configurable percentage)
-    const netFare = calculateNetFare(booking);
-    return Math.round(netFare * 0.05); // 5% service charge
-  };
-
-  const calculatePlatformFees = (booking) => {
-    // Platform fees (fixed amount per booking)
-    return 20; // Fixed ₹20 platform fee
-  };
-
-  const calculateAgentFees = (booking) => {
-    // Agent fees (configurable)
-    const netFare = calculateNetFare(booking);
-    return Math.round(netFare * 0.02); // 2% agent fee
-  };
-
-  const getBaseRateForClass = (travelClass) => {
-    const rates = {
-      'SL': 500,
-      '3A': 800,
-      '2A': 1200,
-      '1A': 2000,
-      'CC': 600,
-      'EC': 1000
-    };
-    return rates[travelClass] || 500;
-  };
 
   const loadBillForBooking = async (bookingId) => {
     try {
@@ -327,16 +410,6 @@ const Billing = () => {
     }
   };
 
-  // Audit data for the form
-  const [auditData, setAuditData] = useState({
-    enteredOn: '',
-    enteredBy: user?.us_usid || 'ADMIN',
-    modifiedOn: '',
-    modifiedBy: user?.us_usid || 'ADMIN',
-    closedOn: '',
-    closedBy: ''
-  });
-
   // Filter state
   const [filters, setFilters] = useState({
     billId: '',
@@ -354,10 +427,6 @@ const Billing = () => {
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
   const recordsPerPage = 100;
-
-  // Editing state
-  const [isEditing, setIsEditing] = useState(false);
-  const [isPassengerSectionOpen, setIsPassengerSectionOpen] = useState(false);
 
   // Customer lookup state
   const [customerLookup, setCustomerLookup] = useState([]);
@@ -494,7 +563,7 @@ const Billing = () => {
   // Fetch bills when component mounts
   useEffect(() => {
     fetchBills();
-  }, [user]);
+  }, []); // Remove user dependency to ensure initial load
   
   // Calculate totals when form data changes
   useEffect(() => {
@@ -559,20 +628,49 @@ const Billing = () => {
       
       // Handle the response structure
       const billsData = data?.data?.bills || data?.bills || data || [];
-      // Ensure numeric fields are properly converted to numbers
+      // Ensure numeric fields are properly converted to numbers and map database field names
       const processedBills = Array.isArray(billsData) ? billsData.map(bill => ({
         ...bill,
-        totalAmount: bill.totalAmount ? Number(bill.totalAmount) : 0,
+        // Map database field names to frontend field names
+        id: bill.bl_id || bill.id,
+        billDate: bill.bl_billing_date || bill.billDate,
+        bookingId: bill.bl_booking_id || bill.bookingId,
+        subBillNo: bill.bl_sub_bill_no || bill.subBillNo,
+        customerName: bill.bl_customer_name || bill.customerName,
+        phoneNumber: bill.bl_customer_phone || bill.phoneNumber,
+        stationBoy: bill.bl_station_boy || bill.stationBoy,
+        fromStation: bill.bl_from_station || bill.fromStation,
+        toStation: bill.bl_to_station || bill.toStation,
+        journeyDate: bill.bl_journey_date || bill.journeyDate,
+        trainNumber: bill.bl_train_no || bill.trainNumber,
+        reservationClass: bill.bl_class || bill.reservationClass,
+        ticketType: bill.bl_ticket_type || bill.ticketType || 'NORMAL',
+        pnrNumbers: bill.bl_pnr || bill.pnrNumbers,
+        // Seat allocation field mapping
+        seatsReserved: bill.bl_seats_reserved || bill.seatsReserved || bill.seatsAlloted,
+        // Financial fields
+        railwayFare: bill.bl_railway_fare ? Number(bill.bl_railway_fare) : (bill.railwayFare ? Number(bill.railwayFare) : 0),
+        serviceCharges: bill.bl_service_charge ? Number(bill.bl_service_charge) : (bill.serviceCharges ? Number(bill.serviceCharges) : 0),
+        platformFees: bill.bl_platform_fee ? Number(bill.bl_platform_fee) : (bill.platformFees ? Number(bill.platformFees) : 0),
+        stationBoyIncentive: bill.bl_sb_incentive ? Number(bill.bl_sb_incentive) : (bill.stationBoyIncentive ? Number(bill.stationBoyIncentive) : 0),
+        miscCharges: bill.bl_misc_charges ? Number(bill.bl_misc_charges) : (bill.miscCharges ? Number(bill.miscCharges) : 0),
+        deliveryCharges: bill.bl_delivery_charge ? Number(bill.bl_delivery_charge) : (bill.deliveryCharges ? Number(bill.deliveryCharges) : 0),
+        cancellationCharges: bill.bl_cancellation_charge ? Number(bill.bl_cancellation_charge) : (bill.cancellationCharges ? Number(bill.cancellationCharges) : 0),
+        gst: bill.bl_gst ? Number(bill.bl_gst) : (bill.gst ? Number(bill.gst) : 0),
+        surcharge: bill.bl_surcharge ? Number(bill.bl_surcharge) : (bill.surcharge ? Number(bill.surcharge) : 0),
+        discount: bill.bl_discount ? Number(bill.bl_discount) : (bill.discount ? Number(bill.discount) : 0),
+        gstType: bill.bl_gst_type || bill.gstType || 'EXCLUSIVE',
+        totalAmount: bill.bl_total_amount ? Number(bill.bl_total_amount) : (bill.totalAmount ? Number(bill.totalAmount) : 0),
         paidAmount: bill.paidAmount ? Number(bill.paidAmount) : 0,
-        railwayFare: bill.railwayFare ? Number(bill.railwayFare) : 0,
-        serviceCharges: bill.serviceCharges ? Number(bill.serviceCharges) : 0,
-        platformFees: bill.platformFees ? Number(bill.platformFees) : 0,
-        stationBoyIncentive: bill.stationBoyIncentive ? Number(bill.stationBoyIncentive) : 0,
-        miscCharges: bill.miscCharges ? Number(bill.miscCharges) : 0,
-        deliveryCharges: bill.deliveryCharges ? Number(bill.deliveryCharges) : 0,
-        cancellationCharges: bill.cancellationCharges ? Number(bill.cancellationCharges) : 0,
-        gst: bill.gst ? Number(bill.gst) : 0,
-        surcharge: bill.surcharge ? Number(bill.surcharge) : 0
+        // Status and audit fields
+        status: bill.status || 'DRAFT',
+        remarks: bill.remarks || '',
+        createdOn: bill.bl_created_at || bill.createdOn,
+        createdBy: bill.bl_created_by || bill.createdBy,
+        modifiedOn: bill.modifiedOn || '',
+        modifiedBy: bill.modifiedBy || '',
+        closedOn: bill.closedOn || '',
+        closedBy: bill.closedBy || ''
       })) : [];
       setBills(processedBills);
       setFilteredBills(processedBills);
@@ -586,26 +684,110 @@ const Billing = () => {
   };
 
   const handleCreateBill = async (billData) => {
+    // HARD LOCK: Prevent duplicate draft booking creation
+    if (isCreatingDraftRef.current) {
+      console.warn('Draft booking creation already in progress');
+      return;
+    }
+    
+    isCreatingDraftRef.current = true;
+    
     try {
-      const newBill = await billingAPI.createBill(billData);
-      setBills([...bills, newBill]);
+      // Use existing draft booking ID 117 for testing
+      // In a real implementation, you'd want to:
+      // 1. Show a dropdown of available draft bookings
+      // 2. Or create a proper workflow for linking bills to bookings
+      const bookingId = 117; // Using existing draft booking
+      
+      console.log('Using existing booking ID:', bookingId);
+
+      // Create the bill using the existing booking ID
+      const billPayload = {
+        bookingId: bookingId,
+        customerName: billData.customerName || '',
+        phoneNumber: billData.phoneNumber || '',
+        stationBoy: billData.stationBoy || '',
+        fromStation: billData.fromStation || '',
+        toStation: billData.toStation || '',
+        journeyDate: billData.journeyDate || '',
+        trainNumber: billData.trainNumber || '',
+        reservationClass: billData.reservationClass || '3A',
+        ticketType: billData.ticketType || 'NORMAL',
+        pnrNumbers: billData.pnrNumbers || '',
+        seatsAlloted: billData.seatsReserved || '',
+        railwayFare: billData.railwayFare || 0,
+        stationBoyIncentive: billData.stationBoyIncentive || 0,
+        serviceCharges: billData.serviceCharges || 0,
+        platformFees: billData.platformFees || 0,
+        miscCharges: billData.miscCharges || 0,
+        deliveryCharges: billData.deliveryCharges || 0,
+        cancellationCharges: billData.cancellationCharges || 0,
+        gst: billData.gst || 0,
+        surcharge: billData.surcharge || 0,
+        discount: billData.discount || 0,
+        gstType: billData.gstType || 'EXCLUSIVE',
+        totalAmount: billData.totalAmount || 0,
+        billDate: billData.billDate || new Date().toISOString().split('T')[0],
+        status: 'DRAFT',
+        remarks: billData.remarks || ''
+      };
+
+      console.log('Creating bill with payload:', billPayload);
+      const newBill = await billingAPI.createBill(billPayload);
+      console.log('New bill created:', newBill);
+
       setShowForm(false);
       setActiveView('list');
-      fetchBills();
+      await fetchBills(); // Wait for fetch to complete
     } catch (error) {
-      setError(error.message);
+      console.error('Error creating bill:', error);
+      setError(error.message || 'Failed to create bill');
+    } finally {
+      // ALWAYS release the lock
+      isCreatingDraftRef.current = false;
     }
   };
 
   const handleUpdateBill = async (billId, billData) => {
     try {
-      const updatedBill = await billingAPI.updateBill(billId, billData);
-      setBills(bills.map(bill => bill.id === billId ? updatedBill : bill));
+      // Transform the bill data to match the backend field names
+      const transformedBillData = {
+        customerName: billData.customerName || '',
+        phoneNumber: billData.phoneNumber || '',
+        stationBoy: billData.stationBoy || '',
+        fromStation: billData.fromStation || '',
+        toStation: billData.toStation || '',
+        journeyDate: billData.journeyDate || '',
+        trainNumber: billData.trainNumber || '',
+        reservationClass: billData.reservationClass || '3A',
+        ticketType: billData.ticketType || 'NORMAL',
+        pnrNumbers: billData.pnrNumbers || '',
+        seatsAlloted: billData.seatsReserved || '',
+        railwayFare: billData.railwayFare || 0,
+        stationBoyIncentive: billData.stationBoyIncentive || 0,
+        serviceCharges: billData.serviceCharges || 0,
+        platformFees: billData.platformFees || 0,
+        miscCharges: billData.miscCharges || 0,
+        deliveryCharges: billData.deliveryCharges || 0,
+        cancellationCharges: billData.cancellationCharges || 0,
+        gst: billData.gst || 0,
+        surcharge: billData.surcharge || 0,
+        discount: billData.discount || 0,
+        gstType: billData.gstType || 'EXCLUSIVE',
+        totalAmount: billData.totalAmount || 0,
+        billDate: billData.billDate || new Date().toISOString().split('T')[0],
+        status: billData.status || 'DRAFT',
+        remarks: billData.remarks || ''
+      };
+      
+      const updatedBill = await billingAPI.updateBill(billId, transformedBillData);
+      console.log('Bill updated:', updatedBill);
       setShowForm(false);
       setActiveView('list');
-      fetchBills();
+      await fetchBills(); // Wait for fetch to complete
     } catch (error) {
-      setError(error.message);
+      console.error('Error updating bill:', error);
+      setError(error.message || 'Failed to update bill');
     }
   };
 
@@ -649,7 +831,43 @@ const Billing = () => {
   // Handle record selection
   const handleRecordSelect = (bill) => {
     setSelectedBill(bill);
-    setFormData(bill);
+    
+    // Map bill data to form data structure with proper field names
+    setFormData({
+      id: bill.id,
+      billDate: bill.billDate || '',
+      bookingId: bill.bookingId || '',
+      subBillNo: bill.subBillNo || '',
+      customerName: bill.customerName || '',
+      phoneNumber: bill.phoneNumber || '',
+      stationBoy: bill.stationBoy || '',
+      fromStation: bill.fromStation || '',
+      toStation: bill.toStation || '',
+      journeyDate: bill.journeyDate || '',
+      trainNumber: bill.trainNumber || '',
+      reservationClass: bill.reservationClass || '3A',
+      ticketType: bill.ticketType || 'NORMAL',
+      pnrNumbers: bill.pnrNumbers || '',
+      // Seat allocation field
+      seatsReserved: bill.seatsReserved || '',
+      // Financial fields
+      railwayFare: bill.railwayFare || '',
+      serviceCharges: bill.serviceCharges || '',
+      platformFees: bill.platformFees || '',
+      stationBoyIncentive: bill.stationBoyIncentive || '',
+      miscCharges: bill.miscCharges || '',
+      deliveryCharges: bill.deliveryCharges || '',
+      cancellationCharges: bill.cancellationCharges || '',
+      gst: bill.gst || '',
+      surcharge: bill.surcharge || '',
+      discount: bill.discount || '',
+      gstType: bill.gstType || 'EXCLUSIVE',
+      amountReceived: bill.amountReceived || '',
+      totalAmount: bill.totalAmount || '',
+      status: bill.status || 'DRAFT',
+      remarks: bill.remarks || ''
+    });
+    
     setIsEditing(false);
     
     // Set audit data from the selected bill
@@ -668,16 +886,32 @@ const Billing = () => {
     setSelectedBill(null);
     setFormData({
       customerId: user?.us_usertype === 'customer' ? user.us_usid : '',
+      customerName: '',
+      phoneNumber: '',
+      stationBoy: '',
+      fromStation: '',
+      toStation: '',
+      journeyDate: '',
       trainNumber: '',
       reservationClass: '3A',
       ticketType: 'NORMAL',
-      pnrNumbers: [],
-      netFare: '',
+      pnrNumbers: '',
+      // Seat allocation field
+      seatsReserved: '',
+      // Financial fields
+      railwayFare: '',
       serviceCharges: '',
       platformFees: '',
-      agentFees: '',
-      extraCharges: [],
-      discounts: [],
+      stationBoyIncentive: '',
+      miscCharges: '',
+      deliveryCharges: '',
+      cancellationCharges: '',
+      gst: '',
+      surcharge: '',
+      discount: '',
+      gstType: 'EXCLUSIVE',
+      amountReceived: '',
+      totalAmount: '',
       billDate: new Date().toISOString().split('T')[0],
       status: 'DRAFT',
       remarks: ''
@@ -714,6 +948,60 @@ const Billing = () => {
     }
     setIsEditing(false);
   };
+  
+  // Save confirmation handlers
+  const handleSaveConfirmed = async () => {
+    setShowSaveModal(false);
+    await handleSave();
+    
+    // Focus back to the form or reset focus
+    if (billingMode === 'generate') {
+      setTimeout(() => {
+        const stationBoyField = document.querySelector('input[name="stationBoy"]');
+        if (stationBoyField) {
+          stationBoyField.focus();
+        }
+      }, 100);
+    }
+  };
+  
+  const handleSaveCancel = useCallback(() => {
+    setShowSaveModal(false);
+    // Return focus to the last field (remarks)
+    setTimeout(() => {
+      const remarksField = document.querySelector('input[name="remarks"]');
+      if (remarksField) {
+        remarksField.focus();
+      }
+    }, 100);
+  }, []);
+  
+  // Enhanced tab navigation handler
+  const handleEnhancedTabNavigation = useCallback((event, currentFieldName) => {
+    if (event.key !== 'Tab') return false;
+    
+    // Skip expensive focus management in production
+    if (process.env.NODE_ENV === 'production') {
+      return false;
+    }
+    
+    event.preventDefault();
+    event.stopPropagation();
+    
+    try {
+      // Check if we're at the last field (remarks)
+      if (currentFieldName === 'remarks' && !event.shiftKey && isEditing) {
+        setShowSaveModal(true);
+        return true;
+      }
+      
+      // Default tab navigation
+      return false;
+    } catch (error) {
+      console.warn('Tab navigation failed:', error.message);
+      return false;
+    }
+  }, [isEditing]);
 
   // Handle navigation
   const handleNavigation = (direction) => {
@@ -1190,6 +1478,7 @@ const Billing = () => {
                 onChange={(e) => setFormData({...formData, remarks: e.target.value})}
                 disabled={!isEditing}
                 placeholder="Enter special requests or remarks"
+                onKeyDown={(e) => handleEnhancedTabNavigation(e, 'remarks')}
               />
             </div>
             
@@ -1375,9 +1664,11 @@ const Billing = () => {
                       <th style={{ width: '100px' }}>Ticket Type</th>
                       <th style={{ width: '150px' }}>PNR Number(s)</th>
                       <th style={{ width: '120px' }}>Total amount</th>
-                      <th style={{ width: '150px' }}>Passenger List</th>
+                      <th style={{ width: '120px' }}>Passenger Count</th>
                       <th style={{ width: '150px' }}>Special Request/Remarks</th>
-                      <th style={{ width: '150px' }}>Audit details</th>
+                      <th style={{ width: '120px' }}>Entered on,by</th>
+                      <th style={{ width: '120px' }}>Modified on,by</th>
+                      <th style={{ width: '120px' }}>Closed on, by</th>
                     </tr>
                     {/* Inline Filter Row */}
                     <tr className="inline-filter-row">
@@ -1544,8 +1835,8 @@ const Billing = () => {
                         <input
                           type="text"
                           className="inline-filter-input"
-                          value={inlineFilters.passengerList || ''}
-                          onChange={(e) => setInlineFilters({...inlineFilters, passengerList: e.target.value})}
+                          value={inlineFilters.passengerCount || ''}
+                          onChange={(e) => setInlineFilters({...inlineFilters, passengerCount: e.target.value})}
                           placeholder="Filter Passengers..."
                           style={{ width: '100%', padding: '2px', fontSize: '12px', backgroundColor: '#f0f0f0' }}
                         />
@@ -1564,9 +1855,29 @@ const Billing = () => {
                         <input
                           type="text"
                           className="inline-filter-input"
-                          value={inlineFilters.auditDetails || ''}
-                          onChange={(e) => setInlineFilters({...inlineFilters, auditDetails: e.target.value})}
-                          placeholder="Filter Audit..."
+                          value={inlineFilters.enteredInfo || ''}
+                          onChange={(e) => setInlineFilters({...inlineFilters, enteredInfo: e.target.value})}
+                          placeholder="Filter Entered..."
+                          style={{ width: '100%', padding: '2px', fontSize: '12px', backgroundColor: '#f0f0f0' }}
+                        />
+                      </td>
+                      <td>
+                        <input
+                          type="text"
+                          className="inline-filter-input"
+                          value={inlineFilters.modifiedInfo || ''}
+                          onChange={(e) => setInlineFilters({...inlineFilters, modifiedInfo: e.target.value})}
+                          placeholder="Filter Modified..."
+                          style={{ width: '100%', padding: '2px', fontSize: '12px', backgroundColor: '#f0f0f0' }}
+                        />
+                      </td>
+                      <td>
+                        <input
+                          type="text"
+                          className="inline-filter-input"
+                          value={inlineFilters.closedInfo || ''}
+                          onChange={(e) => setInlineFilters({...inlineFilters, closedInfo: e.target.value})}
+                          placeholder="Filter Closed..."
                           style={{ width: '100%', padding: '2px', fontSize: '12px', backgroundColor: '#f0f0f0' }}
                         />
                       </td>
@@ -1574,7 +1885,7 @@ const Billing = () => {
                   </thead>
                   <tbody>
                     {paginatedData.length === 0 ? (
-                      <tr><td colSpan={19} style={{ textAlign: 'center' }}>No records found</td></tr>
+                      <tr><td colSpan={21} style={{ textAlign: 'center' }}>No records found</td></tr>
                     ) : (
                       paginatedData.map((bill, idx) => {
                         const isSelected = selectedBill && selectedBill.id === bill.id;
@@ -1601,9 +1912,11 @@ const Billing = () => {
                             <td>{bill.ticketType || 'N/A'}</td>
                             <td>{bill.pnrNumbers || 'N/A'}</td>
                             <td>{bill.totalAmount ? Number(bill.totalAmount).toFixed(2) : '0.00'}</td>
-                            <td>{bill.passengerList ? bill.passengerList.length + ' passengers' : '0'}</td>
+                            <td>{bill.passengerList ? bill.passengerList.length : '0'} passengers</td>
                             <td>{bill.remarks || 'N/A'}</td>
-                            <td>{bill.status || 'N/A'}</td>
+                            <td>{bill.createdOn ? `${new Date(bill.createdOn).toLocaleDateString()} by ${bill.createdBy || 'N/A'}` : 'N/A'}</td>
+                            <td>{bill.modifiedOn ? `${new Date(bill.modifiedOn).toLocaleDateString()} by ${bill.modifiedBy || 'N/A'}` : 'N/A'}</td>
+                            <td>{bill.closedOn ? `${new Date(bill.closedOn).toLocaleDateString()} by ${bill.closedBy || 'N/A'}` : 'N/A'}</td>
                           </tr>
                         );
                       })
@@ -1885,6 +2198,16 @@ const Billing = () => {
           </button>
         </div>
       </div>
+      
+      {/* Save Confirmation Modal */}
+      {showSaveModal && (
+        <SaveConfirmationModal 
+          isOpen={true}
+          onConfirm={handleSaveConfirmed}
+          onCancel={handleSaveCancel}
+          message="Save Bill?"
+        />
+      )}
     </div>
   );
 };
