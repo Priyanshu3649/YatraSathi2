@@ -891,7 +891,7 @@ const Billing = () => {
       stationBoy: '',
       fromStation: '',
       toStation: '',
-      journeyDate: '',
+      journeyDate: '', // Will be set from booking data if available
       trainNumber: '',
       reservationClass: '3A',
       ticketType: 'NORMAL',

@@ -1,8 +1,30 @@
+// Import required models
 const { BillTVL, UserTVL, CustomerTVL: Customer, BookingTVL } = require('../models');
 const { Sequelize } = require('sequelize');
 const { sequelizeTVL } = require('../../config/db');
 
-// Create a new bill
+// Helper function to convert string user ID to integer for database compatibility
+function convertUserIdToInt(userId) {
+  if (typeof userId === 'number') {
+    return userId;
+  }
+  
+  if (typeof userId === 'string') {
+    // Try to extract numeric part from alphanumeric ID (e.g., 'ADM001' -> 1)
+    const numericPart = userId.match(/\d+/);
+    if (numericPart) {
+      return parseInt(numericPart[0]);
+    }
+    
+    // If no numeric part found, use character codes as fallback
+    return userId.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0) % 1000000; // Limit to reasonable size
+  }
+  
+  // Default fallback
+  return 1;
+}
+
+// Create a new bill (TRANSACTIONAL - AUTHORITATIVE BUSINESS FLOW)
 const createBill = async (req, res) => {
   try {
     // Validate required fields
@@ -46,10 +68,11 @@ const createBill = async (req, res) => {
       customerName,
       phoneNumber,
       journeyDate,
-      billDate: req.body.billDate
+      billDate: req.body.billDate,
+      allFields: req.body
     });
     
-    // Validate bookingId
+    // Validate bookingId (MANDATORY)
     if (!bookingId) {
       return res.status(400).json({ message: 'Booking ID is required for billing.' });
     }
@@ -64,68 +87,84 @@ const createBill = async (req, res) => {
       return res.status(400).json({ message: 'Journey date is required.' });
     }
     
+    // Validate bill date is provided
+    if (!billDate) {
+      return res.status(400).json({ message: 'Bill date is required.' });
+    }
+    
     // Validate sequelizeTVL is available
     if (!sequelizeTVL) {
       console.error('sequelizeTVL is undefined');
       return res.status(500).json({ message: 'Database connection error' });
     }
 
-    // Check booking status and existence
-    const booking = await BookingTVL.findByPk(bookingId);
-    if (!booking) {
-      return res.status(404).json({ message: 'Booking not found.' });
-    }
-
-    // Billing can be generated for draft bookings only
-    if (!booking.bk_status || booking.bk_status.toUpperCase() !== 'DRAFT') {
-      return res.status(400).json({ message: 'Billing can only be generated for draft bookings.' });
-    }
-
-    // Check if bill already exists for this booking
-    const existingBill = await BillTVL.findOne({ where: { bl_booking_id: bookingId } });
-    if (existingBill) {
-      return res.status(400).json({ message: 'A bill already exists for this booking.' });
-    }
-
-    // Generate bill number
-    const billNumber = `BILL${Date.now()}${Math.floor(Math.random() * 1000)}`;
-
-    // Calculate total amount based on provided financial fields
-    let calculatedTotal = parseFloat(railwayFare) || 0;
-    calculatedTotal += parseFloat(stationBoyIncentive) || 0;
-    calculatedTotal += parseFloat(serviceCharges) || 0;
-    calculatedTotal += parseFloat(platformFees) || 0;
-    calculatedTotal += parseFloat(gst) || 0;
-    calculatedTotal += parseFloat(miscCharges) || 0;
-    calculatedTotal += parseFloat(deliveryCharges) || 0;
-    calculatedTotal += parseFloat(cancellationCharges) || 0;
-    calculatedTotal += parseFloat(surcharge) || 0;
-    
-    // Apply discount
-    calculatedTotal -= parseFloat(discount) || 0;
-    
-    // Ensure calculated total is not negative
-    calculatedTotal = Math.max(0, calculatedTotal);
-    
-    // Use provided totalAmount if available, otherwise use calculated
-    const finalTotalAmount = totalAmount !== undefined ? parseFloat(totalAmount) : calculatedTotal;
-
-    // Use transaction to ensure atomicity of bill creation and booking status update
+    // TRANSACTIONAL LOGIC (CRITICAL - AUTHORITATIVE BUSINESS FLOW)
     const transaction = await sequelizeTVL.transaction();
     
     try {
-      // Create new bill
+      // 1. Validate booking exists and status
+      const booking = await BookingTVL.findByPk(bookingId, { transaction });
+      if (!booking) {
+        throw new Error('Booking not found');
+      }
+
+      // AUTHORITATIVE RULE: Billing can only be generated for DRAFT/PENDING bookings
+      // CONFIRMED bookings already have bills
+      if (booking.bk_status && booking.bk_status.toUpperCase() === 'CONFIRMED') {
+        throw new Error('Billing already exists for this booking');
+      }
+      
+      if (booking.bk_status && booking.bk_status.toUpperCase() === 'CANCELLED') {
+        throw new Error('Cannot generate bill for cancelled booking');
+      }
+
+      // 2. Generate unique bill number
+      const billNumber = `BILL${Date.now()}${Math.floor(Math.random() * 1000)}`;
+      
+      // 3. Calculate total amount
+      let calculatedTotal = parseFloat(railwayFare) || 0;
+      calculatedTotal += parseFloat(stationBoyIncentive) || 0;
+      calculatedTotal += parseFloat(serviceCharges) || 0;
+      calculatedTotal += parseFloat(platformFees) || 0;
+      calculatedTotal += parseFloat(gst) || 0;
+      calculatedTotal += parseFloat(miscCharges) || 0;
+      calculatedTotal += parseFloat(deliveryCharges) || 0;
+      calculatedTotal += parseFloat(cancellationCharges) || 0;
+      calculatedTotal += parseFloat(surcharge) || 0;
+      
+      // Apply discount
+      calculatedTotal -= parseFloat(discount) || 0;
+      
+      // Ensure calculated total is not negative
+      calculatedTotal = Math.max(0, calculatedTotal);
+      
+      // Use provided totalAmount if available, otherwise use calculated
+      const finalTotalAmount = totalAmount !== undefined ? parseFloat(totalAmount) : calculatedTotal;
+
+      // 4. Create Bill (with proper field mappings)
+      console.log('📝 Creating bill with data:', {
+        bl_entry_no: billNumber,
+        bl_bill_no: billNumber,
+        bl_booking_id: bookingId,
+        bl_billing_date: billDate ? new Date(billDate) : new Date(), // Required billing date
+        bl_customer_name: customerName,
+        bl_customer_phone: phoneNumber, // Required phone field
+        bl_journey_date: journeyDate && journeyDate.trim() ? new Date(journeyDate) : booking.bk_trvldt,
+        bl_total_amount: finalTotalAmount,
+        bl_created_by: convertUserIdToInt(req.user.us_usid)
+      });
+      
       const bill = await BillTVL.create({
         bl_entry_no: billNumber,
         bl_bill_no: billNumber,
         bl_booking_id: bookingId,
-        bl_billing_date: new Date(), // Add required billing date
+        bl_billing_date: billDate ? new Date(billDate) : new Date(), // Required billing date
         bl_customer_name: customerName,
-        bl_customer_phone: phoneNumber || '',
+        bl_customer_phone: phoneNumber, // Required phone field
         bl_station_boy: stationBoy || '',
         bl_from_station: fromStation || '',
         bl_to_station: toStation || '',
-        bl_journey_date: journeyDate || booking.bk_trvldt,
+        bl_journey_date: journeyDate && journeyDate.trim() ? new Date(journeyDate) : booking.bk_trvldt,
         bl_train_no: trainNumber,
         bl_class: reservationClass,
         bl_pnr: pnrNumbers || '',
@@ -142,39 +181,58 @@ const createBill = async (req, res) => {
         bl_discount: discount || 0,
         bl_gst_type: gstType || 'EXCLUSIVE',
         bl_total_amount: finalTotalAmount,
-        bl_created_by: req.user.us_usid
+        bl_created_by: convertUserIdToInt(req.user.us_usid)
       }, { transaction });
       
-      // Update booking status from 'DRAFT' to 'CONFIRMED'
-      await BookingTVL.update({
+      // 5. Update Booking Status to CONFIRMED and mark as billed
+      await booking.update({
         bk_status: 'CONFIRMED',
+        bk_billed: 1,
         mby: req.user.us_usid,
         mdtm: new Date()
-      }, {
-        where: { bk_bkid: bookingId },
-        transaction
-      });
+      }, { transaction });
       
-      // Commit transaction
+      // 6. Commit transaction (ALL operations succeed together)
       await transaction.commit();
       
-      res.status(201).json(bill);
+      console.log(`✅ Bill ${billNumber} created successfully for booking ${bookingId}`);
+      console.log(`✅ Booking ${bookingId} status updated to CONFIRMED`);
+      
+      res.status(201).json({
+        success: true,
+        message: 'Bill created successfully',
+        data: {
+          bill: bill.toJSON(),
+          bookingUpdated: true
+        }
+      });
+      
     } catch (error) {
-      // Rollback transaction on error
+      // 7. Rollback transaction on ANY error (atomicity)
       await transaction.rollback();
+      console.error('❌ Transaction rolled back due to error:', error.message);
       throw error;
     }
+    
   } catch (error) {
     console.error('Error creating bill:', error);
-    res.status(500).json({ message: error.message });
+    res.status(500).json({ 
+      success: false,
+      message: error.message 
+    });
   }
 };
 
-// Get all bills for a customer
+// Get customer bills (CUSTOMER VIEW - OWN RECORDS ONLY)
 const getCustomerBills = async (req, res) => {
   try {
+    // For customers, only show their own bills
     const bills = await BillTVL.findAll({ 
-      where: { bl_created_by: req.user.us_usid },
+      include: [{
+        model: BookingTVL,
+        where: { bk_usid: req.user.us_usid },
+        required: true
+      }],
       order: [['bl_created_at', 'DESC']]
     });
     
@@ -183,36 +241,46 @@ const getCustomerBills = async (req, res) => {
       const billData = bill.toJSON();
       return {
         ...billData,
-        id: billData.bill_id,
-        billId: billData.bill_no,
-        customerId: billData.customer_id,
-        customerName: billData.customer_name,
-        trainNumber: billData.train_number,
-        reservationClass: billData.reservation_class,
+        id: billData.bl_id,
+        billId: billData.bl_bill_no,
+        bookingId: billData.bl_booking_id,
+        customerName: billData.bl_customer_name,
+        phoneNumber: billData.bl_phone,
+        trainNumber: billData.bl_train_no,
+        reservationClass: billData.bl_class,
         ticketType: billData.ticket_type,
-        pnrNumbers: JSON.parse(billData.pnr_numbers || '[]'),
-        netFare: billData.net_fare,
-        serviceCharges: billData.service_charges,
-        platformFees: billData.platform_fees,
-        agentFees: billData.agent_fees,
-        extraCharges: JSON.parse(billData.extra_charges || '[]'),
-        discounts: JSON.parse(billData.discounts || '[]'),
-        totalAmount: billData.total_amount,
-        billDate: billData.bill_date,
-        createdOn: billData.created_on,
-        createdBy: billData.created_by,
-        modifiedOn: billData.modified_on,
-        modifiedBy: billData.modified_by
+        pnrNumbers: billData.bl_pnr,
+        netFare: billData.bl_railway_fare,
+        serviceCharges: billData.bl_service_charge,
+        platformFees: billData.bl_platform_fee,
+        agentFees: 0, // Default since not in model
+        extraCharges: [], // Default empty array
+        discounts: [], // Default empty array
+        totalAmount: billData.bl_total_amount,
+        billDate: billData.bl_bill_date,
+        createdOn: billData.bl_created_at,
+        createdBy: billData.bl_created_by,
+        modifiedOn: billData.mdtm,
+        modifiedBy: billData.mby
       };
     });
     
-    res.json(transformedBills);
+    res.json({
+      success: true,
+      data: {
+        bills: transformedBills,
+        count: transformedBills.length
+      }
+    });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    res.status(500).json({ 
+      success: false,
+      message: error.message 
+    });
   }
 };
 
-// Get all bills (admin and authorized employees)
+// Get all bills (ADMIN/EMPLOYEE VIEW - SHOW ALL RECORDS)
 const getAllBills = async (req, res) => {
   try {
     // Check permissions - handle both old user types and new role IDs
@@ -244,6 +312,7 @@ const getAllBills = async (req, res) => {
       }
     }
     
+    // FETCH ALL BILLS (NO FILTERING - AUTHORITATIVE REQUIREMENT)
     const bills = await BillTVL.findAll({
       order: [['bl_created_at', 'DESC']]
     });
@@ -258,7 +327,7 @@ const getAllBills = async (req, res) => {
         bookingId: billData.bl_booking_id,
         subBillNo: billData.bl_sub_bill_no,
         customerName: billData.bl_customer_name,
-        phoneNumber: billData.bl_customer_phone,
+        phoneNumber: billData.bl_phone, // Use correct field name
         stationBoy: billData.bl_station_boy,
         fromStation: billData.bl_from_station,
         toStation: billData.bl_to_station,
@@ -280,15 +349,21 @@ const getAllBills = async (req, res) => {
         surcharge: billData.bl_surcharge,
         gstType: billData.bl_gst_type,
         totalAmount: billData.bl_total_amount,
-        billDate: billData.bl_billing_date,
+        billDate: billData.bl_bill_date, // Use correct field name
         createdOn: billData.bl_created_at,
         createdBy: billData.bl_created_by,
         remarks: '', // Default empty remarks
-        status: 'DRAFT' // Default status
+        status: 'CONFIRMED' // Default status
       };
     });
     
-    res.json({ success: true, data: { bills: transformedBills } });
+    res.json({ 
+      success: true, 
+      data: { 
+        bills: transformedBills,
+        count: transformedBills.length
+      } 
+    });
   } catch (error) {
     console.error('Get all bills error:', error);
     res.status(500).json({ 
@@ -310,7 +385,7 @@ const getBillById = async (req, res) => {
     
     // Check if user has permission to view this bill
     if (req.user.us_usertype !== 'admin' && 
-        bill.bl_created_by !== req.user.us_usid) {
+        bill.bl_created_by !== convertUserIdToInt(req.user.us_usid)) {
       return res.status(403).json({ message: 'Access denied' });
     }
     
@@ -368,7 +443,7 @@ const updateBill = async (req, res) => {
     }
     
     // Check if user has permission to update this bill
-    if (req.user.us_usertype !== 'admin' && bill.bl_created_by !== req.user.us_usid) {
+    if (req.user.us_usertype !== 'admin' && bill.bl_created_by !== convertUserIdToInt(req.user.us_usid)) {
       return res.status(403).json({ message: 'Access denied' });
     }
     
@@ -415,7 +490,7 @@ const updateBill = async (req, res) => {
     await bill.update({
       ...req.body,
       bl_total_amount: totalAmount,
-      bl_modified_by: req.user.us_usid,
+      bl_modified_by: convertUserIdToInt(req.user.us_usid),
       bl_modified_at: new Date()
     });
     
@@ -484,7 +559,7 @@ const finalizeBill = async (req, res) => {
     
     await bill.update({ 
       bl_status: 'FINAL',
-      bl_modified_by: req.user.us_usid,
+      bl_modified_by: convertUserIdToInt(req.user.us_usid),
       bl_modified_at: new Date()
     });
     
@@ -626,7 +701,7 @@ const searchBills = async (req, res) => {
     // Apply user-specific filters
     if (req.user.us_usertype === 'customer') {
       // Customers can only see their own bills
-      whereConditions.bl_created_by = req.user.us_usid;
+      whereConditions.bl_created_by = convertUserIdToInt(req.user.us_usid);
     }
 
     // Build query
@@ -703,7 +778,7 @@ const getCustomerLedger = async (req, res) => {
 
     // Get all bills for the customer
     const bills = await BillTVL.findAll({
-      where: { bl_created_by: customerId },
+      where: { bl_created_by: convertUserIdToInt(customerId) },
       order: [['bl_billing_date', 'ASC']]
     });
 
@@ -775,7 +850,7 @@ const getCustomerBalance = async (req, res) => {
     // Get total billed amount for the customer
     const bills = await BillTVL.findAll({
       where: { 
-        bl_created_by: customerId,
+        bl_created_by: convertUserIdToInt(customerId),
         bl_status: { [Sequelize.Op.in]: ['FINAL', 'PAID'] } // Only finalized/paid bills
       }
     });
