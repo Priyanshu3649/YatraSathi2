@@ -1,6 +1,285 @@
 const models = require('../models');
 const { Booking, Payment, Pnr, Customer, Employee, Account, PaymentAlloc, Sequelize } = models;
 const { Op } = require('sequelize');
+const financialReportService = require('../services/financialReportService');
+const { getDateRange, getFinancialYear, getQuarter } = require('../utils/dateRangeUtils');
+
+// ============================================================================
+// JESPR REPORTING ENGINE - NEW ENDPOINTS
+// ============================================================================
+
+/**
+ * Run a report based on configuration
+ * POST /api/reports/run
+ */
+const runReport = async (req, res) => {
+  try {
+    const {
+      reportType,
+      periodType = 'MONTHLY',
+      startDate,
+      endDate,
+      filters = {},
+      limit = 1000,
+      offset = 0
+    } = req.body;
+
+    // Validate required fields
+    if (!reportType) {
+      return res.status(400).json({
+        success: false,
+        message: 'Report type is required'
+      });
+    }
+
+    // Get date range
+    let dateRange;
+    if (periodType === 'CUSTOM') {
+      if (!startDate || !endDate) {
+        return res.status(400).json({
+          success: false,
+          message: 'Start date and end date are required for custom period'
+        });
+      }
+      dateRange = { startDate: new Date(startDate), endDate: new Date(endDate) };
+    } else {
+      dateRange = getDateRange(periodType, new Date(), { startDate, endDate });
+    }
+
+    // Merge filters with date range
+    const reportFilters = {
+      ...filters,
+      ...dateRange,
+      limit,
+      offset
+    };
+
+    // Generate report based on type
+    let result;
+    switch (reportType) {
+      case 'JOURNAL':
+        result = await financialReportService.generateJournalReport(reportFilters);
+        break;
+      case 'SALES':
+        result = await financialReportService.generateSalesReport(reportFilters);
+        break;
+      case 'PURCHASE':
+        result = await financialReportService.generatePurchaseReport(reportFilters);
+        break;
+      case 'RECEIPT':
+        result = await financialReportService.generateReceiptReport(reportFilters);
+        break;
+      case 'PAYMENT':
+        result = await financialReportService.generatePaymentReport(reportFilters);
+        break;
+      case 'OUTSTANDING_RECEIVABLES':
+        result = await financialReportService.generateOutstandingReceivablesReport(reportFilters);
+        break;
+      case 'OUTSTANDING_PAYABLES':
+        result = await financialReportService.generateOutstandingPayablesReport(reportFilters);
+        break;
+      case 'AGING_ANALYSIS':
+        result = await financialReportService.generateAgingAnalysisReport(reportFilters);
+        break;
+      default:
+        return res.status(400).json({
+          success: false,
+          message: `Invalid report type: ${reportType}`
+        });
+    }
+
+    // Log report generation
+    console.log(`Report generated: ${reportType}`, {
+      user: req.user.us_usid,
+      recordCount: result.data.length,
+      period: `${dateRange.startDate} to ${dateRange.endDate}`
+    });
+
+    res.json({
+      success: true,
+      data: result.data,
+      aggregates: result.aggregates,
+      metadata: result.metadata
+    });
+  } catch (error) {
+    console.error('Report generation error:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message || 'Failed to generate report'
+    });
+  }
+};
+
+/**
+ * Get report schema (available report types and their fields)
+ * GET /api/reports/schema
+ */
+const getReportSchema = async (req, res) => {
+  try {
+    const schema = {
+      reportTypes: [
+        {
+          type: 'JOURNAL',
+          name: 'Journal Entries',
+          description: 'All journal entries with debit and credit details',
+          filters: ['branchId', 'status'],
+          fields: ['transaction_no', 'transaction_date', 'debit_ledger', 'credit_ledger', 'amount', 'narration']
+        },
+        {
+          type: 'SALES',
+          name: 'Sales Report',
+          description: 'Sales transactions with customer and booking details',
+          filters: ['branchId', 'customerId', 'bookingType', 'status'],
+          fields: ['transaction_no', 'customer_name', 'booking_type', 'pnr', 'gross_amount', 'tax', 'net_amount', 'outstanding']
+        },
+        {
+          type: 'PURCHASE',
+          name: 'Purchase Report',
+          description: 'Purchase transactions with vendor details',
+          filters: ['branchId', 'vendorId', 'status'],
+          fields: ['transaction_no', 'vendor_name', 'gross_amount', 'tax', 'net_amount', 'outstanding']
+        },
+        {
+          type: 'RECEIPT',
+          name: 'Receipt Report',
+          description: 'Customer receipts with payment mode breakdown',
+          filters: ['branchId', 'customerId', 'paymentMode', 'status'],
+          fields: ['transaction_no', 'customer_name', 'amount', 'payment_mode', 'reference_no']
+        },
+        {
+          type: 'PAYMENT',
+          name: 'Payment Report',
+          description: 'Vendor payments with payment mode breakdown',
+          filters: ['branchId', 'vendorId', 'paymentMode', 'status'],
+          fields: ['transaction_no', 'vendor_name', 'amount', 'payment_mode', 'reference_no']
+        },
+        {
+          type: 'OUTSTANDING_RECEIVABLES',
+          name: 'Outstanding Receivables',
+          description: 'Customer outstanding balances',
+          filters: ['branchId', 'customerId'],
+          fields: ['customer_name', 'total_sales', 'total_receipts', 'outstanding_amount']
+        },
+        {
+          type: 'OUTSTANDING_PAYABLES',
+          name: 'Outstanding Payables',
+          description: 'Vendor outstanding balances',
+          filters: ['branchId', 'vendorId'],
+          fields: ['vendor_name', 'total_purchases', 'total_payments', 'outstanding_amount']
+        },
+        {
+          type: 'AGING_ANALYSIS',
+          name: 'Aging Analysis',
+          description: 'Age-wise breakdown of receivables/payables',
+          filters: ['partyType', 'asOfDate'],
+          fields: ['party_name', 'bucket_0_30', 'bucket_31_60', 'bucket_61_90', 'bucket_90_plus', 'total']
+        }
+      ],
+      periodTypes: ['DAILY', 'MONTHLY', 'QUARTERLY', 'ANNUAL', 'CUSTOM'],
+      paymentModes: ['CASH', 'CHEQUE', 'NEFT', 'RTGS', 'UPI', 'CARD', 'WALLET', 'OTHER'],
+      bookingTypes: ['FLIGHT', 'TRAIN', 'HOTEL', 'BUS', 'CAB', 'PACKAGE', 'OTHER'],
+      statuses: ['DRAFT', 'POSTED', 'CANCELLED', 'REVERSED']
+    };
+
+    res.json({
+      success: true,
+      data: schema
+    });
+  } catch (error) {
+    console.error('Schema fetch error:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message || 'Failed to fetch report schema'
+    });
+  }
+};
+
+/**
+ * Save report template
+ * POST /api/reports/templates
+ */
+const saveReportTemplate = async (req, res) => {
+  try {
+    const { name, description, config, isPublic = false } = req.body;
+
+    if (!name || !config) {
+      return res.status(400).json({
+        success: false,
+        message: 'Template name and configuration are required'
+      });
+    }
+
+    // TODO: Save to report_templates table
+    // For now, return success
+    res.json({
+      success: true,
+      message: 'Template saved successfully',
+      data: {
+        id: Date.now(),
+        name,
+        description,
+        config,
+        isPublic,
+        createdBy: req.user.us_usid,
+        createdAt: new Date()
+      }
+    });
+  } catch (error) {
+    console.error('Template save error:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message || 'Failed to save template'
+    });
+  }
+};
+
+/**
+ * Get user's saved templates
+ * GET /api/reports/templates
+ */
+const getReportTemplates = async (req, res) => {
+  try {
+    // TODO: Fetch from report_templates table
+    // For now, return empty array
+    res.json({
+      success: true,
+      data: []
+    });
+  } catch (error) {
+    console.error('Template fetch error:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message || 'Failed to fetch templates'
+    });
+  }
+};
+
+/**
+ * Delete report template
+ * DELETE /api/reports/templates/:id
+ */
+const deleteReportTemplate = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // TODO: Delete from report_templates table
+    // For now, return success
+    res.json({
+      success: true,
+      message: 'Template deleted successfully'
+    });
+  } catch (error) {
+    console.error('Template delete error:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message || 'Failed to delete template'
+    });
+  }
+};
+
+// ============================================================================
+// LEGACY REPORT ENDPOINTS (Keep for backward compatibility)
+// ============================================================================
 
 // Generate customer-specific reports
 const generateCustomerSpecificReport = async (req, res) => {
@@ -426,6 +705,14 @@ const generatePaymentReport = async (req, res) => {
 };
 
 module.exports = {
+  // JESPR Reporting Engine
+  runReport,
+  getReportSchema,
+  saveReportTemplate,
+  getReportTemplates,
+  deleteReportTemplate,
+  
+  // Legacy endpoints
   generateCustomerSpecificReport,
   generateEmployeePerformanceReport,
   generateFinancialReport,

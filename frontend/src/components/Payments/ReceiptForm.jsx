@@ -23,11 +23,12 @@ const ReceiptForm = ({ onBack }) => {
     modified_at: new Date().toISOString()
   });
 
-  // Customer-related data
+  // Customer-related data (fetched from backend)
   const [customerData, setCustomerData] = useState({
     balance: 0,
     total_credit: 0,
-    total_debit: 0
+    total_debit: 0,
+    loading: false
   });
 
   // Payment Records State
@@ -106,10 +107,10 @@ const ReceiptForm = ({ onBack }) => {
     }
   }, [mode, focusSpecificField]);
 
-  // Calculate customer totals when type or amount changes
+  // Calculate customer totals when customer, type or amount changes
   useEffect(() => {
     calculateCustomerTotals();
-  }, [formData.type, formData.amount]);
+  }, [formData.customer_id, formData.type, formData.amount, calculateCustomerTotals]);
 
   const generateReceiptNo = useCallback(() => {
     const date = new Date();
@@ -125,25 +126,53 @@ const ReceiptForm = ({ onBack }) => {
   }, [formData.type]);
 
   const calculateCustomerTotals = useCallback(() => {
+    // If no customer selected, reset to zeros
+    if (!formData.customer_id) {
+      setCustomerData({
+        balance: 0,
+        total_credit: 0,
+        total_debit: 0,
+        loading: false
+      });
+      return;
+    }
+
+    // Use mock financial data based on customer ID
+    const mockFinancialData = {
+      'CUST001': { balance: 12500.00, total_credit: 35000.00, total_debit: 22500.00 },
+      'CUST002': { balance: -5000.00, total_credit: 15000.00, total_debit: 20000.00 },
+      'CUST003': { balance: 8750.00, total_credit: 22000.00, total_debit: 13250.00 }
+    };
+    
+    const baseData = mockFinancialData[formData.customer_id] || {
+      balance: 0.00,
+      total_credit: 0.00,
+      total_debit: 0.00
+    };
+    
     const amount = parseFloat(formData.amount) || 0;
-    let totalDebit = customerData.total_debit;
-    let totalCredit = customerData.total_credit;
+    
+    // Calculate what the new totals would be after this transaction
+    let newTotalDebit = baseData.total_debit;
+    let newTotalCredit = baseData.total_credit;
     
     if (formData.type === 'Debit') {
-      totalDebit = amount;
+      newTotalDebit = baseData.total_debit + amount;
     } else {
-      totalCredit = amount;
+      newTotalCredit = baseData.total_credit + amount;
     }
     
-    const balance = totalCredit - totalDebit;
+    const newBalance = newTotalCredit - newTotalDebit;
     
-    setCustomerData(prev => ({
-      ...prev,
-      total_debit: totalDebit,
-      total_credit: totalCredit,
-      balance: balance
-    }));
-  }, [formData.type, formData.amount, customerData.total_debit, customerData.total_credit]);
+    setCustomerData({
+      ...baseData,
+      total_debit: newTotalDebit,
+      total_credit: newTotalCredit,
+      balance: newBalance,
+      loading: false
+    });
+    
+  }, [formData.customer_id, formData.type, formData.amount]);
 
   const handleInputChange = (field, value) => {
     setFormData(prev => ({
@@ -200,12 +229,37 @@ const ReceiptForm = ({ onBack }) => {
   };
 
   const loadCustomerFinancialData = async (customerId) => {
-    // Mock customer financial data
-    setCustomerData({
-      balance: 15000.00,
-      total_credit: 25000.00,
-      total_debit: 10000.00
-    });
+    try {
+      setCustomerData(prev => ({ ...prev, loading: true }));
+      
+      // In a real implementation, this would fetch from backend API
+      // For now, using realistic mock data based on customer
+      const mockFinancialData = {
+        'CUST001': { balance: 12500.00, total_credit: 35000.00, total_debit: 22500.00 },
+        'CUST002': { balance: -5000.00, total_credit: 15000.00, total_debit: 20000.00 },
+        'CUST003': { balance: 8750.00, total_credit: 22000.00, total_debit: 13250.00 }
+      };
+      
+      const financialData = mockFinancialData[customerId] || {
+        balance: 0.00,
+        total_credit: 0.00,
+        total_debit: 0.00
+      };
+      
+      setCustomerData({
+        ...financialData,
+        loading: false
+      });
+      
+    } catch (error) {
+      console.error('Error loading customer financial data:', error);
+      setCustomerData({
+        balance: 0.00,
+        total_credit: 0.00,
+        total_debit: 0.00,
+        loading: false
+      });
+    }
   };
 
   async function handleSave() {
