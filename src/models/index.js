@@ -45,6 +45,10 @@ const BillTVL = require('./BillTVL');
 const PassengerTVL = require('./PassengerTVL');
 const MasterPassengerList = require('./MasterPassengerList');
 const CustomerMasterPassenger = require('./CustomerMasterPassenger');
+const ReportTemplate = require('./ReportTemplate');
+const Contra = require('./Contra');
+const Receipt = require('./Receipt');
+const Journal = require('./Journal');
 
 // Set up associations
 // Company associations
@@ -137,20 +141,20 @@ Account.belongsTo(Customer, {
   targetKey: 'cu_usid',
   as: 'accountCustomer'
 });
-Account.hasMany(Payment, { 
+Account.hasMany(PaymentTVL, { 
   foreignKey: 'pt_acid', 
   sourceKey: 'ac_acid',
   as: 'accountPayments'
 });
 
-// Payment associations
-Payment.belongsTo(Account, { 
+// PaymentTVL associations
+PaymentTVL.belongsTo(Account, { 
   foreignKey: 'pt_acid', 
   targetKey: 'ac_acid',
   as: 'paymentAccount',
   required: false
 });
-Payment.belongsTo(Booking, { 
+PaymentTVL.belongsTo(Booking, { 
   foreignKey: 'pt_bkid', 
   targetKey: 'bk_bkid',
   as: 'paymentBooking',
@@ -158,7 +162,7 @@ Payment.belongsTo(Booking, {
 });
 
 // PaymentAlloc associations (already defined in PaymentAlloc.js, but ensure they're set)
-PaymentAlloc.belongsTo(Payment, { 
+PaymentAlloc.belongsTo(PaymentTVL, { 
   foreignKey: 'pa_ptid', 
   targetKey: 'pt_ptid',
   as: 'payment'
@@ -170,7 +174,7 @@ PaymentAlloc.belongsTo(Pnr, {
 });
 
 // Ledger associations
-Ledger.belongsTo(Payment, { foreignKey: 'lg_ptid', targetKey: 'pt_ptid' });
+Ledger.belongsTo(PaymentTVL, { foreignKey: 'lg_ptid', targetKey: 'pt_ptid' });
 Ledger.belongsTo(Pnr, { foreignKey: 'lg_pnid', targetKey: 'pn_pnid' });
 Ledger.belongsTo(Account, { foreignKey: 'lg_acid', targetKey: 'ac_acid' });
 
@@ -216,7 +220,7 @@ module.exports = {
   // Export with table name alias for consistency
   pnXpnr: Pnr,  ptXpayment: PaymentTVL,
   paXpayalloc: PaymentAllocTVL,
-  ptPayment: Payment,
+  ptPayment: PaymentTVL,
   paPaymentAlloc: PaymentAlloc,
   billXbill: BillTVL,
   BillTVL,
@@ -243,5 +247,9 @@ module.exports = {
   PassengerTVL,
   MasterPassengerList,
   CustomerMasterPassenger,
+  ReportTemplate,
+  Contra,
+  Receipt,
+  Journal,
   PermissionTVL
 };

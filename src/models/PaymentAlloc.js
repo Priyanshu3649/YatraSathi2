@@ -30,16 +30,37 @@ const PaymentAlloc = sequelize.define('paXpayalloc', {
     allowNull: false,
     comment: 'PNR ID (Foreign Key to pnXpnr)'
   },
-
+  pa_pnr: {
+    type: DataTypes.STRING(15),
+    allowNull: true,
+    comment: 'PNR Number (for quick reference and validation)'
+  },
   pa_allocamt: {
     type: DataTypes.DECIMAL(12, 2),
     allowNull: false,
     comment: 'Allocated Amount (must be <= PNR pending amount)'
   },
+  pa_alloctn_date: {
+    type: DataTypes.DATE,
+    allowNull: true,
+    defaultValue: DataTypes.NOW,
+    comment: 'Allocation Date'
+  },
+  pa_alloctn_type: {
+    type: DataTypes.STRING(10),
+    defaultValue: 'MANUAL',
+    allowNull: true,
+    comment: 'Allocation Type: AUTO (FIFO) | MANUAL (user selected)'
+  },
+  pa_remarks: {
+    type: DataTypes.TEXT,
+    allowNull: true,
+    comment: 'Allocation Remarks'
+  },
   pa_allocdt: {
     type: DataTypes.DATE,
     allowNull: false,
-    comment: 'Allocation Date'
+    comment: 'Allocation Date (legacy field)'
   },
   pa_status: {
     type: DataTypes.STRING(15),
@@ -50,7 +71,7 @@ const PaymentAlloc = sequelize.define('paXpayalloc', {
   pa_rmrks: {
     type: DataTypes.TEXT,
     allowNull: true,
-    comment: 'Allocation Remarks'
+    comment: 'Allocation Remarks (legacy field)'
   },
   // Audit fields
   edtm: {
@@ -70,6 +91,8 @@ const PaymentAlloc = sequelize.define('paXpayalloc', {
   indexes: [
     { fields: ['pa_ptid'] },
     { fields: ['pa_pnid'] },
+    { fields: ['pa_pnr'] },
+    { fields: ['pa_alloctn_date'] },
     { fields: ['pa_allocdt'] }
   ]
 });

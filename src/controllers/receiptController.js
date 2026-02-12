@@ -1,192 +1,193 @@
-// Receipt Entry Controller - Handles money coming in
-const ReceiptEntry = require('../models/ReceiptEntry');
-const LedgerMaster = require('../models/LedgerMaster');
+const { Receipt, User } = require('../models');
+const { validationResult } = require('express-validator');
 
+/**
+ * Receipt Controller
+ * Handles all receipt CRUD operations
+ */
 class ReceiptController {
-  // Get all receipt entries
-  static async getAllEntries(req, res) {
+  async getAllReceipts(req, res) {
     try {
-      const filters = {
-        entry_date_from: req.query.entry_date_from,
-        entry_date_to: req.query.entry_date_to,
-        voucher_no: req.query.voucher_no,
-        receipt_mode: req.query.receipt_mode
-      };
-
-      const entries = await ReceiptEntry.findAll(filters);
+      const { page = 1, limit = 20, search, sortBy = 'rc_date', sortOrder = 'DESC' } = req.query;
+      const offset = (page - 1) * limit;
+      
+      const whereClause = { rc_status: 'Active' };
+      
+      if (search) {
+        whereClause[Op.or] = [
+          { rc_entry_no: { [Op.like]: `%${search}%` } },
+          { rc_customer_name: { [Op.like]: `%${search}%` } },
+          { rc_customer_phone: { [Op.like]: `%${search}%` } }
+        ];
+      }
+      
+      const { count, rows: receipts } = await Receipt.findAndCountAll({
+        where: whereClause,
+        include: [{
+          model: User,
+          as: 'creator',
+          attributes: ['us_usid', 'us_fname', 'us_lname']
+        }],
+        order: [[sortBy, sortOrder]],
+        limit: parseInt(limit),
+        offset: parseInt(offset)
+      });
       
       res.json({
         success: true,
-        data: entries,
-        count: entries.length
+        data: receipts,
+        pagination: {
+          currentPage: parseInt(page),
+          totalPages: Math.ceil(count / limit),
+          totalRecords: count
+        },
+        message: 'Receipts retrieved successfully'
       });
     } catch (error) {
       res.status(500).json({
         success: false,
-        message: error.message
+        message: 'Failed to retrieve receipts',
+        error: error.message
       });
     }
   }
-
-  // Get single receipt entry by ID
-  static async getEntryById(req, res) {
+  
+  async getReceiptById(req, res) {
     try {
       const { id } = req.params;
-      const entry = await ReceiptEntry.findById(id);
+      const receipt = await Receipt.findOne({
+        where: { rc_rcid: id, rc_status: 'Active' },
+        include: [{ model: User, as: 'creator' }]
+      });
       
-      if (!entry) {
-        return res.status(404).json({
-          success: false,
-          message: 'Receipt entry not found'
-        });
+      if (!receipt) {
+        return res.status(404).json({ success: false, message: 'Receipt not found' });
       }
       
-      res.json({
-        success: true,
-        data: entry
-      });
+      res.json({ success: true, data: receipt, message: 'Receipt retrieved successfully' });
     } catch (error) {
       res.status(500).json({
         success: false,
-        message: error.message
+        message: 'Failed to retrieve receipt',
+        error: error.message
       });
     }
   }
-
-  // Create new receipt entry
-  static async createEntry(req, res) {
+  
+  async createReceipt(req, res) {
     try {
-      const entryData = {
-        ...req.body,
-        created_by: req.user?.us_usid || req.user?.id || 1
-      };
-
-      // Validate data
-      const validation = ReceiptEntry.validate(entryData);
-      if (!validation.isValid) {
-        return res.status(400).json({
-          success: false,
-          message: 'Validation failed',
-          errors: validation.errors
-        });
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({ success: false, message: 'Validation failed', errors: errors.array() });
       }
-
-      const entry = await ReceiptEntry.create(entryData);
+      
+      const { 
+        rc_customer_name, 
+        rc_customer_phone, 
+        rc_amount, 
+        rc_payment_mode, 
+        rc_ref_number, 
+        rc_bank_account, 
+        rc_narration 
+      } = req.body;
+      
+      const entryNo = this.generateEntryNo('RC');
+      
+      const receipt = await Receipt.create({
+        rc_entry_no: entryNo,
+        rc_date: new Date(),
+        rc_customer_name,
+        rc_customer_phone,
+        rc_amount: parseFloat(rc_amount) || 0,
+        rc_payment_mode,
+        rc_ref_number,
+        rc_bank_account,
+        rc_narration,
+        rc_created_by: req.user.us_usid,
+        rc_status: 'Active'
+      });
       
       res.status(201).json({
         success: true,
-        message: 'Receipt entry created successfully',
-        data: entry
+        data: receipt,
+        message: 'Receipt created successfully'
       });
     } catch (error) {
       res.status(500).json({
         success: false,
-        message: error.message
+        message: 'Failed to create receipt',
+        error: error.message
       });
     }
   }
-
-  // Update receipt entry
-  static async updateEntry(req, res) {
+  
+  async updateReceipt(req, res) {
     try {
       const { id } = req.params;
-      const updateData = req.body;
-
-      // Validate data
-      const validation = ReceiptEntry.validate(updateData);
-      if (!validation.isValid) {
-        return res.status(400).json({
-          success: false,
-          message: 'Validation failed',
-          errors: validation.errors
-        });
+      const errors = validationResult(req);
+      
+      if (!errors.isEmpty()) {
+        return res.status(400).json({ success: false, message: 'Validation failed', errors: errors.array() });
       }
-
-      const entry = await ReceiptEntry.update(id, updateData);
+      
+      const receipt = await Receipt.findOne({ where: { rc_rcid: id, rc_status: 'Active' } });
+      if (!receipt) {
+        return res.status(404).json({ success: false, message: 'Receipt not found' });
+      }
+      
+      const updatedReceipt = await receipt.update({
+        ...req.body,
+        rc_modified_by: req.user.us_usid,
+        rc_modified_dt: new Date()
+      });
       
       res.json({
         success: true,
-        message: 'Receipt entry updated successfully',
-        data: entry
+        data: updatedReceipt,
+        message: 'Receipt updated successfully'
       });
     } catch (error) {
       res.status(500).json({
         success: false,
-        message: error.message
+        message: 'Failed to update receipt',
+        error: error.message
       });
     }
   }
-
-  // Delete receipt entry
-  static async deleteEntry(req, res) {
+  
+  async deleteReceipt(req, res) {
     try {
       const { id } = req.params;
+      const receipt = await Receipt.findOne({ where: { rc_rcid: id, rc_status: 'Active' } });
       
-      await ReceiptEntry.delete(id);
+      if (!receipt) {
+        return res.status(404).json({ success: false, message: 'Receipt not found' });
+      }
       
-      res.json({
-        success: true,
-        message: 'Receipt entry deleted successfully'
+      await receipt.update({
+        rc_status: 'Deleted',
+        rc_modified_by: req.user.us_usid,
+        rc_modified_dt: new Date()
       });
+      
+      res.json({ success: true, message: 'Receipt deleted successfully' });
     } catch (error) {
       res.status(500).json({
         success: false,
-        message: error.message
+        message: 'Failed to delete receipt',
+        error: error.message
       });
     }
   }
-
-  // Get next voucher number
-  static async getNextVoucherNumber(req, res) {
-    try {
-      const voucherNo = await ReceiptEntry.generateVoucherNumber();
-      
-      res.json({
-        success: true,
-        voucher_no: voucherNo
-      });
-    } catch (error) {
-      res.status(500).json({
-        success: false,
-        message: error.message
-      });
-    }
-  }
-
-  // Get receipt modes
-  static async getReceiptModes(req, res) {
-    try {
-      const modes = ['Cash', 'Bank', 'Cheque', 'Draft'];
-      
-      res.json({
-        success: true,
-        data: modes
-      });
-    } catch (error) {
-      res.status(500).json({
-        success: false,
-        message: error.message
-      });
-    }
-  }
-
-  // Get ledger balance
-  static async getLedgerBalance(req, res) {
-    try {
-      const { ledger_name } = req.params;
-      const balance = await LedgerMaster.getBalance(ledger_name);
-      
-      res.json({
-        success: true,
-        balance: balance
-      });
-    } catch (error) {
-      res.status(500).json({
-        success: false,
-        message: error.message
-      });
-    }
+  
+  generateEntryNo(prefix) {
+    const date = new Date();
+    const year = date.getFullYear().toString().slice(-2);
+    const month = (date.getMonth() + 1).toString().padStart(2, '0');
+    const day = date.getDate().toString().padStart(2, '0');
+    const random = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
+    return `${prefix}${year}${month}${day}${random}`;
   }
 }
 
-module.exports = ReceiptController;
+module.exports = new ReceiptController();

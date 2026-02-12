@@ -51,16 +51,7 @@ const Header = () => {
                     <li><Link to="/travel-plans" className={isActive('/travel-plans') ? 'active' : ''}>Travel Plans</Link></li>
                     <li><Link to="/payments" className={isActive('/payments') ? 'active' : ''}>Payments</Link></li>
                     <li><Link to="/billing" className={isActive('/billing') ? 'active' : ''}>Billing</Link></li>
-                    <li className="dropdown">
-                      <span className={isActive('/reports') ? 'active' : ''}>Reports ▼</span>
-                      <ul className="dropdown-menu">
-                        <li><Link to="/reports?tab=bookings">Booking Reports</Link></li>
-                        <li><Link to="/reports?tab=customerAnalytics">Customer Analytics</Link></li>
-                        <li><Link to="/reports?tab=employeePerformance">Employee Performance</Link></li>
-                        <li><Link to="/reports?tab=financial">Financial Reports</Link></li>
-                        <li><Link to="/reports?tab=corporateCustomers">Corporate Customers</Link></li>
-                      </ul>
-                    </li>
+                    <li><Link to="/reports" className={isActive('/reports') ? 'active' : ''}>Reports</Link></li>
                   </>
                 )}
                 

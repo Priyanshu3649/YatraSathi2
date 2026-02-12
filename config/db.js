@@ -146,8 +146,7 @@ const mysqlPool = mysql.createPool({
   database: process.env.DB_NAME_TVL || 'TVL_001',
   waitForConnections: true,
   connectionLimit: 20,  // Increased for better performance
-  queueLimit: 0,
-  acquireTimeout: 60000  // Connection acquisition timeout in ms
+  queueLimit: 0
 });
 
 module.exports = { sequelize, sequelizeTVL, connectDB, mysqlPool };

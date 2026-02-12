@@ -10,8 +10,8 @@ const PaymentsMenu = ({ onMenuSelect, onQuit }) => {
   const menuRef = useRef(null);
   
   const {
-    handleEnterKey,
-    handleEscapeKey
+    enterAction,
+    closeModal
   } = useKeyboardNavigation();
 
   // Menu items as per ASCII wireframe specification
@@ -47,7 +47,7 @@ const PaymentsMenu = ({ onMenuSelect, onQuit }) => {
         break;
       case 'Escape':
         event.preventDefault();
-        handleEscapeKey(event);
+        closeModal();
         if (onQuit) onQuit();
         break;
       case '1':

@@ -16,27 +16,37 @@ export const useKeyboardNav = (options = {}) => {
 
   const formRef = useRef(null);
   const {
-    setFocusOrder,
-    handleTabNavigation,
-    handleEnterKey,
-    handleEscapeKey,
-    setInitialFocus,
+    registerForm,
+    unregisterForm,
+    focusField,
+    moveNext,
+    movePrevious,
+    enterAction,
+    openModal,
+    closeModal,
+    isModalOpen,
+    activeFormId,
     updateState,
-    currentFocusedField,
-    saveConfirmationOpen,
-    handleSaveConfirmation
+    currentFocusedField
   } = useKeyboardNavigation();
 
   // Initialize keyboard navigation for this form
   useEffect(() => {
     if (fieldOrder.length > 0) {
-      setFocusOrder(fieldOrder);
+      registerForm('PAYMENTS_MODULE', fieldOrder);
       
-      if (autoFocus && formRef.current) {
-        setInitialFocus(formRef);
+      if (autoFocus && fieldOrder.length > 0) {
+        // Focus the first field
+        setTimeout(() => {
+          focusField(fieldOrder[0]);
+        }, 100);
       }
     }
-  }, [fieldOrder, autoFocus, setFocusOrder, setInitialFocus]);
+    
+    return () => {
+      unregisterForm('PAYMENTS_MODULE');
+    };
+  }, [fieldOrder, autoFocus, registerForm, unregisterForm, focusField]);
 
   // Handle form-specific keyboard events
   const handleKeyDown = useCallback((event) => {
@@ -44,26 +54,35 @@ export const useKeyboardNav = (options = {}) => {
     
     switch (event.key) {
       case 'Tab':
-        handleTabNavigation(event, currentField, event.shiftKey);
+        event.preventDefault();
+        if (event.shiftKey) {
+          movePrevious();
+        } else {
+          moveNext();
+        }
         break;
       case 'Enter':
-        handleEnterKey(event, currentField);
+        event.preventDefault();
+        enterAction();
         break;
       case 'Escape':
-        handleEscapeKey(event);
         if (onCancel) onCancel();
+        break;
+      case 'F10':
+        event.preventDefault();
+        openModal();
         break;
       default:
         break;
     }
-  }, [handleTabNavigation, handleEnterKey, handleEscapeKey, onCancel]);
+  }, [moveNext, movePrevious, enterAction, openModal, onCancel]);
 
   // Handle save confirmation response
   useEffect(() => {
-    if (saveConfirmationOpen) {
+    if (isModalOpen) {
       const handleSaveResponse = (confirmed) => {
-        const result = handleSaveConfirmation(confirmed);
-        if (result.action === 'save' && onSave) {
+        closeModal();
+        if (confirmed && onSave) {
           onSave();
         }
       };
@@ -78,7 +97,7 @@ export const useKeyboardNav = (options = {}) => {
         delete window.handleSaveResponse;
       }
     };
-  }, [saveConfirmationOpen, handleSaveConfirmation, onSave]);
+  }, [isModalOpen, closeModal, onSave]);
 
   // Set up keyboard event listeners
   useEffect(() => {
@@ -100,7 +119,7 @@ export const useKeyboardNav = (options = {}) => {
   }, [updateState]);
 
   // Focus specific field
-  const focusField = useCallback((fieldName) => {
+  const focusSpecificField = useCallback((fieldName) => {
     const element = formRef.current?.querySelector(`[name="${fieldName}"], [data-field="${fieldName}"]`);
     if (element) {
       element.focus();
@@ -127,10 +146,10 @@ export const useKeyboardNav = (options = {}) => {
   return {
     formRef,
     currentFocusedField,
-    saveConfirmationOpen,
+    saveConfirmationOpen: isModalOpen,
     enablePassengerLoopMode,
     disablePassengerLoopMode,
-    focusField,
+    focusSpecificField: focusField,
     getFocusableElements,
     validateCurrentField,
     handleKeyDown

@@ -683,6 +683,35 @@ const Billing = () => {
     }
   };
 
+  // Helper function to get an available draft booking for testing
+  const getAvailableDraftBookingId = async () => {
+    try {
+      // First try to get bookings from API
+      const response = await fetch('/api/bookings?status=DRAFT', {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success && data.data && data.data.bookings && data.data.bookings.length > 0) {
+          return data.data.bookings[0].bk_bkid;
+        }
+      }
+      
+      // Fallback: return a default booking ID that should exist
+      // In production, this should be replaced with proper booking selection
+      console.warn('No draft bookings found via API, using fallback booking ID');
+      return 1; // Assuming booking ID 1 exists
+      
+    } catch (error) {
+      console.error('Error getting available booking:', error);
+      // Return a safe default
+      return 1;
+    }
+  };
+
   const handleCreateBill = async (billData) => {
     // HARD LOCK: Prevent duplicate draft booking creation
     if (isCreatingDraftRef.current) {
@@ -693,11 +722,11 @@ const Billing = () => {
     isCreatingDraftRef.current = true;
     
     try {
-      // Use existing draft booking ID 117 for testing
+      // Get available draft bookings for billing
       // In a real implementation, you'd want to:
       // 1. Show a dropdown of available draft bookings
       // 2. Or create a proper workflow for linking bills to bookings
-      const bookingId = 117; // Using existing draft booking
+      const bookingId = await getAvailableDraftBookingId();
       
       console.log('Using existing booking ID:', bookingId);
 
@@ -735,13 +764,29 @@ const Billing = () => {
       console.log('Creating bill with payload:', billPayload);
       const newBill = await billingAPI.createBill(billPayload);
       console.log('New bill created:', newBill);
+      
+      // Show success message
+      alert('Bill created successfully!');
 
       setShowForm(false);
       setActiveView('list');
       await fetchBills(); // Wait for fetch to complete
     } catch (error) {
       console.error('Error creating bill:', error);
-      setError(error.message || 'Failed to create bill');
+      
+      // Provide user-friendly error messages
+      let errorMessage = 'Failed to create bill';
+      
+      if (error.message.includes('Booking not found')) {
+        errorMessage = 'No valid booking found. Please create a booking first.';
+      } else if (error.message.includes('Failed to create bill')) {
+        errorMessage = 'Unable to create bill. Please check all required fields are filled correctly.';
+      } else {
+        errorMessage = error.message || 'An unexpected error occurred';
+      }
+      
+      setError(errorMessage);
+      alert(errorMessage); // Show alert to user
     } finally {
       // ALWAYS release the lock
       isCreatingDraftRef.current = false;

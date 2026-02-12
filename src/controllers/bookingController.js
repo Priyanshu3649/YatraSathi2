@@ -594,10 +594,68 @@ const deleteBooking = async (req, res) => {
     const transaction = await sequelize.transaction();
     
     try {
-      // First, delete related passenger records using Sequelize model
+      // Get the models
       const models = require('../models');
       const PassengerTVL = models.PassengerTVL;
+      const Account = require('../models/AccountTVL');
+      const Pnr = require('../models/Pnr');
+      const Payment = require('../models/Payment');
+      const PaymentAlloc = require('../models/PaymentAlloc');
+      const Ledger = require('../models/Ledger');
       
+      // 1. Delete related PNR records and their dependencies
+      const pnrs = await Pnr.findAll({ 
+        where: { pn_bkid: booking.bk_bkid },
+        transaction
+      });
+      
+      for (const pnr of pnrs) {
+        // Delete PNR-related ledger entries
+        await Ledger.destroy({ 
+          where: { lg_pnid: pnr.pn_pnid }, 
+          transaction 
+        });
+        
+        // Delete PNR-related payment allocations
+        await PaymentAlloc.destroy({ 
+          where: { pa_pnid: pnr.pn_pnid }, 
+          transaction 
+        });
+      }
+      
+      // Delete PNR records
+      await Pnr.destroy({ 
+        where: { pn_bkid: booking.bk_bkid }, 
+        transaction 
+      });
+      
+      // 2. Delete related payment records and their dependencies
+      const payments = await Payment.findAll({ 
+        where: { pt_bkid: booking.bk_bkid },
+        transaction
+      });
+      
+      for (const payment of payments) {
+        // Delete payment-related ledger entries
+        await Ledger.destroy({ 
+          where: { lg_ptid: payment.pt_ptid }, 
+          transaction 
+        });
+        
+        // Delete payment-related allocations
+        await PaymentAlloc.destroy({ 
+          where: { pa_ptid: payment.pt_ptid }, 
+          transaction 
+        });
+      }
+      
+      // Delete payment records
+      await Payment.destroy({ 
+        where: { pt_bkid: booking.bk_bkid }, 
+        transaction 
+      });
+      
+      // 3. Delete related passenger records using Sequelize model
       if (PassengerTVL) {
         await PassengerTVL.destroy({ 
           where: { ps_bkid: booking.bk_bkid }, 
@@ -605,23 +663,25 @@ const deleteBooking = async (req, res) => {
         });
       }
       
-      // Also delete from custom passenger table if it exists
+      // 4. Also delete from custom passenger table if it exists (hard delete)
       try {
-        const { Passenger } = require('../models');
-        await Passenger.deleteByBookingId(booking.bk_bkid, transaction);
+        const { mysqlPool } = require('../../config/db');
+        await mysqlPool.execute(
+          'DELETE FROM psXpassenger WHERE ps_bkid = ?', 
+          [booking.bk_bkid]
+        );
       } catch (customPassengerError) {
         console.warn('Custom passenger deletion failed (this may be OK):', customPassengerError.message);
       }
       
-      // Delete related records in the account table that reference this booking
+      // 5. Delete related records in the account table that reference this booking
       try {
-        const Account = require('../models/AccountTVL');
         await Account.destroy({ where: { ac_bkid: booking.bk_bkid }, transaction });
       } catch (accountError) {
         console.warn('Account deletion failed (this may be OK):', accountError.message);
       }
       
-      // Then delete the booking
+      // 6. Finally delete the booking
       await booking.destroy({ transaction });
       
       // Commit the transaction
@@ -629,7 +689,7 @@ const deleteBooking = async (req, res) => {
       
       res.json({ 
         success: true, 
-        data: { message: 'Booking deleted successfully' } 
+        data: { message: 'Booking and all related records deleted successfully' } 
       });
     } catch (transactionError) {
       // Rollback the transaction on error

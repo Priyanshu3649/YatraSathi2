@@ -382,6 +382,11 @@ const Bookings = () => {
   
   // Define handleNew function first to avoid initialization error
   const handleNew = useCallback(() => {
+    // Calculate tomorrow's date for default travel date
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const tomorrowStr = tomorrow.toISOString().split('T')[0];
+    
     setSelectedBooking(null);
     setFormData({
       bookingId: '',
@@ -393,9 +398,9 @@ const Bookings = () => {
       totalPassengers: 0,
       fromStation: '',
       toStation: '',
-      travelDate: new Date().toISOString().split('T')[0],
+      travelDate: tomorrowStr, // Default to tomorrow
       travelClass: '3A',
-      quotaType: '',
+      quotaType: 'TQ', // Default to Tatkal quota
       pnrNumber: '', // NEW: PNR field
       remarks: '',
       status: 'DRAFT', // ✓ Use uppercase DRAFT as default

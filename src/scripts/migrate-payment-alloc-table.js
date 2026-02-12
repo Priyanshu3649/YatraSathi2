@@ -23,7 +23,7 @@ async function migratePaymentAllocTable() {
       SELECT COLUMN_NAME 
       FROM INFORMATION_SCHEMA.COLUMNS 
       WHERE TABLE_SCHEMA = DATABASE() 
-      AND TABLE_NAME = 'paPaymentAlloc'
+      AND TABLE_NAME = 'paXpayalloc'
       AND COLUMN_NAME = 'pa_pnr'
     `, { type: QueryTypes.SELECT });
 
@@ -32,7 +32,7 @@ async function migratePaymentAllocTable() {
     } else {
       console.log('➕ Adding pa_pnr column...');
       await sequelize.query(`
-        ALTER TABLE paPaymentAlloc 
+        ALTER TABLE paXpayalloc 
         ADD COLUMN pa_pnr VARCHAR(15) NULL 
         COMMENT 'PNR Number (for quick reference and validation)'
         AFTER pa_pnid
@@ -45,7 +45,7 @@ async function migratePaymentAllocTable() {
       SELECT COLUMN_NAME 
       FROM INFORMATION_SCHEMA.COLUMNS 
       WHERE TABLE_SCHEMA = DATABASE() 
-      AND TABLE_NAME = 'paPaymentAlloc'
+      AND TABLE_NAME = 'paXpayalloc'
       AND COLUMN_NAME = 'pa_alloctn_date'
     `, { type: QueryTypes.SELECT });
 
@@ -54,10 +54,10 @@ async function migratePaymentAllocTable() {
     } else {
       console.log('➕ Adding pa_alloctn_date column...');
       await sequelize.query(`
-        ALTER TABLE paPaymentAlloc 
+        ALTER TABLE paXpayalloc 
         ADD COLUMN pa_alloctn_date DATETIME DEFAULT CURRENT_TIMESTAMP 
         COMMENT 'Allocation Date'
-        AFTER pa_amount
+        AFTER pa_allocamt
       `);
       console.log('✅ Added pa_alloctn_date column');
     }
@@ -67,7 +67,7 @@ async function migratePaymentAllocTable() {
       SELECT COLUMN_NAME 
       FROM INFORMATION_SCHEMA.COLUMNS 
       WHERE TABLE_SCHEMA = DATABASE() 
-      AND TABLE_NAME = 'paPaymentAlloc'
+      AND TABLE_NAME = 'paXpayalloc'
       AND COLUMN_NAME = 'pa_alloctn_type'
     `, { type: QueryTypes.SELECT });
 
@@ -76,7 +76,7 @@ async function migratePaymentAllocTable() {
     } else {
       console.log('➕ Adding pa_alloctn_type column...');
       await sequelize.query(`
-        ALTER TABLE paPaymentAlloc 
+        ALTER TABLE paXpayalloc 
         ADD COLUMN pa_alloctn_type VARCHAR(10) DEFAULT 'MANUAL' 
         COMMENT 'Allocation Type: AUTO (FIFO) | MANUAL (user selected)'
         AFTER pa_alloctn_date
@@ -89,7 +89,7 @@ async function migratePaymentAllocTable() {
       SELECT COLUMN_NAME 
       FROM INFORMATION_SCHEMA.COLUMNS 
       WHERE TABLE_SCHEMA = DATABASE() 
-      AND TABLE_NAME = 'paPaymentAlloc'
+      AND TABLE_NAME = 'paXpayalloc'
       AND COLUMN_NAME = 'pa_remarks'
     `, { type: QueryTypes.SELECT });
 
@@ -98,7 +98,7 @@ async function migratePaymentAllocTable() {
     } else {
       console.log('➕ Adding pa_remarks column...');
       await sequelize.query(`
-        ALTER TABLE paPaymentAlloc 
+        ALTER TABLE paXpayalloc 
         ADD COLUMN pa_remarks TEXT NULL 
         COMMENT 'Allocation Remarks'
         AFTER pa_alloctn_type
@@ -109,16 +109,16 @@ async function migratePaymentAllocTable() {
     // Update existing records: populate pa_pnr from PNR table
     console.log('\n🔄 Updating existing records...');
     const [updateResult] = await sequelize.query(`
-      UPDATE paPaymentAlloc pa
+      UPDATE paXpayalloc pa
       INNER JOIN pnXpnr p ON pa.pa_pnid = p.pn_pnid
-      SET pa.pa_pnr = p.pn_pnr
-      WHERE pa.pa_pnr IS NULL AND p.pn_pnr IS NOT NULL
+      SET pa.pa_pnr = p.pn_pnrnum
+      WHERE pa.pa_pnr IS NULL AND p.pn_pnrnum IS NOT NULL
     `);
     console.log(`✅ Updated ${updateResult.affectedRows || 0} existing allocation records with PNR numbers`);
 
     // Update pa_alloctn_date for existing records
     const [dateUpdateResult] = await sequelize.query(`
-      UPDATE paPaymentAlloc 
+      UPDATE paXpayalloc 
       SET pa_alloctn_date = edtm 
       WHERE pa_alloctn_date IS NULL
     `);
@@ -128,7 +128,7 @@ async function migratePaymentAllocTable() {
     console.log('\n📊 Adding index on pa_pnr...');
     try {
       await sequelize.query(`
-        CREATE INDEX idx_pa_pnr ON paPaymentAlloc(pa_pnr)
+        CREATE INDEX idx_pa_pnr ON paXpayalloc(pa_pnr)
       `);
       console.log('✅ Index created on pa_pnr');
     } catch (err) {

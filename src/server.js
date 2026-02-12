@@ -43,6 +43,9 @@ const dashboardRoutes = require('./routes/dashboardRoutes');
 const permissionRoutes = require('./routes/permissionRoutes');
 const bookingRoutes = require('./routes/bookingRoutes');
 const paymentRoutes = require('./routes/paymentRoutes');
+const contraRoutes = require('./routes/contraRoutes');
+const receiptRoutes = require('./routes/receiptRoutes');
+const journalRoutes = require('./routes/journalRoutes');
 const employeeRoutes = require('./routes/employeeRoutes');
 const employeeDashboardRoutes = require('./routes/employeeRoutes');
 const employeeBookingRoutes = require('./routes/employeeBookingRoutes');
@@ -81,6 +84,9 @@ app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/permissions', permissionRoutes);
 app.use('/api/bookings', bookingRoutes);
 app.use('/api/payments', paymentRoutes);
+app.use('/api/contra', contraRoutes);
+app.use('/api/receipts', receiptRoutes);
+app.use('/api/journal', journalRoutes);
 app.use('/api/employees', employeeRoutes);
 app.use('/api/employee', employeeDashboardRoutes); // Employee dashboard routes
 // Employee booking, payment, and billing routes - separate access for employees
@@ -118,9 +124,18 @@ app.use(errorHandler);
 
 // Database connection
 const { connectDB } = require('../config/db');
+const QueryPerformance = require('./services/queryPerformance');
 
 // Connect to database and start server
-connectDB().then(() => {
+connectDB().then(async () => {
+  // Initialize query performance optimizations
+  try {
+    await QueryPerformance.initialize();
+    console.log('✅ Query Performance Optimizations initialized');
+  } catch (error) {
+    console.error('⚠️  Failed to initialize Query Performance Optimizations:', error);
+    // Continue startup even if performance optimizations fail
+  }
   console.log('Database connection established');
   
   const PORT = process.env.PORT || 5004;

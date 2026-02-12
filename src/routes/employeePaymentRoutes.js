@@ -1,20 +1,20 @@
 const express = require('express');
 const {
   getAllPayments,
-  getCustomerPayments,
   getPaymentById,
   getPaymentAllocations,
   getPNRPayments,
   getCustomerPendingPNRs,
   getCustomerAdvance,
   getOutstandingReceivables,
-  createPayment,
   allocatePayment,
   refundPayment,
   updatePayment,
   deletePayment,
   verifyPayment
-} = require('../controllers/paymentController');
+} = require('../controllers/employeePaymentController');
+
+const { createPayment } = require('../controllers/paymentController');
 const authMiddleware = require('../middleware/authMiddleware');
 const { emEmployee: Employee } = require('../models');
 

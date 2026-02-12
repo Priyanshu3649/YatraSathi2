@@ -1,116 +1,142 @@
 const { DataTypes } = require('sequelize');
 const { sequelize, BaseModel } = require('./baseModel');
-const Account = require('./Account');
-const Booking = require('./Booking');
 
 /**
- * Payment Header Model
- * 
- * CRITICAL: This is a financial event, not a booking event.
- * - One payment can be applied to multiple PNRs
- * - Payments are NEVER overwritten
- * - All adjustments create new entries
- * - Full audit trail maintained
+ * Payment Model
+ * Handles payment transactions and records
  */
-const Payment = sequelize.define('ptPayment', {
-  pt_ptid: {
+const Payment = sequelize.define('pyPayment', {
+  py_pymtid: {
     type: DataTypes.BIGINT,
     primaryKey: true,
     autoIncrement: true,
     allowNull: false,
-    comment: 'Payment ID (Primary Key)'
+    comment: 'Payment ID'
   },
-  pt_usid: {
-    type: DataTypes.STRING(15),
-    allowNull: false,
-    comment: 'Customer User ID (who made the payment)'
-  },
-  pt_amount: {
-    type: DataTypes.DECIMAL(15, 2),
-    allowNull: false,
-    comment: 'Total Payment Amount (immutable once posted)'
-  },
-  pt_mode: {
+  
+  py_entry_no: {
     type: DataTypes.STRING(20),
     allowNull: false,
-    comment: 'Payment Mode: CASH, UPI, NEFT, RTGS, CHEQUE, CARD, BANK'
+    unique: true,
+    comment: 'Auto-generated entry number'
   },
-  pt_refno: {
+  
+  py_date: {
+    type: DataTypes.DATEONLY,
+    allowNull: false,
+    defaultValue: DataTypes.NOW,
+    comment: 'Payment date'
+  },
+  
+  py_entry_type: {
+    type: DataTypes.ENUM('Debit', 'Credit'),
+    allowNull: false,
+    comment: 'Entry type'
+  },
+  
+  py_customer_name: {
+    type: DataTypes.STRING(100),
+    allowNull: true,
+    comment: 'Customer name'
+  },
+  
+  py_customer_phone: {
+    type: DataTypes.STRING(15),
+    allowNull: true,
+    comment: 'Customer phone'
+  },
+  
+  py_amount: {
+    type: DataTypes.DECIMAL(15, 2),
+    allowNull: false,
+    defaultValue: 0.00,
+    comment: 'Payment amount'
+  },
+  
+  py_ref_number: {
     type: DataTypes.STRING(50),
     allowNull: true,
-    comment: 'Reference Number (UTR / Cheque No / Transaction ID)'
+    comment: 'Reference number'
   },
-  pt_paydt: {
-    type: DataTypes.DATE,
-    allowNull: false,
-    comment: 'Payment Date (when payment was made)'
+  
+  py_bank_account: {
+    type: DataTypes.STRING(100),
+    allowNull: true,
+    comment: 'Bank account name'
   },
-  pt_rcvby: {
-    type: DataTypes.STRING(15),
-    allowNull: false,
-    comment: 'Received By (User ID who recorded the payment)'
-  },
-  pt_status: {
-    type: DataTypes.STRING(15),
-    defaultValue: 'RECEIVED',
-    allowNull: false,
-    comment: 'Payment Status: RECEIVED | ADJUSTED | REFUNDED | BOUNCED'
-  },
-  pt_acct_period: {
-    type: DataTypes.STRING(7),
-    allowNull: false,
-    comment: 'Accounting Period (YYYY-MM format)'
-  },
-  pt_unallocated_amt: {
+  
+  py_balance: {
     type: DataTypes.DECIMAL(15, 2),
-    defaultValue: 0,
-    comment: 'Unallocated Amount (advance payment)'
+    allowNull: false,
+    defaultValue: 0.00,
+    comment: 'Current balance'
   },
-  pt_remarks: {
-    type: DataTypes.TEXT,
-    allowNull: true,
-    comment: 'Payment Remarks'
+  
+  py_total_credit: {
+    type: DataTypes.DECIMAL(15, 2),
+    allowNull: false,
+    defaultValue: 0.00,
+    comment: 'Total credit amount'
   },
-  // Legacy fields for backward compatibility (deprecated)
-  pt_acid: {
-    type: DataTypes.BIGINT,
-    allowNull: true,
-    comment: 'Account ID (deprecated - use customer ID directly)'
+  
+  py_total_debit: {
+    type: DataTypes.DECIMAL(15, 2),
+    allowNull: false,
+    defaultValue: 0.00,
+    comment: 'Total debit amount'
   },
-  pt_bkid: {
-    type: DataTypes.BIGINT,
-    allowNull: true,
-    comment: 'Booking ID (optional - payment can be advance)'
+  
+  py_created_by: {
+    type: DataTypes.STRING(15),
+    allowNull: false,
+    comment: 'User ID who created the payment'
   },
-  // Audit fields
+  
+  py_status: {
+    type: DataTypes.ENUM('Active', 'Inactive', 'Deleted'),
+    allowNull: false,
+    defaultValue: 'Active',
+    comment: 'Payment status'
+  },
+  
+  // Audit fields from BaseModel
   ...BaseModel
+  
 }, {
-  tableName: 'ptPayment',
-  timestamps: false,
+  tableName: 'pyXpayment',
+  timestamps: true,
   indexes: [
-    { fields: ['pt_usid'], name: 'idx_pt_usid' },
-    { fields: ['pt_paydt'], name: 'idx_pt_paydt' },
-    { fields: ['pt_acct_period'], name: 'idx_pt_acct_period' },
-    { fields: ['pt_status'], name: 'idx_pt_status' }
+    {
+      name: 'idx_py_entry_no',
+      fields: ['py_entry_no']
+    },
+    {
+      name: 'idx_py_date',
+      fields: ['py_date']
+    },
+    {
+      name: 'idx_py_customer_phone',
+      fields: ['py_customer_phone']
+    },
+    {
+      name: 'idx_py_created_by',
+      fields: ['py_created_by']
+    },
+    {
+      name: 'idx_py_status',
+      fields: ['py_status']
+    }
   ]
 });
 
 // Define associations
-Payment.belongsTo(Account, {
-  foreignKey: 'pt_acid',
-  targetKey: 'ac_acid',
-  as: 'account',
-  required: false
-});
-
-Payment.belongsTo(Booking, {
-  foreignKey: 'pt_bkid',
-  targetKey: 'bk_bkid',
-  as: 'booking',
-  required: false
-});
-
-// Payment has many allocations (lazy load to avoid circular dependency)
-// This association will be set up in models/index.js
+Payment.associate = function(models) {
+  // Payment belongs to user who created it
+  Payment.belongsTo(models.User, {
+    foreignKey: 'py_created_by',
+    targetKey: 'us_usid',
+    as: 'creator'
+  });
+};
 
 module.exports = Payment;
