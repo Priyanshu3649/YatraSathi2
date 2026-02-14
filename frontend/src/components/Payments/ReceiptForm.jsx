@@ -2,11 +2,14 @@
 // Implements the ASCII wireframe layout as specified
 
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import { useAuth } from '../../contexts/AuthContext';
 import { useKeyboardNavigation } from '../../contexts/KeyboardNavigationContext';
 import useKeyboardNav from '../../hooks/useKeyboardNavigation';
 import SaveConfirmationModal from '../common/SaveConfirmationModal';
 
 const ReceiptForm = ({ onBack }) => {
+  const { user } = useAuth();
+  
   const [formData, setFormData] = useState({
     receipt_no: '',
     date: new Date().toISOString().split('T')[0],
