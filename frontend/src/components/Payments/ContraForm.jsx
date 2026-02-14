@@ -478,7 +478,7 @@ const ContraForm = ({ onBack }) => {
         />
       )}
       
-      <style jsx>{`
+      <style>{`
         .payment-form-page {
           padding: 16px;
           max-width: 1200px;

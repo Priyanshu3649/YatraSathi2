@@ -107,11 +107,6 @@ const PaymentForm = ({ onBack }) => {
     }
   }, [mode, focusSpecificField]);
 
-  // Calculate customer totals when customer, type or amount changes
-  useEffect(() => {
-    calculateCustomerTotals();
-  }, [formData.customer_id, formData.type, formData.amount, calculateCustomerTotals]);
-
   const generateReceiptNo = useCallback(() => {
     const date = new Date();
     const year = date.getFullYear().toString().slice(-2);
@@ -127,7 +122,7 @@ const PaymentForm = ({ onBack }) => {
 
   const calculateCustomerTotals = useCallback(() => {
     // If no customer selected, reset to zeros
-    if (!formData.customer_id) {
+    if (!formData.customer_name) {
       setCustomerData({
         balance: 0,
         total_credit: 0,
@@ -137,14 +132,14 @@ const PaymentForm = ({ onBack }) => {
       return;
     }
 
-    // Use mock financial data based on customer ID
+    // Use mock financial data based on customer name (for demo purposes)
     const mockFinancialData = {
-      'CUST001': { balance: 12500.00, total_credit: 35000.00, total_debit: 22500.00 },
-      'CUST002': { balance: -5000.00, total_credit: 15000.00, total_debit: 20000.00 },
-      'CUST003': { balance: 8750.00, total_credit: 22000.00, total_debit: 13250.00 }
+      'Raj Kumar': { balance: 12500.00, total_credit: 35000.00, total_debit: 22500.00 },
+      'Priya Sharma': { balance: -5000.00, total_credit: 15000.00, total_debit: 20000.00 },
+      'Amit Patel': { balance: 8750.00, total_credit: 22000.00, total_debit: 13250.00 }
     };
     
-    const baseData = mockFinancialData[formData.customer_id] || {
+    const baseData = mockFinancialData[formData.customer_name] || {
       balance: 0.00,
       total_credit: 0.00,
       total_debit: 0.00
@@ -172,7 +167,12 @@ const PaymentForm = ({ onBack }) => {
       loading: false
     });
     
-  }, [formData.customer_id, formData.type, formData.amount]);
+  }, [formData.customer_name, formData.type, formData.amount]);
+
+  // Calculate customer totals when customer, type or amount changes
+  useEffect(() => {
+    calculateCustomerTotals();
+  }, [formData.customer_name, formData.type, formData.amount, calculateCustomerTotals]);
 
   const handleInputChange = (field, value) => {
     setFormData(prev => ({
@@ -703,7 +703,7 @@ const PaymentForm = ({ onBack }) => {
         />
       )}
       
-      <style jsx>{`
+      <style>{`
         .payment-form-page {
           padding: 16px;
           max-width: 1200px;
