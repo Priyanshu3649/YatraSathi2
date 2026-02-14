@@ -16,11 +16,17 @@ const ReceiptForm = ({ onBack }) => {
     customer_phone: '',
     account_name: '',
     amount: '',
-    ref_number: '',
-    created_by: 'USER001',
-    created_at: new Date().toISOString(),
-    modified_by: 'USER001',
-    modified_at: new Date().toISOString()
+    ref_number: ''
+  });
+
+  // Audit data for the form (following booking/billing pattern)
+  const [auditData, setAuditData] = useState({
+    enteredOn: new Date().toISOString(),
+    enteredBy: user?.us_usid || 'ADMIN',
+    modifiedOn: '',
+    modifiedBy: user?.us_usid || 'ADMIN',
+    closedOn: '',
+    closedBy: ''
   });
 
   // Customer-related data (fetched from backend)
@@ -64,8 +70,7 @@ const ReceiptForm = ({ onBack }) => {
     'account_name',
     'amount',
     'ref_number',
-    'save_button',
-    'view_records_button'
+    'save_button'
   ], []);
 
   // Records mode field order
@@ -177,8 +182,7 @@ const ReceiptForm = ({ onBack }) => {
   const handleInputChange = (field, value) => {
     setFormData(prev => ({
       ...prev,
-      [field]: value,
-      modified_at: new Date().toISOString()
+      [field]: value
     }));
     setError('');
     
@@ -281,6 +285,14 @@ const ReceiptForm = ({ onBack }) => {
         return;
       }
 
+      // Update audit data
+      const currentTime = new Date().toISOString();
+      setAuditData(prev => ({
+        ...prev,
+        modifiedOn: currentTime,
+        modifiedBy: user?.us_usid || 'ADMIN'
+      }));
+      
       // Create new payment record
       const newRecord = {
         id: Date.now(),
@@ -293,7 +305,12 @@ const ReceiptForm = ({ onBack }) => {
         type: formData.type,
         ref_number: formData.ref_number,
         debit_amount: formData.type === 'Debit' ? parseFloat(formData.amount) : 0,
-        credit_amount: formData.type === 'Credit' ? parseFloat(formData.amount) : 0
+        credit_amount: formData.type === 'Credit' ? parseFloat(formData.amount) : 0,
+        // Add audit data
+        createdOn: auditData.enteredOn,
+        createdBy: auditData.enteredBy,
+        modifiedOn: currentTime,
+        modifiedBy: user?.us_usid || 'ADMIN'
       };
 
       // Add to records immediately
@@ -310,11 +327,17 @@ const ReceiptForm = ({ onBack }) => {
         customer_phone: '',
         account_name: '',
         amount: '',
-        ref_number: '',
-        created_by: 'USER001',
-        created_at: new Date().toISOString(),
-        modified_by: 'USER001',
-        modified_at: new Date().toISOString()
+        ref_number: ''
+      });
+      
+      // Reset audit data
+      setAuditData({
+        enteredOn: currentTime,
+        enteredBy: user?.us_usid || 'ADMIN',
+        modifiedOn: '',
+        modifiedBy: user?.us_usid || 'ADMIN',
+        closedOn: '',
+        closedBy: ''
       });
       
       setCustomerData({
@@ -568,23 +591,23 @@ const ReceiptForm = ({ onBack }) => {
           <h4>Audit Details</h4>
           <div className="audit-grid">
             <div className="audit-item">
-              <span className="label">Created By:</span>
-              <span className="value">{formData.created_by}</span>
+              <span className="label">Entered By:</span>
+              <span className="value">{auditData.enteredBy}</span>
             </div>
             <div className="audit-item">
-              <span className="label">Created At:</span>
+              <span className="label">Entered On:</span>
               <span className="value">
-                {new Date(formData.created_at).toLocaleString()}
+                {auditData.enteredOn ? new Date(auditData.enteredOn).toLocaleString() : 'N/A'}
               </span>
             </div>
             <div className="audit-item">
               <span className="label">Modified By:</span>
-              <span className="value">{formData.modified_by}</span>
+              <span className="value">{auditData.modifiedBy}</span>
             </div>
             <div className="audit-item">
-              <span className="label">Modified At:</span>
+              <span className="label">Modified On:</span>
               <span className="value">
-                {new Date(formData.modified_at).toLocaleString()}
+                {auditData.modifiedOn ? new Date(auditData.modifiedOn).toLocaleString() : 'N/A'}
               </span>
             </div>
           </div>
