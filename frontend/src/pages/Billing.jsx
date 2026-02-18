@@ -384,6 +384,9 @@ const Billing = () => {
           setActiveView('create');
           setShowForm(true);
           setIsEditing(true); // Set editing mode to true for new billing from booking
+          
+          // Fetch passengers for the booking and populate passengerList
+          fetchBookingPassengers(bookingId);
         } else if (mode === 'view') {
           // Load existing bill for this booking
           loadBillForBooking(bookingId);
@@ -391,6 +394,51 @@ const Billing = () => {
       }
     }
   }, [location.state]);
+
+  // Function to fetch passengers for a booking and update form data
+  const fetchBookingPassengers = async (bookingId) => {
+    try {
+      console.log('Fetching passengers for booking:', bookingId);
+      const response = await bookingAPI.getBookingPassengers(bookingId);
+      
+      if (response.success && response.passengers) {
+        // Normalize passenger data to match the expected structure
+        const normalizedPassengers = response.passengers.map((passenger, index) => ({
+          id: passenger.ps_psid || index,
+          name: passenger.name || `${passenger.ps_fname} ${passenger.ps_lname || ''}`.trim(),
+          firstName: passenger.firstName || passenger.ps_fname || '',
+          lastName: passenger.lastName || passenger.ps_lname || '',
+          age: passenger.age || passenger.ps_age || '',
+          gender: passenger.gender || passenger.ps_gender || '',
+          berth: passenger.berthPreference || passenger.berth || passenger.ps_berthpref || '',
+          idProofType: passenger.idProofType || passenger.ps_idtype || '',
+          idProofNumber: passenger.idProofNumber || passenger.ps_idno || ''
+        }));
+        
+        console.log('Passengers fetched and normalized:', normalizedPassengers);
+        
+        // Update both the passengerList state and formData.passengerList
+        setFormData(prev => ({
+          ...prev,
+          passengerList: normalizedPassengers
+        }));
+      } else {
+        console.log('No passengers found for booking or invalid response:', response);
+        // Set empty passenger list
+        setFormData(prev => ({
+          ...prev,
+          passengerList: []
+        }));
+      }
+    } catch (error) {
+      console.error('Error fetching booking passengers:', error);
+      // Set empty passenger list on error
+      setFormData(prev => ({
+        ...prev,
+        passengerList: []
+      }));
+    }
+  };
 
   const loadBillForBooking = async (bookingId) => {
     try {

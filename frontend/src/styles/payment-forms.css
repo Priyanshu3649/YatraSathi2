@@ -1,0 +1,354 @@
+/* Payment Forms Consistent Styling Fix */
+/* This CSS ensures uniform layout, spacing, and visual consistency across all payment forms */
+
+.payment-form-page {
+  padding: 16px;
+  max-width: 1200px;
+  margin: 0 auto;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+}
+
+.payment-section-container {
+  background: white;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  padding: 20px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  margin-bottom: 20px;
+}
+
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  padding-bottom: 12px;
+  border-bottom: 2px solid #000080;
+}
+
+.section-header h3 {
+  margin: 0;
+  color: #000080;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.section-actions {
+  display: flex;
+  gap: 12px;
+}
+
+.btn-primary, .btn-secondary {
+  padding: 8px 16px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  transition: all 0.2s ease;
+}
+
+.btn-primary {
+  background: #000080;
+  color: white;
+  border-color: #000080;
+}
+
+.btn-primary:hover {
+  background: #000066;
+  border-color: #000066;
+}
+
+.btn-primary:disabled {
+  background: #cccccc;
+  border-color: #cccccc;
+  cursor: not-allowed;
+}
+
+.btn-secondary {
+  background: white;
+  color: #666;
+  border-color: #ddd;
+}
+
+.btn-secondary:hover {
+  background: #f5f5f5;
+  border-color: #999;
+}
+
+/* Form Layout */
+.form-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 16px;
+  margin-bottom: 16px;
+  align-items: start;
+}
+
+.field-group {
+  display: flex;
+  flex-direction: column;
+}
+
+.field-group label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #333;
+  margin-bottom: 4px;
+}
+
+.form-input, .form-select {
+  padding: 8px 12px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 13px;
+  transition: border-color 0.2s ease;
+}
+
+.form-input:focus, .form-select:focus {
+  outline: none;
+  border-color: #000080;
+  box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
+}
+
+.form-input:disabled, .form-select:disabled {
+  background-color: #f5f5f5;
+  cursor: not-allowed;
+}
+
+/* Financial Details Section */
+.financial-details {
+  background: #f8f9fa;
+  border: 1px solid #e9ecef;
+  border-radius: 6px;
+  padding: 16px;
+  margin: 20px 0;
+}
+
+.financial-details h4 {
+  margin: 0 0 12px 0;
+  color: #000080;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.financial-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+}
+
+.financial-item {
+  display: flex;
+  justify-content: space-between;
+  padding: 8px 0;
+  border-bottom: 1px solid #e9ecef;
+}
+
+.financial-item:last-child {
+  border-bottom: none;
+}
+
+.financial-item .label {
+  font-weight: 500;
+  color: #555;
+}
+
+.financial-item .value {
+  font-weight: 600;
+  color: #333;
+}
+
+.financial-item .value.credit {
+  color: #28a745;
+}
+
+.financial-item .value.debit {
+  color: #dc3545;
+}
+
+/* Audit Details Section */
+.audit-details {
+  background: #f8f9fa;
+  border: 1px solid #e9ecef;
+  border-radius: 6px;
+  padding: 16px;
+  margin: 20px 0;
+}
+
+.audit-details h4 {
+  margin: 0 0 12px 0;
+  color: #000080;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.audit-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 8px;
+}
+
+.audit-item {
+  display: flex;
+  justify-content: space-between;
+  padding: 6px 0;
+}
+
+.audit-item .label {
+  font-weight: 500;
+  color: #555;
+  font-size: 12px;
+}
+
+.audit-item .value {
+  font-weight: 400;
+  color: #333;
+  font-size: 12px;
+}
+
+/* Records Section */
+.records-section {
+  margin-top: 20px;
+}
+
+.records-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #ddd;
+}
+
+.group-summary {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: #e9f7ef;
+  padding: 12px 16px;
+  border-radius: 4px;
+  margin-bottom: 16px;
+}
+
+.group-summary .summary-text {
+  font-weight: 500;
+  color: #2e7d32;
+}
+
+.group-summary .record-count {
+  background: #2e7d32;
+  color: white;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.records-table-container {
+  overflow-x: auto;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+}
+
+.records-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.records-table th {
+  background: #f8f9fa;
+  padding: 10px 8px;
+  text-align: left;
+  font-weight: 600;
+  color: #333;
+  border-bottom: 2px solid #ddd;
+}
+
+.records-table td {
+  padding: 8px;
+  border-bottom: 1px solid #eee;
+}
+
+.records-table tr:hover {
+  background: #f8f9fa;
+}
+
+.type-badge {
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.type-badge.debit {
+  background: #ffebee;
+  color: #c62828;
+}
+
+.type-badge.credit {
+  background: #e8f5e8;
+  color: #2e7d32;
+}
+
+/* Focus Styles for Accessibility */
+.form-input:focus, .form-select:focus, .btn-primary:focus, .btn-secondary:focus {
+  outline: 2px solid #000080;
+  outline-offset: 2px;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .payment-form-page {
+    padding: 12px;
+  }
+  
+  .form-row {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+  
+  .financial-grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+  
+  .audit-grid {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+  
+  .group-summary {
+    flex-direction: column;
+    gap: 8px;
+  }
+  
+  .section-actions {
+    flex-direction: column;
+    gap: 8px;
+  }
+  
+  .section-actions .btn-primary,
+  .section-actions .btn-secondary {
+    width: 100%;
+  }
+}
+
+/* Print Styles */
+@media print {
+  .payment-form-page {
+    padding: 0;
+    max-width: 100%;
+  }
+  
+  .btn-primary, .btn-secondary {
+    display: none;
+  }
+  
+  .payment-section-container {
+    box-shadow: none;
+    border: 1px solid #000;
+  }
+}
