@@ -365,7 +365,7 @@ const AuditTrail = () => {
         )}
       </div>
 
-      <style>{`
+      <style jsx>{`
         .audit-trail-page {
           padding: 20px;
           max-width: 1200px;

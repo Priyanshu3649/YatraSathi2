@@ -15,14 +15,11 @@ CREATE TABLE IF NOT EXISTS audit_forensic_log (
     user_agent TEXT,
     branch_id INT,
     transaction_id VARCHAR(50),
-    record_hash VARCHAR(64),
-    previous_hash VARCHAR(64),
     
     INDEX idx_entity_lookup (entity_name, entity_id),
     INDEX idx_performed_on (performed_on),
     INDEX idx_performed_by (performed_by),
-    INDEX idx_action_type (action_type),
-    INDEX idx_record_hash (record_hash)
+    INDEX idx_action_type (action_type)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Add audit fields to existing tables

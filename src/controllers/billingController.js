@@ -118,8 +118,13 @@ const createBill = async (req, res) => {
         throw new Error('Cannot generate bill for cancelled booking');
       }
 
-      // 2. Generate unique bill number
-      const billNumber = `BILL${Date.now()}${Math.floor(Math.random() * 1000)}`;
+      // 2. Generate unique bill number in format: BL-YYMMDD-NNNN (max 15 chars)
+      const now = new Date();
+      const year = now.getFullYear().toString().slice(-2);
+      const month = (now.getMonth() + 1).toString().padStart(2, '0');
+      const day = now.getDate().toString().padStart(2, '0');
+      const random = Math.floor(Math.random() * 10000).toString().padStart(4, '0');
+      const billNumber = `BL-${year}${month}${day}-${random}`;
       
       // 3. Calculate total amount
       let calculatedTotal = parseFloat(railwayFare) || 0;
@@ -181,8 +186,16 @@ const createBill = async (req, res) => {
         bl_discount: discount || 0,
         bl_gst_type: gstType || 'EXCLUSIVE',
         bl_total_amount: finalTotalAmount,
-        bl_created_by: convertUserIdToInt(req.user.us_usid)
-      }, { transaction });
+        bl_created_by: convertUserIdToInt(req.user.us_usid),
+        // Standard audit fields
+        entered_by: convertUserIdToInt(req.user.us_usid),
+        entered_on: new Date(),
+        status: 'OPEN',
+        bl_status: status || 'CONFIRMED'
+      }, { 
+        transaction,
+        userId: convertUserIdToInt(req.user.us_usid) // Pass userId for hooks
+      });
       
       // 5. Update Booking Status to CONFIRMED and mark as billed
       await booking.update({
@@ -491,7 +504,12 @@ const updateBill = async (req, res) => {
       ...req.body,
       bl_total_amount: totalAmount,
       bl_modified_by: convertUserIdToInt(req.user.us_usid),
-      bl_modified_at: new Date()
+      bl_modified_at: new Date(),
+      // Standard audit fields
+      modified_by: convertUserIdToInt(req.user.us_usid),
+      modified_on: new Date()
+    }, {
+      userId: convertUserIdToInt(req.user.us_usid) // Pass userId for hooks
     });
     
     // Transform data to match frontend expectations
@@ -609,34 +627,80 @@ const finalizeBill = async (req, res) => {
 
 // Delete bill
 const deleteBill = async (req, res) => {
+  const transaction = await sequelizeTVL.transaction();
+  
   try {
-    const bill = await BillTVL.findByPk(req.params.id);
+    const bill = await BillTVL.findByPk(req.params.id, { transaction });
     
     if (!bill) {
+      await transaction.rollback();
       return res.status(404).json({ message: 'Bill not found' });
     }
     
     // Only admin can delete bills
     if (req.user.us_usertype !== 'admin') {
+      await transaction.rollback();
       return res.status(403).json({ message: 'Access denied. Admin only.' });
     }
     
     // Cannot delete finalized or paid bills
     if (bill.bl_status === 'FINAL' || bill.bl_status === 'PAID') {
+      await transaction.rollback();
       return res.status(400).json({ message: 'Cannot delete a finalized or paid bill' });
     }
     
-    await bill.destroy();
+    // Get the associated booking ID before deleting the bill
+    const bookingId = bill.bl_booking_id;
     
-    res.json({ message: 'Bill deleted successfully' });
+    // Delete the bill
+    await bill.destroy({ transaction });
+    
+    // Update the associated booking status back to PENDING
+    if (bookingId) {
+      const booking = await BookingTVL.findByPk(bookingId, { transaction });
+      
+      if (booking && booking.bk_status === 'CONFIRMED') {
+        const oldStatus = booking.bk_status;
+        
+        // Update booking status to PENDING
+        await booking.update({
+          bk_status: 'PENDING',
+          mby: req.user.us_usid
+        }, { transaction });
+        
+        // Log the automatic status change for audit purposes
+        console.log(`[BILLING DELETION AUDIT] Bill ${bill.bl_id} deleted by user ${req.user.us_usid}. ` +
+                    `Associated booking ${bookingId} status automatically changed from ${oldStatus} to PENDING.`);
+      }
+    }
+    
+    // Commit the transaction
+    await transaction.commit();
+    
+    res.json({ 
+      success: true,
+      message: 'Bill deleted successfully. Associated booking status updated to PENDING.',
+      data: {
+        deletedBillId: bill.bl_id,
+        affectedBookingId: bookingId
+      }
+    });
   } catch (error) {
+    // Rollback transaction on error
+    await transaction.rollback();
+    
     // Handle foreign key constraint errors
     if (error.name === 'SequelizeForeignKeyConstraintError') {
       return res.status(400).json({ 
         message: 'Cannot delete bill. Related records exist in other tables.' 
       });
     }
-    res.status(500).json({ message: error.message });
+    
+    console.error('Error deleting bill:', error);
+    res.status(500).json({ 
+      success: false,
+      message: error.message 
+    });
   }
 };
 

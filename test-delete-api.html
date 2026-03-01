@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Delete API</title>
+</head>
+<body>
+    <h1>Test Delete API</h1>
+    <button onclick="testDelete()">Test Delete Booking</button>
+    <div id="result"></div>
+
+    <script>
+        async function testDelete() {
+            const resultDiv = document.getElementById('result');
+            resultDiv.innerHTML = 'Testing...';
+            
+            try {
+                // First, login to get a token
+                const loginResponse = await fetch('http://localhost:5010/api/auth/login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        username: 'admin@example.com',
+                        password: 'password123'
+                    })
+                });
+                
+                if (!loginResponse.ok) {
+                    resultDiv.innerHTML = 'Login failed: ' + await loginResponse.text();
+                    return;
+                }
+                
+                const loginData = await loginResponse.json();
+                const token = loginData.token;
+                resultDiv.innerHTML = 'Login successful. Token: ' + token.substring(0, 20) + '...<br>';
+                
+                // Get bookings
+                const bookingsResponse = await fetch('http://localhost:5010/api/bookings', {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                
+                if (!bookingsResponse.ok) {
+                    resultDiv.innerHTML += 'Failed to get bookings: ' + await bookingsResponse.text();
+                    return;
+                }
+                
+                const bookingsData = await bookingsResponse.json();
+                const bookings = bookingsData.data || bookingsData.bookings || [];
+                
+                if (bookings.length === 0) {
+                    resultDiv.innerHTML += 'No bookings found';
+                    return;
+                }
+                
+                const bookingToDelete = bookings[0];
+                resultDiv.innerHTML += 'Found booking: ' + bookingToDelete.bk_bkno + '<br>';
+                
+                // Delete the booking
+                resultDiv.innerHTML += 'Deleting booking...<br>';
+                
+                const deleteResponse = await fetch(`http://localhost:5010/api/bookings/${bookingToDelete.bk_bkid}`, {
+                    method: 'DELETE',
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                
+                const deleteData = await deleteResponse.json();
+                resultDiv.innerHTML += 'Delete response status: ' + deleteResponse.status + '<br>';
+                resultDiv.innerHTML += 'Delete response data: ' + JSON.stringify(deleteData) + '<br>';
+                
+                if (deleteResponse.ok) {
+                    resultDiv.innerHTML += '✅ Delete successful<br>';
+                } else {
+                    resultDiv.innerHTML += '❌ Delete failed<br>';
+                }
+                
+            } catch (error) {
+                resultDiv.innerHTML += 'Error: ' + error.message;
+            }
+        }
+    </script>
+</body>
+</html>

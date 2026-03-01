@@ -63,3 +63,4 @@ CustomerAdvance.belongsTo(Customer, {
 
 module.exports = CustomerAdvance;
 
+

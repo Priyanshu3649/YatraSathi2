@@ -83,7 +83,7 @@ const AuditInfo = ({ auditData, className = '' }) => {
         </div>
       </div>
       
-      <style>{`
+      <style jsx>{`
         .audit-info-container {
           background: #f8f9fa;
           border: 1px solid #e9ecef;

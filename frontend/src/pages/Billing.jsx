@@ -357,36 +357,51 @@ const Billing = () => {
             journeyDateProcessed: journeyDateValue
           });
           
-          // Auto-populate form with booking data
-          setFormData(prev => ({
-            ...prev,
-            bookingId: bookingId,
-            customerName: passedBookingData.bk_customername || passedBookingData.customerName || '',
-            phoneNumber: passedBookingData.bk_phonenumber || passedBookingData.phoneNumber || '',
-            fromStation: passedBookingData.bk_fromst || passedBookingData.fromStation || '',
-            toStation: passedBookingData.bk_tost || passedBookingData.toStation || '',
-            journeyDate: journeyDateValue,
-            trainNumber: passedBookingData.bk_trno || passedBookingData.trainNumber || '',
-            reservationClass: passedBookingData.bk_class || passedBookingData.reservationClass || '3A',
-            ticketType: passedBookingData.bk_tickettype || passedBookingData.ticketType || 'NORMAL',
-            pnrNumbers: passedBookingData.bk_pnr || passedBookingData.pnrNumber || ''
-            // EXCLUDE financial fields - leave them empty for manual entry:
-            // - seatsAlloted (will remain empty)
-            // - railwayFare (will remain empty) 
-            // - serviceCharges (will remain empty)
-            // - platformFees (will remain empty)
-            // - stationBoyIncentive (will remain empty)
-            // - miscCharges (will remain empty)
-            // - deliveryCharges (will remain empty)
-            // - cancellationCharges (will remain empty)
-          }));
+          // Fetch passenger list for this booking
+          const fetchPassengers = async () => {
+            try {
+              const passengerResponse = await bookingAPI.getBookingPassengers(bookingId);
+              const passengers = passengerResponse?.data?.passengers || passengerResponse?.passengers || [];
+              
+              console.log('📋 Passengers fetched for billing:', passengers);
+              
+              // Map passengers to the format expected by the billing form
+              const mappedPassengers = passengers.map(p => ({
+                name: `${p.ps_fname || ''} ${p.ps_lname || ''}`.trim() || p.name || '',
+                age: p.ps_age || p.age || '',
+                gender: p.ps_gender || p.gender || 'M',
+                berthPreference: p.ps_berthpref || p.berthPreference || ''
+              }));
+              
+              return mappedPassengers;
+            } catch (error) {
+              console.error('Failed to fetch passengers:', error);
+              return [];
+            }
+          };
+          
+          // Load passengers and update form data
+          fetchPassengers().then(passengers => {
+            setFormData(prev => ({
+              ...prev,
+              bookingId: bookingId,
+              customerName: passedBookingData.bk_customername || passedBookingData.customerName || '',
+              phoneNumber: passedBookingData.bk_phonenumber || passedBookingData.phoneNumber || '',
+              fromStation: passedBookingData.bk_fromst || passedBookingData.fromStation || '',
+              toStation: passedBookingData.bk_tost || passedBookingData.toStation || '',
+              journeyDate: journeyDateValue,
+              trainNumber: passedBookingData.bk_trno || passedBookingData.trainNumber || '',
+              reservationClass: passedBookingData.bk_class || passedBookingData.reservationClass || '3A',
+              ticketType: passedBookingData.bk_tickettype || passedBookingData.ticketType || 'NORMAL',
+              pnrNumbers: passedBookingData.bk_pnr || passedBookingData.pnrNumber || '',
+              passengerList: passengers // Add passenger list
+              // EXCLUDE financial fields - leave them empty for manual entry
+            }));
+          });
           
           setActiveView('create');
           setShowForm(true);
           setIsEditing(true); // Set editing mode to true for new billing from booking
-          
-          // Fetch passengers for the booking and populate passengerList
-          fetchBookingPassengers(bookingId);
         } else if (mode === 'view') {
           // Load existing bill for this booking
           loadBillForBooking(bookingId);
@@ -394,51 +409,6 @@ const Billing = () => {
       }
     }
   }, [location.state]);
-
-  // Function to fetch passengers for a booking and update form data
-  const fetchBookingPassengers = async (bookingId) => {
-    try {
-      console.log('Fetching passengers for booking:', bookingId);
-      const response = await bookingAPI.getBookingPassengers(bookingId);
-      
-      if (response.success && response.passengers) {
-        // Normalize passenger data to match the expected structure
-        const normalizedPassengers = response.passengers.map((passenger, index) => ({
-          id: passenger.ps_psid || index,
-          name: passenger.name || `${passenger.ps_fname} ${passenger.ps_lname || ''}`.trim(),
-          firstName: passenger.firstName || passenger.ps_fname || '',
-          lastName: passenger.lastName || passenger.ps_lname || '',
-          age: passenger.age || passenger.ps_age || '',
-          gender: passenger.gender || passenger.ps_gender || '',
-          berth: passenger.berthPreference || passenger.berth || passenger.ps_berthpref || '',
-          idProofType: passenger.idProofType || passenger.ps_idtype || '',
-          idProofNumber: passenger.idProofNumber || passenger.ps_idno || ''
-        }));
-        
-        console.log('Passengers fetched and normalized:', normalizedPassengers);
-        
-        // Update both the passengerList state and formData.passengerList
-        setFormData(prev => ({
-          ...prev,
-          passengerList: normalizedPassengers
-        }));
-      } else {
-        console.log('No passengers found for booking or invalid response:', response);
-        // Set empty passenger list
-        setFormData(prev => ({
-          ...prev,
-          passengerList: []
-        }));
-      }
-    } catch (error) {
-      console.error('Error fetching booking passengers:', error);
-      // Set empty passenger list on error
-      setFormData(prev => ({
-        ...prev,
-        passengerList: []
-      }));
-    }
-  };
 
   const loadBillForBooking = async (bookingId) => {
     try {
@@ -681,6 +651,7 @@ const Billing = () => {
         ...bill,
         // Map database field names to frontend field names
         id: bill.bl_id || bill.id,
+        billNo: bill.bl_bill_no || bill.billNo, // Add bill number mapping
         billDate: bill.bl_billing_date || bill.billDate,
         bookingId: bill.bl_booking_id || bill.bookingId,
         subBillNo: bill.bl_sub_bill_no || bill.subBillNo,
@@ -1322,6 +1293,8 @@ const Billing = () => {
                 value={formData.customerName || ''} 
                 onChange={(e) => setFormData({...formData, customerName: e.target.value})}
                 disabled={!isEditing}
+                readOnly={billingMode === 'generate'}
+                tabIndex={billingMode === 'generate' ? -1 : undefined}
                 placeholder="Enter customer name"
               />
               <label className="erp-form-label required">Phone Number</label>
@@ -1332,6 +1305,8 @@ const Billing = () => {
                 value={formData.phoneNumber || ''} 
                 onChange={(e) => setFormData({...formData, phoneNumber: e.target.value})}
                 disabled={!isEditing}
+                readOnly={billingMode === 'generate'}
+                tabIndex={billingMode === 'generate' ? -1 : undefined}
                 placeholder="Enter phone number"
               />
               <label className="erp-form-label">Station Boy Name</label>
@@ -1342,6 +1317,7 @@ const Billing = () => {
                 value={formData.stationBoy || ''}
                 onChange={(e) => setFormData({...formData, stationBoy: e.target.value})}
                 disabled={!isEditing}
+                tabIndex={1}
                 placeholder="Enter station boy name"
               />
               <label className="erp-form-label required">From Station</label>
@@ -1352,6 +1328,8 @@ const Billing = () => {
                 value={formData.fromStation || ''}
                 onChange={(e) => setFormData({...formData, fromStation: e.target.value})}
                 disabled={!isEditing}
+                readOnly={billingMode === 'generate'}
+                tabIndex={billingMode === 'generate' ? -1 : undefined}
                 placeholder="Enter from station"
               />
               <label className="erp-form-label required">To Station</label>
@@ -1362,6 +1340,8 @@ const Billing = () => {
                 value={formData.toStation || ''}
                 onChange={(e) => setFormData({...formData, toStation: e.target.value})}
                 disabled={!isEditing}
+                readOnly={billingMode === 'generate'}
+                tabIndex={billingMode === 'generate' ? -1 : undefined}
                 placeholder="Enter to station"
               />
             </div>
@@ -1376,6 +1356,8 @@ const Billing = () => {
                 value={formData.journeyDate || ''}
                 onChange={(e) => setFormData({...formData, journeyDate: e.target.value})}
                 disabled={!isEditing}
+                readOnly={billingMode === 'generate'}
+                tabIndex={billingMode === 'generate' ? -1 : undefined}
               />
               <label className="erp-form-label required">Train Number</label>
               <input 
@@ -1393,7 +1375,8 @@ const Billing = () => {
                 className="erp-input" 
                 value={formData.reservationClass || '3A'} 
                 onChange={(e) => setFormData({...formData, reservationClass: e.target.value})}
-                disabled={!isEditing}
+                disabled={!isEditing || billingMode === 'generate'}
+                tabIndex={billingMode === 'generate' ? -1 : undefined}
               >
                 <option value="SL">SL</option>
                 <option value="3A">3A</option>
@@ -1408,13 +1391,14 @@ const Billing = () => {
                 className="erp-input" 
                 value={formData.ticketType || 'NORMAL'} 
                 onChange={(e) => setFormData({...formData, ticketType: e.target.value})}
-                disabled={!isEditing}
+                disabled={!isEditing || billingMode === 'generate'}
+                tabIndex={billingMode === 'generate' ? -1 : undefined}
               >
                 <option value="NORMAL">NORMAL</option>
                 <option value="TATKAL">TATKAL</option>
                 <option value="PREMIUM_TATKAL">PREMIUM TATKAL</option>
               </select>
-              <label className="erp-form-label">PNR Number(s)</label>
+              <label className="erp-form-label required">PNR Number(s)</label>
               <input 
                 type="text" 
                 name="pnrNumbers" 
@@ -1436,6 +1420,7 @@ const Billing = () => {
                 value={formData.seatsAlloted || ''}
                 onChange={(e) => setFormData({...formData, seatsAlloted: e.target.value})}
                 disabled={!isEditing}
+                tabIndex={2}
                 placeholder="Enter seats alloted"
               />
               <label className="erp-form-label">Railway Fare</label>
@@ -1446,6 +1431,7 @@ const Billing = () => {
                 value={formData.railwayFare || ''} 
                 onChange={(e) => setFormData({...formData, railwayFare: e.target.value})}
                 disabled={!isEditing}
+                tabIndex={3}
                 placeholder="Enter railway fare"
               />
               <label className="erp-form-label">Service Charges</label>
@@ -1456,6 +1442,7 @@ const Billing = () => {
                 value={formData.serviceCharges || ''} 
                 onChange={(e) => setFormData({...formData, serviceCharges: e.target.value})}
                 disabled={!isEditing}
+                tabIndex={4}
               />
               <label className="erp-form-label">Platform Fees</label>
               <input 
@@ -1465,6 +1452,7 @@ const Billing = () => {
                 value={formData.platformFees || ''} 
                 onChange={(e) => setFormData({...formData, platformFees: e.target.value})}
                 disabled={!isEditing}
+                tabIndex={5}
               />
               <label className="erp-form-label">Station Boy Incentive</label>
               <input 
@@ -1474,6 +1462,7 @@ const Billing = () => {
                 value={formData.stationBoyIncentive || ''} 
                 onChange={(e) => setFormData({...formData, stationBoyIncentive: e.target.value})}
                 disabled={!isEditing}
+                tabIndex={6}
                 placeholder="Enter station boy incentive"
               />
             </div>
@@ -1488,6 +1477,7 @@ const Billing = () => {
                 value={formData.miscCharges || ''} 
                 onChange={(e) => setFormData({...formData, miscCharges: e.target.value})}
                 disabled={!isEditing}
+                tabIndex={7}
               />
               <label className="erp-form-label">Delivery Charges</label>
               <input 
@@ -1497,6 +1487,7 @@ const Billing = () => {
                 value={formData.deliveryCharges || ''} 
                 onChange={(e) => setFormData({...formData, deliveryCharges: e.target.value})}
                 disabled={!isEditing}
+                tabIndex={8}
               />
               <label className="erp-form-label">Cancellation Charges</label>
               <input 
@@ -1506,6 +1497,7 @@ const Billing = () => {
                 value={formData.cancellationCharges || ''} 
                 onChange={(e) => setFormData({...formData, cancellationCharges: e.target.value})}
                 disabled={!isEditing}
+                tabIndex={9}
               />
               <label className="erp-form-label">GST</label>
               <input 
@@ -1515,6 +1507,7 @@ const Billing = () => {
                 value={formData.gst || ''} 
                 onChange={(e) => setFormData({...formData, gst: e.target.value})}
                 disabled={!isEditing}
+                tabIndex={10}
               />
               <label className="erp-form-label">Surcharge</label>
               <input 
@@ -1524,6 +1517,7 @@ const Billing = () => {
                 value={formData.surcharge || ''} 
                 onChange={(e) => setFormData({...formData, surcharge: e.target.value})}
                 disabled={!isEditing}
+                tabIndex={11}
               />
             </div>
             
@@ -1536,6 +1530,7 @@ const Billing = () => {
                 value={formData.gstType || 'EXCLUSIVE'} 
                 onChange={(e) => setFormData({...formData, gstType: e.target.value})}
                 disabled={!isEditing}
+                tabIndex={12}
               >
                 <option value="EXCLUSIVE">EXCLUSIVE</option>
                 <option value="INCLUSIVE">INCLUSIVE</option>
@@ -1549,6 +1544,7 @@ const Billing = () => {
                 value={formData.totalAmount ? Number(formData.totalAmount).toFixed(2) : '0.00'} 
                 readOnly 
                 disabled={true}
+                tabIndex={-1}
               />
               <label className="erp-form-label">Status</label>
               <select 
@@ -1557,6 +1553,7 @@ const Billing = () => {
                 value={formData.status || 'DRAFT'} 
                 onChange={(e) => setFormData({...formData, status: e.target.value})}
                 disabled={!isEditing}
+                tabIndex={13}
               >
                 <option value="DRAFT">Draft</option>
                 <option value="FINAL">Final</option>
@@ -1570,6 +1567,7 @@ const Billing = () => {
                 value={formData.remarks || ''} 
                 onChange={(e) => setFormData({...formData, remarks: e.target.value})}
                 disabled={!isEditing}
+                tabIndex={14}
                 placeholder="Enter special requests or remarks"
                 onKeyDown={(e) => handleEnhancedTabNavigation(e, 'remarks')}
               />
@@ -1990,7 +1988,7 @@ const Billing = () => {
                             onClick={() => handleRecordSelect(bill)}
                           >
                             <td><input type="checkbox" checked={!!isSelected} onChange={() => {}} /></td>
-                            <td>{bill.id || 'N/A'}</td>
+                            <td>{bill.bl_bill_no || bill.billNo || bill.id || 'N/A'}</td>
                             <td>{bill.billDate || 'N/A'}</td>
                             <td>{bill.bookingId || 'N/A'}</td>
                             <td>{bill.subBillNo || 'N/A'}</td>

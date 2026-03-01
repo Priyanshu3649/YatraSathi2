@@ -10,7 +10,7 @@ const BookingTVL = sequelizeTVL.define('bkXbooking', {
     comment: 'Booking ID'
   },
   bk_bkno: {
-    type: DataTypes.STRING(20),
+    type: DataTypes.STRING(30),
     allowNull: false,
     unique: true,
     comment: 'Booking Number'
@@ -91,6 +91,16 @@ const BookingTVL = sequelizeTVL.define('bkXbooking', {
     allowNull: true,
     comment: 'Remarks'
   },
+  bk_pnr: {
+    type: DataTypes.STRING(15),
+    allowNull: true,
+    comment: 'PNR Number'
+  },
+  bk_billed: {
+    type: DataTypes.TINYINT,
+    defaultValue: 0,
+    comment: 'Billing Status'
+  },
   // Audit fields
   edtm: {
     type: DataTypes.DATE,
@@ -114,6 +124,41 @@ const BookingTVL = sequelizeTVL.define('bkXbooking', {
     type: DataTypes.STRING(15),
     allowNull: true,
     comment: 'Modified By'
+  },
+  entered_by: {
+    type: DataTypes.INTEGER,
+    allowNull: true,
+    comment: 'Entered By User ID'
+  },
+  entered_on: {
+    type: DataTypes.DATE,
+    defaultValue: DataTypes.NOW,
+    comment: 'Entered On'
+  },
+  modified_by: {
+    type: DataTypes.INTEGER,
+    allowNull: true,
+    comment: 'Modified By User ID'
+  },
+  modified_on: {
+    type: DataTypes.DATE,
+    allowNull: true,
+    comment: 'Modified On'
+  },
+  closed_by: {
+    type: DataTypes.INTEGER,
+    allowNull: true,
+    comment: 'Closed By User ID'
+  },
+  closed_on: {
+    type: DataTypes.DATE,
+    allowNull: true,
+    comment: 'Closed On'
+  },
+  status: {
+    type: DataTypes.ENUM('OPEN', 'CLOSED', 'CANCELLED'),
+    defaultValue: 'OPEN',
+    comment: 'Record Status'
   }
 }, {
   tableName: 'bkXbooking',

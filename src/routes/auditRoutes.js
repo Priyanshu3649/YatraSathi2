@@ -1,8 +1,8 @@
 const express = require('express');
 const {
   getAuditLogs,
-  getUserAuditLogs,
-  clearAuditLogs
+  getAuditLogById,
+  getAuditSummary
 } = require('../controllers/auditController');
 const authMiddleware = require('../middleware/authMiddleware');
 
@@ -19,21 +19,20 @@ router.get('/', async (req, res, next) => {
   next();
 }, getAuditLogs);
 
-router.delete('/clear', async (req, res, next) => {
+// Get audit log by ID
+router.get('/:id', async (req, res, next) => {
   if (req.user.userType !== 'admin') {
     return res.status(403).json({ message: 'Access denied. Admin access required.' });
   }
   next();
-}, clearAuditLogs);
+}, getAuditLogById);
 
-// User routes
-router.get('/my-logs', getUserAuditLogs);
-
-router.get('/user/:userId', async (req, res, next) => {
+// Get audit summary statistics
+router.get('/summary/stats', async (req, res, next) => {
   if (req.user.userType !== 'admin') {
     return res.status(403).json({ message: 'Access denied. Admin access required.' });
   }
   next();
-}, getUserAuditLogs);
+}, getAuditSummary);
 
 module.exports = router;

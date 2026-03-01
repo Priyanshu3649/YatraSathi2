@@ -9,7 +9,7 @@ const BillingMaster = sequelizeTVL.define('billingMaster', {
     allowNull: false
   },
   bl_entry_no: {
-    type: DataTypes.STRING(20),
+    type: DataTypes.STRING(30),
     allowNull: false
   },
   bl_bill_no: {
@@ -135,10 +135,107 @@ const BillingMaster = sequelizeTVL.define('billingMaster', {
   bl_created_at: {
     type: DataTypes.DATE,
     defaultValue: DataTypes.NOW
+  },
+  // Standard audit fields
+  entered_by: {
+    type: DataTypes.INTEGER,
+    allowNull: true,
+    comment: 'User ID who created the record'
+  },
+  entered_on: {
+    type: DataTypes.DATE,
+    defaultValue: DataTypes.NOW,
+    comment: 'Timestamp when record was created'
+  },
+  modified_by: {
+    type: DataTypes.INTEGER,
+    allowNull: true,
+    comment: 'User ID who last modified the record'
+  },
+  modified_on: {
+    type: DataTypes.DATE,
+    allowNull: true,
+    comment: 'Timestamp when record was last modified'
+  },
+  closed_by: {
+    type: DataTypes.INTEGER,
+    allowNull: true,
+    comment: 'User ID who closed the record'
+  },
+  closed_on: {
+    type: DataTypes.DATE,
+    allowNull: true,
+    comment: 'Timestamp when record was closed'
+  },
+  status: {
+    type: DataTypes.ENUM('OPEN', 'CLOSED', 'CANCELLED'),
+    defaultValue: 'OPEN',
+    comment: 'Record status'
+  },
+  bl_railway_cancellation_charge: {
+    type: DataTypes.DECIMAL(10, 2),
+    defaultValue: 0
+  },
+  bl_status: {
+    type: DataTypes.ENUM('CONFIRMED', 'CANCELLED', 'PENDING', 'PAID'),
+    defaultValue: 'CONFIRMED',
+    comment: 'Billing status'
+  },
+  bl_modified_at: {
+    type: DataTypes.DATE,
+    allowNull: true
+  },
+  bl_agent_cancellation_charge: {
+    type: DataTypes.DECIMAL(10, 2),
+    defaultValue: 0
+  },
+  bl_cancellation_remarks: {
+    type: DataTypes.TEXT,
+    allowNull: true
+  },
+  bl_bill_date: {
+    type: DataTypes.DATEONLY,
+    allowNull: true
+  },
+  bl_booking_no: {
+    type: DataTypes.STRING(30),
+    allowNull: true
   }
 }, {
   tableName: 'blXbilling',
-  timestamps: false
+  timestamps: false,
+  hooks: {
+    beforeCreate: (bill, options) => {
+      // Auto-populate audit fields on create if userId is provided
+      if (options.userId) {
+        bill.entered_by = options.userId;
+        bill.entered_on = new Date();
+        bill.bl_created_by = options.userId;
+        bill.bl_created_at = new Date();
+        if (!bill.status) bill.status = 'OPEN';
+      }
+    },
+    beforeUpdate: (bill, options) => {
+      // Auto-populate audit fields on update if userId is provided
+      if (options.userId) {
+        bill.modified_by = options.userId;
+        bill.modified_on = new Date();
+        bill.bl_modified_by = options.userId;
+        bill.bl_modified_at = new Date();
+      }
+      
+      // If status is being changed to CLOSED or CANCELLED, set closed_by/closed_on
+      if (bill.changed('status')) {
+        const newStatus = bill.getDataValue('status');
+        if (newStatus && ['CLOSED', 'CANCELLED'].includes(newStatus.toUpperCase())) {
+          if (options.userId && !bill.closed_by) {
+            bill.closed_by = options.userId;
+            bill.closed_on = new Date();
+          }
+        }
+      }
+    }
+  }
 });
 
 // Static method to generate billing data from booking

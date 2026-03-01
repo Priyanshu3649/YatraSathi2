@@ -77,3 +77,4 @@ const YearEndClosing = sequelize.define('yeYearEndClosing', {
 
 module.exports = YearEndClosing;
 
+

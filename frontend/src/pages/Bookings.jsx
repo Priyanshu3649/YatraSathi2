@@ -592,7 +592,7 @@ const Bookings = () => {
       customerName: record.customerName || record.bk_customername || '',
       phoneNumber: record.phoneNumber || record.bk_phonenumber || record.bk_phone || '',
       internalCustomerId: record.customerId || record.bk_customerid || record.cu_usid || '',
-      totalPassengers: record.totalPassengers || 0,
+      totalPassengers: record.totalPassengers || record.bk_pax || record.bk_totalpass || 0,
       fromStation: record.fromStation?.st_stname || record.bk_fromstation || record.bk_fromst || '',
       toStation: record.toStation?.st_stname || record.bk_tostation || record.bk_tost || '',
       travelDate: record.bk_trvldt ? new Date(record.bk_trvldt).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
@@ -1119,7 +1119,7 @@ const Bookings = () => {
               const phone = record.phoneNumber || record.bk_phonenumber || record.bk_phone || '';
               return phone.toLowerCase().includes(searchValue);
             case 'pax':
-              const pax = record.totalPassengers || record.bk_totalpass || 0;
+              const pax = record.totalPassengers || record.bk_pax || record.bk_totalpass || 0;
               return pax.toString().includes(searchValue);
             case 'from':
               const fromStation = record.fromStation?.st_stname || record.bk_fromstation || record.bk_fromst || '';
@@ -1288,16 +1288,21 @@ const Bookings = () => {
   
     if (window.confirm('Are you sure you want to delete this record?')) {
       try {
-        await bookingAPI.deleteBooking(selectedBooking.bk_bkid);
+        const response = await bookingAPI.deleteBooking(selectedBooking.bk_bkid);
+        console.log('Delete response:', response);
         // PERFORMANCE OPTIMIZATION: Update local state instead of refetching all bookings
         setBookings(prev => prev.filter(booking => booking.bk_bkid !== selectedBooking.bk_bkid));
         setFilteredBookings(prev => prev.filter(booking => booking.bk_bkid !== selectedBooking.bk_bkid));
         setSelectedBooking(null); // Clear selection after deletion
+        announceToScreenReader('Booking deleted successfully');
       } catch (error) {
+        console.error('Delete booking error:', error);
         setError(error.message || 'Failed to delete booking');
+        // Refresh bookings to ensure UI is in sync with server
+        fetchBookings();
       }
     }
-  }, [selectedBooking, fetchBookings]);
+  }, [selectedBooking, fetchBookings, announceToScreenReader]);
 
   const removePassenger = useCallback((id) => {
     if (passengerList.length <= 1) {
@@ -2203,7 +2208,7 @@ const Bookings = () => {
                               }} 
                               title="View Passenger Details"
                             >
-                              {isSelected ? (passengerList.filter(p => p.name.trim() !== '').length || record.totalPassengers || 0) : (record.totalPassengers || 0)}
+                              {isSelected ? (passengerList.filter(p => p.name.trim() !== '').length || record.totalPassengers || record.bk_pax || record.bk_totalpass || 0) : (record.totalPassengers || record.bk_pax || record.bk_totalpass || 0)}
                             </td>
                             <td>{record.fromStation?.st_stname || record.bk_fromstation || record.bk_fromst || 'N/A'}</td>
                             <td>{record.toStation?.st_stname || record.bk_tostation || record.bk_tost || 'N/A'}</td>

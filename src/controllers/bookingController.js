@@ -53,8 +53,13 @@ const createBooking = async (req, res) => {
     
     console.timeEnd("BOOKING_VALIDATE_INPUT");
     
-    // Generate booking number
-    const bookingNumber = `BK${Date.now()}${Math.floor(Math.random() * 1000)}`;
+    // Generate booking number in format: BK-YYMMDD-NNNN (max 15 chars)
+    const now = new Date();
+    const year = now.getFullYear().toString().slice(-2);
+    const month = (now.getMonth() + 1).toString().padStart(2, '0');
+    const day = now.getDate().toString().padStart(2, '0');
+    const random = Math.floor(Math.random() * 10000).toString().padStart(4, '0');
+    const bookingNumber = `BK-${year}${month}${day}-${random}`;
     
     // Disable foreign key checks for this transaction to allow any station input
     await sequelize.query('SET FOREIGN_KEY_CHECKS = 0');
@@ -177,8 +182,6 @@ const createBooking = async (req, res) => {
         console.timeEnd("BOOKING_CREATE_PASSENGERS");
       }
       
-      console.timeEnd("BOOKING_TRANSACTION_START");
-      
       // Commit the transaction
       console.time("BOOKING_COMMIT_TRANSACTION");
       await transaction.commit();
@@ -205,9 +208,24 @@ const createBooking = async (req, res) => {
     }
   } catch (error) {
     console.error('Error creating booking with phone-based customer:', error);
+    console.error('Error stack:', error.stack);
+    console.error('Error name:', error.name);
+    
+    // Log more details for debugging
+    if (error.sql) {
+      console.error('SQL Error:', error.sql);
+    }
+    if (error.parent) {
+      console.error('Parent Error:', error.parent);
+    }
+    
     res.status(500).json({ 
       success: false, 
-      error: { code: 'SERVER_ERROR', message: error.message } 
+      error: { 
+        code: 'SERVER_ERROR', 
+        message: error.message,
+        details: process.env.NODE_ENV === 'development' ? error.stack : undefined
+      } 
     });
   }
   console.timeEnd("BOOKING_SAVE_TOTAL");
@@ -591,7 +609,7 @@ const deleteBooking = async (req, res) => {
     }
     
     // Use transaction to ensure all deletions succeed or fail together
-    const transaction = await sequelize.transaction();
+    const transaction = await sequelizeTVL.transaction();
     
     try {
       // Get the models

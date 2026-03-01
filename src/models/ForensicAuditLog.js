@@ -79,6 +79,12 @@ const ForensicAuditLog = sequelizeTVL.define('forensicAuditLog', {
   paranoid: false
 });
 
+// Add indexes for performance
+ForensicAuditLog.addIndex(['entityName', 'entityId']);
+ForensicAuditLog.addIndex(['performedOn']);
+ForensicAuditLog.addIndex(['performedBy']);
+ForensicAuditLog.addIndex(['actionType']);
+
 // Prevent any updates or deletes at model level
 ForensicAuditLog.addHook('beforeUpdate', () => {
   throw new Error('Forensic audit logs cannot be modified');
