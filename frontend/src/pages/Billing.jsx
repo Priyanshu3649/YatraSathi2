@@ -174,7 +174,7 @@ const Billing = () => {
     'gst',
     'surcharge',
     'gstType',
-    'totalAmount',
+    'status',
     'remarks'
   ], []);
   
@@ -1044,11 +1044,6 @@ const Billing = () => {
   const handleEnhancedTabNavigation = useCallback((event, currentFieldName) => {
     if (event.key !== 'Tab') return false;
     
-    // Skip expensive focus management in production
-    if (process.env.NODE_ENV === 'production') {
-      return false;
-    }
-    
     event.preventDefault();
     event.stopPropagation();
     
@@ -1059,13 +1054,38 @@ const Billing = () => {
         return true;
       }
       
-      // Default tab navigation
+      // Find current field index in the field order
+      const currentIndex = fieldOrder.indexOf(currentFieldName);
+      if (currentIndex === -1) {
+        return false;
+      }
+      
+      // Calculate next or previous index based on shift key
+      let nextIndex;
+      if (event.shiftKey) {
+        // Navigate backwards
+        nextIndex = currentIndex > 0 ? currentIndex - 1 : fieldOrder.length - 1;
+      } else {
+        // Navigate forwards
+        nextIndex = currentIndex < fieldOrder.length - 1 ? currentIndex + 1 : 0;
+      }
+      
+      // Find the next field name
+      const nextFieldName = fieldOrder[nextIndex];
+      
+      // Focus the next field
+      const nextField = document.querySelector(`input[name="${nextFieldName}"], select[name="${nextFieldName}"]`);
+      if (nextField && nextField.offsetParent !== null) { // Check if field is visible
+        nextField.focus();
+        return true;
+      }
+      
       return false;
     } catch (error) {
       console.warn('Tab navigation failed:', error.message);
       return false;
     }
-  }, [isEditing]);
+  }, [isEditing, fieldOrder]);
 
   // Handle navigation
   const handleNavigation = (direction) => {
@@ -1294,7 +1314,7 @@ const Billing = () => {
                 onChange={(e) => setFormData({...formData, customerName: e.target.value})}
                 disabled={!isEditing}
                 readOnly={billingMode === 'generate'}
-                tabIndex={billingMode === 'generate' ? -1 : undefined}
+                tabIndex={billingMode === 'generate' ? -1 : 0}
                 placeholder="Enter customer name"
               />
               <label className="erp-form-label required">Phone Number</label>
@@ -1306,7 +1326,7 @@ const Billing = () => {
                 onChange={(e) => setFormData({...formData, phoneNumber: e.target.value})}
                 disabled={!isEditing}
                 readOnly={billingMode === 'generate'}
-                tabIndex={billingMode === 'generate' ? -1 : undefined}
+                tabIndex={billingMode === 'generate' ? -1 : 1}
                 placeholder="Enter phone number"
               />
               <label className="erp-form-label">Station Boy Name</label>
@@ -1317,8 +1337,9 @@ const Billing = () => {
                 value={formData.stationBoy || ''}
                 onChange={(e) => setFormData({...formData, stationBoy: e.target.value})}
                 disabled={!isEditing}
-                tabIndex={1}
+                tabIndex={0}
                 placeholder="Enter station boy name"
+                onKeyDown={(e) => handleEnhancedTabNavigation(e, 'stationBoy')}
               />
               <label className="erp-form-label required">From Station</label>
               <input 
@@ -1329,7 +1350,7 @@ const Billing = () => {
                 onChange={(e) => setFormData({...formData, fromStation: e.target.value})}
                 disabled={!isEditing}
                 readOnly={billingMode === 'generate'}
-                tabIndex={billingMode === 'generate' ? -1 : undefined}
+                tabIndex={billingMode === 'generate' ? -1 : 3}
                 placeholder="Enter from station"
               />
               <label className="erp-form-label required">To Station</label>
@@ -1341,7 +1362,7 @@ const Billing = () => {
                 onChange={(e) => setFormData({...formData, toStation: e.target.value})}
                 disabled={!isEditing}
                 readOnly={billingMode === 'generate'}
-                tabIndex={billingMode === 'generate' ? -1 : undefined}
+                tabIndex={billingMode === 'generate' ? -1 : 4}
                 placeholder="Enter to station"
               />
             </div>
@@ -1357,7 +1378,7 @@ const Billing = () => {
                 onChange={(e) => setFormData({...formData, journeyDate: e.target.value})}
                 disabled={!isEditing}
                 readOnly={billingMode === 'generate'}
-                tabIndex={billingMode === 'generate' ? -1 : undefined}
+                tabIndex={billingMode === 'generate' ? -1 : 5}
               />
               <label className="erp-form-label required">Train Number</label>
               <input 
@@ -1367,7 +1388,9 @@ const Billing = () => {
                 value={formData.trainNumber || ''} 
                 onChange={(e) => setFormData({...formData, trainNumber: e.target.value})}
                 disabled={!isEditing}
+                tabIndex={1}
                 placeholder="Enter train number"
+                onKeyDown={(e) => handleEnhancedTabNavigation(e, 'trainNumber')}
               />
               <label className="erp-form-label required">Reservation Class</label>
               <select 
@@ -1376,7 +1399,7 @@ const Billing = () => {
                 value={formData.reservationClass || '3A'} 
                 onChange={(e) => setFormData({...formData, reservationClass: e.target.value})}
                 disabled={!isEditing || billingMode === 'generate'}
-                tabIndex={billingMode === 'generate' ? -1 : undefined}
+                tabIndex={billingMode === 'generate' ? -1 : 6}
               >
                 <option value="SL">SL</option>
                 <option value="3A">3A</option>
@@ -1392,7 +1415,7 @@ const Billing = () => {
                 value={formData.ticketType || 'NORMAL'} 
                 onChange={(e) => setFormData({...formData, ticketType: e.target.value})}
                 disabled={!isEditing || billingMode === 'generate'}
-                tabIndex={billingMode === 'generate' ? -1 : undefined}
+                tabIndex={billingMode === 'generate' ? -1 : 7}
               >
                 <option value="NORMAL">NORMAL</option>
                 <option value="TATKAL">TATKAL</option>
@@ -1406,7 +1429,9 @@ const Billing = () => {
                 value={formData.pnrNumbers || ''} 
                 onChange={(e) => setFormData({...formData, pnrNumbers: e.target.value})}
                 disabled={!isEditing}
+                tabIndex={2}
                 placeholder="Enter PNR numbers separated by commas"
+                onKeyDown={(e) => handleEnhancedTabNavigation(e, 'pnrNumbers')}
               />
             </div>
             
@@ -1420,8 +1445,9 @@ const Billing = () => {
                 value={formData.seatsAlloted || ''}
                 onChange={(e) => setFormData({...formData, seatsAlloted: e.target.value})}
                 disabled={!isEditing}
-                tabIndex={2}
+                tabIndex={3}
                 placeholder="Enter seats alloted"
+                onKeyDown={(e) => handleEnhancedTabNavigation(e, 'seatsAlloted')}
               />
               <label className="erp-form-label">Railway Fare</label>
               <input 
@@ -1431,8 +1457,9 @@ const Billing = () => {
                 value={formData.railwayFare || ''} 
                 onChange={(e) => setFormData({...formData, railwayFare: e.target.value})}
                 disabled={!isEditing}
-                tabIndex={3}
+                tabIndex={4}
                 placeholder="Enter railway fare"
+                onKeyDown={(e) => handleEnhancedTabNavigation(e, 'railwayFare')}
               />
               <label className="erp-form-label">Service Charges</label>
               <input 
@@ -1442,7 +1469,8 @@ const Billing = () => {
                 value={formData.serviceCharges || ''} 
                 onChange={(e) => setFormData({...formData, serviceCharges: e.target.value})}
                 disabled={!isEditing}
-                tabIndex={4}
+                tabIndex={5}
+                onKeyDown={(e) => handleEnhancedTabNavigation(e, 'serviceCharges')}
               />
               <label className="erp-form-label">Platform Fees</label>
               <input 
@@ -1452,7 +1480,8 @@ const Billing = () => {
                 value={formData.platformFees || ''} 
                 onChange={(e) => setFormData({...formData, platformFees: e.target.value})}
                 disabled={!isEditing}
-                tabIndex={5}
+                tabIndex={6}
+                onKeyDown={(e) => handleEnhancedTabNavigation(e, 'platformFees')}
               />
               <label className="erp-form-label">Station Boy Incentive</label>
               <input 
@@ -1462,8 +1491,9 @@ const Billing = () => {
                 value={formData.stationBoyIncentive || ''} 
                 onChange={(e) => setFormData({...formData, stationBoyIncentive: e.target.value})}
                 disabled={!isEditing}
-                tabIndex={6}
+                tabIndex={7}
                 placeholder="Enter station boy incentive"
+                onKeyDown={(e) => handleEnhancedTabNavigation(e, 'stationBoyIncentive')}
               />
             </div>
             
@@ -1477,7 +1507,8 @@ const Billing = () => {
                 value={formData.miscCharges || ''} 
                 onChange={(e) => setFormData({...formData, miscCharges: e.target.value})}
                 disabled={!isEditing}
-                tabIndex={7}
+                tabIndex={8}
+                onKeyDown={(e) => handleEnhancedTabNavigation(e, 'miscCharges')}
               />
               <label className="erp-form-label">Delivery Charges</label>
               <input 
@@ -1487,7 +1518,8 @@ const Billing = () => {
                 value={formData.deliveryCharges || ''} 
                 onChange={(e) => setFormData({...formData, deliveryCharges: e.target.value})}
                 disabled={!isEditing}
-                tabIndex={8}
+                tabIndex={9}
+                onKeyDown={(e) => handleEnhancedTabNavigation(e, 'deliveryCharges')}
               />
               <label className="erp-form-label">Cancellation Charges</label>
               <input 
@@ -1497,7 +1529,8 @@ const Billing = () => {
                 value={formData.cancellationCharges || ''} 
                 onChange={(e) => setFormData({...formData, cancellationCharges: e.target.value})}
                 disabled={!isEditing}
-                tabIndex={9}
+                tabIndex={10}
+                onKeyDown={(e) => handleEnhancedTabNavigation(e, 'cancellationCharges')}
               />
               <label className="erp-form-label">GST</label>
               <input 
@@ -1507,7 +1540,8 @@ const Billing = () => {
                 value={formData.gst || ''} 
                 onChange={(e) => setFormData({...formData, gst: e.target.value})}
                 disabled={!isEditing}
-                tabIndex={10}
+                tabIndex={11}
+                onKeyDown={(e) => handleEnhancedTabNavigation(e, 'gst')}
               />
               <label className="erp-form-label">Surcharge</label>
               <input 
@@ -1517,7 +1551,8 @@ const Billing = () => {
                 value={formData.surcharge || ''} 
                 onChange={(e) => setFormData({...formData, surcharge: e.target.value})}
                 disabled={!isEditing}
-                tabIndex={11}
+                tabIndex={12}
+                onKeyDown={(e) => handleEnhancedTabNavigation(e, 'surcharge')}
               />
             </div>
             
@@ -1530,7 +1565,8 @@ const Billing = () => {
                 value={formData.gstType || 'EXCLUSIVE'} 
                 onChange={(e) => setFormData({...formData, gstType: e.target.value})}
                 disabled={!isEditing}
-                tabIndex={12}
+                tabIndex={13}
+                onKeyDown={(e) => handleEnhancedTabNavigation(e, 'gstType')}
               >
                 <option value="EXCLUSIVE">EXCLUSIVE</option>
                 <option value="INCLUSIVE">INCLUSIVE</option>
@@ -1553,7 +1589,8 @@ const Billing = () => {
                 value={formData.status || 'DRAFT'} 
                 onChange={(e) => setFormData({...formData, status: e.target.value})}
                 disabled={!isEditing}
-                tabIndex={13}
+                tabIndex={14}
+                onKeyDown={(e) => handleEnhancedTabNavigation(e, 'status')}
               >
                 <option value="DRAFT">Draft</option>
                 <option value="FINAL">Final</option>
@@ -1567,7 +1604,7 @@ const Billing = () => {
                 value={formData.remarks || ''} 
                 onChange={(e) => setFormData({...formData, remarks: e.target.value})}
                 disabled={!isEditing}
-                tabIndex={14}
+                tabIndex={15}
                 placeholder="Enter special requests or remarks"
                 onKeyDown={(e) => handleEnhancedTabNavigation(e, 'remarks')}
               />

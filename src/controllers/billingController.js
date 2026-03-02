@@ -662,15 +662,18 @@ const deleteBill = async (req, res) => {
       if (booking && booking.bk_status === 'CONFIRMED') {
         const oldStatus = booking.bk_status;
         
-        // Update booking status to PENDING
+        // Update booking status to PENDING and reset billed flag
         await booking.update({
           bk_status: 'PENDING',
-          mby: req.user.us_usid
+          bk_billed: 0,
+          mby: req.user.us_usid,
+          mdtm: new Date()
         }, { transaction });
         
         // Log the automatic status change for audit purposes
-        console.log(`[BILLING DELETION AUDIT] Bill ${bill.bl_id} deleted by user ${req.user.us_usid}. ` +
-                    `Associated booking ${bookingId} status automatically changed from ${oldStatus} to PENDING.`);
+        console.log(`[BILLING DELETION AUDIT] Bill ${bill.bl_bill_no} (ID: ${bill.bl_id}) deleted by user ${req.user.us_usid}. ` +
+                    `Associated booking ${bookingId} status automatically changed from ${oldStatus} to PENDING. ` +
+                    `Booking billed flag reset to 0.`);
       }
     }
     

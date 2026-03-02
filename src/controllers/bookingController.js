@@ -1,7 +1,7 @@
 const { BookingTVL, UserTVL, CustomerTVL: Customer, EmployeeTVL: Employee, StationTVL: Station } = require('../models');
 const { Passenger } = require('../models'); // Import the Passenger model
 const { Sequelize } = require('sequelize');
-const { sequelize } = require('../models/baseModel');
+const { sequelizeTVL: sequelize } = require('../../config/db'); // Use sequelizeTVL for TVL database
 
 // Create a new booking request
 const createBooking = async (req, res) => {
@@ -127,6 +127,14 @@ const createBooking = async (req, res) => {
         }
       }
       
+      // Validate status for creation (should not be INACTIVE)
+      if (status === 'INACTIVE') {
+        return res.status(400).json({ 
+          success: false, 
+          error: { code: 'VALIDATION_ERROR', message: 'Cannot create booking with INACTIVE status' } 
+        });
+      }
+          
       // Create new booking with resolved customer ID
       console.time("BOOKING_CREATE_RECORD");
       const booking = await BookingTVL.create({
@@ -235,7 +243,10 @@ const createBooking = async (req, res) => {
 const getCustomerBookings = async (req, res) => {
   try {
     const bookings = await BookingTVL.findAll({ 
-      where: { bk_usid: req.user.us_usid },
+      where: { 
+        bk_usid: req.user.us_usid,
+        bk_status: { [Sequelize.Op.ne]: 'INACTIVE' } // Exclude inactive bookings
+      },
       order: [['bk_reqdt', 'DESC']]
     });
     
@@ -318,14 +329,20 @@ const getAllBookings = async (req, res) => {
     let bookings;
     
     if (isAuthorizedEmployee) {
-      // For admin and all employees, return all bookings
+      // For admin and all employees, return all active bookings
       bookings = await BookingTVL.findAll({
+        where: { 
+          bk_status: { [Sequelize.Op.ne]: 'INACTIVE' } // Exclude inactive bookings
+        },
         order: [['edtm', 'DESC']] // Use edtm for consistency
       });
     } else {
-      // For other users (shouldn't reach here if using employee endpoint), return their bookings
+      // For other users (shouldn't reach here if using employee endpoint), return their active bookings
       bookings = await BookingTVL.findAll({
-        where: { bk_usid: req.user.us_usid },
+        where: { 
+          bk_usid: req.user.us_usid,
+          bk_status: { [Sequelize.Op.ne]: 'INACTIVE' } // Exclude inactive bookings
+        },
         order: [['edtm', 'DESC']]
       });
     }
@@ -397,7 +414,12 @@ const getAllBookings = async (req, res) => {
 // Get booking by ID
 const getBookingById = async (req, res) => {
   try {
-    const booking = await BookingTVL.findByPk(req.params.id);
+    const booking = await BookingTVL.findOne({
+      where: {
+        bk_bkid: req.params.id,
+        bk_status: { [Sequelize.Op.ne]: 'INACTIVE' } // Exclude inactive bookings
+      }
+    });
     
     // Check if booking exists
     if (!booking) {
@@ -443,10 +465,15 @@ const getBookingById = async (req, res) => {
 // Update booking
 const updateBooking = async (req, res) => {
   try {
-    const booking = await BookingTVL.findByPk(req.params.id);
+    const booking = await BookingTVL.findOne({
+      where: {
+        bk_bkid: req.params.id,
+        bk_status: { [Sequelize.Op.ne]: 'INACTIVE' } // Exclude inactive bookings
+      }
+    });
     
     if (!booking) {
-      return res.status(404).json({ message: 'Booking not found' });
+      return res.status(404).json({ message: 'Booking not found or is inactive' });
     }
     
     // Check if user has permission to update this booking
@@ -555,10 +582,15 @@ const updateBooking = async (req, res) => {
 // Cancel booking
 const cancelBooking = async (req, res) => {
   try {
-    const booking = await BookingTVL.findByPk(req.params.id);
+    const booking = await BookingTVL.findOne({
+      where: {
+        bk_bkid: req.params.id,
+        bk_status: { [Sequelize.Op.ne]: 'INACTIVE' } // Exclude inactive bookings
+      }
+    });
     
     if (!booking) {
-      return res.status(404).json({ message: 'Booking not found' });
+      return res.status(404).json({ message: 'Booking not found or is inactive' });
     }
     
     // Check if user has permission to cancel this booking
@@ -588,7 +620,7 @@ const cancelBooking = async (req, res) => {
   }
 };
 
-// Delete booking
+// Soft delete booking - Mark as inactive instead of hard deletion
 const deleteBooking = async (req, res) => {
   try {
     const booking = await BookingTVL.findByPk(req.params.id);
@@ -608,106 +640,29 @@ const deleteBooking = async (req, res) => {
       });
     }
     
-    // Use transaction to ensure all deletions succeed or fail together
-    const transaction = await sequelizeTVL.transaction();
+    // Use transaction to ensure all operations succeed or fail together
+    const transaction = await sequelize.transaction();
     
     try {
-      // Get the models
-      const models = require('../models');
-      const PassengerTVL = models.PassengerTVL;
-      const Account = require('../models/AccountTVL');
-      const Pnr = require('../models/Pnr');
-      const Payment = require('../models/Payment');
-      const PaymentAlloc = require('../models/PaymentAlloc');
-      const Ledger = require('../models/Ledger');
+      // Mark the booking as inactive instead of deleting it
+      await booking.update({ 
+        bk_status: 'INACTIVE',
+        mby: req.user.us_usid,
+        mdtm: new Date()
+      }, { transaction });
       
-      // 1. Delete related PNR records and their dependencies
-      const pnrs = await Pnr.findAll({ 
-        where: { pn_bkid: booking.bk_bkid },
-        transaction
-      });
-      
-      for (const pnr of pnrs) {
-        // Delete PNR-related ledger entries
-        await Ledger.destroy({ 
-          where: { lg_pnid: pnr.pn_pnid }, 
-          transaction 
-        });
-        
-        // Delete PNR-related payment allocations
-        await PaymentAlloc.destroy({ 
-          where: { pa_pnid: pnr.pn_pnid }, 
-          transaction 
-        });
-      }
-      
-      // Delete PNR records
-      await Pnr.destroy({ 
-        where: { pn_bkid: booking.bk_bkid }, 
-        transaction 
-      });
-      
-      // 2. Delete related payment records and their dependencies
-      const payments = await Payment.findAll({ 
-        where: { pt_bkid: booking.bk_bkid },
-        transaction
-      });
-      
-      for (const payment of payments) {
-        // Delete payment-related ledger entries
-        await Ledger.destroy({ 
-          where: { lg_ptid: payment.pt_ptid }, 
-          transaction 
-        });
-        
-        // Delete payment-related allocations
-        await PaymentAlloc.destroy({ 
-          where: { pa_ptid: payment.pt_ptid }, 
-          transaction 
-        });
-      }
-      
-      // Delete payment records
-      await Payment.destroy({ 
-        where: { pt_bkid: booking.bk_bkid }, 
-        transaction 
-      });
-      
-      // 3. Delete related passenger records using Sequelize model
-      if (PassengerTVL) {
-        await PassengerTVL.destroy({ 
-          where: { ps_bkid: booking.bk_bkid }, 
-          transaction 
-        });
-      }
-      
-      // 4. Also delete from custom passenger table if it exists (hard delete)
-      try {
-        const { mysqlPool } = require('../../config/db');
-        await mysqlPool.execute(
-          'DELETE FROM psXpassenger WHERE ps_bkid = ?', 
-          [booking.bk_bkid]
-        );
-      } catch (customPassengerError) {
-        console.warn('Custom passenger deletion failed (this may be OK):', customPassengerError.message);
-      }
-      
-      // 5. Delete related records in the account table that reference this booking
-      try {
-        await Account.destroy({ where: { ac_bkid: booking.bk_bkid }, transaction });
-      } catch (accountError) {
-        console.warn('Account deletion failed (this may be OK):', accountError.message);
-      }
-      
-      // 6. Finally delete the booking
-      await booking.destroy({ transaction });
+      // Log the soft deletion for audit purposes
+      console.log(`[BOOKING SOFT DELETE AUDIT] Booking ${booking.bk_bkid} marked as INACTIVE by user ${req.user.us_usid}.`);
       
       // Commit the transaction
       await transaction.commit();
       
       res.json({ 
         success: true, 
-        data: { message: 'Booking and all related records deleted successfully' } 
+        data: { 
+          message: 'Booking marked as inactive successfully',
+          bookingId: booking.bk_bkid
+        } 
       });
     } catch (transactionError) {
       // Rollback the transaction on error
@@ -715,18 +670,7 @@ const deleteBooking = async (req, res) => {
       throw transactionError;
     }
   } catch (error) {
-    console.error('Delete booking error:', error);
-    
-    // Handle foreign key constraint errors
-    if (error.name === 'SequelizeForeignKeyConstraintError') {
-      return res.status(400).json({ 
-        success: false,
-        error: { 
-          code: 'FOREIGN_KEY_CONSTRAINT', 
-          message: 'Cannot delete booking. Related records exist in other tables.' 
-        } 
-      });
-    }
+    console.error('Soft delete booking error:', error);
     
     res.status(500).json({ 
       success: false, 
@@ -778,6 +722,11 @@ const approveBooking = async (req, res) => {
       return res.status(403).json({ message: 'Access denied. Admin or assigned agent only.' });
     }
     
+    // Check if booking is inactive before approving
+    if (booking.bk_status === 'INACTIVE') {
+      return res.status(400).json({ message: 'Cannot approve an inactive booking' });
+    }
+    
     // Update booking status to PENDING
     await booking.update({ 
       bk_status: 'PENDING',
@@ -804,6 +753,11 @@ const confirmBooking = async (req, res) => {
     // Only admin or assigned employee can confirm booking
     if (req.user.us_usertype !== 'admin' && booking.bk_agent !== req.user.us_usid) {
       return res.status(403).json({ message: 'Access denied. Admin or assigned agent only.' });
+    }
+    
+    // Check if booking is inactive before confirming
+    if (booking.bk_status === 'INACTIVE') {
+      return res.status(400).json({ message: 'Cannot confirm an inactive booking' });
     }
     
     // Update booking status to CONFIRMED
@@ -884,7 +838,12 @@ const getBookingsByStatus = async (req, res) => {
   try {
     const { status } = req.params;
     
-    let whereConditions = { bk_status: status };
+    let whereConditions = { 
+      [Sequelize.Op.and]: [
+        { bk_status: status },
+        { bk_status: { [Sequelize.Op.ne]: 'INACTIVE' } } // Exclude inactive bookings
+      ]
+    };
     
     // Apply user-specific filters
     if (req.user.us_usertype === 'employee') {
@@ -921,7 +880,11 @@ const getBookingPassengers = async (req, res) => {
     const bookingId = req.params.bookingId || req.params.id;
     
     // Check if user has permission to view this booking's passengers
-    const booking = await BookingTVL.findByPk(bookingId, {
+    const booking = await BookingTVL.findOne({
+      where: {
+        bk_bkid: bookingId,
+        bk_status: { [Sequelize.Op.ne]: 'INACTIVE' } // Exclude inactive bookings
+      },
       attributes: ['bk_bkid', 'bk_usid', 'bk_agent']  // Only needed fields
     });
     
@@ -1025,7 +988,9 @@ const searchBookings = async (req, res) => {
     } = req.query;
 
     // Build query conditions
-    let whereConditions = {};
+    let whereConditions = {
+      bk_status: { [Sequelize.Op.ne]: 'INACTIVE' } // Exclude inactive bookings by default
+    };
 
     // Status filter
     if (status) {
@@ -1120,7 +1085,10 @@ const getAssignedBookings = async (req, res) => {
     
     // Get bookings assigned to this employee
     const bookings = await BookingTVL.findAll({
-      where: { bk_agent: req.user.us_usid },
+      where: { 
+        bk_agent: req.user.us_usid,
+        bk_status: { [Sequelize.Op.ne]: 'INACTIVE' } // Exclude inactive bookings
+      },
       order: [['edtm', 'DESC']]
     });
     
@@ -1195,7 +1163,7 @@ const updateBookingStatus = async (req, res) => {
     const { status } = req.body;
     
     // Validate status
-    const validStatuses = ['DRAFT', 'PENDING', 'CONFIRMED', 'CANCELLED', 'COMPLETED'];
+    const validStatuses = ['DRAFT', 'PENDING', 'CONFIRMED', 'CANCELLED', 'COMPLETED', 'INACTIVE'];
     if (!validStatuses.includes(status)) {
       return res.status(400).json({ 
         success: false, 
@@ -1204,11 +1172,16 @@ const updateBookingStatus = async (req, res) => {
     }
     
     // Find booking
-    const booking = await BookingTVL.findByPk(bookingId);
+    const booking = await BookingTVL.findOne({
+      where: {
+        bk_bkid: bookingId,
+        bk_status: { [Sequelize.Op.ne]: 'INACTIVE' } // Don't allow updates to inactive bookings
+      }
+    });
     if (!booking) {
       return res.status(404).json({ 
         success: false, 
-        error: { code: 'NOT_FOUND', message: 'Booking not found' } 
+        error: { code: 'NOT_FOUND', message: 'Booking not found or is inactive' } 
       });
     }
     

@@ -16,7 +16,7 @@ const {
   getBookingPassengers
 } = require('../controllers/bookingController');
 const authMiddleware = require('../middleware/authMiddleware');
-const { canEditBooking, canViewBooking, canCancelBooking } = require('../middleware/bookingAuthorization');
+const { canEditBooking, canViewBooking, canCancelBooking, canDeleteBooking } = require('../middleware/bookingAuthorization');
 
 const router = express.Router();
 
@@ -43,6 +43,6 @@ router.get('/:id', canViewBooking, getBookingById);
 router.put('/:id', canEditBooking, updateBooking);
 router.put('/:id/status', updateBookingStatus); // ✓ Add status update route
 router.post('/:id/cancel', canCancelBooking, cancelBooking);
-router.delete('/:id', canEditBooking, deleteBooking);
+router.delete('/:id', canDeleteBooking, deleteBooking);
 
 module.exports = router;

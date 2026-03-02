@@ -1,6 +1,53 @@
 const { BookingTVL } = require('../models');
 
 /**
+ * Middleware to check if a user can delete a booking
+ * Admins and employees can delete bookings regardless of status
+ * Customers cannot delete bookings (this should be restricted to admin only)
+ */
+const canDeleteBooking = async (req, res, next) => {
+  try {
+    if (!req.user) {
+      return res.status(401).json({
+        success: false,
+        error: { code: 'UNAUTHORIZED', message: 'Authentication required' }
+      });
+    }
+
+    // Handle both 'id' and 'bookingId' parameter names
+    const bookingId = req.params.id || req.params.bookingId;
+    
+    if (!bookingId) {
+      return res.status(400).json({
+        success: false,
+        error: { code: 'BAD_REQUEST', message: 'Booking ID is required' }
+      });
+    }
+
+    const userId = req.user.us_usid;
+    const userRole = req.user.us_roid;
+
+    // Only admins can delete bookings
+    if (userRole === 'ADM') {
+      return next();
+    }
+
+    // For all other roles (including employees and customers), deny deletion
+    return res.status(403).json({
+      success: false,
+      error: { code: 'FORBIDDEN', message: 'Access denied. Only administrators can delete bookings.' }
+    });
+
+  } catch (error) {
+    console.error('Booking deletion authorization error:', error);
+    return res.status(500).json({
+      success: false,
+      error: { code: 'SERVER_ERROR', message: 'Authorization check failed' }
+    });
+  }
+};
+
+/**
  * Middleware to check if a customer can edit a booking based on status
  * Customers can only edit bookings with DRAFT status
  * Admins and employees can edit bookings regardless of status
@@ -237,5 +284,6 @@ const canCancelBooking = async (req, res, next) => {
 module.exports = {
   canEditBooking,
   canViewBooking,
-  canCancelBooking
+  canCancelBooking,
+  canDeleteBooking
 };
