@@ -153,7 +153,10 @@ const createBooking = async (req, res) => {
         bk_status: status || 'DRAFT', // ✓ Use validated status from request body
         eby: req.user.us_usid,
         mby: req.user.us_usid
-      }, { transaction });
+      }, { 
+        transaction,
+        userId: req.user.us_usid  // Pass userId for audit hooks
+      });
       console.timeEnd("BOOKING_CREATE_RECORD");
       
       // If passenger list is provided, create passenger records using optimized PassengerTVL model
@@ -185,7 +188,10 @@ const createBooking = async (req, res) => {
           }));
           
           // Use the Sequelize model for bulk creation
-          await Passenger.bulkCreate(passengerDataBatch, { transaction });
+          await Passenger.bulkCreate(passengerDataBatch, { 
+            transaction,
+            userId: req.user.us_usid  // Pass userId for audit hooks
+          });
         }
         console.timeEnd("BOOKING_CREATE_PASSENGERS");
       }
@@ -516,7 +522,10 @@ const updateBooking = async (req, res) => {
       console.log('Updating booking with data:', updateData);
       
       // Update booking details with validated fields only
-      await booking.update(updateData, { transaction });
+      await booking.update(updateData, { 
+        transaction,
+        userId: req.user.us_usid  // Pass userId for audit hooks
+      });
       
       // If passenger list is provided, update passenger records - OPTIMIZED BATCH PROCESSING
       if (passengerList && Array.isArray(passengerList)) {
@@ -526,7 +535,11 @@ const updateBooking = async (req, res) => {
         // First, mark all existing passengers as inactive for this booking
         await Passenger.update(
           { ps_active: 0, mby: req.user.us_usid },
-          { where: { ps_bkid: booking.bk_bkid }, transaction }
+          { 
+            where: { ps_bkid: booking.bk_bkid }, 
+            transaction,
+            userId: req.user.us_usid  // Pass userId for audit hooks
+          }
         );
         
         // Batch process passengers for better performance
@@ -549,7 +562,10 @@ const updateBooking = async (req, res) => {
           }));
           
           // Batch insert for better performance
-          await Passenger.bulkCreate(passengerDataBatch, { transaction });
+          await Passenger.bulkCreate(passengerDataBatch, { 
+            transaction,
+            userId: req.user.us_usid  // Pass userId for audit hooks
+          });
         }
       }
       
@@ -606,6 +622,8 @@ const cancelBooking = async (req, res) => {
     await booking.update({ 
       bk_status: 'CANCELLED',
       mby: req.user.us_usid 
+    }, {
+      userId: req.user.us_usid  // Pass userId for audit hooks
     });
     
     res.json({
@@ -649,7 +667,10 @@ const deleteBooking = async (req, res) => {
         bk_status: 'INACTIVE',
         mby: req.user.us_usid,
         mdtm: new Date()
-      }, { transaction });
+      }, { 
+        transaction,
+        userId: req.user.us_usid  // Pass userId for audit hooks
+      });
       
       // Log the soft deletion for audit purposes
       console.log(`[BOOKING SOFT DELETE AUDIT] Booking ${booking.bk_bkid} marked as INACTIVE by user ${req.user.us_usid}.`);
@@ -698,6 +719,8 @@ const assignBooking = async (req, res) => {
     await booking.update({ 
       bk_agent: employeeId,
       mby: req.user.us_usid 
+    }, {
+      userId: req.user.us_usid  // Pass userId for audit hooks
     });
     
     res.json(booking);
@@ -731,6 +754,8 @@ const approveBooking = async (req, res) => {
     await booking.update({ 
       bk_status: 'PENDING',
       mby: req.user.us_usid 
+    }, {
+      userId: req.user.us_usid  // Pass userId for audit hooks
     });
     
     res.json(booking);
@@ -760,10 +785,25 @@ const confirmBooking = async (req, res) => {
       return res.status(400).json({ message: 'Cannot confirm an inactive booking' });
     }
     
+    // Check if billing already exists for this booking to maintain consistency
+    const { BillingMaster } = require('../models');
+    const existingBilling = await BillingMaster.findOne({
+      where: { bl_booking_id: bookingId }
+    });
+
+    if (existingBilling) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Billing already exists for this booking' 
+      });
+    }
+    
     // Update booking status to CONFIRMED
     await booking.update({ 
       bk_status: 'CONFIRMED',
       mby: req.user.us_usid 
+    }, {
+      userId: req.user.us_usid  // Pass userId for audit hooks
     });
     
     // Create PNR record
@@ -795,35 +835,121 @@ const confirmBooking = async (req, res) => {
       mby: req.user.us_usid
     });
     
-    // Create bill automatically
-    const { BillTVL, Customer } = require('../models');
-    const billNumber = `BILL${Date.now()}${Math.floor(Math.random() * 1000)}`;
+    // Create bill automatically using the unified BillingMaster system (BillingMaster and Op already imported above)
+    const { Customer } = require('../models');
+    
+    // Generate unique bill number in format: BL-YYMMDD-NNNN (max 15 chars)
+    const now = new Date();
+    const year = now.getFullYear().toString().slice(-2);
+    const month = (now.getMonth() + 1).toString().padStart(2, '0');
+    const day = now.getDate().toString().padStart(2, '0');
+    
+    // Generate unique entry number (format: YYYYMMDD-XXX)
+    const dateStr = now.getFullYear() + 
+                   String(now.getMonth() + 1).padStart(2, '0') + 
+                   String(now.getDate()).padStart(2, '0');
+    
+    // Find next sequence number for today
+    const { Op } = require('sequelize');
+    const existingBills = await BillingMaster.findAll({
+      where: {
+        bl_entry_no: {
+          [Op.like]: `${dateStr}%`
+        }
+      }
+    });
+    
+    const nextSeq = existingBills.length + 1;
+    const entryNo = `${dateStr}-${String(nextSeq).padStart(3, '0')}`;
+    
+    // Generate bill number
+    const billNumber = `BL-${year}${month}${day}-${String(nextSeq).padStart(4, '0')}`;
     
     // Fetch customer name
     const customer = await Customer.findOne({ where: { cu_usid: booking.bk_usid } });
     const customerName = customer ? customer.cu_name : '';
     
-    const bill = await BillTVL.create({
-      bill_no: billNumber,
-      customer_id: booking.bk_usid,
-      customer_name: customerName,
-      train_number: trainNumber,
-      reservation_class: travelClass,
-      ticket_type: 'TATKAL', // Default to TATKAL
-      pnr_numbers: JSON.stringify([pnrNumber]),
-      net_fare: bookingAmount || 0,
-      service_charges: serviceCharges || 0,
-      platform_fees: platformFees || 0,
-      agent_fees: agentFees || 0,
-      extra_charges: JSON.stringify(extraCharges || []),
-      discounts: JSON.stringify(discounts || []),
-      total_amount: totalAmount || 0,
-      bill_date: new Date(),
-      status: 'FINAL', // Change status to FINAL since it's generated after confirmation
-      remarks: `Bill for booking ${booking.bk_bkno} and PNR ${pnrNumber}`,
-      created_by: req.user.us_usid,
-      modified_by: req.user.us_usid
+    // Calculate totals
+    const totalAmountCalculated = (bookingAmount || 0) + 
+                                 (serviceCharges || 0) + 
+                                 (platformFees || 0) + 
+                                 (agentFees || 0) +
+                                 (extraCharges?.reduce((sum, charge) => sum + parseFloat(charge.amount || 0), 0) || 0) -
+                                 (discounts?.reduce((sum, discount) => sum + parseFloat(discount.amount || 0), 0) || 0);
+    
+    const bill = await BillingMaster.create({
+      bl_entry_no: entryNo,
+      bl_bill_no: billNumber,
+      bl_booking_id: booking.bk_bkid,
+      bl_booking_no: booking.bk_bkno,
+      bl_billing_date: new Date(),
+      bl_journey_date: travelDate,
+      bl_customer_name: customerName,
+      bl_customer_phone: booking.bk_phonenumber,
+      bl_station_boy: '', // Will be filled later
+      bl_from_station: booking.bk_fromst,
+      bl_to_station: booking.bk_tost,
+      bl_train_no: trainNumber,
+      bl_class: travelClass,
+      bl_pnr: pnrNumber,
+      bl_seats_reserved: '', // Will be filled later
+      bl_railway_fare: bookingAmount || 0,
+      bl_service_charge: serviceCharges || 0,
+      bl_platform_fee: platformFees || 0,
+      bl_sb_incentive: agentFees || 0,
+      bl_misc_charges: extraCharges?.reduce((sum, charge) => sum + parseFloat(charge.amount || 0), 0) || 0,
+      bl_gst: 0, // Will be calculated later
+      bl_delivery_charge: 0, // Will be added later
+      bl_cancellation_charge: 0, // Will be added later
+      bl_surcharge: 0, // Will be added later
+      bl_discount: discounts?.reduce((sum, discount) => sum + parseFloat(discount.amount || 0), 0) || 0,
+      bl_total_amount: totalAmountCalculated,
+      bl_created_by: req.user.us_usid,
+      bl_status: 'CONFIRMED',
+      status: 'OPEN',
+      // Standard audit fields
+      entered_by: req.user.us_usid,
+      entered_on: new Date()
+    }, {
+      userId: req.user.us_usid // Pass userId for hooks
     });
+    
+    // Update booking status to CONFIRMED and mark as billed
+    await booking.update({
+      bk_status: 'CONFIRMED',
+      bk_billed: 1,
+      mby: req.user.us_usid,
+      mdtm: new Date()
+    }, {
+      userId: req.user.us_usid  // Pass userId for audit hooks
+    });
+    
+    // Update passenger records with the billing number
+    const { Passenger } = require('../models'); // Import the Passenger model
+    try {
+      // Update all active passengers for this booking with the billing number
+      const [updateResult] = await sequelizeTVL.query(
+        `UPDATE psXpassenger 
+         SET bl_bill_no = :billNumber, 
+             mdtm = NOW(), 
+             mby = :modifiedBy 
+         WHERE ps_bkid = :bookingId AND ps_active = 1`,
+        {
+          replacements: {
+            billNumber: billNumber,
+            modifiedBy: req.user.us_usid,
+            bookingId: booking.bk_bkid
+          },
+          type: sequelizeTVL.QueryTypes.UPDATE
+        }
+      );
+      
+      console.log(`📊 Updated ${updateResult.affectedRows} passengers with billing number ${billNumber}`);
+    } catch (passengerError) {
+      console.error('⚠️ Error updating passenger records with billing number:', passengerError);
+      // Don't throw error here as the bill has already been created successfully
+      // The passengers can be updated later if needed
+    }
     
     // Return booking with PNR and bill details
     const updatedBooking = await BookingTVL.findByPk(bookingId);
@@ -1198,6 +1324,8 @@ const updateBookingStatus = async (req, res) => {
       bk_status: status,
       mby: req.user.us_usid,
       mdtm: new Date()
+    }, {
+      userId: req.user.us_usid  // Pass userId for audit hooks
     });
     
     res.json({ 

@@ -42,6 +42,7 @@ const CustomerAdvanceTVL = require('./CustomerAdvanceTVL');
 const YearEndClosing = require('./YearEndClosing');
 const YearEndClosingTVL = require('./YearEndClosingTVL');
 const BillTVL = require('./BillTVL');
+const BillingMaster = require('./BillingMaster');
 const PassengerTVL = require('./PassengerTVL');
 const MasterPassengerList = require('./MasterPassengerList');
 const CustomerMasterPassenger = require('./CustomerMasterPassenger');
@@ -224,6 +225,7 @@ module.exports = {
   paPaymentAlloc: PaymentAlloc,
   billXbill: BillTVL,
   BillTVL,
+  BillingMaster,
   Session,
   Audit,
   Config,

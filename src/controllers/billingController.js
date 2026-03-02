@@ -205,7 +205,35 @@ const createBill = async (req, res) => {
         mdtm: new Date()
       }, { transaction });
       
-      // 6. Commit transaction (ALL operations succeed together)
+      // 6. Update passenger records with the billing number
+      const { Passenger } = require('../models'); // Import the Passenger model
+      try {
+        // Update all active passengers for this booking with the billing number
+        const [updateResult] = await sequelizeTVL.query(
+          `UPDATE psXpassenger 
+           SET bl_bill_no = :billNumber, 
+               mdtm = NOW(), 
+               mby = :modifiedBy 
+           WHERE ps_bkid = :bookingId AND ps_active = 1`,
+          {
+            replacements: {
+              billNumber: billNumber,
+              modifiedBy: req.user.us_usid,
+              bookingId: bookingId
+            },
+            type: sequelizeTVL.QueryTypes.UPDATE,
+            transaction
+          }
+        );
+        
+        console.log(`📊 Updated ${updateResult.affectedRows} passengers with billing number ${billNumber}`);
+      } catch (passengerError) {
+        console.error('⚠️ Error updating passenger records with billing number:', passengerError);
+        // Don't throw error here as the bill has already been created successfully
+        // The passengers can be updated later if needed
+      }
+      
+      // 7. Commit transaction (ALL operations succeed together)
       await transaction.commit();
       
       console.log(`✅ Bill ${billNumber} created successfully for booking ${bookingId}`);
@@ -330,10 +358,54 @@ const getAllBills = async (req, res) => {
       order: [['bl_created_at', 'DESC']]
     });
     
-    // Transform data to match frontend expectations
-    const transformedBills = bills.map(bill => {
+    // Fetch passenger details for all bills (optimized batch operation)
+    const { Passenger } = require('../models');
+    const transformedBills = [];
+    
+    for (const bill of bills) {
       const billData = bill.toJSON();
-      return {
+      
+      // Fetch passenger details for this bill
+      let passengerList = [];
+      try {
+        // First, try to get passengers by billing number if available
+        if (billData.bl_bill_no) {
+          const passengerResult = await Passenger.getByBillingNumber(billData.bl_bill_no);
+          if (passengerResult.success) {
+            passengerList = passengerResult.passengers.map(p => ({
+              id: p.ps_psid,
+              name: p.ps_fname + (p.ps_lname ? ' ' + p.ps_lname : ''),
+              age: p.ps_age,
+              gender: p.ps_gender,
+              berth: p.ps_berthalloc || p.ps_berthpref,
+              seatNo: p.ps_seatno,
+              coach: p.ps_coach
+            }));
+          }
+        }
+        
+        // If no passengers found by billing number, try by booking ID as fallback
+        if (passengerList.length === 0 && billData.bl_booking_id) {
+          const passengerResult = await Passenger.getByBookingId(billData.bl_booking_id);
+          if (passengerResult.success) {
+            passengerList = passengerResult.passengers.map(p => ({
+              id: p.ps_psid,
+              name: p.ps_fname + (p.ps_lname ? ' ' + p.ps_lname : ''),
+              age: p.ps_age,
+              gender: p.ps_gender,
+              berth: p.ps_berthalloc || p.ps_berthpref,
+              seatNo: p.ps_seatno,
+              coach: p.ps_coach
+            }));
+          }
+        }
+      } catch (passengerError) {
+        console.error('⚠️ Error fetching passenger details for bill:', billData.bl_bill_no, passengerError);
+        // Continue with empty passenger list if there's an error
+        passengerList = [];
+      }
+      
+      transformedBills.push({
         ...billData,
         id: billData.bl_id,
         billId: billData.bl_bill_no,
@@ -350,7 +422,7 @@ const getAllBills = async (req, res) => {
         ticketType: 'NORMAL', // Default ticket type since it's not in the model
         pnrNumbers: billData.bl_pnr,
         seatsAlloted: billData.bl_seats_reserved,
-        passengerList: [], // Default empty passenger list since it's not in the model
+        passengerList: passengerList, // Populate with actual passenger details
         railwayFare: billData.bl_railway_fare,
         stationBoyIncentive: billData.bl_sb_incentive,
         serviceCharges: billData.bl_service_charge,
@@ -367,8 +439,8 @@ const getAllBills = async (req, res) => {
         createdBy: billData.bl_created_by,
         remarks: '', // Default empty remarks
         status: 'CONFIRMED' // Default status
-      };
-    });
+      });
+    }
     
     res.json({ 
       success: true, 
@@ -402,6 +474,48 @@ const getBillById = async (req, res) => {
       return res.status(403).json({ message: 'Access denied' });
     }
     
+    // Fetch passenger details for this bill
+    const { Passenger } = require('../models');
+    let passengerList = [];
+    
+    try {
+      // First, try to get passengers by billing number if available
+      if (bill.bl_bill_no) {
+        const passengerResult = await Passenger.getByBillingNumber(bill.bl_bill_no);
+        if (passengerResult.success) {
+          passengerList = passengerResult.passengers.map(p => ({
+            id: p.ps_psid,
+            name: p.ps_fname + (p.ps_lname ? ' ' + p.ps_lname : ''),
+            age: p.ps_age,
+            gender: p.ps_gender,
+            berth: p.ps_berthalloc || p.ps_berthpref,
+            seatNo: p.ps_seatno,
+            coach: p.ps_coach
+          }));
+        }
+      }
+      
+      // If no passengers found by billing number, try by booking ID as fallback
+      if (passengerList.length === 0 && bill.bl_booking_id) {
+        const passengerResult = await Passenger.getByBookingId(bill.bl_booking_id);
+        if (passengerResult.success) {
+          passengerList = passengerResult.passengers.map(p => ({
+            id: p.ps_psid,
+            name: p.ps_fname + (p.ps_lname ? ' ' + p.ps_lname : ''),
+            age: p.ps_age,
+            gender: p.ps_gender,
+            berth: p.ps_berthalloc || p.ps_berthpref,
+            seatNo: p.ps_seatno,
+            coach: p.ps_coach
+          }));
+        }
+      }
+    } catch (passengerError) {
+      console.error('⚠️ Error fetching passenger details:', passengerError);
+      // Continue with empty passenger list if there's an error
+      passengerList = [];
+    }
+    
     // Transform data to match frontend expectations
     const billData = bill.toJSON();
     const transformedBill = {
@@ -421,7 +535,7 @@ const getBillById = async (req, res) => {
       ticketType: 'NORMAL', // Default ticket type since it's not in the model
       pnrNumbers: billData.bl_pnr,
       seatsAlloted: billData.bl_seats_reserved,
-      passengerList: [], // Default empty passenger list since it's not in the model
+      passengerList: passengerList, // Populate with actual passenger details
       railwayFare: billData.bl_railway_fare,
       stationBoyIncentive: billData.bl_sb_incentive,
       serviceCharges: billData.bl_service_charge,
@@ -513,6 +627,47 @@ const updateBill = async (req, res) => {
     });
     
     // Transform data to match frontend expectations
+    const { Passenger } = require('../models');
+    let passengerList = [];
+    
+    try {
+      // First, try to get passengers by billing number if available
+      if (bill.bl_bill_no) {
+        const passengerResult = await Passenger.getByBillingNumber(bill.bl_bill_no);
+        if (passengerResult.success) {
+          passengerList = passengerResult.passengers.map(p => ({
+            id: p.ps_psid,
+            name: p.ps_fname + (p.ps_lname ? ' ' + p.ps_lname : ''),
+            age: p.ps_age,
+            gender: p.ps_gender,
+            berth: p.ps_berthalloc || p.ps_berthpref,
+            seatNo: p.ps_seatno,
+            coach: p.ps_coach
+          }));
+        }
+      }
+      
+      // If no passengers found by billing number, try by booking ID as fallback
+      if (passengerList.length === 0 && bill.bl_booking_id) {
+        const passengerResult = await Passenger.getByBookingId(bill.bl_booking_id);
+        if (passengerResult.success) {
+          passengerList = passengerResult.passengers.map(p => ({
+            id: p.ps_psid,
+            name: p.ps_fname + (p.ps_lname ? ' ' + p.ps_lname : ''),
+            age: p.ps_age,
+            gender: p.ps_gender,
+            berth: p.ps_berthalloc || p.ps_berthpref,
+            seatNo: p.ps_seatno,
+            coach: p.ps_coach
+          }));
+        }
+      }
+    } catch (passengerError) {
+      console.error('⚠️ Error fetching passenger details:', passengerError);
+      // Continue with empty passenger list if there's an error
+      passengerList = [];
+    }
+    
     const billData = bill.toJSON();
     const transformedBill = {
       ...billData,
@@ -531,7 +686,7 @@ const updateBill = async (req, res) => {
       ticketType: 'NORMAL', // Default ticket type since it's not in the model
       pnrNumbers: billData.bl_pnr,
       seatsAlloted: billData.bl_seats_reserved,
-      passengerList: [], // Default empty passenger list since it's not in the model
+      passengerList: passengerList, // Populate with actual passenger details
       railwayFare: billData.bl_railway_fare,
       stationBoyIncentive: billData.bl_sb_incentive,
       serviceCharges: billData.bl_service_charge,
@@ -582,6 +737,47 @@ const finalizeBill = async (req, res) => {
     });
     
     // Transform data to match frontend expectations
+    const { Passenger } = require('../models');
+    let passengerList = [];
+    
+    try {
+      // First, try to get passengers by billing number if available
+      if (bill.bl_bill_no) {
+        const passengerResult = await Passenger.getByBillingNumber(bill.bl_bill_no);
+        if (passengerResult.success) {
+          passengerList = passengerResult.passengers.map(p => ({
+            id: p.ps_psid,
+            name: p.ps_fname + (p.ps_lname ? ' ' + p.ps_lname : ''),
+            age: p.ps_age,
+            gender: p.ps_gender,
+            berth: p.ps_berthalloc || p.ps_berthpref,
+            seatNo: p.ps_seatno,
+            coach: p.ps_coach
+          }));
+        }
+      }
+      
+      // If no passengers found by billing number, try by booking ID as fallback
+      if (passengerList.length === 0 && bill.bl_booking_id) {
+        const passengerResult = await Passenger.getByBookingId(bill.bl_booking_id);
+        if (passengerResult.success) {
+          passengerList = passengerResult.passengers.map(p => ({
+            id: p.ps_psid,
+            name: p.ps_fname + (p.ps_lname ? ' ' + p.ps_lname : ''),
+            age: p.ps_age,
+            gender: p.ps_gender,
+            berth: p.ps_berthalloc || p.ps_berthpref,
+            seatNo: p.ps_seatno,
+            coach: p.ps_coach
+          }));
+        }
+      }
+    } catch (passengerError) {
+      console.error('⚠️ Error fetching passenger details:', passengerError);
+      // Continue with empty passenger list if there's an error
+      passengerList = [];
+    }
+    
     const billData = bill.toJSON();
     const transformedBill = {
       ...billData,
@@ -600,7 +796,7 @@ const finalizeBill = async (req, res) => {
       ticketType: 'NORMAL', // Default ticket type since it's not in the model
       pnrNumbers: billData.bl_pnr,
       seatsAlloted: billData.bl_seats_reserved,
-      passengerList: [], // Default empty passenger list since it's not in the model
+      passengerList: passengerList, // Populate with actual passenger details
       railwayFare: billData.bl_railway_fare,
       stationBoyIncentive: billData.bl_sb_incentive,
       serviceCharges: billData.bl_service_charge,
@@ -655,16 +851,16 @@ const deleteBill = async (req, res) => {
     // Delete the bill
     await bill.destroy({ transaction });
     
-    // Update the associated booking status back to PENDING
+    // Update the associated booking status back to DRAFT
     if (bookingId) {
       const booking = await BookingTVL.findByPk(bookingId, { transaction });
       
-      if (booking && booking.bk_status === 'CONFIRMED') {
+      if (booking && (booking.bk_status === 'CONFIRMED' || booking.bk_status === 'PENDING')) {
         const oldStatus = booking.bk_status;
         
-        // Update booking status to PENDING and reset billed flag
+        // Update booking status to DRAFT and reset billed flag
         await booking.update({
-          bk_status: 'PENDING',
+          bk_status: 'DRAFT',
           bk_billed: 0,
           mby: req.user.us_usid,
           mdtm: new Date()
@@ -672,9 +868,33 @@ const deleteBill = async (req, res) => {
         
         // Log the automatic status change for audit purposes
         console.log(`[BILLING DELETION AUDIT] Bill ${bill.bl_bill_no} (ID: ${bill.bl_id}) deleted by user ${req.user.us_usid}. ` +
-                    `Associated booking ${bookingId} status automatically changed from ${oldStatus} to PENDING. ` +
+                    `Associated booking ${bookingId} status automatically changed from ${oldStatus} to DRAFT. ` +
                     `Booking billed flag reset to 0.`);
       }
+    }
+    
+    // Reset billing number from passenger records
+    try {
+      const [updateResult] = await sequelizeTVL.query(
+        `UPDATE psXpassenger 
+         SET bl_bill_no = NULL, 
+             mdtm = NOW(), 
+             mby = :modifiedBy 
+         WHERE bl_bill_no = :billNumber AND ps_active = 1`,
+        {
+          replacements: {
+            billNumber: bill.bl_bill_no,
+            modifiedBy: req.user.us_usid
+          },
+          type: sequelizeTVL.QueryTypes.UPDATE,
+          transaction
+        }
+      );
+      
+      console.log(`📊 Reset billing number for ${updateResult.affectedRows} passengers associated with bill ${bill.bl_bill_no}`);
+    } catch (passengerError) {
+      console.error('⚠️ Error resetting passenger billing numbers:', passengerError);
+      // Don't throw error here as the bill deletion should still proceed
     }
     
     // Commit the transaction
@@ -682,7 +902,7 @@ const deleteBill = async (req, res) => {
     
     res.json({ 
       success: true,
-      message: 'Bill deleted successfully. Associated booking status updated to PENDING.',
+      message: 'Bill deleted successfully. Associated booking status updated to DRAFT.',
       data: {
         deletedBillId: bill.bl_id,
         affectedBookingId: bookingId
@@ -704,6 +924,117 @@ const deleteBill = async (req, res) => {
       success: false,
       message: error.message 
     });
+  }
+};
+
+// Cancel bill (TRANSACTIONAL - AUTHORITATIVE BUSINESS FLOW)
+const cancelBill = async (req, res) => {
+  const transaction = await sequelizeTVL.transaction();
+  
+  try {
+    const bill = await BillTVL.findByPk(req.params.id, { transaction });
+    
+    if (!bill) {
+      await transaction.rollback();
+      return res.status(404).json({ message: 'Bill not found' });
+    }
+    
+    // Check if bill is already cancelled
+    if (bill.bl_status === 'CANCELLED') {
+      await transaction.rollback();
+      return res.status(400).json({ message: 'Bill is already cancelled' });
+    }
+    
+    // Validate required fields
+    const { railwayCancellationCharge, agentCancellationCharge, cancellationRemarks } = req.body;
+    
+    if (railwayCancellationCharge === undefined && agentCancellationCharge === undefined) {
+      await transaction.rollback();
+      return res.status(400).json({ message: 'At least one cancellation charge is required' });
+    }
+    
+    // Get the associated booking ID
+    const bookingId = bill.bl_booking_id;
+    
+    // Update the bill with cancellation information
+    await bill.update({
+      bl_status: 'CANCELLED',
+      bl_railway_cancellation_charge: parseFloat(railwayCancellationCharge) || 0,
+      bl_agent_cancellation_charge: parseFloat(agentCancellationCharge) || 0,
+      bl_cancellation_remarks: cancellationRemarks || '',
+      bl_modified_by: convertUserIdToInt(req.user.us_usid),
+      bl_modified_at: new Date(),
+      modified_by: convertUserIdToInt(req.user.us_usid),
+      modified_on: new Date(),
+      status: 'CANCELLED'
+    }, { transaction });
+    
+    // Update the associated booking status to CANCELLED
+    if (bookingId) {
+      const booking = await BookingTVL.findByPk(bookingId, { transaction });
+      
+      if (booking) {
+        const oldStatus = booking.bk_status;
+        
+        // Update booking status to CANCELLED
+        await booking.update({
+          bk_status: 'CANCELLED',
+          mby: req.user.us_usid,
+          mdtm: new Date()
+        }, { transaction });
+        
+        // Log the automatic status change for audit purposes
+        console.log(`[BILLING CANCELLATION AUDIT] Bill ${bill.bl_bill_no} (ID: ${bill.bl_id}) cancelled by user ${req.user.us_usid}. ` +
+                    `Associated booking ${bookingId} status automatically changed from ${oldStatus} to CANCELLED. ` +
+                    `Railway cancellation charge: ${railwayCancellationCharge || 0}, ` +
+                    `Agent cancellation charge: ${agentCancellationCharge || 0}`);
+      }
+    }
+    
+    // Reset billing number from passenger records
+    try {
+      const [updateResult] = await sequelizeTVL.query(
+        `UPDATE psXpassenger 
+         SET bl_bill_no = NULL, 
+             mdtm = NOW(), 
+             mby = :modifiedBy 
+         WHERE bl_bill_no = :billNumber AND ps_active = 1`,
+        {
+          replacements: {
+            billNumber: bill.bl_bill_no,
+            modifiedBy: req.user.us_usid
+          },
+          type: sequelizeTVL.QueryTypes.UPDATE,
+          transaction
+        }
+      );
+      
+      console.log(`📊 Reset billing number for ${updateResult.affectedRows} passengers associated with bill ${bill.bl_bill_no}`);
+    } catch (passengerError) {
+      console.error('⚠️ Error resetting passenger billing numbers:', passengerError);
+      // Don't throw error here as the bill cancellation should still proceed
+    }
+    
+    // Commit the transaction
+    await transaction.commit();
+    
+    res.json({ 
+      success: true,
+      message: 'Bill cancelled successfully. Associated booking status updated to CANCELLED.',
+      data: {
+        cancelledBillId: bill.bl_id,
+        affectedBookingId: bookingId,
+        railwayCancellationCharge: parseFloat(railwayCancellationCharge) || 0,
+        agentCancellationCharge: parseFloat(agentCancellationCharge) || 0
+      }
+    });
+  } catch (error) {
+    // Rollback transaction on error
+    await transaction.rollback();
+    
+    // Handle other errors
+    console.error('Cancel bill error:', error);
+    return res.status(500).json({ message: error.message || 'Server error during cancellation' });
   }
 };
 
@@ -967,6 +1298,7 @@ module.exports = {
   updateBill,
   finalizeBill,
   deleteBill,
+  cancelBill,
   searchBills,
   getCustomerLedger,
   getCustomerBalance

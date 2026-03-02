@@ -100,7 +100,22 @@ const PassengerTVL = sequelizeTVL.define('psXpassenger', {
   }
 }, {
   tableName: 'psXpassenger',
-  timestamps: false
+  timestamps: false,
+  hooks: {
+    beforeCreate: (passenger, options) => {
+      // Auto-populate audit fields on create if userId is provided
+      if (options.userId) {
+        passenger.eby = options.userId;
+        passenger.mby = options.userId;
+      }
+    },
+    beforeUpdate: (passenger, options) => {
+      // Auto-populate audit fields on update if userId is provided
+      if (options.userId) {
+        passenger.mby = options.userId;
+      }
+    }
+  }
 });
 
 module.exports = PassengerTVL;

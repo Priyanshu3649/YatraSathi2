@@ -7,6 +7,7 @@ const {
   updateBill,
   finalizeBill,
   deleteBill,
+  cancelBill,
   searchBills,
   getCustomerLedger,
   getCustomerBalance
@@ -39,5 +40,6 @@ router.get('/:id', getBillById);
 router.put('/:id', updateBill);
 router.put('/:id/finalize', finalizeBill);
 router.delete('/:id', deleteBill);
+router.post('/:id/cancel', cancelBill);
 
 module.exports = router;

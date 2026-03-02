@@ -168,7 +168,35 @@ const BookingTVL = sequelizeTVL.define('bkXbooking', {
       unique: true,
       fields: ['bk_bkno']
     }
-  ]
+  ],
+  hooks: {
+    beforeCreate: (booking, options) => {
+      // Auto-populate audit fields on create if userId is provided
+      if (options.userId) {
+        booking.entered_by = options.userId;
+        booking.entered_on = new Date();
+        if (!booking.status) booking.status = 'OPEN';
+      }
+    },
+    beforeUpdate: (booking, options) => {
+      // Auto-populate audit fields on update if userId is provided
+      if (options.userId) {
+        booking.modified_by = options.userId;
+        booking.modified_on = new Date();
+      }
+      
+      // If status is being changed to CLOSED or CANCELLED, set closed_by/closed_on
+      if (booking.changed('status')) {
+        const newStatus = booking.getDataValue('status');
+        if (newStatus && ['CLOSED', 'CANCELLED'].includes(newStatus.toUpperCase())) {
+          if (options.userId && !booking.closed_by) {
+            booking.closed_by = options.userId;
+            booking.closed_on = new Date();
+          }
+        }
+      }
+    }
+  }
 });
 
 module.exports = BookingTVL;

@@ -20,6 +20,7 @@ class Passenger {
     this.eby = data.eby;
     this.mdtm = data.mdtm;
     this.mby = data.mby;
+    this.bl_bill_no = data.bl_bill_no; // New field for billing number
   }
 
   // Create new passenger
@@ -28,8 +29,8 @@ class Passenger {
       INSERT INTO psXpassenger (
         ps_bkid, ps_fname, ps_lname, ps_age, ps_gender, 
         ps_berthpref, ps_berthalloc, ps_seatno, ps_coach, 
-        ps_active, edtm, eby, mdtm, mby
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), ?, NOW(), ?)
+        ps_active, edtm, eby, mdtm, mby, bl_bill_no
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), ?, NOW(), ?, ?)
     `;
     
     const values = [
@@ -44,7 +45,8 @@ class Passenger {
       passengerData.ps_coach || null,
       passengerData.ps_active || 1,
       passengerData.eby || 'system',
-      passengerData.mby || 'system'
+      passengerData.mby || 'system',
+      passengerData.bl_bill_no || null
     ];
 
     try {
@@ -108,7 +110,7 @@ class Passenger {
       UPDATE psXpassenger SET 
         ps_fname = ?, ps_lname = ?, ps_age = ?, ps_gender = ?,
         ps_berthpref = ?, ps_berthalloc = ?, ps_seatno = ?, ps_coach = ?,
-        mdtm = NOW(), mby = ?
+        mdtm = NOW(), mby = ?, bl_bill_no = ?
       WHERE ps_psid = ? AND ps_active = 1
     `;
 
@@ -122,6 +124,7 @@ class Passenger {
       updateData.ps_seatno || null,
       updateData.ps_coach || null,
       updateData.mby || 'system',
+      updateData.bl_bill_no || null,
       passengerId
     ];
 
@@ -188,20 +191,21 @@ class Passenger {
       ps_coach: null,
       ps_active: 1,
       eby: createdBy || 'system',
-      mby: createdBy || 'system'
+      mby: createdBy || 'system',
+      bl_bill_no: passenger.billNo || null // New field for billing number
     }));
 
     try {
       // Build batch insert query
       const placeholders = passengerDataBatch.map(() => 
-        '(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), ?, NOW(), ?)'
+        '(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), ?, NOW(), ?, ?)'
       ).join(',');
 
       const query = `
         INSERT INTO psXpassenger (
           ps_bkid, ps_fname, ps_lname, ps_age, ps_gender, 
           ps_berthpref, ps_berthalloc, ps_seatno, ps_coach, 
-          ps_active, edtm, eby, mdtm, mby
+          ps_active, edtm, eby, mdtm, mby, bl_bill_no
         ) VALUES ${placeholders}
       `;
 
@@ -209,7 +213,7 @@ class Passenger {
       const values = passengerDataBatch.flatMap(p => [
         p.ps_bkid, p.ps_fname, p.ps_lname, p.ps_age, p.ps_gender,
         p.ps_berthpref, p.ps_berthalloc, p.ps_seatno, p.ps_coach,
-        p.ps_active, p.eby, p.mby
+        p.ps_active, p.eby, p.mby, p.bl_bill_no
       ]);
 
       // Execute batch insert
@@ -242,7 +246,8 @@ class Passenger {
             ps_coach: null,
             ps_active: 1,
             eby: createdBy || 'system',
-            mby: createdBy || 'system'
+            mby: createdBy || 'system',
+            bl_bill_no: passenger.billNo || null // New field for billing number
           };
 
           await this.create(passengerData);
@@ -357,6 +362,26 @@ class Passenger {
     } catch (error) {
       console.error('Error getting passenger statistics:', error);
       throw new Error('Failed to get passenger statistics: ' + error.message);
+    }
+  }
+
+  // Get passengers by billing number
+  static async getByBillingNumber(billNo) {
+    const query = `
+      SELECT * FROM psXpassenger 
+      WHERE bl_bill_no = ? AND ps_active = 1 
+      ORDER BY ps_psid ASC
+    `;
+
+    try {
+      const [rows] = await db.execute(query, [billNo]);
+      return {
+        success: true,
+        passengers: rows.map(row => new Passenger(row))
+      };
+    } catch (error) {
+      console.error('Error fetching passengers by billing number:', error);
+      throw new Error('Failed to fetch passengers: ' + error.message);
     }
   }
 }

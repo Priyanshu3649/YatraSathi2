@@ -265,9 +265,55 @@ const getBillingByBookingId = async (req, res) => {
       });
     }
 
+    // Fetch passenger details for this booking
+    const { Passenger } = require('../models');
+    let passengerList = [];
+
+    try {
+      // Try to get passengers by billing number if available
+      if (billing.bl_bill_no) {
+        const passengerResult = await Passenger.getByBillingNumber(billing.bl_bill_no);
+        if (passengerResult.success) {
+          passengerList = passengerResult.passengers.map(p => ({
+            id: p.ps_psid,
+            name: p.ps_fname + (p.ps_lname ? ' ' + p.ps_lname : ''),
+            age: p.ps_age,
+            gender: p.ps_gender,
+            berth: p.ps_berthalloc || p.ps_berthpref,
+            seatNo: p.ps_seatno,
+            coach: p.ps_coach
+          }));
+        }
+      }
+
+      // If no passengers found by billing number, try by booking ID as fallback
+      if (passengerList.length === 0) {
+        const passengerResult = await Passenger.getByBookingId(bookingId);
+        if (passengerResult.success) {
+          passengerList = passengerResult.passengers.map(p => ({
+            id: p.ps_psid,
+            name: p.ps_fname + (p.ps_lname ? ' ' + p.ps_lname : ''),
+            age: p.ps_age,
+            gender: p.ps_gender,
+            berth: p.ps_berthalloc || p.ps_berthpref,
+            seatNo: p.ps_seatno,
+            coach: p.ps_coach
+          }));
+        }
+      }
+    } catch (passengerError) {
+      console.error('⚠️ Error fetching passenger details:', passengerError);
+      // Continue with empty passenger list if there's an error
+      passengerList = [];
+    }
+
+    // Add passenger list to the response
+    const billingData = billing.toJSON();
+    billingData.passengerList = passengerList;
+
     res.json({
       success: true,
-      data: billing
+      data: billingData
     });
   } catch (error) {
     console.error('Get billing by booking ID error:', error);

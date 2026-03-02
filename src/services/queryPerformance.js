@@ -51,20 +51,18 @@ class QueryPerformanceService {
         { name: 'idx_bk_reqdt', columns: ['bk_reqdt'] }
       ],
       
-      // Bill table indexes
+      // Bill table indexes - Only valid columns
       blXbilling: [
-        { name: 'idx_bl_bkid', columns: ['bl_bkid'] },
         { name: 'idx_bl_status', columns: ['bl_status'] },
-        { name: 'idx_bl_bldt', columns: ['bl_bldt'] },
-        { name: 'idx_bl_agent', columns: ['bl_agent'] }
+        { name: 'idx_bl_booking_id', columns: ['bl_booking_id'] },
+        { name: 'idx_bl_billing_date', columns: ['bl_billing_date'] }
       ],
       
-      // Payment table indexes
+      // Payment table indexes - Only valid columns  
       pyXpayment: [
-        { name: 'idx_py_bkid', columns: ['py_bkid'] },
-        { name: 'idx_py_pymtmode', columns: ['py_pymtmode'] },
-        { name: 'idx_py_pymtdt', columns: ['py_pymtdt'] },
-        { name: 'idx_py_agent', columns: ['py_agent'] }
+        { name: 'idx_py_status', columns: ['py_status'] },
+        { name: 'idx_py_customer_id', columns: ['py_customer_id'] },
+        { name: 'idx_py_payment_date', columns: ['py_payment_date'] }
       ],
       
       // Customer/User indexes
@@ -96,7 +94,24 @@ class QueryPerformanceService {
    */
   async applyRecommendedIndexes() {
     try {
+      // Check if auto-indexing is enabled via environment variable
+      const enableAutoIndex = process.env.ENABLE_AUTO_INDEX === 'true';
+      
+      // Skip index creation if disabled or in production
+      if (!enableAutoIndex || process.env.NODE_ENV === 'production') {
+        if (!enableAutoIndex) {
+          console.log('ℹ️  Automatic index creation disabled (ENABLE_AUTO_INDEX=false)');
+        } else {
+          console.log('ℹ️  Skipping automatic index creation (production environment)');
+        }
+        return;
+      }
+      
       console.log('🔍 Applying recommended database indexes...');
+      
+      let createdCount = 0;
+      let existingCount = 0;
+      let failedCount = 0;
       
       for (const [modelName, indexes] of Object.entries(this.recommendedIndexes)) {
         const tableName = this.tableNameMapping[modelName] || modelName;
@@ -106,16 +121,21 @@ class QueryPerformanceService {
             if (!indexExists) {
               await this.createIndex(tableName, index.name, index.columns);
               console.log(`✅ Created index ${index.name} on ${modelName} (${tableName})`);
+              createdCount++;
             } else {
-              console.log(`ℹ️  Index ${index.name} already exists on ${modelName} (${tableName})`);
+              existingCount++;
             }
           } catch (error) {
-            console.warn(`⚠️  Failed to create index ${index.name} on ${modelName} (${tableName}):`, error.message);
+            failedCount++;
+            // Only log first few failures to avoid spam
+            if (failedCount <= 3) {
+              console.warn(`⚠️  Failed to create index ${index.name} on ${modelName} (${tableName}):`, error.message);
+            }
           }
         }
       }
       
-      console.log('✅ Database indexing completed');
+      console.log(`✅ Database indexing completed: ${existingCount} existing, ${createdCount} created, ${failedCount} failed`);
     } catch (error) {
       console.error('❌ Error applying database indexes:', error);
       throw error;

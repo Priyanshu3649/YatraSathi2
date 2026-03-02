@@ -1262,6 +1262,23 @@ export const billingAPI = {
     return data;
   },
   
+  // Cancel bill
+  cancelBill: async (id, cancellationData) => {
+    const response = await fetch(`${API_BASE_URL}/billing/${id}/cancel`, {
+      method: 'POST',
+      headers: getHeaders(true),
+      body: JSON.stringify(cancellationData)
+    });
+    
+    const data = await response.json();
+    
+    if (!response.ok) {
+      throw new Error(data.message || 'Failed to cancel bill');
+    }
+    
+    return data;
+  },
+  
   // Export bill as PDF
   exportBill: async (id) => {
     const response = await fetch(`${API_BASE_URL}/billing/${id}/export`, {
