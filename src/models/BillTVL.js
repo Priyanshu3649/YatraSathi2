@@ -196,7 +196,7 @@ const BillTVL = sequelizeTVL.define('blXbilling', {
     comment: 'Timestamp when record was closed'
   },
   status: {
-    type: DataTypes.ENUM('OPEN', 'CLOSED', 'CANCELLED'),
+    type: DataTypes.ENUM('OPEN', 'CLOSED', 'CANCELLED', 'DRAFT', 'FINAL', 'PAID'),
     defaultValue: 'OPEN',
     comment: 'Record status'
   },
@@ -204,21 +204,53 @@ const BillTVL = sequelizeTVL.define('blXbilling', {
     type: DataTypes.DECIMAL(10, 2),
     defaultValue: 0
   },
-  bl_status: {
-    type: DataTypes.ENUM('CONFIRMED', 'CANCELLED', 'PENDING', 'PAID'),
-    defaultValue: 'CONFIRMED',
-    comment: 'Billing status'
-  },
-  bl_modified_at: {
-    type: DataTypes.DATE,
-    allowNull: true
-  },
   bl_agent_cancellation_charge: {
     type: DataTypes.DECIMAL(10, 2),
     defaultValue: 0
   },
+  bl_station_boy_cancellation_charge: {
+    type: DataTypes.DECIMAL(10, 2),
+    defaultValue: 0
+  },
+  total_cancel_charges: {
+    type: DataTypes.DECIMAL(10, 2),
+    defaultValue: 0
+  },
+  refund_amount: {
+    type: DataTypes.DECIMAL(10, 2),
+    defaultValue: 0
+  },
+  payment_status: {
+    type: DataTypes.ENUM('UNPAID', 'PARTIALLY_PAID', 'FULLY_PAID', 'REFUND_DUE'),
+    defaultValue: 'UNPAID'
+  },
+  is_cancelled: {
+    type: DataTypes.TINYINT(1),
+    defaultValue: 0
+  },
+  cancellation_date: {
+    type: DataTypes.DATE,
+    allowNull: true
+  },
+  cancelled_on: {
+    type: DataTypes.DATE,
+    allowNull: true
+  },
+  cancelled_by: {
+    type: DataTypes.STRING(15),
+    allowNull: true
+  },
   bl_cancellation_remarks: {
     type: DataTypes.TEXT,
+    allowNull: true
+  },
+  bl_status: {
+    type: DataTypes.ENUM('DRAFT', 'CONFIRMED', 'CANCELLED', 'PENDING', 'PAID', 'FINAL'),
+    defaultValue: 'DRAFT',
+    comment: 'Billing status'
+  },
+  bl_modified_at: {
+    type: DataTypes.DATE,
     allowNull: true
   },
   bl_bill_date: {
@@ -248,7 +280,6 @@ const BillTVL = sequelizeTVL.define('blXbilling', {
       if (options.userId) {
         bill.modified_by = options.userId;
         bill.modified_on = new Date();
-        bill.bl_modified_by = options.userId;
         bill.bl_modified_at = new Date();
       }
       

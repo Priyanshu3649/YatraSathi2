@@ -341,7 +341,8 @@ export const bookingAPI = {
     const data = await response.json();
     
     if (!response.ok) {
-      throw new Error(data.message || 'Failed to create booking');
+      const errorMessage = data.message || (data.error && data.error.message) || 'Failed to create booking';
+      throw new Error(errorMessage);
     }
     
     return data;

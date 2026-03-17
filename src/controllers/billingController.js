@@ -1,7 +1,17 @@
 // Import required models
-const { BillTVL, UserTVL, CustomerTVL: Customer, BookingTVL } = require('../models');
+const { BillTVL, UserTVL, CustomerTVL: Customer, BookingTVL, Journal } = require('../models');
 const { Sequelize } = require('sequelize');
 const { sequelizeTVL } = require('../../config/db');
+
+// Helper function to generate journal entry number
+function generateJournalEntryNo(prefix) {
+  const date = new Date();
+  const year = date.getFullYear().toString().slice(-2);
+  const month = (date.getMonth() + 1).toString().padStart(2, '0');
+  const day = date.getDate().toString().padStart(2, '0');
+  const random = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
+  return `${prefix}${year}${month}${day}${random}`;
+}
 
 // Helper function to convert string user ID to integer for database compatibility
 function convertUserIdToInt(userId) {
@@ -929,65 +939,141 @@ const deleteBill = async (req, res) => {
 
 // Cancel bill (TRANSACTIONAL - AUTHORITATIVE BUSINESS FLOW)
 const cancelBill = async (req, res) => {
+  console.log(`[CANCELLATION REQUEST] Bill ID: ${req.params.id}`);
   const transaction = await sequelizeTVL.transaction();
   
   try {
     const bill = await BillTVL.findByPk(req.params.id, { transaction });
     
     if (!bill) {
+      console.error(`[CANCELLATION ERROR] Bill not found: ${req.params.id}`);
       await transaction.rollback();
       return res.status(404).json({ message: 'Bill not found' });
     }
     
+    console.log(`[CANCELLATION DEBUG] Found bill: ${bill.bl_bill_no}, Current Status: ${bill.bl_status}`);
+    
     // Check if bill is already cancelled
-    if (bill.bl_status === 'CANCELLED') {
+    if (bill.bl_status === 'CANCELLED' || bill.is_cancelled === 1) {
+      console.warn(`[CANCELLATION WARNING] Bill ${bill.bl_id} is already cancelled`);
       await transaction.rollback();
       return res.status(400).json({ message: 'Bill is already cancelled' });
     }
     
     // Validate required fields
-    const { railwayCancellationCharge, agentCancellationCharge, cancellationRemarks } = req.body;
+    const { 
+      railwayCancellationCharge, 
+      agentCancellationCharge, 
+      stationBoyCharges,
+      cancellationRemarks,
+      cancellationDate,
+      totalCancellationCharges,
+      refundAmount
+    } = req.body;
     
-    if (railwayCancellationCharge === undefined && agentCancellationCharge === undefined) {
+    console.log(`[CANCELLATION DEBUG] Received Payload:`, req.body);
+    
+    // Validation: At least one cancellation charge required
+    if ((railwayCancellationCharge === undefined || railwayCancellationCharge === null) && 
+        (agentCancellationCharge === undefined || agentCancellationCharge === null) &&
+        (stationBoyCharges === undefined || stationBoyCharges === null)) {
+      console.error(`[CANCELLATION ERROR] No charges provided for bill ${bill.bl_id}`);
       await transaction.rollback();
-      return res.status(400).json({ message: 'At least one cancellation charge is required' });
+      return res.status(400).json({ message: 'At least one cancellation charge is required (Railway, Agent, or Station Boy)' });
+    }
+    
+    // Validation: Charges cannot be negative
+    const railwayCharge = parseFloat(railwayCancellationCharge) || 0;
+    const agentCharge = parseFloat(agentCancellationCharge) || 0;
+    const sbCharge = parseFloat(stationBoyCharges) || 0;
+    
+    if (railwayCharge < 0 || agentCharge < 0 || sbCharge < 0) {
+      console.error(`[CANCELLATION ERROR] Negative charges provided: R=${railwayCharge}, A=${agentCharge}, SB=${sbCharge}`);
+      await transaction.rollback();
+      return res.status(400).json({ message: 'Cancellation charges cannot be negative' });
+    }
+    
+    // Validation: Total charges cannot exceed bill amount
+    const totalCharges = railwayCharge + agentCharge + sbCharge;
+    const billTotal = parseFloat(bill.bl_total_amount) || 0;
+    
+    if (totalCharges > billTotal) {
+      console.error(`[CANCELLATION ERROR] Charges (${totalCharges}) exceed bill total (${billTotal})`);
+      await transaction.rollback();
+      return res.status(400).json({ 
+        message: `Total cancellation charges (${totalCharges.toFixed(2)}) cannot exceed bill amount (${billTotal.toFixed(2)})` 
+      });
     }
     
     // Get the associated booking ID
     const bookingId = bill.bl_booking_id;
     
+    // Calculate refund amount if not provided
+    const calculatedRefund = Math.max(0, billTotal - totalCharges);
+    const finalRefund = refundAmount !== undefined ? parseFloat(refundAmount) : calculatedRefund;
+    
+    // Determine payment status based on refund
+    let paymentStatus = 'UNPAID';
+    if (finalRefund > 0) {
+      paymentStatus = 'REFUND_DUE';
+    } else if (totalCharges === billTotal) {
+      paymentStatus = 'FULLY_PAID';
+    } else {
+      paymentStatus = 'PARTIALLY_PAID';
+    }
+    
     // Update the bill with cancellation information
-    await bill.update({
-      bl_status: 'CANCELLED',
-      bl_railway_cancellation_charge: parseFloat(railwayCancellationCharge) || 0,
-      bl_agent_cancellation_charge: parseFloat(agentCancellationCharge) || 0,
-      bl_cancellation_remarks: cancellationRemarks || '',
-      bl_modified_by: convertUserIdToInt(req.user.us_usid),
-      bl_modified_at: new Date(),
-      modified_by: convertUserIdToInt(req.user.us_usid),
-      modified_on: new Date(),
-      status: 'CANCELLED'
-    }, { transaction });
+    try {
+      console.log(`[CANCELLATION DEBUG] Updating bill ${bill.bl_id} with charges: Railway=${railwayCharge}, Agent=${agentCharge}, SB=${sbCharge}`);
+      
+      const updatePayload = {
+        bl_status: 'CANCELLED',
+        is_cancelled: 1,
+        bl_railway_cancellation_charge: railwayCharge,
+        bl_agent_cancellation_charge: agentCharge,
+        bl_station_boy_cancellation_charge: sbCharge,
+        total_cancel_charges: totalCharges,
+        refund_amount: finalRefund,
+        payment_status: paymentStatus,
+        bl_cancellation_remarks: cancellationRemarks || '',
+        cancellation_date: cancellationDate ? new Date(cancellationDate) : new Date(),
+        cancelled_on: new Date(),
+        cancelled_by: req.user.us_usid, // VARCHAR(15) in DB
+        bl_modified_at: new Date(),
+        modified_by: convertUserIdToInt(req.user.us_usid),
+        modified_on: new Date(),
+        status: 'CANCELLED'
+      };
+      
+      await bill.update(updatePayload, { transaction });
+      console.log(`[CANCELLATION DEBUG] Bill update successful`);
+    } catch (updateError) {
+      console.error(`[CANCELLATION ERROR] Failed to update bill:`, updateError);
+      await transaction.rollback();
+      return res.status(500).json({ message: 'Failed to update bill during cancellation', error: updateError.message });
+    }
     
     // Update the associated booking status to CANCELLED
     if (bookingId) {
-      const booking = await BookingTVL.findByPk(bookingId, { transaction });
-      
-      if (booking) {
-        const oldStatus = booking.bk_status;
+      try {
+        const booking = await BookingTVL.findByPk(bookingId, { transaction });
         
-        // Update booking status to CANCELLED
-        await booking.update({
-          bk_status: 'CANCELLED',
-          mby: req.user.us_usid,
-          mdtm: new Date()
-        }, { transaction });
-        
-        // Log the automatic status change for audit purposes
-        console.log(`[BILLING CANCELLATION AUDIT] Bill ${bill.bl_bill_no} (ID: ${bill.bl_id}) cancelled by user ${req.user.us_usid}. ` +
-                    `Associated booking ${bookingId} status automatically changed from ${oldStatus} to CANCELLED. ` +
-                    `Railway cancellation charge: ${railwayCancellationCharge || 0}, ` +
-                    `Agent cancellation charge: ${agentCancellationCharge || 0}`);
+        if (booking) {
+          const oldStatus = booking.bk_status;
+          
+          // Update booking status to CANCELLED
+          await booking.update({
+            bk_status: 'CANCELLED',
+            mby: req.user.us_usid,
+            mdtm: new Date()
+          }, { transaction });
+          
+          console.log(`[CANCELLATION DEBUG] Booking ${bookingId} status updated to CANCELLED`);
+        }
+      } catch (bookingError) {
+        console.error(`[CANCELLATION ERROR] Failed to update booking ${bookingId}:`, bookingError);
+        await transaction.rollback();
+        return res.status(500).json({ message: 'Failed to update associated booking during cancellation', error: bookingError.message });
       }
     }
     
@@ -1015,8 +1101,50 @@ const cancelBill = async (req, res) => {
       // Don't throw error here as the bill cancellation should still proceed
     }
     
+    // Accounting Integration - Create journal entries for cancellation
+    try {
+      console.log(`[CANCELLATION DEBUG] Creating journal entries for Bill ${bill.bl_bill_no}`);
+      
+      const journalEntries = [
+        {
+          je_entry_no: generateJournalEntryNo('CN'),
+          je_date: new Date(),
+          je_account: 'CUSTOMER_ACCOUNT',
+          je_entry_type: 'Debit',
+          je_amount: finalRefund,
+          je_narration: `Refund due to customer for cancelled Bill ${bill.bl_bill_no}`,
+          je_ref_number: bill.bl_bill_no,
+          je_voucher_type: 'Journal',
+          je_created_by: req.user.us_usid,
+          je_status: 'Active'
+        },
+        {
+          je_entry_no: generateJournalEntryNo('CN'),
+          je_date: new Date(),
+          je_account: 'CANCELLATION_INCOME',
+          je_entry_type: 'Credit',
+          je_amount: totalCharges,
+          je_narration: `Cancellation charges for Bill ${bill.bl_bill_no}`,
+          je_ref_number: bill.bl_bill_no,
+          je_voucher_type: 'Journal',
+          je_created_by: req.user.us_usid,
+          je_status: 'Active'
+        }
+      ];
+      
+      await Journal.bulkCreate(journalEntries, { transaction });
+      console.log(`[CANCELLATION DEBUG] Journal entries created successfully`);
+    } catch (journalError) {
+      console.error(`[CANCELLATION ERROR] Failed to create journal entries:`, journalError);
+      // We don't necessarily want to rollback the whole transaction if accounting fails,
+      // but according to the user's rule #11, it MUST use a transaction.
+      // So I will throw and rollback.
+      throw journalError;
+    }
+    
     // Commit the transaction
     await transaction.commit();
+    console.log(`[CANCELLATION DEBUG] Transaction committed successfully for Bill ${bill.bl_id}`);
     
     res.json({ 
       success: true,
@@ -1024,8 +1152,13 @@ const cancelBill = async (req, res) => {
       data: {
         cancelledBillId: bill.bl_id,
         affectedBookingId: bookingId,
-        railwayCancellationCharge: parseFloat(railwayCancellationCharge) || 0,
-        agentCancellationCharge: parseFloat(agentCancellationCharge) || 0
+        railwayCancellationCharge: railwayCharge,
+        agentCancellationCharge: agentCharge,
+        stationBoyCharges: sbCharge,
+        totalCancellationCharges: totalCharges,
+        refundAmount: finalRefund,
+        paymentStatus: paymentStatus,
+        cancellationDate: cancellationDate || new Date().toISOString().split('T')[0]
       }
     });
   } catch (error) {
@@ -1033,8 +1166,11 @@ const cancelBill = async (req, res) => {
     await transaction.rollback();
     
     // Handle other errors
-    console.error('Cancel bill error:', error);
-    return res.status(500).json({ message: error.message || 'Server error during cancellation' });
+    console.error('[BILLING CANCELLATION ERROR]:', error);
+    return res.status(500).json({ 
+      success: false,
+      message: error.message || 'Server error during cancellation' 
+    });
   }
 };
 

@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Booking Creation</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 800px; margin: 50px auto; padding: 20px; }
+        button { padding: 10px 20px; margin: 10px; font-size: 16px; cursor: pointer; }
+        #output { background: #f5f5f5; padding: 15px; border-radius: 5px; margin-top: 20px; white-space: pre-wrap; }
+        .success { color: green; }
+        .error { color: red; }
+    </style>
+</head>
+<body>
+    <h1>🧪 Test Booking Creation</h1>
+    <button onclick="testBooking()">Create Test Booking</button>
+    <div id="output"></div>
+
+    <script>
+        async function testBooking() {
+            const output = document.getElementById('output');
+            output.innerHTML = 'Testing...\n';
+            
+            try {
+                // Step 1: Login
+                output.innerHTML += '\n1️⃣ Logging in...\n';
+                const loginRes = await fetch('/api/auth/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        email: 'admin@example.com',
+                        password: 'admin123'
+                    })
+                });
+                
+                const loginData = await loginRes.json();
+                
+                if (!loginRes.ok) {
+                    throw new Error(`Login failed: ${loginData.message}`);
+                }
+                
+                output.innerHTML += `✅ Login successful!\nToken: ${loginData.token.substring(0, 50)}...\n\n`;
+                
+                // Step 2: Create booking
+                output.innerHTML += '2️⃣ Creating booking...\n';
+                const bookingRes = await fetch('/api/bookings', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${loginData.token}`
+                    },
+                    body: JSON.stringify({
+                        phoneNumber: '9999999999',
+                        customerName: 'HTML Test Customer',
+                        fromStation: 'NDLS',
+                        toStation: 'BCT',
+                        travelDate: '2026-05-01',
+                        travelClass: 'SL',
+                        berthPreference: 'LOWER',
+                        totalPassengers: 1,
+                        passengerList: [],
+                        status: 'DRAFT'
+                    })
+                });
+                
+                const bookingData = await bookingRes.json();
+                
+                if (!bookingRes.ok) {
+                    throw new Error(`Booking failed: ${JSON.stringify(bookingData)}`);
+                }
+                
+                output.innerHTML += `\n✅ BOOKING CREATED SUCCESSFULLY!\n`;
+                output.innerHTML += `\nBooking ID: ${bookingData.data?.bk_bkid}`;
+                output.innerHTML += `\nBooking Number: ${bookingData.data?.bk_bkno}`;
+                output.innerHTML += `\nCustomer: ${bookingData.data?.bk_customername}`;
+                output.innerHTML += `\nPhone: ${bookingData.data?.bk_phonenumber}`;
+                output.innerHTML += `\nRoute: ${bookingData.data?.bk_fromst} → ${bookingData.data?.bk_tost}`;
+                output.innerHTML += `\nStatus: ${bookingData.data?.bk_status}`;
+                output.innerHTML += `\nEntered By: ${bookingData.data?.entered_by}`;
+                output.className = 'success';
+                
+            } catch (error) {
+                output.innerHTML += `\n❌ ERROR: ${error.message}\n`;
+                output.innerHTML += `\nStack: ${error.stack}\n`;
+                output.className = 'error';
+            }
+        }
+    </script>
+</body>
+</html>

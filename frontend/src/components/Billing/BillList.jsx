@@ -26,8 +26,8 @@ const BillList = ({ bills, loading, onEdit, onDelete, onFinalize, onExport, onVi
   };
 
   const canFinalize = (bill) => {
-    return (user?.us_usertype === 'admin' || user?.us_usertype === 'employee') && 
-           bill.status === 'DRAFT';
+    // No longer needed - bills are created as CONFIRMED by default
+    return false;
   };
 
   // Handle row click for selection

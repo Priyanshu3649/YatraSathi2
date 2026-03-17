@@ -1,4 +1,6 @@
-console.log('Starting server.js...');
+if (process.env.NODE_ENV === 'development') {
+  console.log('Starting server.js...');
+}
 const express = require('express');
 const cors = require('cors');
 const dotenv = require('dotenv');
@@ -15,10 +17,11 @@ app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Log all requests
+// Log all requests (development only)
 app.use((req, res, next) => {
-  console.log(`Incoming request: ${req.method} ${req.url}`);
-  console.log('Request headers:', req.headers);
+  if (process.env.NODE_ENV === 'development') {
+    console.log(`Incoming request: ${req.method} ${req.url}`);
+  }
   next();
 });
 
@@ -27,7 +30,9 @@ app.use(express.static('public'));
 
 // Routes
 app.get('/', (req, res) => {
-  console.log('Root route called');
+  if (process.env.NODE_ENV === 'development') {
+    console.log('Root route called');
+  }
   res.redirect('/demo-portals.html');
 });
 
@@ -38,8 +43,8 @@ require('./models');
 const authRoutes = require('./routes/authRoutes');
 const travelPlanRoutes = require('./routes/travelPlanRoutes');
 const reportRoutes = require('./routes/reportRoutes');
-const debugRoutes = require('./routes/debugRoutes');
 const dashboardRoutes = require('./routes/dashboardRoutes');
+const debugRoutes = require('./routes/debugRoutes');
 const permissionRoutes = require('./routes/permissionRoutes');
 const bookingRoutes = require('./routes/bookingRoutes');
 const paymentRoutes = require('./routes/paymentRoutes');
@@ -47,7 +52,6 @@ const contraRoutes = require('./routes/contraRoutes');
 const receiptRoutes = require('./routes/receiptRoutes');
 const journalRoutes = require('./routes/journalRoutes');
 const employeeRoutes = require('./routes/employeeRoutes');
-const employeeDashboardRoutes = require('./routes/employeeRoutes');
 const employeeBookingRoutes = require('./routes/employeeBookingRoutes');
 const employeePaymentRoutes = require('./routes/employeePaymentRoutes');
 const employeeBillingRoutes = require('./routes/employeeBillingRoutes');
@@ -73,13 +77,19 @@ const passengerRoutes = require('./routes/passengerRoutes');
 const healthRoutes = require('./routes/healthRoutes');
 
 // Use routes
-console.log('Registering auth routes');
+if (process.env.NODE_ENV === 'development') {
+  console.log('Registering auth routes');
+}
 app.use('/api/auth', authRoutes);
 app.use('/api/security', securityRoutes);
-console.log('Auth routes registered');
+if (process.env.NODE_ENV === 'development') {
+  console.log('Auth routes registered');
+}
 app.use('/api/travel-plans', travelPlanRoutes);
 app.use('/api/reports', reportRoutes);
-app.use('/api/debug', debugRoutes);
+if (process.env.NODE_ENV === 'development') {
+  app.use('/api/debug', debugRoutes);
+}
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/permissions', permissionRoutes);
 app.use('/api/bookings', bookingRoutes);
@@ -88,7 +98,7 @@ app.use('/api/contra', contraRoutes);
 app.use('/api/receipts', receiptRoutes);
 app.use('/api/journal', journalRoutes);
 app.use('/api/employees', employeeRoutes);
-app.use('/api/employee', employeeDashboardRoutes); // Employee dashboard routes
+app.use('/api/employee', employeeRoutes); // Employee dashboard routes
 // Employee booking, payment, and billing routes - separate access for employees
 app.use('/api/employee/bookings', employeeBookingRoutes);
 app.use('/api/employee/payments', employeePaymentRoutes);

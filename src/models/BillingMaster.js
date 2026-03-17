@@ -200,6 +200,42 @@ const BillingMaster = sequelizeTVL.define('billingMaster', {
   bl_booking_no: {
     type: DataTypes.STRING(30),
     allowNull: true
+  },
+  // Comprehensive cancellation fields
+  is_cancelled: {
+    type: DataTypes.TINYINT(1),
+    defaultValue: 0,
+    comment: 'Flag indicating if bill is cancelled'
+  },
+  cancelled_on: {
+    type: DataTypes.DATE,
+    allowNull: true,
+    comment: 'Timestamp when bill was cancelled'
+  },
+  cancelled_by: {
+    type: DataTypes.INTEGER,
+    allowNull: true,
+    comment: 'User ID who cancelled the bill'
+  },
+  cancellation_date: {
+    type: DataTypes.DATEONLY,
+    allowNull: true,
+    comment: 'Effective date of cancellation'
+  },
+  total_cancel_charges: {
+    type: DataTypes.DECIMAL(10, 2),
+    defaultValue: 0,
+    comment: 'Total cancellation charges (railway + agent)'
+  },
+  refund_amount: {
+    type: DataTypes.DECIMAL(10, 2),
+    defaultValue: 0,
+    comment: 'Refund amount after cancellation'
+  },
+  payment_status: {
+    type: DataTypes.ENUM('UNPAID', 'PARTIALLY_PAID', 'FULLY_PAID', 'REFUND_DUE'),
+    defaultValue: 'UNPAID',
+    comment: 'Payment status for cancelled bill'
   }
 }, {
   tableName: 'blXbilling',
@@ -231,6 +267,17 @@ const BillingMaster = sequelizeTVL.define('billingMaster', {
           if (options.userId && !bill.closed_by) {
             bill.closed_by = options.userId;
             bill.closed_on = new Date();
+          }
+        }
+      }
+      
+      // If bill is being cancelled (is_cancelled flag set), populate cancellation fields
+      if (bill.changed('is_cancelled') && bill.is_cancelled === 1) {
+        if (options.userId) {
+          bill.cancelled_by = options.userId;
+          bill.cancelled_on = new Date();
+          if (!bill.cancellation_date) {
+            bill.cancellation_date = new Date().toISOString().split('T')[0];
           }
         }
       }

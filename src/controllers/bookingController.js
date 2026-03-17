@@ -1,7 +1,27 @@
-const { BookingTVL, UserTVL, CustomerTVL: Customer, EmployeeTVL: Employee, StationTVL: Station } = require('../models');
-const { Passenger } = require('../models'); // Import the Passenger model
+const { BookingTVL, UserTVL, CustomerTVL: Customer, EmployeeTVL: Employee, StationTVL: Station, PassengerTVL: Passenger, Journal } = require('../models');
 const { Sequelize } = require('sequelize');
 const { sequelizeTVL: sequelize } = require('../../config/db'); // Use sequelizeTVL for TVL database
+
+// Helper function to convert string user ID to integer for database compatibility
+function convertUserIdToInt(userId) {
+  if (typeof userId === 'number') {
+    return userId;
+  }
+  
+  if (typeof userId === 'string') {
+    // Try to extract numeric part from alphanumeric ID (e.g., 'ADM001' -> 1)
+    const numericPart = userId.match(/\d+/);
+    if (numericPart) {
+      return parseInt(numericPart[0]);
+    }
+    
+    // If no numeric part found, use character codes as fallback
+    return userId.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0) % 1000000; // Limit to reasonable size
+  }
+  
+  // For null/undefined, return a default value or throw error based on requirements
+  return null; // or throw new Error('Invalid user ID');
+}
 
 // Create a new booking request
 const createBooking = async (req, res) => {
@@ -61,40 +81,66 @@ const createBooking = async (req, res) => {
     const random = Math.floor(Math.random() * 10000).toString().padStart(4, '0');
     const bookingNumber = `BK-${year}${month}${day}-${random}`;
     
-    // Disable foreign key checks for this transaction to allow any station input
-    await sequelize.query('SET FOREIGN_KEY_CHECKS = 0');
-    
     const transaction = await sequelize.transaction();
     
     try {
+      // Disable foreign key checks for this specific transaction's connection
+      await sequelize.query('SET FOREIGN_KEY_CHECKS = 0', { transaction });
+      
       let customerId = internalCustomerId;
       
       // MANDATORY: Atomic customer creation if customer doesn't exist
       if (!customerId) {
-        // Check if customer exists by phone number
-        const existingCustomer = await Customer.findOne({
-          include: [{
-            model: UserTVL,
-            as: 'user',
-            where: {
-              us_phone: cleanPhone
-            },
-            required: true
-          }],
+        console.log(`Searching for existing customer with phone: ${cleanPhone}`);
+        
+        // 1. First, check if a User record exists for this phone number
+        const existingUser = await UserTVL.findOne({
+          where: { us_phone: cleanPhone },
           transaction
         });
         
-        if (existingCustomer) {
-          // Customer exists, use their ID
-          customerId = existingCustomer.cu_usid;
+        if (existingUser) {
+          console.log(`✅ Found existing user: ${existingUser.us_usid}`);
+          
+          // 2. Check if this user also has a Customer record
+          const existingCustomer = await Customer.findOne({
+            where: { cu_usid: existingUser.us_usid },
+            transaction
+          });
+          
+          if (existingCustomer) {
+            console.log(`✅ Found existing customer for user: ${existingCustomer.cu_cusid}`);
+            customerId = existingCustomer.cu_usid;
+          } else {
+            // 3. User exists but no Customer record - create Customer record only
+            console.log(`📝 User exists but no customer record. Creating customer record for user: ${existingUser.us_usid}`);
+            const customerNumber = `CUST${Date.now()}${Math.floor(Math.random() * 1000)}`;
+            const customerPrimaryId = `CU${Math.floor(Math.random() * 1000000)}`;
+            
+            const newCustomer = await Customer.create({
+              cu_cusid: customerPrimaryId,
+              cu_usid: existingUser.us_usid,
+              cu_custno: customerNumber,
+              cu_custtype: 'WALK_IN',
+              cu_active: 1,
+              eby: req.user.us_usid,
+              mby: req.user.us_usid
+            }, { 
+              transaction,
+              userId: convertUserIdToInt(req.user.us_usid)
+            });
+            
+            customerId = newCustomer.cu_usid;
+          }
         } else {
-          // MANDATORY: Create new customer atomically
-          const nameParts = customerName.trim().split(' ');
-          const firstName = nameParts[0] || '';
-          const lastName = nameParts.slice(1).join(' ') || '';
+          // 4. Neither User nor Customer exists - create both
+          console.log('📝 Creating new user and customer records...');
+          const firstName = customerName.split(' ')[0] || 'Customer';
+          const lastName = customerName.split(' ').slice(1).join(' ') || '';
           
           // Create user record first
           const userPrimaryId = `US${Math.floor(Math.random() * 1000000)}`;
+          console.log('Creating new user record:', userPrimaryId);
           const newUser = await UserTVL.create({
             us_usid: userPrimaryId,
             us_fname: firstName,
@@ -105,13 +151,14 @@ const createBooking = async (req, res) => {
             us_roid: 'CUS',
             us_active: 1,
             us_password: 'PHONE_BOOKING', // Temporary password
-            eby: req.user.us_usid,
-            mby: req.user.us_usid
+            us_eby: req.user.us_usid,
+            us_mby: req.user.us_usid
           }, { transaction });
           
           // Create customer record
           const customerNumber = `CUST${Date.now()}${Math.floor(Math.random() * 1000)}`;
           const customerPrimaryId = `CU${Math.floor(Math.random() * 1000000)}`;
+          console.log('Creating new customer record:', customerPrimaryId);
           
           const newCustomer = await Customer.create({
             cu_cusid: customerPrimaryId,
@@ -121,11 +168,16 @@ const createBooking = async (req, res) => {
             cu_active: 1,
             eby: req.user.us_usid,
             mby: req.user.us_usid
-          }, { transaction });
+          }, { 
+            transaction,
+            userId: convertUserIdToInt(req.user.us_usid)
+          });
           
           customerId = newCustomer.cu_usid;
         }
       }
+      
+      console.log('Using customer ID:', customerId);
       
       // Validate status for creation (should not be INACTIVE)
       if (status === 'INACTIVE') {
@@ -155,7 +207,7 @@ const createBooking = async (req, res) => {
         mby: req.user.us_usid
       }, { 
         transaction,
-        userId: req.user.us_usid  // Pass userId for audit hooks
+        userId: convertUserIdToInt(req.user.us_usid)  // Convert to integer for BookingTVL audit hooks
       });
       console.timeEnd("BOOKING_CREATE_RECORD");
       
@@ -168,10 +220,6 @@ const createBooking = async (req, res) => {
         );
         
         if (validPassengers.length > 0) {
-          // Import models to access PassengerTVL
-          const models = require('../models');
-          const { PassengerTVL: Passenger } = models;
-          
           // Use optimized bulkCreate method with PassengerTVL model for better performance
           const passengerDataBatch = validPassengers.map(passenger => ({
             ps_bkid: booking.bk_bkid,
@@ -487,12 +535,12 @@ const updateBooking = async (req, res) => {
       return res.status(403).json({ message: 'Access denied' });
     }
     
-    // Disable foreign key checks for this transaction to allow any station input
-    await sequelize.query('SET FOREIGN_KEY_CHECKS = 0');
-    
     const transaction = await sequelize.transaction();
     
     try {
+      // Disable foreign key checks for this specific transaction's connection
+      await sequelize.query('SET FOREIGN_KEY_CHECKS = 0', { transaction });
+      
       const { passengerList, 
               bk_fromst, bk_tost, bk_trvldt, bk_class, bk_quota, 
               bk_berthpref, bk_totalpass, bk_remarks, bk_status,
@@ -524,14 +572,11 @@ const updateBooking = async (req, res) => {
       // Update booking details with validated fields only
       await booking.update(updateData, { 
         transaction,
-        userId: req.user.us_usid  // Pass userId for audit hooks
+        userId: convertUserIdToInt(req.user.us_usid)  // Convert to integer for BookingTVL audit hooks
       });
       
       // If passenger list is provided, update passenger records - OPTIMIZED BATCH PROCESSING
       if (passengerList && Array.isArray(passengerList)) {
-        const models = require('../models');
-        const Passenger = models.PassengerTVL;
-        
         // First, mark all existing passengers as inactive for this booking
         await Passenger.update(
           { ps_active: 0, mby: req.user.us_usid },

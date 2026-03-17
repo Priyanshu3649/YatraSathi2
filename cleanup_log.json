@@ -1,0 +1,250 @@
+{
+  "timestamp": "2026-03-04T05:57:12.956Z",
+  "backupVerified": true,
+  "filesToRemove": [],
+  "filesKept": [
+    {
+      "path": ".env",
+      "name": ".env",
+      "size": 301
+    },
+    {
+      "path": ".gitignore",
+      "name": ".gitignore",
+      "size": 190
+    },
+    {
+      "path": "CLEANUP_REPORT.md",
+      "name": "CLEANUP_REPORT.md",
+      "size": 5799
+    },
+    {
+      "path": "PROJECT_ANALYSIS_REPORT.md",
+      "name": "PROJECT_ANALYSIS_REPORT.md",
+      "size": 2752
+    },
+    {
+      "path": "PROJECT_CLEANUP_PLAN.md",
+      "name": "PROJECT_CLEANUP_PLAN.md",
+      "size": 2631
+    },
+    {
+      "path": "README.md",
+      "name": "README.md",
+      "size": 8135
+    },
+    {
+      "path": "add-missing-roles.js",
+      "name": "add-missing-roles.js",
+      "size": 1265
+    },
+    {
+      "path": "analyze-debug-output.js",
+      "name": "analyze-debug-output.js",
+      "size": 2781
+    },
+    {
+      "path": "check-billing-table-structure.js",
+      "name": "check-billing-table-structure.js",
+      "size": 950
+    },
+    {
+      "path": "cleanup-project.js",
+      "name": "cleanup-project.js",
+      "size": 11011
+    },
+    {
+      "path": "cleanup_criteria.md",
+      "name": "cleanup_criteria.md",
+      "size": 1092
+    },
+    {
+      "path": "cleanup_log.json",
+      "name": "cleanup_log.json",
+      "size": 42642
+    },
+    {
+      "path": "cleanup_log.txt",
+      "name": "cleanup_log.txt",
+      "size": 3648
+    },
+    {
+      "path": "comprehensive_test.js",
+      "name": "comprehensive_test.js",
+      "size": 6937
+    },
+    {
+      "path": "create-accounting-tables.sql",
+      "name": "create-accounting-tables.sql",
+      "size": 4097
+    },
+    {
+      "path": "create-audit-tables.sql",
+      "name": "create-audit-tables.sql",
+      "size": 5372
+    },
+    {
+      "path": "create-billing-master-table.sql",
+      "name": "create-billing-master-table.sql",
+      "size": 3034
+    },
+    {
+      "path": "create-demo-data.js",
+      "name": "create-demo-data.js",
+      "size": 884
+    },
+    {
+      "path": "create-financial-transaction-table.sql",
+      "name": "create-financial-transaction-table.sql",
+      "size": 15613
+    },
+    {
+      "path": "create-lgxledger-table.sql",
+      "name": "create-lgxledger-table.sql",
+      "size": 1708
+    },
+    {
+      "path": "create-master-passenger-table.sql",
+      "name": "create-master-passenger-table.sql",
+      "size": 1673
+    },
+    {
+      "path": "create-payments-accounting-tables.sql",
+      "name": "create-payments-accounting-tables.sql",
+      "size": 8496
+    },
+    {
+      "path": "create-psXpassenger-table.sql",
+      "name": "create-psXpassenger-table.sql",
+      "size": 1258
+    },
+    {
+      "path": "debug-booking-billing-flow.js",
+      "name": "debug-booking-billing-flow.js",
+      "size": 2009
+    },
+    {
+      "path": "demo-booking-billing-workflow.js",
+      "name": "demo-booking-billing-workflow.js",
+      "size": 5399
+    },
+    {
+      "path": "direct-api-test.js",
+      "name": "direct-api-test.js",
+      "size": 1745
+    },
+    {
+      "path": "final-billing-fix-verification.js",
+      "name": "final-billing-fix-verification.js",
+      "size": 3194
+    },
+    {
+      "path": "final-delete-test.js",
+      "name": "final-delete-test.js",
+      "size": 1883
+    },
+    {
+      "path": "final-ultimate-delete-test.js",
+      "name": "final-ultimate-delete-test.js",
+      "size": 1917
+    },
+    {
+      "path": "fix-booking-billing-consistency.js",
+      "name": "fix-booking-billing-consistency.js",
+      "size": 3872
+    },
+    {
+      "path": "fix-passenger-schema.js",
+      "name": "fix-passenger-schema.js",
+      "size": 2203
+    },
+    {
+      "path": "package-lock.json",
+      "name": "package-lock.json",
+      "size": 170252
+    },
+    {
+      "path": "package.json",
+      "name": "package.json",
+      "size": 1116
+    },
+    {
+      "path": "performance-diagnostic.js",
+      "name": "performance-diagnostic.js",
+      "size": 3078
+    },
+    {
+      "path": "remove-inline-css.js",
+      "name": "remove-inline-css.js",
+      "size": 768
+    },
+    {
+      "path": "setup-mysql.sh",
+      "name": "setup-mysql.sh",
+      "size": 3370
+    },
+    {
+      "path": "simple-billing-verification.js",
+      "name": "simple-billing-verification.js",
+      "size": 3486
+    },
+    {
+      "path": "simple-delete-test.js",
+      "name": "simple-delete-test.js",
+      "size": 1256
+    },
+    {
+      "path": "test-delete-api.html",
+      "name": "test-delete-api.html",
+      "size": 3401
+    },
+    {
+      "path": "test-filter-panel-layout.html",
+      "name": "test-filter-panel-layout.html",
+      "size": 2904
+    },
+    {
+      "path": "ultimate-delete-test.js",
+      "name": "ultimate-delete-test.js",
+      "size": 1895
+    },
+    {
+      "path": "verify-billing-fix-complete.js",
+      "name": "verify-billing-fix-complete.js",
+      "size": 1840
+    },
+    {
+      "path": "verify-billing-fix.js",
+      "name": "verify-billing-fix.js",
+      "size": 2373
+    },
+    {
+      "path": "verify-billing-integration.js",
+      "name": "verify-billing-integration.js",
+      "size": 6228
+    },
+    {
+      "path": "verify-booking-billing-consistency.js",
+      "name": "verify-booking-billing-consistency.js",
+      "size": 2713
+    },
+    {
+      "path": "verify-fix-completed.js",
+      "name": "verify-fix-completed.js",
+      "size": 2592
+    },
+    {
+      "path": "verify-passenger-billing-changes.js",
+      "name": "verify-passenger-billing-changes.js",
+      "size": 5915
+    }
+  ],
+  "errors": [],
+  "summary": {
+    "totalScanned": 47,
+    "markedForRemoval": 0,
+    "kept": 47,
+    "removed": 0,
+    "failed": 0
+  }
+}

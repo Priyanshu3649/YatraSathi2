@@ -61,33 +61,49 @@ const CustomerTVL = sequelizeTVL.define('cuXcustomer', {
     allowNull: true,
     comment: 'GST Number'
   },
-  // Audit fields
-  edtm: {
+  entered_by: {
+    type: DataTypes.INTEGER,
+    allowNull: true,
+    comment: 'Entered By User ID'
+  },
+  entered_on: {
     type: DataTypes.DATE,
     defaultValue: DataTypes.NOW,
-    allowNull: true,
-    comment: 'Entered Date Time'
+    comment: 'Entered On'
   },
-  eby: {
-    type: DataTypes.STRING(15),
+  modified_by: {
+    type: DataTypes.INTEGER,
     allowNull: true,
-    comment: 'Entered By'
+    comment: 'Modified By User ID'
   },
-  mdtm: {
+  modified_on: {
     type: DataTypes.DATE,
-    defaultValue: DataTypes.NOW,
-    allowNull: true,
-    onUpdate: DataTypes.NOW,
-    comment: 'Modified Date Time'
+    comment: 'Modified On'
   },
-  mby: {
-    type: DataTypes.STRING(15),
-    allowNull: true,
-    comment: 'Modified By'
+  status: {
+    type: DataTypes.ENUM('OPEN', 'CLOSED', 'CANCELLED'),
+    defaultValue: 'OPEN'
   }
 }, {
+  sequelize: sequelizeTVL,
+  modelName: 'cuXcustomer',
   tableName: 'cuXcustomer',
-  timestamps: false
+  timestamps: false,
+  hooks: {
+    beforeCreate: (customer, options) => {
+      if (options.userId) {
+        customer.entered_by = options.userId;
+        customer.entered_on = new Date();
+        if (!customer.status) customer.status = 'OPEN';
+      }
+    },
+    beforeUpdate: (customer, options) => {
+      if (options.userId) {
+        customer.modified_by = options.userId;
+        customer.modified_on = new Date();
+      }
+    }
+  }
 });
 
 // Define associations
