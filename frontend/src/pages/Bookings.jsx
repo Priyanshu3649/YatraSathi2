@@ -585,6 +585,20 @@ const Bookings = () => {
   // Define handleRecordSelect before functions that depend on it
   const handleRecordSelect = useCallback(async (record) => {
     setSelectedBooking(record);
+    
+    // Fetch billing data to get PNR if available
+    let billingPNR = null;
+    if (record.hasBilling && record.bk_bkid) {
+      try {
+        const billingResponse = await billingAPI.getBillByBookingId(record.bk_bkid);
+        if (billingResponse.success && billingResponse.data) {
+          billingPNR = billingResponse.data.bl_pnr || billingResponse.data.pnrNumbers || billingResponse.data.pnrNumber || null;
+        }
+      } catch (error) {
+        console.warn('Failed to fetch billing for PNR:', error);
+      }
+    }
+    
     setFormData({
       bookingId: record.bk_bkid || '',
       bookingDate: record.bk_bookingdt ? new Date(record.bk_bookingdt).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
@@ -598,7 +612,7 @@ const Bookings = () => {
       travelDate: record.bk_trvldt ? new Date(record.bk_trvldt).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
       travelClass: record.bk_class || record.bk_travelclass || '3A',
       quotaType: mapQuotaValueToFrontend(record.quotaType || record.bk_quotatype || record.bk_quota || ''),
-      pnrNumber: record.pnrNumber || record.bk_pnr || '', // NEW: PNR field
+      pnrNumber: billingPNR || record.pnrNumber || record.bk_pnr || '', // Priority: Billing PNR > Booking PNR
       remarks: record.bk_remarks || '',
       status: record.bk_status || 'DRAFT',
       createdBy: record.createdBy || record.bk_createdby || 'system',

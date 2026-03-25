@@ -1,11 +1,18 @@
 // Payment Form Component - Money going out
-// Implements the ASCII wireframe layout as specified
+// Modern ERP styling matching bookings/billing
 
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useKeyboardNavigation } from '../../contexts/KeyboardNavigationContext';
 import useKeyboardNav from '../../hooks/useKeyboardNavigation';
 import SaveConfirmationModal from '../common/SaveConfirmationModal';
+import '../../styles/vintage-erp-theme.css';
+import '../../styles/classic-enterprise-global.css';
+import '../../styles/vintage-admin-panel.css';
+import '../../styles/dynamic-admin-panel.css';
+import '../../styles/vintage-erp-global.css';
+import '../../styles/bookings.css';
+import '../../dense.css';
 
 const PaymentForm = ({ onBack }) => {
   const { user } = useAuth();

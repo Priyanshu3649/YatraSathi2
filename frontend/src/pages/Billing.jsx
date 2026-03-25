@@ -142,6 +142,7 @@ import BillCreationForm from '../components/Billing/BillCreationForm';
 import BillList from '../components/Billing/BillList';
 import BillDetails from '../components/Billing/BillDetails';
 import CustomerLedger from '../components/Billing/CustomerLedger';
+// Integrated Cancellation logic directly into Billing to avoid React Fiber HMR bugs
 
 const Billing = () => {
   const { user } = useAuth();
@@ -172,18 +173,28 @@ const Billing = () => {
   // Editing state (MOVED TO TOP to avoid TDZ)
   const [isEditing, setIsEditing] = useState(false);
   const [isPassengerSectionOpen, setIsPassengerSectionOpen] = useState(false);
-  // Cancellation modal state - simplified
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [showCancelConfirmDialog, setShowCancelConfirmDialog] = useState(false);
-  const [cancelFormData, setCancelFormData] = useState({
-    railwayCancellationCharge: '',
-    agentCancellationCharge: '',
-    stationBoyCharges: '',
-    cancellationRemarks: '',
-    cancellationDate: new Date().toISOString().split('T')[0],
-    totalCancellationCharges: 0,
-    refundAmount: 0
+  
+  const [cancelData, setCancelData] = useState({
+    railwayCharge: '',
+    agentCharge: '',
+    stationBoyCharge: '',
+    remarks: '',
+    date: new Date().toISOString().split('T')[0],
   });
+  
+  const cancelFormRef = useRef(null);
+  const cancelConfirmBtnRef = useRef(null);
+
+  // Derived Values for Cancellation
+  const railwayC = parseFloat(cancelData.railwayCharge) || 0;
+  const agentC = parseFloat(cancelData.agentCharge) || 0;
+  const stationBoyC = parseFloat(cancelData.stationBoyCharge) || 0;
+  const totalC = railwayC + agentC + stationBoyC;
+  const billTotalC = selectedBill ? (parseFloat(selectedBill.totalAmount || selectedBill.bl_total_amount) || 0) : 0;
+  const refundC = Math.max(0, billTotalC - totalC);
+  const isCancelValid = railwayC > 0 || agentC > 0 || stationBoyC > 0;
   
   // Booking integration state
   const [bookingData, setBookingData] = useState(null);
@@ -915,242 +926,94 @@ const Billing = () => {
   };
 
   const handleCancelBill = async (billId) => {
-    // Reset form data when opening modal
-    setCancelFormData({
-      railwayCancellationCharge: '',
-      agentCancellationCharge: '',
-      stationBoyCharges: '',
-      cancellationRemarks: '',
-      cancellationDate: new Date().toISOString().split('T')[0],
-      totalCancellationCharges: 0,
-      refundAmount: 0
+    setCancelData({
+      railwayCharge: '', agentCharge: '', stationBoyCharge: '',
+      remarks: '', date: new Date().toISOString().split('T')[0],
     });
-    
-    // Show cancellation modal
     setShowCancelModal(true);
+    setShowCancelConfirmDialog(false);
+    
+    // Auto focus first input
+    setTimeout(() => {
+      const firstInput = cancelFormRef.current?.querySelector('input[name="railwayCharge"]');
+      if (firstInput) {
+        firstInput.focus();
+        if (firstInput.select) firstInput.select();
+      }
+    }, 100);
   };
 
-  // Calculate cancellation charges and refund amount
-  useEffect(() => {
-    if (showCancelModal && selectedBill) {
-      const railwayCharge = parseFloat(cancelFormData.railwayCancellationCharge) || 0;
-      const agentCharge = parseFloat(cancelFormData.agentCancellationCharge) || 0;
-      const stationBoyCharge = parseFloat(cancelFormData.stationBoyCharges) || 0;
-      const totalCharges = railwayCharge + agentCharge + stationBoyCharge;
-      
-      const billTotal = parseFloat(selectedBill.totalAmount) || 0;
-      const amountPaid = parseFloat(selectedBill.amountReceived) || 0;
-      const refundAmt = Math.max(0, amountPaid - totalCharges);
-      
-      setCancelFormData(prev => ({
-        ...prev,
-        totalCancellationCharges: totalCharges,
-        refundAmount: refundAmt
-      }));
-    }
-  }, [cancelFormData.railwayCancellationCharge, cancelFormData.agentCancellationCharge, cancelFormData.stationBoyCharges, showCancelModal, selectedBill]);
+  const handleExecuteCancel = async () => {
+    if (!isCancelValid) return alert('Enter at least one cancellation charge.');
+    if (totalC > billTotalC) return alert(`Charges (₹${totalC}) exceed bill total.`);
 
-  const handleCancelConfirmed = async () => {
-    console.log('🏁 handleCancelConfirmed started');
-    if (!selectedBill) {
-      console.warn('⚠️ No bill selected for cancellation');
-      return;
-    }
-    
-    // Validation: At least one cancellation charge must be entered
-    const railwayCharge = parseFloat(cancelFormData.railwayCancellationCharge || 0);
-    const agentCharge = parseFloat(cancelFormData.agentCancellationCharge || 0);
-    const stationBoyCharge = parseFloat(cancelFormData.stationBoyCharges || 0);
-    
-    console.log(`📊 Charges: Railway=${railwayCharge}, Agent=${agentCharge}, SB=${stationBoyCharge}`);
-    
-    if (railwayCharge === 0 && agentCharge === 0 && stationBoyCharge === 0) {
-      alert('Please enter at least one cancellation charge (Railway, Agent, or Station Boy)');
-      return;
-    }
-    
-    // Validation: Cancellation charges cannot exceed total bill amount
-    const totalCharges = railwayCharge + agentCharge + stationBoyCharge;
-    const billTotal = parseFloat(selectedBill.totalAmount) || 0;
-    
-    console.log(`💰 Total Charges: ${totalCharges}, Bill Total: ${billTotal}`);
-    
-    if (totalCharges > billTotal) {
-      alert(`Total cancellation charges (${totalCharges.toFixed(2)}) cannot exceed bill amount (${billTotal.toFixed(2)})`);
-      return;
-    }
-    
     try {
-      const billIdForApi = selectedBill.id || selectedBill.bl_id;
-      console.log(`🔄 Initiating API call for bill ID: ${billIdForApi}`);
+      const payload = {
+        railwayCancellationCharge: railwayC,
+        agentCancellationCharge: agentC,
+        stationBoyCharges: stationBoyC,
+        totalCancellationCharges: totalC,
+        refundAmount: refundC,
+        cancellationRemarks: cancelData.remarks,
+        cancellationDate: cancelData.date
+      };
+
+      await billingAPI.cancelBill(selectedBill.id || selectedBill.bl_id, payload);
+      alert('Bill safely cancelled and booking updated.');
       
-      // Call the API to cancel the bill with comprehensive data
-      const result = await billingAPI.cancelBill(billIdForApi, {
-        railwayCancellationCharge: railwayCharge,
-        agentCancellationCharge: agentCharge,
-        stationBoyCharges: stationBoyCharge,
-        cancellationRemarks: cancelFormData.cancellationRemarks,
-        cancellationDate: cancelFormData.cancellationDate,
-        totalCancellationCharges: totalCharges,
-        refundAmount: cancelFormData.refundAmount
-      });
-      
-      console.log('✅ API call successful:', result);
-      
-      // Close modal and reset form
       setShowCancelModal(false);
       setShowCancelConfirmDialog(false);
-      setCancelFormData({
-        railwayCancellationCharge: '',
-        agentCancellationCharge: '',
-        stationBoyCharges: '',
-        cancellationRemarks: '',
-        cancellationDate: new Date().toISOString().split('T')[0],
-        totalCancellationCharges: 0,
-        refundAmount: 0
-      });
-      
-      // Refresh the bills list
-      console.log('🔄 Refreshing bills list...');
-      await fetchBills();
-      
-      // Clear selection to force user to re-select the updated record
+      fetchBills();
       setSelectedBill(null);
-      
-      // Show success message
-      alert('Bill cancelled successfully. Associated booking status updated to CANCELLED.');
-    } catch (error) {
-      console.error('❌ Error in handleCancelConfirmed:', error);
-      alert('Error cancelling bill: ' + (error.message || 'Unknown error occurred'));
-      setShowCancelConfirmDialog(false); // Make sure to close the dialog on error so user can fix data
+    } catch (err) {
+      alert('Failed: ' + err.message);
     }
   };
 
-  // Handle keyboard navigation in the cancellation modal
-  const handleCancelModalKeyDown = (e) => {
+  const handleCancelModalKeys = (e) => {
+    e.stopPropagation();
     if (e.key === 'Escape') {
       e.preventDefault();
-      setShowCancelModal(false);
-      setShowCancelConfirmDialog(false);
-    } else if (e.key === 'Enter') {
-      // Handle Enter key based on context
-      if (e.target.tagName === 'TEXTAREA') {
-        // Allow normal Enter behavior in textarea (new line)
-        return;
+      if (showCancelConfirmDialog) setShowCancelConfirmDialog(false);
+      else setShowCancelModal(false);
+      return;
+    }
+    
+    if (showCancelConfirmDialog) {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        handleExecuteCancel();
       }
-      
-      // For input fields, move to next field or show confirmation
-      e.preventDefault();
-      
-      // Order: Railway → Agent → Station Boy → Total → Refund → Date → Remarks
-      const focusableElements = cancelModalRef.current.querySelectorAll(
-        'input:not([disabled]), textarea:not([disabled])'
-      );
-      
-      // Filter elements to match the exact tab order (1-7)
-      const orderedElements = Array.from(focusableElements).sort((a, b) => {
-        return (parseInt(a.getAttribute('tabindex')) || 0) - (parseInt(b.getAttribute('tabindex')) || 0);
-      }).filter(el => (parseInt(el.getAttribute('tabindex')) || 0) > 0);
-      
-      const currentIndex = orderedElements.findIndex(
-        el => el === document.activeElement
-      );
-      
-      if (currentIndex >= 0 && currentIndex < orderedElements.length - 1) {
-        // Move to next field
-        orderedElements[currentIndex + 1].focus();
-        if (orderedElements[currentIndex + 1].select && orderedElements[currentIndex + 1].tagName === 'INPUT') {
-          orderedElements[currentIndex + 1].select();
-        }
-      } else if (currentIndex === orderedElements.length - 1) {
-        // On last field (Remarks), show confirmation dialog
-        setShowCancelConfirmDialog(true);
-      }
-    } else if (e.key === 'Tab') {
-      // Order: Railway → Agent → Station Boy → Total → Refund → Date → Remarks
-      const focusableElements = cancelModalRef.current.querySelectorAll(
-        'input:not([disabled]), textarea:not([disabled])'
-      );
-      
-      // Filter and sort elements to match the exact tab order (1-7)
-      const orderedElements = Array.from(focusableElements).sort((a, b) => {
-        return (parseInt(a.getAttribute('tabindex')) || 0) - (parseInt(b.getAttribute('tabindex')) || 0);
-      }).filter(el => (parseInt(el.getAttribute('tabindex')) || 0) > 0);
-      
-      // Get the index of currently focused element
-      const currentIndex = orderedElements.findIndex(
-        el => el === document.activeElement
-      );
+      return;
+    }
 
-      if (e.shiftKey) {
-        // Shift+Tab: Reverse navigation
-        if (currentIndex <= 0) {
-          // If on first element or none, wrap to last
-          e.preventDefault();
-          orderedElements[orderedElements.length - 1].focus();
+    const inputs = Array.from(cancelFormRef.current?.querySelectorAll('input:not([disabled]), textarea:not([disabled]), button:not([disabled])') || []);
+    const currentIndex = inputs.indexOf(e.target);
+
+    if (e.key === 'Tab') {
+      if (e.target.name === 'remarks' && !e.shiftKey) {
+        e.preventDefault();
+        if (isCancelValid) {
+            setShowCancelConfirmDialog(true);
+            setTimeout(() => cancelConfirmBtnRef.current?.focus(), 100);
         } else {
-          // Normal Shift+Tab behavior within the ordered list
-          e.preventDefault();
-          orderedElements[currentIndex - 1].focus();
+            inputs[inputs.length - 1]?.focus(); // Go to Review Button
         }
-      } else {
-        // Tab: Forward navigation
-        if (currentIndex === orderedElements.length - 1) {
-          // Tabbing from last input field (Remarks) - show confirmation dialog
-          e.preventDefault();
-          setShowCancelConfirmDialog(true);
-        } else if (currentIndex === -1) {
-          // No element focused, focus first
-          e.preventDefault();
-          orderedElements[0].focus();
-        } else {
-          // Normal Tab behavior within the ordered list
-          e.preventDefault();
-          orderedElements[currentIndex + 1].focus();
+      }
+    } else if (e.key === 'Enter') {
+      if (e.target.tagName !== 'TEXTAREA' && e.target.tagName !== 'BUTTON') {
+        e.preventDefault();
+        if (currentIndex >= 0 && currentIndex < inputs.length - 1) {
+          inputs[currentIndex + 1].focus();
+        } else if (currentIndex === inputs.length - 1 || e.target.name === 'remarks') {
+          if (isCancelValid) {
+              setShowCancelConfirmDialog(true);
+              setTimeout(() => cancelConfirmBtnRef.current?.focus(), 100);
+          }
         }
       }
     }
   };
-
-  // Effect to manage focus when cancellation modal opens/closes
-  useEffect(() => {
-    if (showCancelModal && cancelModalRef.current && !showCancelConfirmDialog) {
-      // Focus the first field (Railway Cancellation Charge) when modal opens
-      const firstField = cancelModalRef.current.querySelector(
-        'input[tabindex="1"]'
-      );
-      if (firstField) {
-        setTimeout(() => {
-          firstField.focus();
-          if (firstField.select) firstField.select(); // Select all text for easy editing
-        }, 150);
-      }
-      
-      // Prevent body scroll when modal is open
-      document.body.style.overflow = 'hidden';
-    } else if (!showCancelModal && !showCancelConfirmDialog) {
-      // Restore body scroll when modal closes
-      document.body.style.overflow = 'unset';
-    }
-    
-    // Cleanup function
-    return () => {
-      document.body.style.overflow = 'unset';
-    };
-  }, [showCancelModal, showCancelConfirmDialog]);
-
-  // Effect to manage focus in the confirmation dialog
-  useEffect(() => {
-    if (showCancelConfirmDialog) {
-      const confirmButton = document.querySelector('.erp-modal-footer .erp-button-danger');
-      if (confirmButton) {
-        setTimeout(() => {
-          confirmButton.focus();
-          console.log('🎯 Confirmation button focused automatically');
-        }, 150);
-      }
-    }
-  }, [showCancelConfirmDialog]);
 
   const handleFinalizeBill = async (billId) => {
     try {
@@ -2662,304 +2525,75 @@ const Billing = () => {
         />
       )}
 
-      {/* Cancellation Modal - Simple Interface with 3 Charge Fields */}
-      {showCancelModal && selectedBill && (
-        <div className="erp-modal-overlay" onClick={(e) => {
-          if (e.target === e.currentTarget) {
-            setShowCancelModal(false);
-          }
-        }}>
-          <div className="erp-modal" style={{ maxWidth: '600px' }} ref={cancelModalRef}>
+      {showCancelModal && selectedBill && !showCancelConfirmDialog && (
+        <div className="erp-modal-overlay" onKeyDown={handleCancelModalKeys}>
+          <div className="erp-modal" ref={cancelFormRef}>
             <div className="erp-modal-header">
               <h3>🚫 Cancel Bill - {selectedBill.billId || selectedBill.bl_bill_no}</h3>
-              <button 
-                className="erp-modal-close" 
-                onClick={() => setShowCancelModal(false)}
-                aria-label="Close"
-                tabIndex={-1}
-              >
-                ×
-              </button>
+              <button className="erp-modal-close" onClick={() => setShowCancelModal(false)}>×</button>
             </div>
-            
             <div className="erp-modal-body">
-              {/* Bill ID Display */}
-              <div style={{ marginBottom: '15px', padding: '10px', background: '#f8f9fa', borderRadius: '4px' }}>
-                <label style={{ fontSize: '11px', color: '#666', display: 'block', marginBottom: '3px' }}>Bill ID:</label>
-                <input 
-                  type="text" 
-                  className="erp-input" 
-                  value={selectedBill.billId || selectedBill.bl_bill_no} 
-                  readOnly 
-                  style={{ background: '#f5f5f5', fontWeight: 'bold' }} 
-                  tabIndex={-1} 
-                />
-              </div>
-
-              {/* Field 1: Railway Cancellation Charge */}
               <div className="erp-form-group" style={{ marginBottom: '12px' }}>
-                <label className="erp-form-label" style={{ width: '200px', fontWeight: 'bold' }}>
-                  Railway Cancellation Charge (₹):
-                  <span style={{ color: '#d32f2f', marginLeft: '4px' }}>*</span>
-                </label>
-                <input
-                  type="number"
-                  name="railwayCancellationCharge"
-                  className="erp-input"
-                  value={cancelFormData.railwayCancellationCharge}
-                  onChange={(e) => setCancelFormData({
-                    ...cancelFormData,
-                    railwayCancellationCharge: e.target.value
-                  })}
-                  placeholder="0.00"
-                  min="0"
-                  step="0.01"
-                  tabIndex={1}
-                  onKeyDown={(e) => handleCancelModalKeyDown(e)}
-                  style={{ width: 'calc(100% - 210px)' }}
-                  autoFocus
-                  aria-label="Railway Cancellation Charge"
-                />
+                <label className="erp-form-label">Railway Cancellation Charge (₹): *</label>
+                <input type="number" name="railwayCharge" className="erp-input" value={cancelData.railwayCharge} onChange={e => setCancelData({...cancelData, railwayCharge: e.target.value})} min="0" step="0.01" />
               </div>
-
-              {/* Field 2: Agent Cancellation Charge */}
               <div className="erp-form-group" style={{ marginBottom: '12px' }}>
-                <label className="erp-form-label" style={{ width: '200px', fontWeight: 'bold' }}>
-                  Agent Cancellation Charge (₹):
-                  <span style={{ color: '#d32f2f', marginLeft: '4px' }}>*</span>
-                </label>
-                <input
-                  type="number"
-                  name="agentCancellationCharge"
-                  className="erp-input"
-                  value={cancelFormData.agentCancellationCharge}
-                  onChange={(e) => setCancelFormData({
-                    ...cancelFormData,
-                    agentCancellationCharge: e.target.value
-                  })}
-                  placeholder="0.00"
-                  min="0"
-                  step="0.01"
-                  tabIndex={2}
-                  onKeyDown={(e) => handleCancelModalKeyDown(e)}
-                  style={{ width: 'calc(100% - 210px)' }}
-                  aria-label="Agent Cancellation Charge"
-                />
+                <label className="erp-form-label">Agent Cancellation Charge (₹): *</label>
+                <input type="number" name="agentCharge" className="erp-input" value={cancelData.agentCharge} onChange={e => setCancelData({...cancelData, agentCharge: e.target.value})} min="0" step="0.01" />
               </div>
-
-              {/* Field 3: Station Boy Charges */}
               <div className="erp-form-group" style={{ marginBottom: '12px' }}>
-                <label className="erp-form-label" style={{ width: '200px', fontWeight: 'bold' }}>
-                  Station Boy Charges (₹):
-                  <span style={{ color: '#d32f2f', marginLeft: '4px' }}>*</span>
-                </label>
-                <input
-                  type="number"
-                  name="stationBoyCharges"
-                  className="erp-input"
-                  value={cancelFormData.stationBoyCharges}
-                  onChange={(e) => setCancelFormData({
-                    ...cancelFormData,
-                    stationBoyCharges: e.target.value
-                  })}
-                  placeholder="0.00"
-                  min="0"
-                  step="0.01"
-                  tabIndex={3}
-                  onKeyDown={(e) => handleCancelModalKeyDown(e)}
-                  style={{ width: 'calc(100% - 210px)' }}
-                  aria-label="Station Boy Charges"
-                />
+                <label className="erp-form-label">Station Boy Charges (₹): *</label>
+                <input type="number" name="stationBoyCharge" className="erp-input" value={cancelData.stationBoyCharge} onChange={e => setCancelData({...cancelData, stationBoyCharge: e.target.value})} min="0" step="0.01" />
               </div>
-
-              {/* Field 4: Total Cancellation Charges (Read-only but focusable) */}
               <div className="erp-form-group" style={{ marginBottom: '12px' }}>
-                <label className="erp-form-label" style={{ width: '200px', fontWeight: 'bold' }}>Total Cancellation Charges (₹):</label>
-                <input
-                  type="text"
-                  className="erp-input"
-                  value={`₹${cancelFormData.totalCancellationCharges.toFixed(2)}`}
-                  readOnly
-                  tabIndex={4}
-                  onKeyDown={(e) => handleCancelModalKeyDown(e)}
-                  style={{ width: 'calc(100% - 210px)', background: '#f5f5f5', fontWeight: 'bold' }}
-                  aria-label="Total Cancellation Charges"
-                />
+                <label className="erp-form-label">Total Cancellation (₹):</label>
+                <input type="text" className="erp-input" value={`₹${totalC.toFixed(2)}`} readOnly style={{ background: '#f5f5f5', fontWeight: 'bold' }} tabIndex={-1} />
               </div>
-
-              {/* Field 5: Refundable Amount (Read-only but focusable) */}
               <div className="erp-form-group" style={{ marginBottom: '12px' }}>
-                <label className="erp-form-label" style={{ width: '200px', fontWeight: 'bold' }}>Refundable Amount (₹):</label>
-                <input
-                  type="text"
-                  className="erp-input"
-                  value={`₹${cancelFormData.refundAmount.toFixed(2)}`}
-                  readOnly
-                  tabIndex={5}
-                  onKeyDown={(e) => handleCancelModalKeyDown(e)}
-                  style={{ width: 'calc(100% - 210px)', background: '#e8f5e9', fontWeight: 'bold', color: '#2e7d32' }}
-                  aria-label="Refundable Amount"
-                />
-                
+                <label className="erp-form-label">Refundable Amount (₹):</label>
+                <input type="text" className="erp-input" value={`₹${refundC.toFixed(2)}`} readOnly style={{ background: '#e8f5e9', fontWeight: 'bold', color: '#2e7d32' }} tabIndex={-1} />
               </div>
-
-              {/* Field 6: Cancellation Date */}
               <div className="erp-form-group" style={{ marginBottom: '12px' }}>
-                <label className="erp-form-label" style={{ width: '200px' }}>Cancellation Date:</label>
-                <input
-                  type="date"
-                  name="cancellationDate"
-                  className="erp-input"
-                  value={cancelFormData.cancellationDate}
-                  onChange={(e) => setCancelFormData({
-                    ...cancelFormData,
-                    cancellationDate: e.target.value
-                  })}
-                  tabIndex={6}
-                  onKeyDown={(e) => handleCancelModalKeyDown(e)}
-                  style={{ width: 'calc(100% - 210px)' }}
-                  aria-label="Cancellation Date"
-                />
+                <label className="erp-form-label">Cancellation Date:</label>
+                <input type="date" name="date" className="erp-input" value={cancelData.date} onChange={e => setCancelData({...cancelData, date: e.target.value})} />
               </div>
-
-              {/* Field 7: Cancellation Remarks (Last Editable Field) */}
               <div className="erp-form-group" style={{ marginBottom: '12px' }}>
-                <label className="erp-form-label" style={{ width: '200px' }}>Cancellation Remarks:</label>
-                <textarea
-                  className="erp-input"
-                  name="cancellationRemarks"
-                  value={cancelFormData.cancellationRemarks}
-                  onChange={(e) => setCancelFormData({
-                    ...cancelFormData,
-                    cancellationRemarks: e.target.value
-                  })}
-                  placeholder="Enter reason for cancellation..."
-                  rows="3"
-                  tabIndex={7}
-                  onKeyDown={(e) => handleCancelModalKeyDown(e)}
-                  style={{ width: 'calc(100% - 210px)', resize: 'vertical' }}
-                  aria-label="Cancellation Remarks"
-                />
+                <label className="erp-form-label">Cancellation Remarks:</label>
+                <textarea name="remarks" className="erp-input" value={cancelData.remarks} onChange={e => setCancelData({...cancelData, remarks: e.target.value})} rows="3" />
               </div>
-
-               </div>
-            
+            </div>
             <div className="erp-modal-footer">
-              <button 
-                className="erp-button erp-button-secondary" 
-                onClick={(e) => {
-                  e.preventDefault();
-                  setShowCancelModal(false);
-                }}
-                tabIndex={10}
-              >
-                Cancel
-              </button>
-              <button 
-                className="erp-button erp-button-primary" 
-                onClick={(e) => {
-                  e.preventDefault();
-                  console.log('💾 Save Cancellation button clicked');
-                  handleCancelConfirmed();
-                }}
-                disabled={!cancelFormData.railwayCancellationCharge && !cancelFormData.agentCancellationCharge && !cancelFormData.stationBoyCharges}
-                tabIndex={8}
-                style={{ marginLeft: '10px' }}
-              >
-                💾 Save Cancellation
-              </button>
-              <button 
-                className="erp-button erp-button-secondary" 
-                onClick={(e) => {
-                  e.preventDefault();
-                  console.log('📋 Proceed to Confirmation button clicked');
-                  setShowCancelConfirmDialog(true);
-                }}
-                disabled={!cancelFormData.railwayCancellationCharge && !cancelFormData.agentCancellationCharge && !cancelFormData.stationBoyCharges}
-                tabIndex={9}
-                style={{ marginLeft: '10px' }}
-              >
-                📋 Review & Confirm
+              <button className="erp-button erp-button-secondary" onClick={() => setShowCancelModal(false)}>Close</button>
+              <button className="erp-button erp-button-danger" onClick={() => { setShowCancelConfirmDialog(true); setTimeout(() => cancelConfirmBtnRef.current?.focus(), 100); }} disabled={!isCancelValid}>
+                Review & Confirm Cancel
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Cancellation Confirmation Dialog */}
-      {showCancelConfirmDialog && (
-        <div className="erp-modal-overlay" style={{ zIndex: 10001 }}>
+      {showCancelConfirmDialog && selectedBill && (
+        <div className="erp-modal-overlay" onKeyDown={handleCancelModalKeys}>
           <div className="erp-modal" style={{ maxWidth: '450px' }}>
             <div className="erp-modal-header">
               <h3>⚠️ Confirm Cancellation</h3>
             </div>
-            
             <div className="erp-modal-body">
-              <p style={{ fontSize: '14px', marginBottom: '15px', fontWeight: '500' }}>
-                Proceed to confirm cancellation?
-              </p>
-              
-              <div style={{ background: '#fff3cd', padding: '12px', borderRadius: '4px', marginBottom: '15px', border: '1px solid #ffeeba' }}>
-                <strong style={{ display: 'block', borderBottom: '1px solid #ffeeba', paddingBottom: '5px', marginBottom: '8px', color: '#856404', fontSize: '13px' }}>
-                  CANCELLATION SUMMARY
-                </strong>
-                <ul style={{ margin: '5px 0 0 0', paddingLeft: '20px', fontSize: '13px', lineHeight: '1.6' }}>
-                  <li>Railway Charge: ₹{parseFloat(cancelFormData.railwayCancellationCharge || 0).toFixed(2)}</li>
-                  <li>Agent Charge: ₹{parseFloat(cancelFormData.agentCancellationCharge || 0).toFixed(2)}</li>
-                  <li>Station Boy Charge: ₹{parseFloat(cancelFormData.stationBoyCharges || 0).toFixed(2)}</li>
-                  <li style={{ marginTop: '8px', paddingTop: '5px', borderTop: '1px dashed #ffeeba', fontWeight: 'bold', fontSize: '15px', color: '#d32f2f' }}>
-                    Total Cancellation Amount: ₹{cancelFormData.totalCancellationCharges.toFixed(2)}
-                  </li>
-                  <li style={{ marginTop: '5px', fontWeight: 'bold', fontSize: '15px', color: '#2e7d32' }}>
-                    Refund Amount: ₹{cancelFormData.refundAmount.toFixed(2)}
-                  </li>
+              <p>Proceed to confirm cancellation?</p>
+              <div style={{ background: '#fff3cd', padding: '12px', border: '1px solid #ffeeba', marginBottom: '15px' }}>
+                <strong>CANCELLATION SUMMARY</strong>
+                <ul>
+                  <li>Railway Charge: ₹{railwayC.toFixed(2)}</li>
+                  <li>Agent Charge: ₹{agentC.toFixed(2)}</li>
+                  <li>Station Boy Charge: ₹{stationBoyC.toFixed(2)}</li>
+                  <li style={{ color: '#d32f2f', fontWeight: 'bold' }}>Total: ₹{totalC.toFixed(2)}</li>
+                  <li style={{ color: '#2e7d32', fontWeight: 'bold' }}>Refund: ₹{refundC.toFixed(2)}</li>
                 </ul>
               </div>
-
-              <div style={{ background: '#f8f9fa', padding: '10px', borderRadius: '4px', marginBottom: '15px' }}>
-                <p style={{ fontSize: '12px', color: '#666', margin: 0 }}>
-                  <strong>Remarks:</strong> {cancelFormData.cancellationRemarks || 'No remarks provided'}
-                </p>
-              </div>
-
-              <p style={{ fontSize: '12px', color: '#d32f2f', fontWeight: '500', display: 'flex', alignItems: 'center', gap: '5px' }}>
-                <span>⚠️</span> Warning: This action cannot be undone.
-              </p>
             </div>
-            
             <div className="erp-modal-footer">
-              <button 
-                className="erp-button erp-button-secondary" 
-                onClick={() => setShowCancelConfirmDialog(false)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Escape') {
-                    e.preventDefault();
-                    setShowCancelConfirmDialog(false);
-                  } else if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault();
-                    setShowCancelConfirmDialog(false);
-                  }
-                }}
-              >
-                No, Go Back
-              </button>
-              <button 
-                className="erp-button erp-button-danger" 
-                autoFocus
-                onClick={async (e) => {
-                  e.preventDefault();
-                  console.log('✅ Confirmation clicked/Enter pressed via Click/Space');
-                  await handleCancelConfirmed();
-                }}
-                onKeyDown={async (e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault();
-                    console.log('✅ Confirmation Enter pressed via onKeyDown');
-                    await handleCancelConfirmed();
-                  }
-                }}
-                style={{ marginLeft: '10px' }}
-              >
+              <button className="erp-button erp-button-secondary" onClick={() => setShowCancelConfirmDialog(false)}>No, Go Back</button>
+              <button ref={cancelConfirmBtnRef} className="erp-button erp-button-danger" onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleExecuteCancel(); }}>
                 Yes, Cancel Bill
               </button>
             </div>
