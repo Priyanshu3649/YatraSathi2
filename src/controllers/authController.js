@@ -192,21 +192,15 @@ const employeeLogin = async (req, res) => {
       });
     }
 
-    // Handle session creation for TVL users
+    // Handle session creation
     let session = null;
-    if (isTVLUser) {
-      // This is a TVL user - skip session creation to avoid foreign key constraint
-      console.log(`TVL employee user login detected: ${user.us_usid} (${sanitizedEmail})`);
-    } else {
-      // Create session for the employee
-      try {
-        session = await SessionService.createSession(user, req);
-        console.log(`Session created for user: ${user.us_usid} (${sanitizedEmail})`);
-      } catch (sessionError) {
-        console.error('Session creation failed for user', user.us_usid, ':', sessionError.message);
-        // Continue login process even if session creation fails
-        session = null;
-      }
+    try {
+      session = await SessionService.createSession(user, req);
+      console.log(`Session created for user: ${user.us_usid} (${sanitizedEmail})`);
+    } catch (sessionError) {
+      console.error('Session creation failed for user', user.us_usid, ':', sessionError.message);
+      // Continue login process even if session creation fails
+      session = null;
     }
     
     res.json({
@@ -272,22 +266,15 @@ const loginUser = async (req, res) => {
 
     if (login && user && login.lg_passwd && await bcrypt.compare(password, login.lg_passwd)) {
       
-      // For TVL users, we need to handle session creation differently
-      // Check if this is a TVL user (has TVL-specific properties)
+      // Handle session creation
       let sessionId = null;
-      if (isTVLUser) {
-        // This is a TVL user - skip session creation to avoid foreign key constraint
-        console.log(`TVL user login detected: ${user.us_usid}`);
-      } else {
-        // Create session for the user (only for non-TVL users to avoid foreign key constraint)
-        try {
-          const session = await SessionService.createSession(user, req);
-          sessionId = session.ss_ssid;
-        } catch (sessionError) {
-          console.error('Session creation failed:', sessionError.message);
-          // Continue login process even if session creation fails
-          sessionId = null;
-        }
+      try {
+        const session = await SessionService.createSession(user, req);
+        sessionId = session.ss_ssid;
+      } catch (sessionError) {
+        console.error('Session creation failed:', sessionError.message);
+        // Continue login process even if session creation fails
+        sessionId = null;
       }
       
       res.json({

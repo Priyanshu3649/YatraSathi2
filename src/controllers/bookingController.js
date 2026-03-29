@@ -1,6 +1,7 @@
 const { BookingTVL, UserTVL, CustomerTVL: Customer, EmployeeTVL: Employee, StationTVL: Station, PassengerTVL: Passenger, Journal } = require('../models');
-const { Sequelize } = require('sequelize');
+const { Sequelize, Op } = require('sequelize');
 const { sequelizeTVL: sequelize } = require('../../config/db'); // Use sequelizeTVL for TVL database
+const queryHelper = require('../utils/queryHelper');
 
 // Helper function to convert string user ID to integer for database compatibility
 function convertUserIdToInt(userId) {
@@ -19,8 +20,8 @@ function convertUserIdToInt(userId) {
     return userId.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0) % 1000000; // Limit to reasonable size
   }
   
-  // For null/undefined, return a default value or throw error based on requirements
-  return null; // or throw new Error('Invalid user ID');
+  // Default fallback
+  return 1;
 }
 
 // Create a new booking request
@@ -296,12 +297,17 @@ const createBooking = async (req, res) => {
 // Get all bookings for a customer
 const getCustomerBookings = async (req, res) => {
   try {
-    const bookings = await BookingTVL.findAll({ 
+    const { limit, offset, page } = queryHelper.getPaginationOptions(req.query);
+    const order = queryHelper.getSortingOptions(req.query, 'bk_reqdt', 'DESC');
+    
+    const { count, rows: bookings } = await BookingTVL.findAndCountAll({ 
       where: { 
         bk_usid: req.user.us_usid,
-        bk_status: { [Sequelize.Op.ne]: 'INACTIVE' } // Exclude inactive bookings
+        bk_status: { [Op.ne]: 'INACTIVE' } // Exclude inactive bookings
       },
-      order: [['bk_reqdt', 'DESC']]
+      order,
+      limit,
+      offset
     });
     
     // Batch fetch passenger counts for all bookings
@@ -359,7 +365,7 @@ const getCustomerBookings = async (req, res) => {
       };
     });
     
-    res.json({ success: true, data: { bookings: transformedBookings } });
+    res.json(queryHelper.formatPaginatedResponse(count, transformedBookings, page, limit));
   } catch (error) {
     console.error('Get customer bookings error:', error);
     res.status(500).json({ 
@@ -372,34 +378,43 @@ const getCustomerBookings = async (req, res) => {
 // Get all bookings (admin and authorized employees)
 const getAllBookings = async (req, res) => {
   try {
+    const { limit, offset, page } = queryHelper.getPaginationOptions(req.query);
+    const order = queryHelper.getSortingOptions(req.query, 'edtm', 'DESC');
+    
+    // Define filter map for Bookings
+    const filterMap = {
+      dateColumn: 'bk_trvldt',
+      statusColumn: 'bk_status',
+      searchColumns: ['bk_bkno', 'bk_customername', 'bk_phonenumber', 'bk_pnr'],
+      customFilters: {
+        fromStation: 'bk_fromst',
+        toStation: 'bk_tost',
+        travelClass: 'bk_class'
+      }
+    };
+    
+    const where = queryHelper.buildWhereClause(req.query, filterMap);
+
     // Check if user is admin or employee
     const allowedRoles = ['AGT', 'ACC', 'HR', 'CC', 'MKT', 'MGT', 'ADM'];
-    const isAuthorizedEmployee = allowedRoles.includes(req.user.us_roid);
+    const checkAdmin = (req.user.us_usertype || req.user.usertype || '').toLowerCase() === 'admin';
+    const checkRoidAdmin = (req.user.us_roid || '').toLowerCase() === 'admin' || req.user.us_roid === 'ADM';
+    const isAuthorizedEmployee = allowedRoles.includes(req.user.us_roid) || checkAdmin || checkRoidAdmin;
     
-    // Import models for passenger and station lookups
-    const models = require('../models');
-    const { PassengerTVL: Passenger, StationTVL: Station } = models;
-    
-    let bookings;
-    
-    if (isAuthorizedEmployee) {
-      // For admin and all employees, return all active bookings
-      bookings = await BookingTVL.findAll({
-        where: { 
-          bk_status: { [Sequelize.Op.ne]: 'INACTIVE' } // Exclude inactive bookings
-        },
-        order: [['edtm', 'DESC']] // Use edtm for consistency
-      });
-    } else {
-      // For other users (shouldn't reach here if using employee endpoint), return their active bookings
-      bookings = await BookingTVL.findAll({
-        where: { 
-          bk_usid: req.user.us_usid,
-          bk_status: { [Sequelize.Op.ne]: 'INACTIVE' } // Exclude inactive bookings
-        },
-        order: [['edtm', 'DESC']]
-      });
+    if (!isAuthorizedEmployee) {
+      // For non-employee users, return their own bookings
+      where.bk_usid = req.user.us_usid;
     }
+    
+    // Exclude inactive bookings
+    where.bk_status = { [Op.ne]: 'INACTIVE' };
+
+    const { count, rows: bookings } = await BookingTVL.findAndCountAll({
+      where,
+      order,
+      limit,
+      offset
+    });
     
     // Batch fetch passenger counts for all bookings
     const bookingIds = bookings.map(booking => booking.bk_bkid);
@@ -455,7 +470,7 @@ const getAllBookings = async (req, res) => {
       };
     });
     
-    res.json({ success: true, data: { bookings: transformedBookings } });
+    res.json(queryHelper.formatPaginatedResponse(count, transformedBookings, page, limit));
   } catch (error) {
     console.error('Get all bookings error:', error);
     res.status(500).json({ 

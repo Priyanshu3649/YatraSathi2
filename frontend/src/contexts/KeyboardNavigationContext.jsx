@@ -20,7 +20,8 @@ export const KeyboardNavigationProvider = ({ children }) => {
     activeScreen: '',
     activeFormId: '',
     focusedFieldIndex: 0,
-    mode: 'NEW',
+    mode: 'VIEW', // VIEW, CREATE, EDIT
+    activeZone: 'TABLE', // ACTION_BAR, FORM, TABLE, MODAL
     isModalOpen: false,
     isPassengerLoopActive: false,
     lastTabTimestamp: 0,
@@ -51,7 +52,8 @@ export const KeyboardNavigationProvider = ({ children }) => {
       ...prev,
       activeFormId: prev.activeFormId || formId,
       focusedFieldIndex: 0,
-      mode: 'NEW'
+      mode: 'VIEW',
+      activeZone: 'TABLE'
     }));
   }, []);
 
@@ -78,7 +80,8 @@ export const KeyboardNavigationProvider = ({ children }) => {
       ...prev,
       activeFormId: formId,
       focusedFieldIndex: 0,
-      mode: 'NEW'
+      mode: 'VIEW',
+      activeZone: 'TABLE'
     }));
     
     // Auto-focus first field
@@ -162,22 +165,56 @@ export const KeyboardNavigationProvider = ({ children }) => {
     return true;
   }, [keyboardState.activeFormId, keyboardState.focusedFieldIndex, focusField]);
 
+  // SET MODE (VIEW, CREATE, EDIT)
+  const setMode = useCallback((newMode) => {
+    setKeyboardState(prev => ({
+      ...prev,
+      mode: newMode,
+      // When switching to CREATE or EDIT, automatically jump to FORM zone
+      activeZone: (newMode === 'CREATE' || newMode === 'EDIT') ? 'FORM' : 'TABLE',
+      focusedFieldIndex: 0
+    }));
+
+    if (newMode === 'CREATE' || newMode === 'EDIT') {
+      const activeForm = registeredForms.current.get(keyboardState.activeFormId);
+      if (activeForm && activeForm.fields.length > 0) {
+        setTimeout(() => focusField(activeForm.fields[0]), 50);
+      }
+    }
+  }, [keyboardState.activeFormId, focusField]);
+
+  // SET ACTIVE ZONE
+  const setActiveZone = useCallback((zone) => {
+    setKeyboardState(prev => ({
+      ...prev,
+      activeZone: zone
+    }));
+  }, []);
+
   // ENTER ACTION (CONTEXT-DEPENDENT)
   const enterAction = useCallback(() => {
     const activeElement = document.activeElement;
     
-    // If on a grid row, open context menu
+    // If modal is open, save modal
+    if (keyboardState.isModalOpen) {
+       window.dispatchEvent(new CustomEvent('modalSubmit'));
+       return true;
+    }
+
+    // If on a grid row, select it
     if (activeElement && activeElement.closest('tr[data-record-id]')) {
-      // Open context dropdown for record actions
       const recordId = activeElement.closest('tr').dataset.recordId;
-      console.log('Opening context menu for record:', recordId);
-      // This will be handled by specific components
-      return { action: 'contextMenu', recordId };
+      window.dispatchEvent(new CustomEvent('recordSelected', { detail: { recordId } }));
+      return true;
     }
     
-    // Otherwise, treat as Tab
-    return moveNext();
-  }, [moveNext]);
+    // Otherwise, treat as Tab in forms
+    if (keyboardState.activeZone === 'FORM') {
+      return moveNext();
+    }
+    
+    return false;
+  }, [moveNext, keyboardState.isModalOpen, keyboardState.activeZone]);
 
   // MODAL MANAGEMENT (SAVE POPUP)
   const openModal = useCallback(() => {
@@ -246,19 +283,46 @@ export const KeyboardNavigationProvider = ({ children }) => {
   // GLOBAL KEYBOARD EVENT HANDLER (MANDATORY PRIMITIVES ONLY)
   const handleGlobalKeyDown = useCallback((event) => {
     // If modal is open, allow it to handle events exclusively
-    if (keyboardState.isModalOpen) {
+    if (keyboardState.isModalOpen || keyboardState.activeZone === 'MODAL') {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        closeModal();
+        setActiveZone(keyboardState.mode === 'VIEW' ? 'TABLE' : 'FORM');
+      } else if (event.key === 'Enter') {
+        // Handled by enterAction which is called by component if needed, 
+        // or we can handle it here if it's a simple save
+      }
       return;
     }
 
-    // ONLY Tab, Shift+Tab, Enter are allowed navigation primitives
+    // Global Shortcuts
     switch (event.key) {
+      case 'F2': // NEW
+        event.preventDefault();
+        window.dispatchEvent(new CustomEvent('handleNew'));
+        break;
+      case 'F3': // EDIT
+        event.preventDefault();
+        window.dispatchEvent(new CustomEvent('handleEdit'));
+        break;
+      case 'F4': // DELETE
+        event.preventDefault();
+        window.dispatchEvent(new CustomEvent('handleDelete'));
+        break;
+      case 'F10': // SAVE
+        event.preventDefault();
+        window.dispatchEvent(new CustomEvent('handleSave'));
+        break;
+      case 'Escape':
+        event.preventDefault();
+        window.dispatchEvent(new CustomEvent('handleCancel'));
+        break;
       case 'Tab':
         event.preventDefault();
         if (event.shiftKey) {
           movePrevious();
         } else {
           if (keyboardState.isPassengerLoopActive) {
-            // Special passenger loop logic
             const isDoubleTab = detectDoubleTab();
             handlePassengerTab(isDoubleTab);
           } else {
@@ -266,28 +330,33 @@ export const KeyboardNavigationProvider = ({ children }) => {
           }
         }
         break;
-        
       case 'Enter':
         event.preventDefault();
         enterAction();
         break;
-        
-      case 'Escape':
-        if (keyboardState.isModalOpen) {
-          closeModal();
+      case 'ArrowUp':
+      case 'ArrowDown':
+      case 'ArrowLeft':
+      case 'ArrowRight':
+        if (keyboardState.activeZone === 'TABLE') {
+          // Table navigation is handled by components listening to these keys
+          // but we can dispatch a custom event
+          window.dispatchEvent(new CustomEvent('tableNavigation', { detail: { key: event.key } }));
         }
         break;
-        
-      case 'F10':
-        event.preventDefault();
-        openModal();
-        break;
-        
       default:
-        // No other keys handled globally
         break;
     }
-  }, [moveNext, movePrevious, enterAction, closeModal, openModal, keyboardState.isModalOpen, keyboardState.isPassengerLoopActive, detectDoubleTab]);
+  }, [moveNext, movePrevious, enterAction, closeModal, keyboardState.isModalOpen, keyboardState.activeZone, keyboardState.mode, keyboardState.isPassengerLoopActive, detectDoubleTab, setActiveZone]);
+
+  // UTILITY: SCREEN READER ANNOUNCEMENTS (ACCESSIBILITY)
+  const announceToScreenReader = useCallback((message) => {
+    console.log(`📣 ACCESSIBILITY ANNOUNCEMENT: ${message}`);
+    const announcement = document.getElementById('erp-announcer');
+    if (announcement) {
+      announcement.textContent = message;
+    }
+  }, []);
 
   // PASSENGER TAB LOGIC (MANDATORY IMPLEMENTATION)
   const handlePassengerTab = useCallback((isDoubleTab) => {
@@ -342,6 +411,7 @@ export const KeyboardNavigationProvider = ({ children }) => {
     activeFormId: keyboardState.activeFormId,
     focusedFieldIndex: keyboardState.focusedFieldIndex,
     mode: keyboardState.mode,
+    activeZone: keyboardState.activeZone,
     isModalOpen: keyboardState.isModalOpen,
     isPassengerLoopActive: keyboardState.isPassengerLoopActive,
     
@@ -354,6 +424,8 @@ export const KeyboardNavigationProvider = ({ children }) => {
     enterAction,
     openModal,
     closeModal,
+    setMode,
+    setActiveZone,
     
     // PASSENGER LOOP API
     enterPassengerLoop,
@@ -363,6 +435,7 @@ export const KeyboardNavigationProvider = ({ children }) => {
     focusField,
     handleManualFocus,
     detectDoubleTab,
+    announceToScreenReader,
     
     // LEGACY COMPATIBILITY (DEPRECATED - DO NOT USE)
     updateState: () => console.warn('updateState is deprecated. Use specific methods instead.'),

@@ -131,11 +131,14 @@ const parseDbError = (error) => {
 // Get all applications
 const getAllApplications = async (req, res) => {
   try {
-    const applications = await ApplicationTVL.findAll({
+    const { limit, offset, page } = queryHelper.getPaginationOptions(req.query);
+    const { count, rows: applications } = await ApplicationTVL.findAndCountAll({
       order: [['ap_apid', 'ASC']],
+      limit,
+      offset,
       raw: true
     });
-    res.json(applications);
+    res.json(queryHelper.formatPaginatedResponse(count, applications, page, limit));
   } catch (error) {
     console.error('Error fetching applications:', error);
     res.status(500).json({ message: error.message });
@@ -235,11 +238,14 @@ const deleteApplication = async (req, res) => {
 // Get all modules
 const getAllModules = async (req, res) => {
   try {
-    const modules = await ModuleTVL.findAll({
+    const { limit, offset, page } = queryHelper.getPaginationOptions(req.query);
+    const { count, rows: modules } = await ModuleTVL.findAndCountAll({
       order: [['mo_apid', 'ASC'], ['mo_moid', 'ASC']],
+      limit,
+      offset,
       raw: true
     });
-    res.json(modules);
+    res.json(queryHelper.formatPaginatedResponse(count, modules, page, limit));
   } catch (error) {
     console.error('Error fetching modules:', error);
     res.status(500).json({ message: error.message });
@@ -364,11 +370,14 @@ const deleteModule = async (req, res) => {
 // Get all users
 const getAllUsers = async (req, res) => {
   try {
-    const users = await UserTVL.findAll({
+    const { limit, offset, page } = queryHelper.getPaginationOptions(req.query);
+    const { count, rows: users } = await UserTVL.findAndCountAll({
       order: [['us_usid', 'ASC']],
+      limit,
+      offset,
       raw: true
     });
-    res.json(users);
+    res.json(queryHelper.formatPaginatedResponse(count, users, page, limit));
   } catch (error) {
     console.error('Error fetching users:', error);
     res.status(500).json({ message: error.message });
@@ -596,13 +605,16 @@ const getEffectivePermissions = async (req, res) => {
 // Get all customers
 const getAllCustomers = async (req, res) => {
   try {
-    const customers = await CustomerTVL.findAll({
+    const { limit, offset, page } = queryHelper.getPaginationOptions(req.query);
+    const { count, rows: customers } = await CustomerTVL.findAndCountAll({
       include: [{
         model: UserTVL,
         as: 'user',
         attributes: ['us_fname', 'us_lname', 'us_email', 'us_phone', 'us_roid', 'us_active']
       }],
       order: [['cu_custno', 'ASC']],
+      limit,
+      offset,
       raw: false
     });
     
@@ -628,7 +640,7 @@ const getAllCustomers = async (req, res) => {
       };
     });
     
-    res.json(formattedCustomers);
+    res.json(queryHelper.formatPaginatedResponse(count, formattedCustomers, page, limit));
   } catch (error) {
     console.error('Error fetching customers:', error);
     res.status(500).json({ message: error.message });
@@ -638,11 +650,14 @@ const getAllCustomers = async (req, res) => {
 // ==================== OPERATION CRUD ====================
 const getAllOperations = async (req, res) => {
   try {
-    const operations = await PermissionTVL.findAll({
+    const { limit, offset, page } = queryHelper.getPaginationOptions(req.query);
+    const { count, rows: operations } = await PermissionTVL.findAndCountAll({
       order: [['op_apid', 'ASC'], ['op_moid', 'ASC'], ['op_opid', 'ASC']],
+      limit,
+      offset,
       raw: true
     });
-    res.json(operations);
+    res.json(queryHelper.formatPaginatedResponse(count, operations, page, limit));
   } catch (error) {
     console.error('Error fetching operations:', error);
     res.status(500).json({ message: error.message });
@@ -727,12 +742,14 @@ const deleteOperation = async (req, res) => {
 // ==================== ROLE CRUD ====================
 const getAllRoles = async (req, res) => {
   try {
-    const roles = await RoleTVL.findAll({
+    const { limit, offset, page } = queryHelper.getPaginationOptions(req.query);
+    const { count, rows: roles } = await RoleTVL.findAndCountAll({
       order: [['fn_fnid', 'ASC']],
+      limit,
+      offset,
       raw: true
     });
-    console.log('Fetched roles sample:', roles[0]);
-    res.json(roles);
+    res.json(queryHelper.formatPaginatedResponse(count, roles, page, limit));
   } catch (error) {
     console.error('Error fetching roles:', error);
     res.status(500).json({ message: error.message });
@@ -1033,12 +1050,14 @@ const deleteUserPermission = async (req, res) => {
 // Get all employees with minimal user information (simplified)
 const getAllEmployees = async (req, res) => {
   try {
+    const { limit, offset, page } = queryHelper.getPaginationOptions(req.query);
+    
     // Ensure core association exists
     if (!EmployeeTVL.associations.user) {
       EmployeeTVL.belongsTo(UserTVL, { foreignKey: 'em_usid', targetKey: 'us_usid', as: 'user' });
     }
 
-    const employees = await EmployeeTVL.findAll({
+    const { count, rows: employees } = await EmployeeTVL.findAndCountAll({
       attributes: [
         'em_usid', 'em_empno', 'em_dept', 'em_salary',
         'em_joindt', 'em_status', 'em_manager', 'em_address', 'em_city',
@@ -1066,7 +1085,9 @@ const getAllEmployees = async (req, res) => {
           }]
         }
       ],
-      order: [['edtm', 'DESC']]
+      order: [['edtm', 'DESC']],
+      limit,
+      offset
     });
 
     const transformedEmployees = employees.map(emp => {
@@ -1117,7 +1138,7 @@ const getAllEmployees = async (req, res) => {
       };
     });
 
-    res.json(transformedEmployees);
+    res.json(queryHelper.formatPaginatedResponse(count, transformedEmployees, page, limit));
   } catch (error) {
     console.error('Error fetching employees:', error);
     const getErrorDetails = (err) => {

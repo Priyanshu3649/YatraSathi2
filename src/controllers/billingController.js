@@ -1,7 +1,9 @@
 // Import required models
-const { BillTVL, UserTVL, CustomerTVL: Customer, BookingTVL, Journal } = require('../models');
-const { Sequelize } = require('sequelize');
+const { BillTVL, UserTVL, CustomerTVL: Customer, BookingTVL, Journal, PassengerTVL: Passenger, ForensicAuditLog } = require('../models');
+const { Sequelize, Op } = require('sequelize');
 const { sequelizeTVL } = require('../../config/db');
+const queryHelper = require('../utils/queryHelper');
+const RealTimeService = require('../services/realTimeService');
 
 // Helper function to generate journal entry number
 function generateJournalEntryNo(prefix) {
@@ -61,7 +63,6 @@ const createBill = async (req, res) => {
       platformFees,
       miscCharges,
       deliveryCharges,
-      cancellationCharges,
       gst,
       surcharge,
       discount,
@@ -144,7 +145,6 @@ const createBill = async (req, res) => {
       calculatedTotal += parseFloat(gst) || 0;
       calculatedTotal += parseFloat(miscCharges) || 0;
       calculatedTotal += parseFloat(deliveryCharges) || 0;
-      calculatedTotal += parseFloat(cancellationCharges) || 0;
       calculatedTotal += parseFloat(surcharge) || 0;
       
       // Apply discount
@@ -190,7 +190,6 @@ const createBill = async (req, res) => {
         bl_platform_fee: platformFees || 0,
         bl_misc_charges: miscCharges || 0,
         bl_delivery_charge: deliveryCharges || 0,
-        bl_cancellation_charge: cancellationCharges || 0,
         bl_gst: gst || 0,
         bl_surcharge: surcharge || 0,
         bl_discount: discount || 0,
@@ -249,6 +248,9 @@ const createBill = async (req, res) => {
       console.log(`✅ Bill ${billNumber} created successfully for booking ${bookingId}`);
       console.log(`✅ Booking ${bookingId} status updated to CONFIRMED`);
       
+      // Emit real-time update
+      RealTimeService.emitBillingUpdate(bill.toJSON());
+
       res.status(201).json({
         success: true,
         message: 'Bill created successfully',
@@ -334,131 +336,123 @@ const getCustomerBills = async (req, res) => {
 // Get all bills (ADMIN/EMPLOYEE VIEW - SHOW ALL RECORDS)
 const getAllBills = async (req, res) => {
   try {
-    // Check permissions - handle both old user types and new role IDs
-    const isEmployee = req.user.us_usertype === 'employee' || ['AGT', 'ACC', 'HR', 'CC', 'MKT', 'MGT', 'ADM'].includes(req.user.us_roid);
+    const { limit, offset, page } = queryHelper.getPaginationOptions(req.query);
+    const order = queryHelper.getSortingOptions(req.query, 'bl_created_at', 'DESC');
     
-    if (req.user.us_usertype !== 'admin' && req.user.us_roid !== 'ADM') {
-      // For employee role IDs
-      if (['AGT', 'ACC', 'MGT', 'ADM'].includes(req.user.us_roid)) {
-        // Allow access for Agent, Accounts, Management, and Admin roles
-        // No additional check needed
+    // Define filter map for Billing
+    const filterMap = {
+      dateColumn: 'bl_billing_date',
+      amountColumn: 'bl_total_amount',
+      statusColumn: 'bl_status',
+      searchColumns: ['bl_bill_no', 'bl_customer_name', 'bl_customer_phone', 'bl_pnr'],
+      customFilters: {
+        bookingId: 'bl_booking_id',
+        stationBoy: 'bl_station_boy'
+      }
+    };
+    
+    const where = queryHelper.buildWhereClause(req.query, filterMap);
+
+    // Check permissions
+    const usertype = (req.user.us_usertype || req.user.usertype || '').toLowerCase();
+    const isEmployee = usertype === 'employee' || ['AGT', 'ACC', 'HR', 'CC', 'MKT', 'MGT', 'ADM'].includes(req.user.us_roid);
+    const isAdmin = usertype === 'admin' || req.user.us_roid === 'ADM' || req.user.us_roid === 'admin';
+    
+    if (!isAdmin) {
+      if (['AGT', 'ACC', 'MGT'].includes(req.user.us_roid)) {
+        // Allowed to see all
       } else if (isEmployee) {
-        // For other employees, check if they have accounts department access
-        const { emXemployee: Employee } = require('../models');
-        const employee = await Employee.findOne({
-          where: { em_usid: req.user.us_usid }
-        });
+        const { EmployeeTVL: Employee } = require('../models');
+        const employee = await Employee.findOne({ where: { em_usid: req.user.us_usid } });
         if (!employee || !['ACCOUNTS', 'FINANCE', 'MANAGEMENT'].includes(employee.em_dept)) {
-          return res.status(403).json({
-            success: false,
-            message: 'Access denied. Admin, Accounts, or Management access required.'
-          });
+          return res.status(403).json({ success: false, message: 'Access denied.' });
         }
       } else {
-        // For customers and unauthorized users
-        return res.status(403).json({
-          success: false,
-          message: 'Access denied. Admin, Accounts, or Management access required.'
-        });
+        // Customer view: only their own bills
+        // Use bk_usid from joined BookingTVL
+        where['$booking.bk_usid$'] = req.user.us_usid;
       }
     }
     
-    // FETCH ALL BILLS (NO FILTERING - AUTHORITATIVE REQUIREMENT)
-    const bills = await BillTVL.findAll({
-      order: [['bl_created_at', 'DESC']]
+    const { count, rows: bills } = await BillTVL.findAndCountAll({
+      where,
+      include: [{
+        model: BookingTVL,
+        as: 'booking',
+        attributes: ['bk_usid'],
+        required: false // Use LEFT JOIN to show bills even if booking association fails
+      }],
+      order,
+      limit,
+      offset
     });
     
-    // Fetch passenger details for all bills (optimized batch operation)
-    const { Passenger } = require('../models');
-    const transformedBills = [];
+    // Batch fetch passenger counts/details for these bills
+    const billNumbers = bills.map(b => b.bl_bill_no).filter(Boolean);
+    const bookingIds = bills.map(b => b.bl_booking_id).filter(Boolean);
     
-    for (const bill of bills) {
+    // Simple cache for passengers to avoid repeated DB calls
+    const billPassengersMap = {};
+    
+    if (billNumbers.length > 0 || bookingIds.length > 0) {
+      const passengers = await Passenger.findAll({
+        where: {
+          [Op.or]: [
+            { bl_bill_no: { [Op.in]: billNumbers } },
+            { ps_bkid: { [Op.in]: bookingIds } }
+          ],
+          ps_active: 1
+        }
+      });
+      
+      passengers.forEach(p => {
+        const key = p.bl_bill_no || p.ps_bkid;
+        if (!billPassengersMap[key]) billPassengersMap[key] = [];
+        billPassengersMap[key].push({
+          id: p.ps_psid,
+          name: p.ps_fname + (p.ps_lname ? ' ' + p.ps_lname : ''),
+          age: p.ps_age,
+          gender: p.ps_gender,
+          berth: p.ps_berthalloc || p.ps_berthpref,
+          seatNo: p.ps_seatno,
+          coach: p.ps_coach
+        });
+      });
+    }
+    
+    const transformedBills = bills.map(bill => {
       const billData = bill.toJSON();
+      const passengerList = billPassengersMap[billData.bl_bill_no] || billPassengersMap[billData.bl_booking_id] || [];
       
-      // Fetch passenger details for this bill
-      let passengerList = [];
-      try {
-        // First, try to get passengers by billing number if available
-        if (billData.bl_bill_no) {
-          const passengerResult = await Passenger.getByBillingNumber(billData.bl_bill_no);
-          if (passengerResult.success) {
-            passengerList = passengerResult.passengers.map(p => ({
-              id: p.ps_psid,
-              name: p.ps_fname + (p.ps_lname ? ' ' + p.ps_lname : ''),
-              age: p.ps_age,
-              gender: p.ps_gender,
-              berth: p.ps_berthalloc || p.ps_berthpref,
-              seatNo: p.ps_seatno,
-              coach: p.ps_coach
-            }));
-          }
-        }
-        
-        // If no passengers found by billing number, try by booking ID as fallback
-        if (passengerList.length === 0 && billData.bl_booking_id) {
-          const passengerResult = await Passenger.getByBookingId(billData.bl_booking_id);
-          if (passengerResult.success) {
-            passengerList = passengerResult.passengers.map(p => ({
-              id: p.ps_psid,
-              name: p.ps_fname + (p.ps_lname ? ' ' + p.ps_lname : ''),
-              age: p.ps_age,
-              gender: p.ps_gender,
-              berth: p.ps_berthalloc || p.ps_berthpref,
-              seatNo: p.ps_seatno,
-              coach: p.ps_coach
-            }));
-          }
-        }
-      } catch (passengerError) {
-        console.error('⚠️ Error fetching passenger details for bill:', billData.bl_bill_no, passengerError);
-        // Continue with empty passenger list if there's an error
-        passengerList = [];
-      }
-      
-      transformedBills.push({
+      return {
         ...billData,
         id: billData.bl_id,
         billId: billData.bl_bill_no,
         bookingId: billData.bl_booking_id,
-        subBillNo: billData.bl_sub_bill_no,
         customerName: billData.bl_customer_name,
-        phoneNumber: billData.bl_phone, // Use correct field name
-        stationBoy: billData.bl_station_boy,
-        fromStation: billData.bl_from_station,
-        toStation: billData.bl_to_station,
-        journeyDate: billData.bl_journey_date,
-        trainNumber: billData.bl_train_no,
-        reservationClass: billData.bl_class,
-        ticketType: 'NORMAL', // Default ticket type since it's not in the model
-        pnrNumbers: billData.bl_pnr,
-        seatsAlloted: billData.bl_seats_reserved,
-        passengerList: passengerList, // Populate with actual passenger details
-        railwayFare: billData.bl_railway_fare,
-        stationBoyIncentive: billData.bl_sb_incentive,
-        serviceCharges: billData.bl_service_charge,
-        platformFees: billData.bl_platform_fee,
-        miscCharges: billData.bl_misc_charges,
-        deliveryCharges: billData.bl_delivery_charge,
-        cancellationCharges: billData.bl_cancellation_charge,
-        gst: billData.bl_gst,
-        surcharge: billData.bl_surcharge,
-        gstType: billData.bl_gst_type,
-        totalAmount: billData.bl_total_amount,
-        billDate: billData.bl_bill_date, // Use correct field name
-        createdOn: billData.bl_created_at,
-        createdBy: billData.bl_created_by,
-        remarks: '', // Default empty remarks
-        status: 'CONFIRMED' // Default status
-      });
+        phoneNumber: billData.bl_customer_phone,
+        passengerList
+      };
+    });
+    
+    // Handle Export Request
+    if (req.query.export === 'csv') {
+      const columns = [
+        { label: 'Bill No', key: 'bl_bill_no' },
+        { label: 'Booking ID', key: 'bl_booking_id' },
+        { label: 'Customer', key: 'bl_customer_name' },
+        { label: 'Phone', key: 'bl_customer_phone' },
+        { label: 'Amount', key: 'bl_total_amount' },
+        { label: 'Date', key: 'bl_billing_date' },
+        { label: 'Status', key: 'bl_status' }
+      ];
+      const csv = queryHelper.convertToCSV(transformedBills, columns);
+      res.setHeader('Content-Type', 'text/csv');
+      res.setHeader('Content-Disposition', 'attachment; filename=bills.csv');
+      return res.send(csv);
     }
     
-    res.json({ 
-      success: true, 
-      data: { 
-        bills: transformedBills,
-        count: transformedBills.length
-      } 
-    });
+    res.json(queryHelper.formatPaginatedResponse(count, transformedBills, page, limit));
   } catch (error) {
     console.error('Get all bills error:', error);
     res.status(500).json({ 
@@ -552,7 +546,6 @@ const getBillById = async (req, res) => {
       platformFees: billData.bl_platform_fee,
       miscCharges: billData.bl_misc_charges,
       deliveryCharges: billData.bl_delivery_charge,
-      cancellationCharges: billData.bl_cancellation_charge,
       gst: billData.bl_gst,
       surcharge: billData.bl_surcharge,
       gstType: billData.bl_gst_type,
@@ -939,237 +932,148 @@ const deleteBill = async (req, res) => {
 
 // Cancel bill (TRANSACTIONAL - AUTHORITATIVE BUSINESS FLOW)
 const cancelBill = async (req, res) => {
-  console.log(`[CANCELLATION REQUEST] Bill ID: ${req.params.id}`);
   const transaction = await sequelizeTVL.transaction();
   
   try {
     const bill = await BillTVL.findByPk(req.params.id, { transaction });
     
     if (!bill) {
-      console.error(`[CANCELLATION ERROR] Bill not found: ${req.params.id}`);
       await transaction.rollback();
       return res.status(404).json({ message: 'Bill not found' });
     }
     
-    console.log(`[CANCELLATION DEBUG] Found bill: ${bill.bl_bill_no}, Current Status: ${bill.bl_status}`);
-    
     // Check if bill is already cancelled
     if (bill.bl_status === 'CANCELLED' || bill.is_cancelled === 1) {
-      console.warn(`[CANCELLATION WARNING] Bill ${bill.bl_id} is already cancelled`);
       await transaction.rollback();
       return res.status(400).json({ message: 'Bill is already cancelled' });
     }
     
-    // Validate required fields
-    const { 
-      railwayCancellationCharge, 
-      agentCancellationCharge, 
-      stationBoyCharges,
-      cancellationRemarks,
-      cancellationDate,
-      totalCancellationCharges,
-      refundAmount
-    } = req.body;
+    const { railwayCharges, agentCharges, reason } = req.body;
     
-    console.log(`[CANCELLATION DEBUG] Received Payload:`, req.body);
-    
-    // Validation: At least one cancellation charge required
-    if ((railwayCancellationCharge === undefined || railwayCancellationCharge === null) && 
-        (agentCancellationCharge === undefined || agentCancellationCharge === null) &&
-        (stationBoyCharges === undefined || stationBoyCharges === null)) {
-      console.error(`[CANCELLATION ERROR] No charges provided for bill ${bill.bl_id}`);
-      await transaction.rollback();
-      return res.status(400).json({ message: 'At least one cancellation charge is required (Railway, Agent, or Station Boy)' });
-    }
-    
-    // Validation: Charges cannot be negative
-    const railwayCharge = parseFloat(railwayCancellationCharge) || 0;
-    const agentCharge = parseFloat(agentCancellationCharge) || 0;
-    const sbCharge = parseFloat(stationBoyCharges) || 0;
-    
-    if (railwayCharge < 0 || agentCharge < 0 || sbCharge < 0) {
-      console.error(`[CANCELLATION ERROR] Negative charges provided: R=${railwayCharge}, A=${agentCharge}, SB=${sbCharge}`);
+    // Validation: Charges required and non-negative
+    if (railwayCharges < 0 || agentCharges < 0) {
       await transaction.rollback();
       return res.status(400).json({ message: 'Cancellation charges cannot be negative' });
     }
     
-    // Validation: Total charges cannot exceed bill amount
-    const totalCharges = railwayCharge + agentCharge + sbCharge;
+    if (!reason) {
+      await transaction.rollback();
+      return res.status(400).json({ message: 'Cancellation reason is required' });
+    }
+    
+    // Calculate total charges and refund
+    const totalCancelCharges = (parseFloat(railwayCharges) || 0) + (parseFloat(agentCharges) || 0);
     const billTotal = parseFloat(bill.bl_total_amount) || 0;
     
-    if (totalCharges > billTotal) {
-      console.error(`[CANCELLATION ERROR] Charges (${totalCharges}) exceed bill total (${billTotal})`);
+    if (totalCancelCharges > billTotal) {
       await transaction.rollback();
       return res.status(400).json({ 
-        message: `Total cancellation charges (${totalCharges.toFixed(2)}) cannot exceed bill amount (${billTotal.toFixed(2)})` 
+        message: `Total cancellation charges (${totalCancelCharges.toFixed(2)}) cannot exceed bill amount (${billTotal.toFixed(2)})` 
       });
     }
     
-    // Get the associated booking ID
+    const refundAmount = Math.max(0, billTotal - totalCancelCharges);
+    
+    // Save old values for audit log
+    const oldValues = bill.toJSON();
+    
+    // 1. Update the bill status and recording cancellation charges
+    await bill.update({
+      bl_status: 'CANCELLED',
+      status: 'CANCELLED',
+      is_cancelled: 1,
+      bl_railway_cancellation_charge: railwayCharges,
+      bl_agent_cancellation_charge: agentCharges,
+      total_cancel_charges: totalCancelCharges,
+      refund_amount: refundAmount,
+      bl_cancellation_remarks: reason,
+      cancelled_on: new Date(),
+      cancelled_by: req.user.us_usid,
+      mby: req.user.us_usid,
+      mdtm: new Date()
+    }, { transaction });
+    
+    // 2. Update the associated booking status to CANCELLED
     const bookingId = bill.bl_booking_id;
-    
-    // Calculate refund amount if not provided
-    const calculatedRefund = Math.max(0, billTotal - totalCharges);
-    const finalRefund = refundAmount !== undefined ? parseFloat(refundAmount) : calculatedRefund;
-    
-    // Determine payment status based on refund
-    let paymentStatus = 'UNPAID';
-    if (finalRefund > 0) {
-      paymentStatus = 'REFUND_DUE';
-    } else if (totalCharges === billTotal) {
-      paymentStatus = 'FULLY_PAID';
-    } else {
-      paymentStatus = 'PARTIALLY_PAID';
-    }
-    
-    // Update the bill with cancellation information
-    try {
-      console.log(`[CANCELLATION DEBUG] Updating bill ${bill.bl_id} with charges: Railway=${railwayCharge}, Agent=${agentCharge}, SB=${sbCharge}`);
-      
-      const updatePayload = {
-        bl_status: 'CANCELLED',
-        is_cancelled: 1,
-        bl_railway_cancellation_charge: railwayCharge,
-        bl_agent_cancellation_charge: agentCharge,
-        bl_station_boy_cancellation_charge: sbCharge,
-        total_cancel_charges: totalCharges,
-        refund_amount: finalRefund,
-        payment_status: paymentStatus,
-        bl_cancellation_remarks: cancellationRemarks || '',
-        cancellation_date: cancellationDate ? new Date(cancellationDate) : new Date(),
-        cancelled_on: new Date(),
-        cancelled_by: req.user.us_usid, // VARCHAR(15) in DB
-        bl_modified_at: new Date(),
-        modified_by: convertUserIdToInt(req.user.us_usid),
-        modified_on: new Date(),
-        status: 'CANCELLED'
-      };
-      
-      await bill.update(updatePayload, { transaction });
-      console.log(`[CANCELLATION DEBUG] Bill update successful`);
-    } catch (updateError) {
-      console.error(`[CANCELLATION ERROR] Failed to update bill:`, updateError);
-      await transaction.rollback();
-      return res.status(500).json({ message: 'Failed to update bill during cancellation', error: updateError.message });
-    }
-    
-    // Update the associated booking status to CANCELLED
     if (bookingId) {
-      try {
-        const booking = await BookingTVL.findByPk(bookingId, { transaction });
-        
-        if (booking) {
-          const oldStatus = booking.bk_status;
-          
-          // Update booking status to CANCELLED
-          await booking.update({
-            bk_status: 'CANCELLED',
-            mby: req.user.us_usid,
-            mdtm: new Date()
-          }, { transaction });
-          
-          console.log(`[CANCELLATION DEBUG] Booking ${bookingId} status updated to CANCELLED`);
-        }
-      } catch (bookingError) {
-        console.error(`[CANCELLATION ERROR] Failed to update booking ${bookingId}:`, bookingError);
-        await transaction.rollback();
-        return res.status(500).json({ message: 'Failed to update associated booking during cancellation', error: bookingError.message });
+      const booking = await BookingTVL.findByPk(bookingId, { transaction });
+      if (booking) {
+        await booking.update({
+          bk_status: 'CANCELLED',
+          mby: req.user.us_usid,
+          mdtm: new Date()
+        }, { transaction });
       }
     }
     
-    // Reset billing number from passenger records
-    try {
-      const [updateResult] = await sequelizeTVL.query(
-        `UPDATE psXpassenger 
-         SET bl_bill_no = NULL, 
-             mdtm = NOW(), 
-             mby = :modifiedBy 
-         WHERE bl_bill_no = :billNumber AND ps_active = 1`,
-        {
-          replacements: {
-            billNumber: bill.bl_bill_no,
-            modifiedBy: req.user.us_usid
-          },
-          type: sequelizeTVL.QueryTypes.UPDATE,
-          transaction
-        }
-      );
-      
-      console.log(`📊 Reset billing number for ${updateResult.affectedRows} passengers associated with bill ${bill.bl_bill_no}`);
-    } catch (passengerError) {
-      console.error('⚠️ Error resetting passenger billing numbers:', passengerError);
-      // Don't throw error here as the bill cancellation should still proceed
-    }
+    // 3. Accounting Integration - Record cancellation charges and refund
+    const journalEntries = [
+      {
+        je_entry_no: generateJournalEntryNo('CN'),
+        je_date: new Date(),
+        je_account: 'CUSTOMER_ACCOUNT', // Simplified for now
+        je_entry_type: 'Debit',
+        je_amount: refundAmount,
+        je_narration: `Refund for cancelled Bill ${bill.bl_bill_no}. Reason: ${reason}`,
+        je_ref_number: bill.bl_bill_no,
+        je_voucher_type: 'Journal',
+        je_created_by: req.user.us_usid,
+        je_status: 'Active',
+        eby: req.user.us_usid,
+        edtm: new Date()
+      },
+      {
+        je_entry_no: generateJournalEntryNo('CN'),
+        je_date: new Date(),
+        je_account: 'CANCELLATION_INCOME',
+        je_entry_type: 'Credit',
+        je_amount: totalCancelCharges,
+        je_narration: `Cancellation charges for Bill ${bill.bl_bill_no}`,
+        je_ref_number: bill.bl_bill_no,
+        je_voucher_type: 'Journal',
+        je_created_by: req.user.us_usid,
+        je_status: 'Active',
+        eby: req.user.us_usid,
+        edtm: new Date()
+      }
+    ];
     
-    // Accounting Integration - Create journal entries for cancellation
-    try {
-      console.log(`[CANCELLATION DEBUG] Creating journal entries for Bill ${bill.bl_bill_no}`);
-      
-      const journalEntries = [
-        {
-          je_entry_no: generateJournalEntryNo('CN'),
-          je_date: new Date(),
-          je_account: 'CUSTOMER_ACCOUNT',
-          je_entry_type: 'Debit',
-          je_amount: finalRefund,
-          je_narration: `Refund due to customer for cancelled Bill ${bill.bl_bill_no}`,
-          je_ref_number: bill.bl_bill_no,
-          je_voucher_type: 'Journal',
-          je_created_by: req.user.us_usid,
-          je_status: 'Active'
-        },
-        {
-          je_entry_no: generateJournalEntryNo('CN'),
-          je_date: new Date(),
-          je_account: 'CANCELLATION_INCOME',
-          je_entry_type: 'Credit',
-          je_amount: totalCharges,
-          je_narration: `Cancellation charges for Bill ${bill.bl_bill_no}`,
-          je_ref_number: bill.bl_bill_no,
-          je_voucher_type: 'Journal',
-          je_created_by: req.user.us_usid,
-          je_status: 'Active'
-        }
-      ];
-      
-      await Journal.bulkCreate(journalEntries, { transaction });
-      console.log(`[CANCELLATION DEBUG] Journal entries created successfully`);
-    } catch (journalError) {
-      console.error(`[CANCELLATION ERROR] Failed to create journal entries:`, journalError);
-      // We don't necessarily want to rollback the whole transaction if accounting fails,
-      // but according to the user's rule #11, it MUST use a transaction.
-      // So I will throw and rollback.
-      throw journalError;
-    }
+    await Journal.bulkCreate(journalEntries, { transaction });
+    
+    // 4. Create forensic audit log
+    await ForensicAuditLog.create({
+      entityName: 'BILL',
+      entityId: bill.bl_id,
+      actionType: 'CANCEL',
+      oldValues: oldValues,
+      newValues: bill.toJSON(),
+      performedBy: convertUserIdToInt(req.user.us_usid),
+      performedOn: new Date(),
+      remarks: `Bill cancelled. Railway Charges: ${railwayCharges}, Agent Charges: ${agentCharges}, Refund: ${refundAmount}. Reason: ${reason}`
+    }, { transaction });
     
     // Commit the transaction
     await transaction.commit();
-    console.log(`[CANCELLATION DEBUG] Transaction committed successfully for Bill ${bill.bl_id}`);
     
+    // Emit real-time update
+    RealTimeService.emitBillingUpdate(bill.toJSON());
+
     res.json({ 
       success: true,
       message: 'Bill cancelled successfully. Associated booking status updated to CANCELLED.',
       data: {
         cancelledBillId: bill.bl_id,
-        affectedBookingId: bookingId,
-        railwayCancellationCharge: railwayCharge,
-        agentCancellationCharge: agentCharge,
-        stationBoyCharges: sbCharge,
-        totalCancellationCharges: totalCharges,
-        refundAmount: finalRefund,
-        paymentStatus: paymentStatus,
-        cancellationDate: cancellationDate || new Date().toISOString().split('T')[0]
+        refundAmount: refundAmount,
+        totalCharges: totalCancelCharges
       }
     });
   } catch (error) {
     // Rollback transaction on error
     await transaction.rollback();
-    
-    // Handle other errors
-    console.error('[BILLING CANCELLATION ERROR]:', error);
-    return res.status(500).json({ 
+    console.error('Error cancelling bill:', error);
+    res.status(500).json({ 
       success: false,
-      message: error.message || 'Server error during cancellation' 
+      message: error.message 
     });
   }
 };
@@ -1274,7 +1178,6 @@ const searchBills = async (req, res) => {
         platformFees: billData.bl_platform_fee,
         miscCharges: billData.bl_misc_charges,
         deliveryCharges: billData.bl_delivery_charge,
-        cancellationCharges: billData.bl_cancellation_charge,
         gst: billData.bl_gst,
         surcharge: billData.bl_surcharge,
         gstType: billData.bl_gst_type,
@@ -1426,6 +1329,29 @@ const getCustomerBalance = async (req, res) => {
   }
 };
 
+// Get billing statistics
+const getBillingStats = async (req, res) => {
+  try {
+    const filterMap = {
+      dateColumn: 'bl_billing_date',
+      statusColumn: 'bl_status'
+    };
+    const where = queryHelper.buildWhereClause(req.query, filterMap);
+    
+    const stats = await queryHelper.getAggregation(
+      BillTVL, 
+      where, 
+      ['bl_status'], 
+      ['bl_total_amount']
+    );
+    
+    res.json({ success: true, data: stats });
+  } catch (error) {
+    console.error('Get billing stats error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+
 module.exports = {
   createBill,
   getCustomerBills,
@@ -1437,5 +1363,6 @@ module.exports = {
   cancelBill,
   searchBills,
   getCustomerLedger,
-  getCustomerBalance
+  getCustomerBalance,
+  getBillingStats
 };

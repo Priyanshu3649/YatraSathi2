@@ -1,10 +1,14 @@
 // Audit Trail Viewer Page
 // Administrative interface for viewing forensic audit logs
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
-import api from '../services/api';
+import { auditAPI } from '../services/api';
+import { usePagination } from '../hooks/usePagination';
+import PaginationControls from '../components/common/PaginationControls';
+import '../styles/vintage-erp-theme.css';
+import '../styles/vintage-erp-global.css';
 
 const AuditTrail = () => {
   const { user } = useAuth();
@@ -14,18 +18,27 @@ const AuditTrail = () => {
   const [auditLogs, setAuditLogs] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [expandedLogs, setExpandedLogs] = useState(new Set());
+  
+  // Pagination state
+  const {
+    page,
+    limit,
+    pagination,
+    updatePagination,
+    setPage,
+    setLimit
+  } = usePagination(1, 50);
+
   const [filters, setFilters] = useState({
     entityName: '',
     entityId: '',
     actionType: '',
     performedBy: '',
     dateFrom: '',
-    dateTo: '',
-    page: 1,
-    limit: 20
+    dateTo: ''
   });
   const [totalLogs, setTotalLogs] = useState(0);
-  const [expandedLogs, setExpandedLogs] = useState(new Set());
 
   // Check admin permissions
   useEffect(() => {
@@ -35,47 +48,65 @@ const AuditTrail = () => {
   }, [user, navigate]);
 
   // Fetch audit logs
-  const fetchAuditLogs = async () => {
+  const fetchAuditLogs = useCallback(async () => {
     if (user?.us_usertype !== 'admin' && user?.us_roid !== 'ADM') return;
     
     setLoading(true);
     setError('');
     
     try {
-      const response = await api.get('/audit/logs', {
-        params: {
-          ...filters,
-          page: filters.page,
-          limit: filters.limit
+      const params = {
+        ...filters,
+        page,
+        limit
+      };
+      
+      // Clean up empty filters
+      Object.keys(params).forEach(key => {
+        if (params[key] === '' || params[key] === null || params[key] === undefined) {
+          delete params[key];
         }
       });
       
-      if (response.data.success) {
-        setAuditLogs(response.data.data.logs);
-        setTotalLogs(response.data.data.totalCount);
+      const response = await auditAPI.getAllLogs(params);
+      
+      if (response.success) {
+        // Correctly parse the paginated response from auditController.js
+        const logs = response.data.logs || [];
+        const pagination = {
+          currentPage: response.data.currentPage || 1,
+          totalPages: response.data.totalPages || 1,
+          totalRecords: response.data.totalCount || 0,
+          hasNext: response.data.hasNext,
+          hasPrev: response.data.hasPrevious
+        };
+        
+        setAuditLogs(logs);
+        setTotalLogs(pagination.totalRecords);
+        updatePagination(pagination);
       } else {
-        setError(response.data.message || 'Failed to fetch audit logs');
+        throw new Error(response.message || 'Failed to fetch audit logs');
       }
     } catch (err) {
       console.error('Error fetching audit logs:', err);
-      setError('Failed to fetch audit logs');
+      setError(err.message || 'Failed to fetch audit logs');
     } finally {
       setLoading(false);
     }
-  };
+  }, [filters, page, limit, updatePagination, user]);
 
-  // Fetch logs on component mount and when filters change
+  // Fetch logs on component mount and when filters/pagination change
   useEffect(() => {
     fetchAuditLogs();
-  }, [filters.page, filters.limit]);
+  }, [fetchAuditLogs]);
 
   // Handle filter changes
   const handleFilterChange = (field, value) => {
     setFilters(prev => ({
       ...prev,
-      [field]: value,
-      page: 1 // Reset to first page when filters change
+      [field]: value
     }));
+    setPage(1); // Reset to first page when filters change
   };
 
   // Handle search
@@ -85,7 +116,7 @@ const AuditTrail = () => {
 
   // Handle pagination
   const handlePageChange = (newPage) => {
-    setFilters(prev => ({ ...prev, page: newPage }));
+    setPage(newPage);
   };
 
   // Toggle expanded view for log details
@@ -164,7 +195,7 @@ const AuditTrail = () => {
   };
 
   // Calculate total pages
-  const totalPages = Math.ceil(totalLogs / filters.limit);
+  const totalPages = Math.ceil(totalLogs / limit);
 
   if (user?.us_usertype !== 'admin' && user?.us_roid !== 'ADM') {
     return null;
@@ -340,29 +371,12 @@ const AuditTrail = () => {
         )}
 
         {/* Pagination */}
-        {totalLogs > 0 && (
-          <div className="pagination">
-            <button 
-              onClick={() => handlePageChange(filters.page - 1)}
-              disabled={filters.page <= 1}
-              className="pagination-button"
-            >
-              Previous
-            </button>
-            
-            <span className="page-info">
-              Page {filters.page} of {totalPages}
-            </span>
-            
-            <button 
-              onClick={() => handlePageChange(filters.page + 1)}
-              disabled={filters.page >= totalPages}
-              className="pagination-button"
-            >
-              Next
-            </button>
-          </div>
-        )}
+        <PaginationControls
+          pagination={pagination}
+          onPageChange={setPage}
+          limit={limit}
+          onLimitChange={setLimit}
+        />
       </div>
 
       <style jsx>{`
@@ -631,30 +645,6 @@ const AuditTrail = () => {
           margin-top: 24px;
           padding-top: 16px;
           border-top: 1px solid #eee;
-        }
-        
-        .pagination-button {
-          padding: 8px 16px;
-          background: #000080;
-          color: white;
-          border: none;
-          border-radius: 4px;
-          cursor: pointer;
-          font-weight: 500;
-        }
-        
-        .pagination-button:hover:not(:disabled) {
-          background: #000066;
-        }
-        
-        .pagination-button:disabled {
-          opacity: 0.5;
-          cursor: not-allowed;
-        }
-        
-        .page-info {
-          font-size: 14px;
-          color: #666;
         }
         
         @media (max-width: 768px) {

@@ -3,6 +3,8 @@ import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { showMessage } from './MessageDisplay';
 import { parseError, validateFormData } from '../utils/errorParser';
+import PaginationControls from './common/PaginationControls';
+import useERPFilters from '../hooks/useERPFilters';
 import '../styles/vintage-erp-theme.css';
 import '../styles/dynamic-admin-panel.css';
 
@@ -13,14 +15,18 @@ const DynamicAdminPanel = () => {
   const navigate = useNavigate();
   const [activeModule, setActiveModule] = useState('applications');
   const [data, setData] = useState([]);
-  const [filteredData, setFilteredData] = useState([]);
   const [loading, setLoading] = useState(false);
   const [selectedRecord, setSelectedRecord] = useState(null);
   const [formData, setFormData] = useState({});
   const [isEditing, setIsEditing] = useState(false);
   const [expandedNav, setExpandedNav] = useState({ master: true, security: true });
   const [currentPage, setCurrentPage] = useState(1);
-  const recordsPerPage = 100;
+  const [limit, setLimit] = useState(50);
+  const [pagination, setPagination] = useState({
+    currentPage: 1,
+    totalPages: 1,
+    totalRecords: 0
+  });
   
   // Dropdown data sources
   const [dropdownData, setDropdownData] = useState({
@@ -73,8 +79,20 @@ const DynamicAdminPanel = () => {
     active: ''
   });
   
-  // Inline filter state for grid filtering
-  const [inlineFilters, setInlineFilters] = useState({});
+  // Inline filter state for grid filtering - Enable real-time filtering with 500ms debounce
+  const { 
+    draftFilters: inlineFilters, 
+    activeFilters, 
+    handleFilterChange: handleInlineFilterChange, 
+    applyFiltersManual: applyFilters, 
+    clearFiltersManual: clearFilters 
+  } = useERPFilters({}, () => { 
+    handlePageChange(1); 
+    fetchData(1, pagination.pageSize || 50); 
+  }, { 
+    realTime: true, 
+    debounceMs: 500 
+  });
   
   // Filter timeout for live search
   const [filterTimeout, setFilterTimeout] = useState(null);
@@ -671,15 +689,12 @@ const DynamicAdminPanel = () => {
         }
       }
     });
-    
-    setFilteredData(filtered);
-    setCurrentPage(1); // Reset to first page when filtering
   }, [filters, data, inlineFilters]);
 
   // Auto-select first record when data changes (only on initial load or module change)
   useEffect(() => {
-    if (filteredData.length > 0 && !selectedRecord && !isEditing) {
-      const firstRecord = filteredData[0];
+    if (data.length > 0 && !selectedRecord && !isEditing) {
+      const firstRecord = data[0];
       handleRecordSelect(firstRecord);
     }
   }, [activeModule, data.length]); // Only trigger on module change or data load
@@ -689,21 +704,20 @@ const DynamicAdminPanel = () => {
     const handleKeyDown = (e) => {
       if (!selectedRecord || isEditing) return;
       
-      const paginatedData = getPaginatedData();
-      const currentIndex = paginatedData.findIndex(item => 
+      const currentIndex = data.findIndex(item => 
         isSameRecord(item, selectedRecord, activeModule)
       );
       
       if (e.key === 'ArrowDown') {
         e.preventDefault();
-        if (currentIndex < paginatedData.length - 1) {
-          handleRecordSelect(paginatedData[currentIndex + 1]);
+        if (currentIndex < data.length - 1) {
+          handleRecordSelect(data[currentIndex + 1]);
           scrollToSelectedRow();
         }
       } else if (e.key === 'ArrowUp') {
         e.preventDefault();
         if (currentIndex > 0) {
-          handleRecordSelect(paginatedData[currentIndex - 1]);
+          handleRecordSelect(data[currentIndex - 1]);
           scrollToSelectedRow();
         }
       } else if (e.key === 'Enter' && !isEditing) {
@@ -720,7 +734,7 @@ const DynamicAdminPanel = () => {
     
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [selectedRecord, isEditing, activeModule, filteredData, currentPage]);
+  }, [selectedRecord, isEditing, activeModule, data, currentPage]);
 
   // Scroll to selected row
   const scrollToSelectedRow = () => {
@@ -733,21 +747,22 @@ const DynamicAdminPanel = () => {
   };
 
   useEffect(() => {
-    fetchData();
-    fetchDropdownData();
-    // Reset filters when module changes
-    setFilters({ 
-      ap_apid: '', 
-      mo_apid: '', 
-      shortName: '', 
-      active: '', 
-      fp_allow: '',
-      up_allow: ''
-    });
-    
-    // Reset inline filters when module changes
-    setInlineFilters({});
+    clearFilters();
+    setCurrentPage(1);
   }, [activeModule]);
+
+  useEffect(() => {
+    fetchData(currentPage, limit);
+  }, [activeModule, currentPage, limit]);
+
+  const handlePageChange = (newPage) => {
+    setCurrentPage(newPage);
+  };
+
+  const handleLimitChange = (newLimit) => {
+    setLimit(newLimit);
+    setCurrentPage(1);
+  };
 
   const fetchDropdownData = async () => {
     const token = localStorage.getItem('token');
@@ -785,17 +800,28 @@ const DynamicAdminPanel = () => {
     }
   };
 
-  const fetchData = async () => {
+  const fetchData = async (page = 1, pageSize = 50) => {
     setLoading(true);
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`${API_BASE_URL}${modules[activeModule].endpoint}`, {
+      const response = await fetch(`${API_BASE_URL}${modules[activeModule].endpoint}?page=${page}&limit=${pageSize}&${new URLSearchParams(activeFilters).toString()}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       
       if (response.ok) {
         const result = await response.json();
-        const dataArray = Array.isArray(result) ? result : result.data || [];
+        // Standardized handling: extract data array from paginated response or direct array
+        const dataArray = Array.isArray(result.data) ? result.data : (Array.isArray(result) ? result : []);
+        
+        if (result.pagination) {
+          setPagination(result.pagination);
+        } else {
+          setPagination({
+            currentPage: page,
+            totalPages: Math.ceil(dataArray.length / pageSize) || 1,
+            totalRecords: dataArray.length
+          });
+        }
         
         // Apply computed fields if defined for this module
         const moduleConfig = modules[activeModule];
@@ -813,15 +839,12 @@ const DynamicAdminPanel = () => {
         }
         
         setData(processedData);
-        setFilteredData(processedData);
       } else {
         setData([]);
-        setFilteredData([]);
       }
     } catch (error) {
       console.error('Error fetching data:', error);
       setData([]);
-      setFilteredData([]);
     } finally {
       setLoading(false);
     }
@@ -903,13 +926,6 @@ const DynamicAdminPanel = () => {
     setFilterTimeout(newTimeout);
   };
   
-  const handleInlineFilterChange = (column, value) => {
-    setInlineFilters(prev => ({
-      ...prev,
-      [column]: value
-    }));
-  };
-  
   const handleClearFilters = () => {
     // Clear all filters
     setFilters({
@@ -954,7 +970,7 @@ const DynamicAdminPanel = () => {
     });
     
     // Clear inline filters
-    setInlineFilters({});
+    clearFilters();
     
     // Clear filter timeout
     if (filterTimeout) {
@@ -1148,25 +1164,24 @@ const DynamicAdminPanel = () => {
   };
 
   const handleNavigation = (direction) => {
-    const paginatedData = getPaginatedData();
-    if (paginatedData.length === 0) return;
+    if (data.length === 0) return;
     
     let newIndex = 0;
     if (selectedRecord) {
-      const currentIndex = paginatedData.findIndex(item => 
+      const currentIndex = data.findIndex(item => 
         isSameRecord(item, selectedRecord, activeModule)
       );
       
       switch(direction) {
         case 'first': newIndex = 0; break;
         case 'prev': newIndex = currentIndex > 0 ? currentIndex - 1 : 0; break;
-        case 'next': newIndex = currentIndex < paginatedData.length - 1 ? currentIndex + 1 : paginatedData.length - 1; break;
-        case 'last': newIndex = paginatedData.length - 1; break;
+        case 'next': newIndex = currentIndex < data.length - 1 ? currentIndex + 1 : data.length - 1; break;
+        case 'last': newIndex = data.length - 1; break;
         default: break;
       }
     }
     
-    handleRecordSelect(paginatedData[newIndex]);
+    handleRecordSelect(data[newIndex]);
   };
 
   const toggleNav = (section) => {
@@ -1174,20 +1189,14 @@ const DynamicAdminPanel = () => {
   };
 
   // Pagination
-  const getPaginatedData = () => {
-    const startIndex = (currentPage - 1) * recordsPerPage;
-    const endIndex = startIndex + recordsPerPage;
-    return filteredData.slice(startIndex, endIndex);
-  };
-
-  const totalPages = Math.ceil(filteredData.length / recordsPerPage);
-  const paginatedData = getPaginatedData();
+  // Remove legacy client-side pagination
+  // Pagination is now handled server-side via fetchData(currentPage, limit)
   
   // Check if navigation buttons should be disabled
-  const isFirstRecord = selectedRecord && paginatedData.length > 0 && 
-    paginatedData[0][modules[activeModule].columns[0]] === selectedRecord[modules[activeModule].columns[0]];
-  const isLastRecord = selectedRecord && paginatedData.length > 0 && 
-    paginatedData[paginatedData.length - 1][modules[activeModule].columns[0]] === selectedRecord[modules[activeModule].columns[0]];
+  const isFirstRecord = selectedRecord && data.length > 0 && 
+    data[0][modules[activeModule].columns[0]] === selectedRecord[modules[activeModule].columns[0]];
+  const isLastRecord = selectedRecord && data.length > 0 && 
+    data[data.length - 1][modules[activeModule].columns[0]] === selectedRecord[modules[activeModule].columns[0]];
 
   const currentModule = modules[activeModule];
 
@@ -1536,12 +1545,11 @@ const DynamicAdminPanel = () => {
                     <tr className="inline-filter-row">
                       <td></td>
                       {currentModule.columns.map((col, idx) => {
-                        // Determine input type based on column characteristics
                         let inputType = 'text';
                         if (col.includes('active') || col.includes('admin') || col.includes('security') || 
                             col.includes('allow') || col.includes('ready') || col.includes('secure')) {
                           inputType = 'select';
-                        } else if (col.includes('edtm') || col.includes('mdtm') || col.includes('cdtm') || col.includes('paydt')) {
+                        } else if (col.includes('edtm') || col.includes('mdtm') || col.includes('cdtm')) {
                           inputType = 'date';
                         }
                         
@@ -1555,8 +1563,8 @@ const DynamicAdminPanel = () => {
                                 style={{ width: '100%', padding: '2px', fontSize: '12px', backgroundColor: '#f0f0f0' }}
                               >
                                 <option value="">All</option>
-                                <option value="1">Active</option>
-                                <option value="0">Inactive</option>
+                                <option value="1">Active/Yes</option>
+                                <option value="0">Inactive/No</option>
                               </select>
                             ) : inputType === 'date' ? (
                               <input
@@ -1582,10 +1590,10 @@ const DynamicAdminPanel = () => {
                     </tr>
                   </thead>
                   <tbody>
-                    {paginatedData.length === 0 ? (
+                    {data.length === 0 ? (
                       <tr><td colSpan={currentModule.columns.length + 1} style={{ textAlign: 'center' }}>No records found</td></tr>
                     ) : (
-                      paginatedData.map((record, idx) => {
+                      data.map((record, idx) => {
                         const isSelected = selectedRecord && isSameRecord(record, selectedRecord, activeModule);
                         return (
                           <tr 
@@ -1625,6 +1633,16 @@ const DynamicAdminPanel = () => {
                 </table>
               </div>
             )}
+            
+            {/* Pagination Controls */}
+            {!loading && (
+              <PaginationControls
+                pagination={pagination}
+                onPageChange={handlePageChange}
+                limit={limit}
+                onLimitChange={handleLimitChange}
+              />
+            )}
           </div>
         </div>
 
@@ -1632,8 +1650,8 @@ const DynamicAdminPanel = () => {
         <div className="erp-filter-panel">
           <div className="erp-filter-header">
             Filter Criteria
-            {(filteredData.length !== data.length) && (
-              <span className="erp-filter-indicator">{filteredData.length}/{data.length}</span>
+            {(data.length !== data.length) && (
+              <span className="erp-filter-indicator">{data.length}/{data.length}</span>
             )}
           </div>
           
@@ -2034,44 +2052,44 @@ const DynamicAdminPanel = () => {
       </div>
 
       {/* Status Bar - Static */}
-      <div className="erp-status-bar">
+        <div className="erp-status-bar">
         <div className="erp-status-item">{isEditing ? 'Editing' : 'Ready'}</div>
         <div className="erp-status-item">
-          Records: {filteredData.length !== data.length ? `${filteredData.length}/${data.length}` : filteredData.length}
+          Total Records: {pagination.totalRecords}
         </div>
         <div className="erp-status-item">
-          Showing: {paginatedData.length > 0 ? `${((currentPage - 1) * recordsPerPage) + 1}-${Math.min(currentPage * recordsPerPage, filteredData.length)}` : '0'} of {filteredData.length}
+          Showing: {data.length > 0 ? `${((pagination.currentPage - 1) * limit) + 1}-${Math.min(pagination.currentPage * limit, pagination.totalRecords)}` : '0'} of {pagination.totalRecords}
         </div>
         <div className="erp-status-item" style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '4px' }}>
           <button 
             className="erp-icon-button" 
             onClick={() => setCurrentPage(1)}
-            disabled={currentPage === 1}
+            disabled={pagination.currentPage === 1}
             title="First Page"
           >
             |◀
           </button>
           <button 
             className="erp-icon-button" 
-            onClick={() => setCurrentPage(currentPage - 1)}
-            disabled={currentPage === 1}
+            onClick={() => setCurrentPage(pagination.currentPage - 1)}
+            disabled={pagination.currentPage === 1}
             title="Previous Page"
           >
             ◀
           </button>
-          <span style={{ margin: '0 4px', fontSize: '12px' }}>Page {currentPage}/{totalPages || 1}</span>
+          <span style={{ margin: '0 4px', fontSize: '12px' }}>Page {pagination.currentPage}/{pagination.totalPages || 1}</span>
           <button 
             className="erp-icon-button" 
-            onClick={() => setCurrentPage(currentPage + 1)}
-            disabled={currentPage === totalPages || totalPages === 0}
+            onClick={() => setCurrentPage(pagination.currentPage + 1)}
+            disabled={pagination.currentPage === pagination.totalPages || pagination.totalPages === 0}
             title="Next Page"
           >
             ▶
           </button>
           <button 
             className="erp-icon-button" 
-            onClick={() => setCurrentPage(totalPages)}
-            disabled={currentPage === totalPages || totalPages === 0}
+            onClick={() => setCurrentPage(pagination.totalPages)}
+            disabled={pagination.currentPage === pagination.totalPages || pagination.totalPages === 0}
             title="Last Page"
           >
             ▶|

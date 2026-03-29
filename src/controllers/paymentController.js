@@ -1,5 +1,8 @@
 const { Payment, Contra, Receipt, Journal, User } = require('../models');
 const { validationResult } = require('express-validator');
+const { Op } = require('sequelize');
+const queryHelper = require('../utils/queryHelper');
+const RealTimeService = require('../services/realTimeService');
 
 /**
  * Payment Controller
@@ -12,47 +15,56 @@ class PaymentController {
    */
   async getAllPayments(req, res) {
     try {
-      const { page = 1, limit = 20, search, sortBy = 'py_date', sortOrder = 'DESC' } = req.query;
+      const { limit, offset, page } = queryHelper.getPaginationOptions(req.query);
+      const order = queryHelper.getSortingOptions(req.query, 'py_date', 'DESC');
       
-      const offset = (page - 1) * limit;
-      
-      // Build where clause
-      const whereClause = {
-        py_status: 'Active'
+      const filterMap = {
+        dateColumn: 'py_date',
+        amountColumn: 'py_amount',
+        statusColumn: 'py_status',
+        searchColumns: ['py_entry_no', 'py_customer_name', 'py_customer_phone'],
+        customFilters: {
+          type: 'py_entry_type'
+        }
       };
       
-      if (search) {
-        whereClause[Op.or] = [
-          { py_entry_no: { [Op.like]: `%${search}%` } },
-          { py_customer_name: { [Op.like]: `%${search}%` } },
-          { py_customer_phone: { [Op.like]: `%${search}%` } }
-        ];
+      const where = queryHelper.buildWhereClause(req.query, filterMap);
+      
+      // Default filter for active payments if not specified
+      if (!req.query.status) {
+        where.py_status = 'Active';
       }
       
       const { count, rows: payments } = await Payment.findAndCountAll({
-        where: whereClause,
+        where,
         include: [{
           model: User,
           as: 'creator',
           attributes: ['us_usid', 'us_fname', 'us_lname']
         }],
-        order: [[sortBy, sortOrder]],
-        limit: parseInt(limit),
-        offset: parseInt(offset)
+        order,
+        limit,
+        offset
       });
       
-      res.json({
-        success: true,
-        data: payments,
-        pagination: {
-          currentPage: parseInt(page),
-          totalPages: Math.ceil(count / limit),
-          totalRecords: count,
-          hasNext: page < Math.ceil(count / limit),
-          hasPrev: page > 1
-        },
-        message: 'Payments retrieved successfully'
-      });
+      // Handle Export Request
+      if (req.query.export === 'csv') {
+        const columns = [
+          { label: 'Entry No', key: 'py_entry_no' },
+          { label: 'Date', key: 'py_date' },
+          { label: 'Customer', key: 'py_customer_name' },
+          { label: 'Phone', key: 'py_customer_phone' },
+          { label: 'Amount', key: 'py_amount' },
+          { label: 'Type', key: 'py_entry_type' },
+          { label: 'Status', key: 'py_status' }
+        ];
+        const csv = queryHelper.convertToCSV(payments.map(p => p.toJSON()), columns);
+        res.setHeader('Content-Type', 'text/csv');
+        res.setHeader('Content-Disposition', 'attachment; filename=payments.csv');
+        return res.send(csv);
+      }
+      
+      res.json(queryHelper.formatPaginatedResponse(count, payments, page, limit));
       
     } catch (error) {
       console.error('Get payments error:', error);
@@ -166,6 +178,9 @@ class PaymentController {
         py_status: 'Active'
       });
       
+      // Emit real-time update
+      RealTimeService.emitPaymentUpdate(payment.toJSON());
+
       res.status(201).json({
         success: true,
         data: payment,
@@ -220,6 +235,12 @@ class PaymentController {
         py_modified_dt: new Date()
       });
       
+      // Emit real-time update
+      RealTimeService.broadcast('payment_update', {
+        type: 'PAYMENT_UPDATED',
+        data: updatedPayment.toJSON()
+      });
+
       res.json({
         success: true,
         data: updatedPayment,

@@ -1,5 +1,7 @@
 const { Journal, User } = require('../models');
 const { validationResult } = require('express-validator');
+const { Op } = require('sequelize');
+const queryHelper = require('../utils/queryHelper');
 
 /**
  * Journal Controller
@@ -8,16 +10,17 @@ const { validationResult } = require('express-validator');
 class JournalController {
   async getAllJournals(req, res) {
     try {
-      const { page = 1, limit = 20, search, sortBy = 'je_date', sortOrder = 'DESC' } = req.query;
-      const offset = (page - 1) * limit;
+      const { limit, offset, page } = queryHelper.getPaginationOptions(req.query);
+      const sortBy = req.query.sortBy || 'je_date';
+      const sortOrder = (req.query.sortOrder || 'DESC').toUpperCase();
       
       const whereClause = { je_status: 'Active' };
       
-      if (search) {
+      if (req.query.search) {
         whereClause[Op.or] = [
-          { je_entry_no: { [Op.like]: `%${search}%` } },
-          { je_account: { [Op.like]: `%${search}%` } },
-          { je_narration: { [Op.like]: `%${search}%` } }
+          { je_entry_no: { [Op.like]: `%${req.query.search}%` } },
+          { je_account: { [Op.like]: `%${req.query.search}%` } },
+          { je_narration: { [Op.like]: `%${req.query.search}%` } }
         ];
       }
       
@@ -29,21 +32,13 @@ class JournalController {
           attributes: ['us_usid', 'us_fname', 'us_lname']
         }],
         order: [[sortBy, sortOrder]],
-        limit: parseInt(limit),
-        offset: parseInt(offset)
+        limit,
+        offset
       });
       
-      res.json({
-        success: true,
-        data: journals,
-        pagination: {
-          currentPage: parseInt(page),
-          totalPages: Math.ceil(count / limit),
-          totalRecords: count
-        },
-        message: 'Journal entries retrieved successfully'
-      });
+      res.json(queryHelper.formatPaginatedResponse(count, journals, page, limit));
     } catch (error) {
+      console.error('Get journals error:', error);
       res.status(500).json({
         success: false,
         message: 'Failed to retrieve journal entries',

@@ -1,36 +1,29 @@
-// Payments Menu Component - ASCII Wireframe Layout
-// Implements the exact menu layout as specified in the redesign plan
-
 import React, { useState, useEffect, useRef } from 'react';
 import { useKeyboardNavigation } from '../../contexts/KeyboardNavigationContext';
-import '../../styles/payments-menu.css';
+import '../../styles/vintage-erp-theme.css';
 
 const PaymentsMenu = ({ onMenuSelect, onQuit }) => {
   const [selectedIndex, setSelectedIndex] = useState(0);
   const menuRef = useRef(null);
   
   const {
-    enterAction,
     closeModal
   } = useKeyboardNavigation();
 
-  // Menu items as per ASCII wireframe specification
   const menuItems = [
-    { id: 'contra', label: 'Contra', description: 'Cash to Bank / Bank to Cash transfers' },
-    { id: 'payment', label: 'Payment', description: 'Money going out (Payments to suppliers, expenses)' },
-    { id: 'receipt', label: 'Receipt', description: 'Money coming in (Receipts from customers)' },
-    { id: 'journal', label: 'Journal Entry', description: 'Adjustments and other accounting entries' },
-    { id: 'quit', label: 'Quit', description: 'Exit Payments module' }
+    { id: 'contra', label: 'Contra', description: 'Cash to Bank / Bank to Cash transfers', icon: '⇄' },
+    { id: 'payment', label: 'Payment', description: 'Money going out (Payments to suppliers, expenses)', icon: '↑' },
+    { id: 'receipt', label: 'Receipt', description: 'Money coming in (Receipts from customers)', icon: '↓' },
+    { id: 'journal', label: 'Journal Entry', description: 'Adjustments and other accounting entries', icon: '✎' },
+    { id: 'quit', label: 'Quit', description: 'Exit Payments module', icon: '✕' }
   ];
 
-  // Set initial focus
   useEffect(() => {
     if (menuRef.current) {
       menuRef.current.focus();
     }
   }, []);
 
-  // Handle keyboard navigation
   const handleKeyDown = (event) => {
     switch (event.key) {
       case 'ArrowUp':
@@ -47,30 +40,21 @@ const PaymentsMenu = ({ onMenuSelect, onQuit }) => {
         break;
       case 'Escape':
         event.preventDefault();
-        closeModal();
         if (onQuit) onQuit();
         break;
-      case '1':
-      case '2':
-      case '3':
-      case '4':
-      case '5':
-        event.preventDefault();
-        const index = parseInt(event.key) - 1;
-        if (index < menuItems.length) {
+      default:
+        // Numeric shortcuts
+        if (/^[1-5]$/.test(event.key)) {
+          const index = parseInt(event.key) - 1;
           setSelectedIndex(index);
           setTimeout(() => handleMenuSelection(index), 100);
         }
         break;
-      default:
-        break;
     }
   };
 
-  // Handle menu selection
   const handleMenuSelection = (index = selectedIndex) => {
     const selectedItem = menuItems[index];
-    
     if (selectedItem.id === 'quit') {
       if (onQuit) onQuit();
     } else {
@@ -79,58 +63,51 @@ const PaymentsMenu = ({ onMenuSelect, onQuit }) => {
   };
 
   return (
-    <div className="payments-menu-container">
-      {/* ASCII Wireframe Header */}
-      <div className="payments-menu-header">
-        <div className="ascii-border-top">┌─────────────────────────────────────────────┐</div>
-        <div className="ascii-content">│                                             │</div>
-        <div className="ascii-title">│                 PAYMENTS                    │</div>
-        <div className="ascii-content">│                                             │</div>
+    <div className="erp-container" style={{ maxWidth: '600px', margin: '40px auto', padding: '0' }}>
+      <div className="erp-panel-header" style={{ textAlign: 'center', fontSize: '16px', padding: '10px' }}>
+        ACCOUNTING VOUCHER SELECTION
       </div>
-
-      {/* Menu Items */}
+      
       <div 
-        className="payments-menu-items"
+        className="erp-menu-list"
         ref={menuRef}
         tabIndex={0}
         onKeyDown={handleKeyDown}
+        style={{ outline: 'none', background: '#f5f5f5' }}
       >
         {menuItems.map((item, index) => (
           <div
             key={item.id}
-            className={`ascii-menu-item ${index === selectedIndex ? 'selected' : ''}`}
+            className={`erp-menu-item-row ${selectedIndex === index ? 'active' : ''}`}
             onClick={() => {
               setSelectedIndex(index);
               handleMenuSelection(index);
             }}
+            style={{
+              padding: '12px 20px',
+              borderBottom: '1px solid #ddd',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              backgroundColor: selectedIndex === index ? 'var(--erp-blue-dark)' : 'transparent',
+              color: selectedIndex === index ? 'white' : 'var(--erp-text)',
+              transition: 'all 0.1s'
+            }}
           >
-            <div className="ascii-item-line">
-              │{index === selectedIndex ? '               > ' : '                 '}{item.label}{' '.repeat(Math.max(0, 22 - item.label.length))}│
+            <span style={{ width: '30px', fontWeight: 'bold', opacity: 0.7 }}>{index + 1}.</span>
+            <span style={{ width: '40px', fontSize: '18px' }}>{item.icon}</span>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontWeight: 'bold', fontSize: '14px' }}>{item.label}</div>
+              <div style={{ fontSize: '11px', opacity: 0.8 }}>{item.description}</div>
             </div>
+            {selectedIndex === index && <span style={{ fontWeight: 'bold' }}>➜</span>}
           </div>
         ))}
       </div>
-
-      {/* ASCII Wireframe Footer */}
-      <div className="payments-menu-footer">
-        <div className="ascii-content">│                                             │</div>
-        <div className="ascii-border-bottom">└─────────────────────────────────────────────┘</div>
+      
+      <div style={{ padding: '10px', background: '#e0e0e0', fontSize: '11px', textAlign: 'center', borderTop: '1px solid #ccc' }}>
+        Use Arrow keys to navigate, Enter to select, or press 1-5
       </div>
-
-      {/* Instructions */}
-      <div className="payments-menu-instructions">
-        <div className="instruction-line">Use ↑↓ Arrow keys to navigate</div>
-        <div className="instruction-line">Press ENTER to select</div>
-        <div className="instruction-line">Press ESC or select Quit to exit</div>
-        <div className="instruction-line">Press 1-5 for quick selection</div>
-      </div>
-
-      {/* Selected item description */}
-      {selectedIndex < menuItems.length && (
-        <div className="selected-item-description">
-          <strong>{menuItems[selectedIndex].label}:</strong> {menuItems[selectedIndex].description}
-        </div>
-      )}
     </div>
   );
 };

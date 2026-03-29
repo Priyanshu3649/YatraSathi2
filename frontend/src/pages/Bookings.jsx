@@ -41,6 +41,9 @@ import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { bookingAPI } from '../services/api';
+import { usePagination } from '../hooks/usePagination';
+import useERPFilters from '../hooks/useERPFilters';
+import PaginationControls from '../components/common/PaginationControls';
 import SaveConfirmationModal from '../components/common/SaveConfirmationModal';
 import RecordActionMenu from '../components/common/RecordActionMenu';
 import { useKeyboardForm } from '../hooks/useKeyboardForm';
@@ -94,7 +97,6 @@ const Bookings = () => {
   const { user, isAuthenticated } = useAuth();
   const navigate = useNavigate();
   const [bookings, setBookings] = useState([]);
-  const [filteredBookings, setFilteredBookings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [selectedBooking, setSelectedBooking] = useState(null);
@@ -123,6 +125,34 @@ const Bookings = () => {
   });
   const [passengerList, setPassengerList] = useState([]);
   const [isEditing, setIsEditing] = useState(false);
+  
+  // Pagination state - 50 records per page with server-side support
+  const {
+    page,
+    limit,
+    pagination,
+    setPage,
+    setLimit,
+    nextPage,
+    prevPage,
+    changeLimit,
+    updatePagination
+  } = usePagination(1, 50);
+  
+  // Filter state for inline grid filtering (moved before fetchBookings to avoid hoisting issues)
+  // Enable real-time filtering with 500ms debounce
+  const {
+    draftFilters: inlineFilters,
+    activeFilters,
+    handleFilterChange: handleInlineFilterChange,
+    applyFiltersManual: applyFilters,
+    clearFiltersManual: clearFilters
+  } = useERPFilters({}, () => {
+    setPage(1);
+  }, { 
+    realTime: true, 
+    debounceMs: 500 
+  });
   
   // Helper function to convert database quota values to frontend display values
   const mapQuotaValueToFrontend = (dbValue) => {
@@ -203,31 +233,64 @@ const Bookings = () => {
   const fetchBookings = useCallback(async () => {
     try {
       setLoading(true);
-      let data;
+      let bookingsArray = [];
+      let paginationData = null;
       
       // Check if user is admin or employee
-      const isEmployee = user && ['AGT', 'ACC', 'HR', 'CC', 'MKT', 'MGT', 'ADM'].includes(user.us_roid);
+      const isEmployee = user && (
+        ['AGT', 'ACC', 'HR', 'CC', 'MKT', 'MGT', 'ADM'].includes(user.us_roid) ||
+        user.us_usertype === 'admin' || 
+        user.usertype === 'admin'
+      );
+      
+      // Pass pagination params
+      const params = {
+        page: page,
+        limit: limit,
+        ...activeFilters
+      };
+      
       if (isEmployee) {
-        data = await bookingAPI.getAllBookings();
+        const response = await bookingAPI.getAllBookings(params);
+        // getAllBookings returns { success, data, pagination }
+        bookingsArray = response?.data || [];
+        paginationData = response?.pagination || null;
       } else {
-        const response = await bookingAPI.getMyBookings();
-        // Handle the wrapped response structure for customer bookings
-        data = response.success ? response.data.bookings : [];
+        const response = await bookingAPI.getMyBookings(params);
+        // getMyBookings returns { success, data: { bookings, pagination } }
+        bookingsArray = response?.data?.bookings || response?.data || [];
+        paginationData = response?.data?.pagination || response?.pagination || null;
       }
       
-      // Handle the response structure
-      const bookingsData = data?.data?.bookings || data?.bookings || data || [];
-      const bookingsArray = Array.isArray(bookingsData) ? bookingsData : [];
+      // Safety check for arrays
+      bookingsArray = Array.isArray(bookingsArray) ? bookingsArray : [];
       
       setBookings(bookingsArray);
-      setFilteredBookings(bookingsArray);
+// Update pagination info from API response
+      if (paginationData) {
+        updatePagination(paginationData);
+      } else {
+        // Fallback if no pagination data exists (e.g. mock data or broken API)
+        updatePagination({
+          currentPage: page,
+          totalPages: Math.ceil(bookingsArray.length / limit) || 1,
+          totalRecords: bookingsArray.length
+        });
+      }
+      
       setError('');
     } catch (err) {
+      console.error('❌ Error fetching bookings:', err);
       setError(err.message || 'Failed to fetch bookings');
     } finally {
       setLoading(false);
     }
-  }, [user]);
+  }, [user, page, limit, activeFilters, updatePagination]);
+  
+  // Refetch when page or limit changes
+  useEffect(() => {
+    fetchBookings();
+  }, [page, limit, fetchBookings]);
   
   // Create a ref to hold the handleSave function to avoid dependency cycle
   const handleSaveRef = useRef();
@@ -348,14 +411,10 @@ const Bookings = () => {
         setBookings(prev => prev.map(booking => 
           booking.bk_bkid === savedBookingData.bk_bkid ? savedBookingData : booking
         ));
-        setFilteredBookings(prev => prev.map(booking => 
-          booking.bk_bkid === savedBookingData.bk_bkid ? savedBookingData : booking
-        ));
-      } else {
+} else {
         // Add new booking to the list
         setBookings(prev => [savedBookingData, ...prev]);
-        setFilteredBookings(prev => [savedBookingData, ...prev]);
-      }
+}
       
       // Show success message
       announceToScreenReader('Booking saved successfully');
@@ -585,20 +644,6 @@ const Bookings = () => {
   // Define handleRecordSelect before functions that depend on it
   const handleRecordSelect = useCallback(async (record) => {
     setSelectedBooking(record);
-    
-    // Fetch billing data to get PNR if available
-    let billingPNR = null;
-    if (record.hasBilling && record.bk_bkid) {
-      try {
-        const billingResponse = await billingAPI.getBillByBookingId(record.bk_bkid);
-        if (billingResponse.success && billingResponse.data) {
-          billingPNR = billingResponse.data.bl_pnr || billingResponse.data.pnrNumbers || billingResponse.data.pnrNumber || null;
-        }
-      } catch (error) {
-        console.warn('Failed to fetch billing for PNR:', error);
-      }
-    }
-    
     setFormData({
       bookingId: record.bk_bkid || '',
       bookingDate: record.bk_bookingdt ? new Date(record.bk_bookingdt).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
@@ -612,7 +657,7 @@ const Bookings = () => {
       travelDate: record.bk_trvldt ? new Date(record.bk_trvldt).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
       travelClass: record.bk_class || record.bk_travelclass || '3A',
       quotaType: mapQuotaValueToFrontend(record.quotaType || record.bk_quotatype || record.bk_quota || ''),
-      pnrNumber: billingPNR || record.pnrNumber || record.bk_pnr || '', // Priority: Billing PNR > Booking PNR
+      pnrNumber: record.pnrNumber || record.bk_pnr || '', // NEW: PNR field
       remarks: record.bk_remarks || '',
       status: record.bk_status || 'DRAFT',
       createdBy: record.createdBy || record.bk_createdby || 'system',
@@ -709,12 +754,7 @@ const Bookings = () => {
                 ? { ...booking, bk_status: 'CANCELLED' }
                 : booking
             ));
-            setFilteredBookings(prev => prev.map(booking => 
-              booking.bk_bkid === record.bk_bkid 
-                ? { ...booking, bk_status: 'CANCELLED' }
-                : booking
-            ));
-            announceToScreenReader('Booking cancelled successfully');
+announceToScreenReader('Booking cancelled successfully');
           }
           break;
           
@@ -748,9 +788,6 @@ const Bookings = () => {
     setEnterMenuOpen(false);
     setEnterMenuSelectedIndex(0);
   }, []);
-  
-  // Filter state for inline grid filtering
-  const [inlineFilters, setInlineFilters] = useState({});
   
   // Enhanced field focus handler - ULTRA OPTIMIZED
   const handleFieldFocus = useCallback((fieldName) => {
@@ -1058,111 +1095,48 @@ const Bookings = () => {
     });
   }, [passengerList]);
     
-  const [currentPage, setCurrentPage] = useState(1);
-  const recordsPerPage = 100;
-    
-  // Pagination helper function
-  const getPaginatedData = useCallback(() => {
-    const startIndex = (currentPage - 1) * recordsPerPage;
-    const endIndex = startIndex + recordsPerPage;
-    return filteredBookings.slice(startIndex, endIndex);
-  }, [filteredBookings, currentPage, recordsPerPage]);
-    
   // Navigation functions
   const handleNavigation = useCallback((direction) => {
-    const paginatedData = getPaginatedData();
-    if (paginatedData.length === 0) return;
+    if (bookings.length === 0) return;
         
     let newIndex = 0;
     if (selectedBooking) {
-      const currentIndex = paginatedData.findIndex(item => 
+      const currentIndex = bookings.findIndex(item => 
         item.bk_bkid === selectedBooking.bk_bkid
       );
           
       switch(direction) {
         case 'first': newIndex = 0; break;
         case 'prev': newIndex = currentIndex > 0 ? currentIndex - 1 : 0; break;
-        case 'next': newIndex = currentIndex < paginatedData.length - 1 ? currentIndex + 1 : paginatedData.length - 1; break;
-        case 'last': newIndex = paginatedData.length - 1; break;
+        case 'next': newIndex = currentIndex < bookings.length - 1 ? currentIndex + 1 : bookings.length - 1; break;
+        case 'last': newIndex = bookings.length - 1; break;
         default: break;
       }
     }
         
-    handleRecordSelect(paginatedData[newIndex]);
-  }, [getPaginatedData, selectedBooking, handleRecordSelect]);
+    handleRecordSelect(bookings[newIndex]);
+  }, [bookings, selectedBooking, handleRecordSelect]);
   
   // Check if navigation buttons should be disabled
-  const { paginatedData, isFirstRecord, isLastRecord } = useMemo(() => {
-    const data = getPaginatedData();
-    const first = selectedBooking && data.length > 0 && 
-      data[0].bk_bkid === selectedBooking.bk_bkid;
-    const last = selectedBooking && data.length > 0 && 
-      data[data.length - 1].bk_bkid === selectedBooking.bk_bkid;
-    return { paginatedData: data, isFirstRecord: first, isLastRecord: last };
-  }, [filteredBookings, currentPage, recordsPerPage, selectedBooking]);
+  const { isFirstRecord, isLastRecord } = useMemo(() => {
+    const first = selectedBooking && bookings.length > 0 && 
+      bookings[0].bk_bkid === selectedBooking.bk_bkid;
+    const last = selectedBooking && bookings.length > 0 && 
+      bookings[bookings.length - 1].bk_bkid === selectedBooking.bk_bkid;
+    return { isFirstRecord: first, isLastRecord: last };
+  }, [bookings, selectedBooking]);
       
-  // Fetch bookings when component mounts
+  // Fetch bookings when component mounts or page/limit changes
   useEffect(() => {
     fetchBookings();
-  }, [user?.us_usid]);
+  }, [user?.us_usid, page, limit, fetchBookings]);
 
   // Set form to NEW mode by default on page load (after all functions are defined)
   useEffect(() => {
     handleNew();
   }, [handleNew]);
       
-  // Apply filters with proper field mapping
-  useEffect(() => {
-    let filtered = [...bookings];
-        
-    // Apply inline filters with proper field mapping
-    Object.entries(inlineFilters).forEach(([column, value]) => {
-      if (value !== undefined && value !== '') {
-        const searchValue = value.toLowerCase();
-        filtered = filtered.filter(record => {
-          switch (column) {
-            case 'id':
-              return record.bk_bkid?.toString().toLowerCase().includes(searchValue);
-            case 'date':
-              const bookingDate = new Date(record.bk_bookingdt || record.createdOn || new Date()).toLocaleDateString();
-              return bookingDate.toLowerCase().includes(searchValue);
-            case 'customer':
-              const customerName = record.customerName || record.bk_customername || '';
-              return customerName.toLowerCase().includes(searchValue);
-            case 'phone':
-              const phone = record.phoneNumber || record.bk_phonenumber || record.bk_phone || '';
-              return phone.toLowerCase().includes(searchValue);
-            case 'pax':
-              const pax = record.totalPassengers || record.bk_pax || record.bk_totalpass || 0;
-              return pax.toString().includes(searchValue);
-            case 'from':
-              const fromStation = record.fromStation?.st_stname || record.bk_fromstation || record.bk_fromst || '';
-              return fromStation.toLowerCase().includes(searchValue);
-            case 'to':
-              const toStation = record.toStation?.st_stname || record.bk_tostation || record.bk_tost || '';
-              return toStation.toLowerCase().includes(searchValue);
-            case 'travelDate':
-              const travelDate = new Date(record.bk_trvldt || record.bk_travelldate || new Date()).toLocaleDateString();
-              return travelDate.toLowerCase().includes(searchValue);
-            case 'class':
-              const travelClass = record.bk_class || record.bk_travelclass || '';
-              return travelClass.toLowerCase().includes(searchValue);
-            case 'status':
-              const status = record.bk_status || 'Draft';
-              return status.toLowerCase().includes(searchValue);
-            case 'remarks':
-              const remarks = record.bk_remarks || record.remarks || '';
-              return remarks.toLowerCase().includes(searchValue);
-            default:
-              return record[column]?.toString().toLowerCase().includes(searchValue);
-          }
-        });
-      }
-    });
-        
-    setFilteredBookings(filtered);
-    setCurrentPage(1); // Reset to first page when filtering
-  }, [inlineFilters, bookings]);
+  
     
   const handleInputChange = useCallback((e) => {
     const { name, value } = e.target;
@@ -1204,12 +1178,7 @@ const Bookings = () => {
       
     
     
-  const handleInlineFilterChange = useCallback((column, value) => {
-    setInlineFilters(prev => ({
-      ...prev,
-      [column]: value
-    }));
-  }, []);
+  
     
   const handleEdit = useCallback(() => {
     if (selectedBooking) {
@@ -1306,8 +1275,7 @@ const Bookings = () => {
         console.log('Delete response:', response);
         // PERFORMANCE OPTIMIZATION: Update local state instead of refetching all bookings
         setBookings(prev => prev.filter(booking => booking.bk_bkid !== selectedBooking.bk_bkid));
-        setFilteredBookings(prev => prev.filter(booking => booking.bk_bkid !== selectedBooking.bk_bkid));
-        setSelectedBooking(null); // Clear selection after deletion
+setSelectedBooking(null); // Clear selection after deletion
         announceToScreenReader('Booking deleted successfully');
       } catch (error) {
         console.error('Delete booking error:', error);
@@ -1332,7 +1300,7 @@ const Bookings = () => {
     ));
   }, []);
 
-  const totalPages = useMemo(() => Math.ceil(filteredBookings.length / recordsPerPage), [filteredBookings, recordsPerPage]);
+  const totalPages = useMemo(() => Math.ceil(bookings.length / limit), [bookings, limit]);
 
   // Action menu functions
   const openActionMenu = useCallback((e) => {
@@ -1403,12 +1371,7 @@ const Bookings = () => {
                 ? { ...booking, bk_status: 'CANCELLED' }
                 : booking
             ));
-            setFilteredBookings(prev => prev.map(booking => 
-              booking.bk_bkid === record.bk_bkid 
-                ? { ...booking, bk_status: 'CANCELLED' }
-                : booking
-            ));
-          } catch (error) {
+} catch (error) {
             setError(error.message || 'Failed to cancel booking');
           }
         }
@@ -1467,8 +1430,6 @@ const Bookings = () => {
       const isInFormField = e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT' || e.target.tagName === 'TEXTAREA';
       
       if (!isInFormField || focusedOnGrid) {
-        const currentPaginatedData = getPaginatedData();
-        
         // Ctrl+S for Save
         if (e.ctrlKey && e.key === 's') {
           e.preventDefault();
@@ -1488,7 +1449,7 @@ const Bookings = () => {
               setEnterMenuSelectedIndex(prev => prev > 0 ? prev - 1 : enabledOptions.length - 1);
             } else if (selectedRecordIndex > 0) {
               setSelectedRecordIndex(prev => prev - 1);
-              const newRecord = currentPaginatedData[selectedRecordIndex - 1];
+              const newRecord = bookings[selectedRecordIndex - 1];
               if (newRecord) {
                 handleRecordSelect(newRecord);
               }
@@ -1501,9 +1462,9 @@ const Bookings = () => {
               const options = getEnterMenuOptions(selectedBooking);
               const enabledOptions = options.filter(opt => opt.enabled);
               setEnterMenuSelectedIndex(prev => prev < enabledOptions.length - 1 ? prev + 1 : 0);
-            } else if (selectedRecordIndex < currentPaginatedData.length - 1) {
+            } else if (selectedRecordIndex < bookings.length - 1) {
               setSelectedRecordIndex(prev => prev + 1);
-              const newRecord = currentPaginatedData[selectedRecordIndex + 1];
+              const newRecord = bookings[selectedRecordIndex + 1];
               if (newRecord) {
                 handleRecordSelect(newRecord);
               }
@@ -1511,14 +1472,16 @@ const Bookings = () => {
             break;
           case 'ArrowLeft':
             e.preventDefault();
-            if (!enterMenuOpen && currentPage > 1) {
-              setCurrentPage(prev => prev - 1);
+            if (!enterMenuOpen && pagination.hasPrevPage) {
+              prevPage();
+              announceToScreenReader(`Navigated to page ${page - 1}`);
             }
             break;
           case 'ArrowRight':
             e.preventDefault();
-            if (!enterMenuOpen && currentPage < totalPages) {
-              setCurrentPage(prev => prev + 1);
+            if (!enterMenuOpen && pagination.hasNextPage) {
+              nextPage();
+              announceToScreenReader(`Navigated to page ${page + 1}`);
             }
             break;
           case 'Escape':
@@ -1599,7 +1562,7 @@ const Bookings = () => {
 
     document.addEventListener('keydown', handleGlobalKeyDown);
     return () => document.removeEventListener('keydown', handleGlobalKeyDown);
-  }, [selectedRecordIndex, getPaginatedData, currentPage, totalPages, selectedBooking, focusedOnGrid, isEditing, handleEdit, handleDelete, handleNew, handleSave, handleRecordSelect, openActionMenu, enterMenuOpen, enterMenuSelectedIndex, getEnterMenuOptions, handleEnterMenuAction, openEnterMenu, closeEnterMenu]);
+  }, [selectedRecordIndex, bookings, pagination, page, selectedBooking, focusedOnGrid, isEditing, handleEdit, handleDelete, handleNew, handleSave, handleRecordSelect, openActionMenu, enterMenuOpen, enterMenuSelectedIndex, getEnterMenuOptions, handleEnterMenuAction, openEnterMenu, closeEnterMenu, prevPage, nextPage]);
 
   return (
     <div className="booking-layout">
@@ -1632,7 +1595,7 @@ const Bookings = () => {
          </div>
          <div style={{ flex: 1 }}></div>
          <div style={{ fontWeight: 'bold', fontSize: '12px' }}>
-             {isEditing ? 'EDIT MODE' : 'READY'} | Records: {filteredBookings.length}
+             {isEditing ? 'EDIT MODE' : 'READY'} | Total Records: {pagination.totalRecords || bookings.length} | Total Pages: {pagination.totalPages || 1}
          </div>
       </div>
 
@@ -2070,17 +2033,19 @@ const Bookings = () => {
                         <input 
                           type="text" 
                           placeholder="Filter ID..."
-                          value={inlineFilters.id || ''}
-                          onChange={(e) => setInlineFilters(prev => ({...prev, id: e.target.value}))}
+                          value={inlineFilters.bk_bkid || ''}
+                          onChange={(e) => handleInlineFilterChange('bk_bkid', e.target.value)}
+                          className="inline-filter-input"
                           style={{ width: '100%', padding: '2px 4px', fontSize: '11px', border: '1px solid #ddd' }}
                         />
                       </td>
                       <td>
                         <input 
-                          type="text" 
+                          type="date" 
                           placeholder="Filter Date..."
-                          value={inlineFilters.date || ''}
-                          onChange={(e) => setInlineFilters(prev => ({...prev, date: e.target.value}))}
+                          value={inlineFilters.bk_bookingdt || ''}
+                          onChange={(e) => handleInlineFilterChange('bk_bookingdt', e.target.value)}
+                          className="inline-filter-input"
                           style={{ width: '100%', padding: '2px 4px', fontSize: '11px', border: '1px solid #ddd' }}
                         />
                       </td>
@@ -2088,8 +2053,9 @@ const Bookings = () => {
                         <input 
                           type="text" 
                           placeholder="Filter Customer..."
-                          value={inlineFilters.customer || ''}
-                          onChange={(e) => setInlineFilters(prev => ({...prev, customer: e.target.value}))}
+                          value={inlineFilters.bk_customername || ''}
+                          onChange={(e) => handleInlineFilterChange('bk_customername', e.target.value)}
+                          className="inline-filter-input"
                           style={{ width: '100%', padding: '2px 4px', fontSize: '11px', border: '1px solid #ddd' }}
                         />
                       </td>
@@ -2097,8 +2063,9 @@ const Bookings = () => {
                         <input 
                           type="text" 
                           placeholder="Filter Phone..."
-                          value={inlineFilters.phone || ''}
-                          onChange={(e) => setInlineFilters(prev => ({...prev, phone: e.target.value}))}
+                          value={inlineFilters.bk_phonenumber || ''}
+                          onChange={(e) => handleInlineFilterChange('bk_phonenumber', e.target.value)}
+                          className="inline-filter-input"
                           style={{ width: '100%', padding: '2px 4px', fontSize: '11px', border: '1px solid #ddd' }}
                         />
                       </td>
@@ -2106,8 +2073,9 @@ const Bookings = () => {
                         <input 
                           type="text" 
                           placeholder="Pax..."
-                          value={inlineFilters.pax || ''}
-                          onChange={(e) => setInlineFilters(prev => ({...prev, pax: e.target.value}))}
+                          value={inlineFilters.bk_totalpax || ''}
+                          onChange={(e) => handleInlineFilterChange('bk_totalpax', e.target.value)}
+                          className="inline-filter-input"
                           style={{ width: '100%', padding: '2px 4px', fontSize: '11px', border: '1px solid #ddd' }}
                         />
                       </td>
@@ -2115,8 +2083,9 @@ const Bookings = () => {
                         <input 
                           type="text" 
                           placeholder="Filter From..."
-                          value={inlineFilters.from || ''}
-                          onChange={(e) => setInlineFilters(prev => ({...prev, from: e.target.value}))}
+                          value={inlineFilters.bk_fromst || ''}
+                          onChange={(e) => handleInlineFilterChange('bk_fromst', e.target.value)}
+                          className="inline-filter-input"
                           style={{ width: '100%', padding: '2px 4px', fontSize: '11px', border: '1px solid #ddd' }}
                         />
                       </td>
@@ -2124,17 +2093,19 @@ const Bookings = () => {
                         <input 
                           type="text" 
                           placeholder="Filter To..."
-                          value={inlineFilters.to || ''}
-                          onChange={(e) => setInlineFilters(prev => ({...prev, to: e.target.value}))}
+                          value={inlineFilters.bk_tost || ''}
+                          onChange={(e) => handleInlineFilterChange('bk_tost', e.target.value)}
+                          className="inline-filter-input"
                           style={{ width: '100%', padding: '2px 4px', fontSize: '11px', border: '1px solid #ddd' }}
                         />
                       </td>
                       <td>
                         <input 
-                          type="text" 
+                          type="date" 
                           placeholder="Travel..."
-                          value={inlineFilters.travelDate || ''}
-                          onChange={(e) => setInlineFilters(prev => ({...prev, travelDate: e.target.value}))}
+                          value={inlineFilters.bk_trvldt || ''}
+                          onChange={(e) => handleInlineFilterChange('bk_trvldt', e.target.value)}
+                          className="inline-filter-input"
                           style={{ width: '100%', padding: '2px 4px', fontSize: '11px', border: '1px solid #ddd' }}
                         />
                       </td>
@@ -2142,8 +2113,9 @@ const Bookings = () => {
                         <input 
                           type="text" 
                           placeholder="Class..."
-                          value={inlineFilters.class || ''}
-                          onChange={(e) => setInlineFilters(prev => ({...prev, class: e.target.value}))}
+                          value={inlineFilters.bk_class || ''}
+                          onChange={(e) => handleInlineFilterChange('bk_class', e.target.value)}
+                          className="inline-filter-input"
                           style={{ width: '100%', padding: '2px 4px', fontSize: '11px', border: '1px solid #ddd' }}
                         />
                       </td>
@@ -2151,8 +2123,9 @@ const Bookings = () => {
                         <input 
                           type="text" 
                           placeholder="Filter Quota..."
-                          value={inlineFilters.quotaType || ''}
-                          onChange={(e) => setInlineFilters(prev => ({...prev, quotaType: e.target.value}))}
+                          value={inlineFilters.bk_quotatype || ''}
+                          onChange={(e) => handleInlineFilterChange('bk_quotatype', e.target.value)}
+                          className="inline-filter-input"
                           style={{ width: '100%', padding: '2px 4px', fontSize: '11px', border: '1px solid #ddd' }}
                         />
                       </td>
@@ -2160,8 +2133,9 @@ const Bookings = () => {
                         <input 
                           type="text" 
                           placeholder="Filter Status..."
-                          value={inlineFilters.status || ''}
-                          onChange={(e) => setInlineFilters(prev => ({...prev, status: e.target.value}))}
+                          value={inlineFilters.bk_status || ''}
+                          onChange={(e) => handleInlineFilterChange('bk_status', e.target.value)}
+                          className="inline-filter-input"
                           style={{ width: '100%', padding: '2px 4px', fontSize: '11px', border: '1px solid #ddd' }}
                         />
                       </td>
@@ -2169,18 +2143,19 @@ const Bookings = () => {
                         <input 
                           type="text" 
                           placeholder="Filter Remarks..."
-                          value={inlineFilters.remarks || ''}
-                          onChange={(e) => setInlineFilters(prev => ({...prev, remarks: e.target.value}))}
+                          value={inlineFilters.bk_remarks || ''}
+                          onChange={(e) => handleInlineFilterChange('bk_remarks', e.target.value)}
+                          className="inline-filter-input"
                           style={{ width: '100%', padding: '2px 4px', fontSize: '11px', border: '1px solid #ddd' }}
                         />
                       </td>
                     </tr>
                   </thead>
                   <tbody>
-                    {paginatedData.length === 0 ? (
+                    {bookings.length === 0 ? (
                       <tr><td colSpan="12" style={{ textAlign: 'center' }}>No records found</td></tr>
                     ) : (
-                      paginatedData.map((record, idx) => {
+                      bookings.map((record, idx) => {
                         const isSelected = selectedBooking && selectedBooking.bk_bkid === record.bk_bkid;
                         const isHighlighted = selectedRecordIndex === idx;
                         return (
@@ -2247,7 +2222,14 @@ const Bookings = () => {
                     )}
                   </tbody>
                 </table>
-              {/* Removed the duplicate audit section from the end of the page */}
+                
+                {/* Pagination Controls */}
+                <PaginationControls
+                  pagination={pagination}
+                  onPageChange={setPage}
+                  limit={limit}
+                  onLimitChange={changeLimit}
+                />
             </div>
           </div>
       </div>
@@ -2257,29 +2239,37 @@ const Bookings = () => {
       <div className="layout-right-sidebar">
          <div className="layout-filters-content">
              <div className="section-title">FILTERS</div>
-             <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                <div className="field small-label">
-                   <label className="label">ID</label>
-                   <input type="text" className="erp-input" value={inlineFilters['bk_bkid']||''} onChange={(e)=>handleInlineFilterChange('bk_bkid', e.target.value)} />
+             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '80px 1fr', gap: '6px', alignItems: 'center' }}>
+                   <label style={{ fontSize: '11px', textAlign: 'right' }}>ID:</label>
+                   <input type="text" className="erp-input inline-filter-input" value={inlineFilters['bk_bkid']||''} onChange={(e)=>handleInlineFilterChange('bk_bkid', e.target.value)} />
                 </div>
-                <div className="field small-label">
-                   <label className="label">Date</label>
-                   <input type="date" className="erp-input" value={inlineFilters['bk_bookingdt']||''} onChange={(e)=>handleInlineFilterChange('bk_bookingdt', e.target.value)} />
+                <div style={{ display: 'grid', gridTemplateColumns: '80px 1fr', gap: '6px', alignItems: 'center' }}>
+                   <label style={{ fontSize: '11px', textAlign: 'right' }}>Date:</label>
+                   <input type="date" className="erp-input inline-filter-input" value={inlineFilters['bk_bookingdt']||''} onChange={(e)=>handleInlineFilterChange('bk_bookingdt', e.target.value)} />
                 </div>
-                <div className="field small-label">
-                   <label className="label">Cust</label>
-                   <input type="text" className="erp-input" value={inlineFilters['customerName']||''} onChange={(e)=>handleInlineFilterChange('customerName', e.target.value)} />
+                <div style={{ display: 'grid', gridTemplateColumns: '80px 1fr', gap: '6px', alignItems: 'center' }}>
+                   <label style={{ fontSize: '11px', textAlign: 'right' }}>Customer:</label>
+                   <input type="text" className="erp-input inline-filter-input" value={inlineFilters['bk_customername']||''} onChange={(e)=>handleInlineFilterChange('bk_customername', e.target.value)} />
                 </div>
-                <div className="field small-label">
-                   <label className="label">From</label>
-                   <input type="text" className="erp-input" value={inlineFilters['fromStation']||''} onChange={(e)=>handleInlineFilterChange('fromStation', e.target.value)} />
+                <div style={{ display: 'grid', gridTemplateColumns: '80px 1fr', gap: '6px', alignItems: 'center' }}>
+                   <label style={{ fontSize: '11px', textAlign: 'right' }}>Phone:</label>
+                   <input type="text" className="erp-input inline-filter-input" value={inlineFilters['bk_phonenumber']||''} onChange={(e)=>handleInlineFilterChange('bk_phonenumber', e.target.value)} />
                 </div>
-                <div className="field small-label">
-                   <label className="label">To</label>
-                   <input type="text" className="erp-input" value={inlineFilters['toStation']||''} onChange={(e)=>handleInlineFilterChange('toStation', e.target.value)} />
+                <div style={{ display: 'grid', gridTemplateColumns: '80px 1fr', gap: '6px', alignItems: 'center' }}>
+                   <label style={{ fontSize: '11px', textAlign: 'right' }}>From:</label>
+                   <input type="text" className="erp-input inline-filter-input" value={inlineFilters['bk_fromst']||''} onChange={(e)=>handleInlineFilterChange('bk_fromst', e.target.value)} />
                 </div>
-                <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '4px' }}>
-                    <button onClick={() => {setInlineFilters({}); /* Clear filters only - no need to refetch */}} className="erp-button small">Clear</button>
+                <div style={{ display: 'grid', gridTemplateColumns: '80px 1fr', gap: '6px', alignItems: 'center' }}>
+                   <label style={{ fontSize: '11px', textAlign: 'right' }}>To:</label>
+                   <input type="text" className="erp-input inline-filter-input" value={inlineFilters['bk_tost']||''} onChange={(e)=>handleInlineFilterChange('bk_tost', e.target.value)} />
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '80px 1fr', gap: '6px', alignItems: 'center' }}>
+                   <label style={{ fontSize: '11px', textAlign: 'right' }}>Status:</label>
+                   <input type="text" className="erp-input inline-filter-input" value={inlineFilters['bk_status']||''} onChange={(e)=>handleInlineFilterChange('bk_status', e.target.value)} />
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '4px', gap: '4px' }}>
+                    <button onClick={clearFilters} className="erp-button small">Clear (ESC)</button>
                 </div>
              </div>
              <div style={{ flex: 1 }}></div>

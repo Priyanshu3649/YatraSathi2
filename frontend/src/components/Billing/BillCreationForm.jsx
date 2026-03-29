@@ -16,7 +16,7 @@ const BillCreationForm = ({ onCancel, onSubmit, user, error, setError }) => {
     extraCharges: [{ label: '', amount: '' }],
     discounts: [{ label: '', amount: '', type: 'FIXED' }], // FIXED or PERCENTAGE
     billDate: new Date().toISOString().split('T')[0],
-    status: 'CONFIRMED', // New bills are always CONFIRMED
+    status: 'DRAFT',
     remarks: ''
   });
   const [customers, setCustomers] = useState([]);
@@ -479,6 +479,24 @@ const BillCreationForm = ({ onCancel, onSubmit, user, error, setError }) => {
         </button>
         <button type="button" className="tool-button" onClick={onCancel}>
           Cancel
+        </button>
+        <button
+          type="button"
+          className="tool-button"
+          onClick={() => {
+            setFormData({ ...formData, status: 'FINAL' });
+          }}
+        >
+          Save as Draft
+        </button>
+        <button
+          type="button"
+          className="tool-button"
+          onClick={() => {
+            setFormData({ ...formData, status: 'FINAL' });
+          }}
+        >
+          Finalize Bill
         </button>
       </div>
     </form>

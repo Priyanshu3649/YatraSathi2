@@ -80,20 +80,57 @@ const getAdminDashboard = async (req, res) => {
       revenueGenerated: 0 // Would need to calculate from related payments
     }));
     
+    // Calculate time ranges for trending
+    const now = new Date();
+    const twentyFourHoursAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+    const fortyEightHoursAgo = new Date(now.getTime() - 48 * 60 * 60 * 1000);
+
+    // Bookings Trend
+    const bookingsToday = await BookingTVL.count({ where: { edtm: { [Op.gte]: twentyFourHoursAgo } } });
+    const bookingsYesterday = await BookingTVL.count({ 
+      where: { edtm: { [Op.lt]: twentyFourHoursAgo, [Op.gte]: fortyEightHoursAgo } } 
+    });
+
+    // Revenue Trend
+    const revenueToday = await PaymentTVL.sum('pt_amount', {
+      where: { pt_status: 'PROCESSED', edtm: { [Op.gte]: twentyFourHoursAgo } }
+    }) || 0;
+    const revenueYesterday = await PaymentTVL.sum('pt_amount', {
+      where: { 
+        pt_status: 'PROCESSED', 
+        edtm: { [Op.lt]: twentyFourHoursAgo, [Op.gte]: fortyEightHoursAgo } 
+      }
+    }) || 0;
+
     // Format the response to match frontend expectations
     const dashboardData = {
       overview: {
         totalUsers,
         totalBookings,
         totalRevenue: totalRevenue || 0,
-        totalPending: pendingPayments || 0
+        totalPending: pendingPayments || 0,
+        trends: {
+          bookings: {
+            current: bookingsToday,
+            previous: bookingsYesterday,
+            delta: bookingsToday - bookingsYesterday,
+            percent: bookingsYesterday > 0 ? ((bookingsToday - bookingsYesterday) / bookingsYesterday * 100).toFixed(1) : 0
+          },
+          revenue: {
+            current: revenueToday,
+            previous: revenueYesterday,
+            delta: revenueToday - revenueYesterday,
+            percent: revenueYesterday > 0 ? ((revenueToday - revenueYesterday) / revenueYesterday * 100).toFixed(1) : 0
+          }
+        }
       },
       bookingStats: {
         pending: pendingBookings,
         confirmed: confirmedBookings,
         cancelled: cancelledBookings
       },
-      employeePerformance: formattedEmployeePerformance
+      employeePerformance: formattedEmployeePerformance,
+      lastUpdated: new Date().toISOString()
     };
 
     res.json({ success: true, data: dashboardData });

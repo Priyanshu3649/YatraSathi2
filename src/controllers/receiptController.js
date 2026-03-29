@@ -1,5 +1,7 @@
 const { Receipt, User } = require('../models');
 const { validationResult } = require('express-validator');
+const { Op } = require('sequelize');
+const queryHelper = require('../utils/queryHelper');
 
 /**
  * Receipt Controller
@@ -8,16 +10,17 @@ const { validationResult } = require('express-validator');
 class ReceiptController {
   async getAllReceipts(req, res) {
     try {
-      const { page = 1, limit = 20, search, sortBy = 'rc_date', sortOrder = 'DESC' } = req.query;
-      const offset = (page - 1) * limit;
+      const { limit, offset, page } = queryHelper.getPaginationOptions(req.query);
+      const sortBy = req.query.sortBy || 'rc_date';
+      const sortOrder = (req.query.sortOrder || 'DESC').toUpperCase();
       
       const whereClause = { rc_status: 'Active' };
       
-      if (search) {
+      if (req.query.search) {
         whereClause[Op.or] = [
-          { rc_entry_no: { [Op.like]: `%${search}%` } },
-          { rc_customer_name: { [Op.like]: `%${search}%` } },
-          { rc_customer_phone: { [Op.like]: `%${search}%` } }
+          { rc_entry_no: { [Op.like]: `%${req.query.search}%` } },
+          { rc_customer_name: { [Op.like]: `%${req.query.search}%` } },
+          { rc_customer_phone: { [Op.like]: `%${req.query.search}%` } }
         ];
       }
       
@@ -29,21 +32,13 @@ class ReceiptController {
           attributes: ['us_usid', 'us_fname', 'us_lname']
         }],
         order: [[sortBy, sortOrder]],
-        limit: parseInt(limit),
-        offset: parseInt(offset)
+        limit,
+        offset
       });
       
-      res.json({
-        success: true,
-        data: receipts,
-        pagination: {
-          currentPage: parseInt(page),
-          totalPages: Math.ceil(count / limit),
-          totalRecords: count
-        },
-        message: 'Receipts retrieved successfully'
-      });
+      res.json(queryHelper.formatPaginatedResponse(count, receipts, page, limit));
     } catch (error) {
+      console.error('Get receipts error:', error);
       res.status(500).json({
         success: false,
         message: 'Failed to retrieve receipts',

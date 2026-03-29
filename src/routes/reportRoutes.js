@@ -1,111 +1,64 @@
 const express = require('express');
-const genericReportController = require('../controllers/genericReportController');
-const authMiddleware = require('../middleware/authMiddleware');
-const rbacMiddleware = require('../middleware/rbacMiddleware');
-const { requirePermission } = require('../middleware/rbacMiddleware');
-const reportValidation = require('../middleware/reportValidation');
-
 const router = express.Router();
+const { generateReport } = require('../reports/reportService');
+const { exportToExcel, exportToPDF } = require('../services/exportService');
 
-// Apply authentication middleware to all report routes
-router.use(authMiddleware);
+/**
+ * @route GET /api/reports
+ * @desc Generate report data
+ */
+router.get('/', async (req, res) => {
+  try {
+    const { reportType, periodType, startDate, endDate, customerId } = req.query;
+    if (!reportType) return res.status(400).json({ success: false, message: 'reportType is required' });
 
-// Generic report execution endpoint
-// POST /api/reports/run
-router.post('/run', 
-  requirePermission('reports.access'),
-  reportValidation.validateReportRequest,
-  genericReportController.runReport
-);
+    const data = await generateReport(reportType, { 
+      periodType, 
+      startDate, 
+      endDate, 
+      customerId: parseInt(customerId) || null 
+    });
 
-// Get report schema and available options
-// GET /api/reports/schema
-router.get('/schema',
-  requirePermission('reports.access'),
-  genericReportController.getReportSchema
-);
+    res.json({ success: true, data });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
 
-// Report template management
-// POST /api/reports/templates
-router.post('/templates',
-  requirePermission('reports.templates.create'),
-  reportValidation.validateTemplateSave,
-  genericReportController.saveTemplate
-);
+/**
+ * @route POST /api/reports/export
+ * @desc Export report to Excel or PDF
+ */
+router.post('/export', async (req, res) => {
+  try {
+    const { reportType, format, filters } = req.body;
+    
+    // First generate the data
+    const data = await generateReport(reportType, filters);
+    
+    let buffer;
+    let contentType;
+    let fileName = `${reportType}_Report_${Date.now()}`;
 
-// GET /api/reports/templates
-router.get('/templates',
-  requirePermission('reports.templates.view'),
-  genericReportController.getTemplates
-);
+    if (format === 'EXCEL') {
+      buffer = await exportToExcel(reportType, data);
+      contentType = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+      fileName += '.xlsx';
+    } else if (format === 'PDF') {
+      buffer = await exportToPDF(reportType, data);
+      contentType = 'application/pdf';
+      fileName += '.pdf';
+    } else {
+      return res.status(400).json({ success: false, message: 'Invalid format' });
+    }
 
-// DELETE /api/reports/templates/:id
-router.delete('/templates/:id',
-  requirePermission('reports.templates.delete'),
-  genericReportController.deleteTemplate
-);
+    res.setHeader('Content-Type', contentType);
+    res.setHeader('Content-Disposition', `attachment; filename=${fileName}`);
+    res.send(buffer);
 
-// Report execution history
-// GET /api/reports/history
-router.get('/history',
-  requirePermission('reports.history.view'),
-  genericReportController.getReportHistory
-);
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
 
-// Performance monitoring routes
-// GET /api/reports/performance
-router.get('/performance',
-  requirePermission('admin'),
-  genericReportController.getPerformanceMetrics
-);
-
-// DELETE /api/reports/cache
-router.delete('/cache',
-  requirePermission('admin'),
-  genericReportController.clearReportCache
-);
-
-// Time period report routes
-// POST /api/reports/time-period
-router.post('/time-period',
-  requirePermission('reports.access'),
-  reportValidation.validateTimePeriodReportRequest,
-  genericReportController.generateTimePeriodReport
-);
-
-// POST /api/reports/comparative
-router.post('/comparative',
-  requirePermission('reports.access'),
-  genericReportController.generateComparativeReport
-);
-
-// POST /api/reports/trend-analysis
-router.post('/trend-analysis',
-  requirePermission('reports.access'),
-  genericReportController.generateTrendAnalysis
-);
-
-// Financial report routes
-// POST /api/reports/financial
-router.post('/financial',
-  requirePermission('reports.access'),
-  reportValidation.validateFinancialReportRequest,
-  genericReportController.generateFinancialReport
-);
-
-// Export routes
-// POST /api/reports/export
-router.post('/export',
-  requirePermission('reports.access'),
-  reportValidation.validateExportRequest,
-  genericReportController.exportReport
-);
-
-// GET /api/reports/:id/export/:format
-router.get('/:id/export',
-  requirePermission('reports.access'),
-  genericReportController.exportReportById
-);
-
-// Export the router
 module.exports = router;

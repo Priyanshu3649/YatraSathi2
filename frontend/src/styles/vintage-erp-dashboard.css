@@ -321,3 +321,50 @@
     flex: 1 0 auto;
   }
 }
+
+/* Real-time Indicators */
+.live-indicator {
+  margin-left: 10px;
+  font-size: 11px;
+  color: #2ecc71;
+  background-color: rgba(46, 204, 113, 0.1);
+  padding: 2px 8px;
+  border-radius: 10px;
+  animation: pulse 2s infinite;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+@keyframes pulse {
+  0% { opacity: 1; }
+  50% { opacity: 0.4; }
+  100% { opacity: 1; }
+}
+
+.trend-tag {
+  font-size: 11px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  margin-left: 8px;
+  display: inline-flex;
+  align-items: center;
+  font-weight: bold;
+}
+
+.trend-tag.up {
+  color: #27ae60;
+  background-color: rgba(39, 174, 96, 0.1);
+}
+
+.trend-tag.down {
+  color: #e74c3c;
+  background-color: rgba(231, 76, 60, 0.1);
+}
+
+.summary-value {
+  display: flex !important;
+  align-items: baseline;
+  justify-content: center;
+  gap: 8px;
+}

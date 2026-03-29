@@ -1,454 +1,320 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useReport } from '../contexts/ReportContext';
+import { useKeyboardNavigation } from '../contexts/KeyboardNavigationContext';
 import '../styles/vintage-erp-theme.css';
-import '../styles/classic-enterprise-global.css';
-
-// Import JESPR components
-import ReportBuilder from '../components/JESPR/ReportBuilder';
-import ReportViewer from '../components/JESPR/ReportViewer';
-import SavedReports from '../components/JESPR/SavedReports';
 
 const Reports = () => {
   const { user } = useAuth();
-  const { 
-    currentReport, 
-    loading, 
-    error, 
-    fetchTemplates, 
-    savedTemplates 
-  } = useReport();
+  const { runReport, exportReport, currentReport, loading, error, resetReport } = useReport();
+  const { setActiveZone, setActiveForm, registerForm, unregisterForm } = useKeyboardNavigation();
   
-  const [activeTab, setActiveTab] = useState('builder');
-  const [showTemplates, setShowTemplates] = useState(false);
+  // Filter State
+  const [filters, setFilters] = useState({
+    reportType: 'CANCELLATION',
+    periodType: 'MONTHLY',
+    startDate: '',
+    endDate: '',
+    customerId: ''
+  });
+  
+  const [focusedRowIndex, setFocusedRowIndex] = useState(-1);
+  const filterFormRef = useRef(null);
 
-  // Fetch templates on component mount
+  const REPORT_TYPES = [
+    'JOURNAL', 'SALES', 'PURCHASE', 'RECEIPT', 'PAYMENT', 
+    'CANCELLATION', 'OUTSTANDING', 'AGING', 'PROFITABILITY'
+  ];
+  const PERIOD_TYPES = ['DAILY', 'MONTHLY', 'QUARTERLY', 'ANNUAL', 'CUSTOM'];
+
+  // Register form for keyboard navigation
   useEffect(() => {
-    fetchTemplates();
-  }, [fetchTemplates]);
+    const fields = ['reportType', 'periodType', 'startDate', 'endDate', 'customerId'];
+    registerForm('report-filters', fields);
+    setActiveForm('report-filters');
+    setActiveZone('FORM');
+    
+    return () => unregisterForm('report-filters');
+  }, [registerForm, unregisterForm, setActiveForm, setActiveZone]);
 
-  // Keyboard navigation support
+  const handleFilterChange = (e) => {
+    const { name, value } = e.target;
+    setFilters(prev => ({ ...prev, [name]: value }));
+  };
+
+  const handleGenerate = useCallback(() => {
+    runReport(filters.reportType, filters);
+    setActiveZone('TABLE');
+    setFocusedRowIndex(0);
+  }, [runReport, filters, setActiveZone]);
+
+  const handleExportClick = useCallback((format) => {
+    exportReport(filters.reportType, format, filters);
+  }, [exportReport, filters]);
+
+  const handleClear = useCallback(() => {
+    setFilters({
+      reportType: 'CANCELLATION',
+      periodType: 'MONTHLY',
+      startDate: '',
+      endDate: '',
+      customerId: ''
+    });
+    resetReport();
+    setActiveZone('FORM');
+  }, [resetReport, setActiveZone]);
+
+  // Global Keyboard Shortcuts
   useEffect(() => {
     const handleKeyDown = (e) => {
-      // Tab navigation between main sections
-      if (e.key === 'Tab') {
-        // Handle tab navigation logic here
-        return;
-      }
-      
-      // Escape to close templates panel
-      if (e.key === 'Escape' && showTemplates) {
-        setShowTemplates(false);
+      if (e.key === 'F2') {
         e.preventDefault();
+        setActiveZone('FORM');
+        filterFormRef.current?.querySelector('select')?.focus();
+      }
+      if (e.key === 'F5') {
+        e.preventDefault();
+        handleGenerate();
+      }
+      if (e.key === 'F10') {
+        e.preventDefault();
+        handleExportClick('EXCEL');
+      }
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        handleClear();
       }
       
-      // Enter to run report in builder
-      if (e.key === 'Enter' && activeTab === 'builder' && !loading) {
-        // Trigger report run
-        return;
+      // Table Navigation
+      if (currentReport && currentReport.rows.length > 0) {
+        if (e.key === 'ArrowDown') {
+          setFocusedRowIndex(prev => Math.min(prev + 1, currentReport.rows.length - 1));
+        }
+        if (e.key === 'ArrowUp') {
+          setFocusedRowIndex(prev => Math.max(prev - 1, 0));
+        }
       }
     };
 
-    document.addEventListener('keydown', handleKeyDown);
-    return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [activeTab, loading, showTemplates]);
-
-  const renderTabContent = () => {
-    switch (activeTab) {
-      case 'builder':
-        return <ReportBuilder />;
-      case 'viewer':
-        return <ReportViewer />;
-      case 'saved':
-        return <SavedReports />;
-      default:
-        return <ReportBuilder />;
-    }
-  };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [handleGenerate, handleExportClick, handleClear, currentReport, setActiveZone]);
 
   return (
-    <div className="erp-admin-container">
-      {/* Title Bar */}
-      <div className="title-bar">
-        <div className="system-menu">📊</div>
-        <div className="title-text">JESPR Reporting System</div>
-        <div className="close-button">×</div>
+    <div className="erp-admin-container reports-layout">
+      {/* Action Bar */}
+      <div className="erp-action-bar">
+        <button className="erp-button" onClick={() => setActiveZone('FORM')} title="Focus Filters (F2)">
+          <span className="kb-shortcut">F2</span> Filters
+        </button>
+        <button className="erp-button erp-button-primary" onClick={handleGenerate} disabled={loading} title="Generate Report (F5)">
+          <span className="kb-shortcut">F5</span> Generate
+        </button>
+        <div className="erp-tool-separator"></div>
+        <button className="erp-button" onClick={() => handleExportClick('EXCEL')} disabled={!currentReport} title="Export Excel (F10)">
+          <span className="kb-shortcut">F10</span> Export Excel
+        </button>
+        <button className="erp-button" onClick={() => handleExportClick('PDF')} disabled={!currentReport}>
+          PDF
+        </button>
+        <button className="erp-button" onClick={handleClear} title="Clear Filters (ESC)">
+          <span className="kb-shortcut">ESC</span> Clear
+        </button>
       </div>
 
-      {/* Menu Bar */}
-      <div className="menu-bar">
-        <div className="menu-item">File</div>
-        <div className="menu-item">Edit</div>
-        <div className="menu-item">View</div>
-        <div className="menu-item">Export</div>
-        <div className="menu-item">Templates</div>
-        <div className="menu-item">Help</div>
-      </div>
-
-      {/* Toolbar */}
-      <div className="toolbar">
-        <button 
-          className={`tool-button ${activeTab === 'builder' ? 'active' : ''}`}
-          onClick={() => setActiveTab('builder')}
-          disabled={loading}
-        >
-          Report Builder
-        </button>
-        
-        <button 
-          className={`tool-button ${activeTab === 'viewer' ? 'active' : ''}`}
-          onClick={() => setActiveTab('viewer')}
-          disabled={!currentReport || loading}
-        >
-          Report Viewer
-        </button>
-        
-        <button 
-          className={`tool-button ${activeTab === 'saved' ? 'active' : ''}`}
-          onClick={() => setActiveTab('saved')}
-          disabled={loading}
-        >
-          Saved Reports ({savedTemplates.length})
-        </button>
-        
-        <div className="tool-separator"></div>
-        
-        <button 
-          className="tool-button"
-          onClick={() => setShowTemplates(!showTemplates)}
-          disabled={loading}
-        >
-          {showTemplates ? 'Hide Templates' : 'Show Templates'}
-        </button>
-        
-        {loading && (
-          <div className="loading-indicator">
-            <span className="spinner"></span>
-            Processing...
-          </div>
-        )}
-      </div>
-
-      {/* Main Content Area */}
-      <div className="main-content">
-        {/* Left Panel - Templates (collapsible) */}
-        {showTemplates && (
-          <div className="templates-panel">
-            <div className="panel-header">
-              <h3>Saved Templates</h3>
-              <button 
-                className="close-panel"
-                onClick={() => setShowTemplates(false)}
-              >
-                ×
-              </button>
+      <div className="report-main-content">
+        {/* Filters Section */}
+        <section className="erp-section filter-section" ref={filterFormRef}>
+          <div className="section-header">🔍 Report Filters</div>
+          <div className="erp-form-row-compact-5">
+            <div className="erp-form-group">
+              <label>Report Type</label>
+              <select className="erp-input" name="reportType" value={filters.reportType} onChange={handleFilterChange}>
+                {REPORT_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+              </select>
             </div>
-            <div className="templates-list">
-              {savedTemplates.length === 0 ? (
-                <div className="no-templates">
-                  <p>No saved templates found</p>
-                  <small>Create and save templates from the Report Builder</small>
+            <div className="erp-form-group">
+              <label>Period</label>
+              <select className="erp-input" name="periodType" value={filters.periodType} onChange={handleFilterChange}>
+                {PERIOD_TYPES.map(p => <option key={p} value={p}>{p}</option>)}
+              </select>
+            </div>
+            <div className="erp-form-group">
+              <label>From Date</label>
+              <input type="date" className="erp-input" name="startDate" value={filters.startDate} onChange={handleFilterChange} disabled={filters.periodType !== 'CUSTOM'} />
+            </div>
+            <div className="erp-form-group">
+              <label>To Date</label>
+              <input type="date" className="erp-input" name="endDate" value={filters.endDate} onChange={handleFilterChange} disabled={filters.periodType !== 'CUSTOM'} />
+            </div>
+            <div className="erp-form-group">
+              <label>Customer ID</label>
+              <input type="number" className="erp-input" name="customerId" value={filters.customerId} onChange={handleFilterChange} placeholder="All" />
+            </div>
+          </div>
+        </section>
+
+        {/* Summary Info */}
+        {currentReport && currentReport.summary && (
+          <div className="erp-summary-row">
+            {Object.entries(currentReport.summary).map(([key, value]) => (
+              <div key={key} className="summary-card">
+                <div className="summary-label">{key.replace(/([A-Z])/g, ' $1').toUpperCase()}</div>
+                <div className="summary-value">
+                  {typeof value === 'number' && key.toLowerCase().includes('amount' || 'charges' || 'refund') 
+                    ? `₹${value.toLocaleString(undefined, { minimumFractionDigits: 2 })}` 
+                    : value}
                 </div>
-              ) : (
-                savedTemplates.map(template => (
-                  <div key={template.rt_rtid} className="template-item">
-                    <div className="template-name">{template.rt_name}</div>
-                    <div className="template-description">{template.rt_description}</div>
-                    <div className="template-meta">
-                      <span className="template-type">{template.rt_type}</span>
-                      <span className="template-date">
-                        {new Date(template.createdAt).toLocaleDateString()}
-                      </span>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
+              </div>
+            ))}
           </div>
         )}
 
-        {/* Main Work Area */}
-        <div className={`work-area ${showTemplates ? 'with-templates' : ''}`}>
-          {error && (
-            <div className="alert alert-error">
-              <strong>Error:</strong> {error}
-            </div>
-          )}
-          
-          {renderTabContent()}
-        </div>
+        {/* Error Display */}
+        {error && <div className="erp-error-banner">❌ {error}</div>}
+
+        {/* Data Table */}
+        <section className="erp-section table-section">
+          <div className="section-header">📋 Report Data: {filters.reportType}</div>
+          <div className="erp-table-container">
+            {loading ? (
+              <div className="erp-loading-placeholder">Processing Report Data...</div>
+            ) : currentReport ? (
+              <table className="erp-table">
+                <thead>
+                  <tr>
+                    {currentReport.columns.map(col => <th key={col}>{col}</th>)}
+                  </tr>
+                </thead>
+                <tbody>
+                  {currentReport.rows.map((row, idx) => (
+                    <tr key={idx} className={focusedRowIndex === idx ? 'focused-row' : ''}>
+                      {Object.values(row).map((val, i) => (
+                        <td key={i}>{val !== null && val !== undefined ? val.toString() : '-'}</td>
+                      ))}
+                    </tr>
+                  ))}
+                  {currentReport.rows.length === 0 && (
+                    <tr>
+                      <td colSpan={currentReport.columns.length} className="no-data">No records found for the selected period.</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            ) : (
+              <div className="erp-empty-placeholder">
+                <div className="placeholder-icon">📊</div>
+                <p>Select your criteria and click <strong>Generate</strong> to view the report.</p>
+              </div>
+            )}
+          </div>
+        </section>
       </div>
 
-      {/* Status Bar */}
-      <div className="status-bar">
-        <div className="status-item">
-          User: {user?.us_fname} {user?.us_lname}
-        </div>
-        <div className="status-item">
-          Report: {currentReport ? currentReport.config.reportType : 'None'}
-        </div>
-        <div className="status-item">
-          Records: {currentReport?.data?.length || 0}
-        </div>
-        <div className="status-item">
-          Status: {loading ? 'Processing...' : currentReport ? 'Ready' : 'Idle'}
-        </div>
-        <div className="status-panel">
-          {loading ? 'WORKING' : 'READY'}
-        </div>
-      </div>
-
-      {/* Custom Styles */}
       <style>{`
-        .erp-admin-container {
+        .reports-layout {
           height: 100vh;
           display: flex;
           flex-direction: column;
-          background: #f0f0f0;
-          font-family: Arial, sans-serif;
+          background: #f8f9fa;
         }
-
-        .title-bar {
-          background: linear-gradient(to right, #000080, #4169e1);
-          color: white;
-          padding: 4px 8px;
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          font-size: 12px;
-          border-bottom: 2px solid #000080;
-        }
-
-        .menu-bar {
-          background: #e0e0e0;
-          padding: 2px 8px;
-          display: flex;
-          border-bottom: 1px solid #c0c0c0;
-          font-size: 11px;
-        }
-
-        .menu-item {
-          padding: 2px 8px;
-          margin-right: 2px;
-          cursor: pointer;
-          border: 1px solid transparent;
-        }
-
-        .menu-item:hover {
-          background: #c0c0c0;
-          border: 1px solid #808080;
-        }
-
-        .toolbar {
-          background: #d0d0d0;
-          padding: 4px 8px;
-          display: flex;
-          align-items: center;
-          border-bottom: 1px solid #a0a0a0;
-          font-size: 11px;
-          flex-wrap: wrap;
-          gap: 4px;
-        }
-
-        .tool-button {
-          background: #e0e0e0;
-          border: 1px solid #808080;
-          padding: 2px 6px;
-          margin-right: 4px;
-          cursor: pointer;
-          font-size: 11px;
-          white-space: nowrap;
-        }
-
-        .tool-button:hover:not(:disabled) {
-          background: #c0c0c0;
-        }
-
-        .tool-button.active {
-          background: #000080;
-          color: white;
-          border-color: #000080;
-        }
-
-        .tool-button:disabled {
-          opacity: 0.5;
-          cursor: not-allowed;
-        }
-
-        .tool-separator {
-          width: 1px;
-          height: 16px;
-          background: #808080;
-          margin: 0 4px;
-        }
-
-        .loading-indicator {
-          display: flex;
-          align-items: center;
-          gap: 4px;
-          color: #000080;
-          font-weight: bold;
-        }
-
-        .spinner {
-          width: 12px;
-          height: 12px;
-          border: 2px solid #c0c0c0;
-          border-top: 2px solid #000080;
-          border-radius: 50%;
-          animation: spin 1s linear infinite;
-        }
-
-        @keyframes spin {
-          0% { transform: rotate(0deg); }
-          100% { transform: rotate(360deg); }
-        }
-
-        .main-content {
-          display: flex;
+        .report-main-content {
           flex: 1;
-          overflow: hidden;
-        }
-
-        .templates-panel {
-          width: 250px;
-          background: #f8f8f8;
-          border-right: 1px solid #c0c0c0;
+          padding: 20px;
+          overflow-y: auto;
           display: flex;
           flex-direction: column;
+          gap: 20px;
         }
-
-        .panel-header {
-          background: #000080;
-          color: white;
-          padding: 6px 12px;
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          font-size: 12px;
+        .erp-section {
+          background: #fff;
+          border: 1px solid #dee2e6;
+          box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+        }
+        .section-header {
+          background: #e9ecef;
+          padding: 8px 15px;
           font-weight: bold;
+          font-size: 13px;
+          border-bottom: 1px solid #dee2e6;
+          color: #495057;
         }
-
-        .close-panel {
-          background: none;
-          border: none;
-          color: white;
-          font-size: 16px;
-          cursor: pointer;
-          padding: 0;
-          width: 20px;
-          height: 20px;
+        .filter-section {
+          padding-bottom: 15px;
+        }
+        .erp-summary-row {
           display: flex;
+          gap: 15px;
+          flex-wrap: wrap;
+        }
+        .summary-card {
+          flex: 1;
+          min-width: 200px;
+          background: #fff;
+          padding: 15px;
+          border-left: 4px solid #0056b3;
+          box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+        }
+        .summary-label {
+          font-size: 11px;
+          color: #6c757d;
+          font-weight: bold;
+          margin-bottom: 5px;
+        }
+        .summary-value {
+          font-size: 20px;
+          font-weight: bold;
+          color: #0056b3;
+        }
+        .table-section {
+          flex: 1;
+          display: flex;
+          flex-direction: column;
+          min-height: 400px;
+        }
+        .erp-table-container {
+          flex: 1;
+          overflow: auto;
+        }
+        .erp-loading-placeholder, .erp-empty-placeholder {
+          height: 100%;
+          display: flex;
+          flex-direction: column;
           align-items: center;
           justify-content: center;
-        }
-
-        .templates-list {
-          flex: 1;
-          overflow-y: auto;
-          padding: 8px 0;
-        }
-
-        .template-item {
-          padding: 8px 12px;
-          border-bottom: 1px solid #e0e0e0;
-          cursor: pointer;
-        }
-
-        .template-item:hover {
-          background: #e0e0e0;
-        }
-
-        .template-name {
-          font-weight: bold;
-          color: #000080;
-          margin-bottom: 2px;
-        }
-
-        .template-description {
-          font-size: 11px;
-          color: #666;
-          margin-bottom: 4px;
-        }
-
-        .template-meta {
-          display: flex;
-          justify-content: space-between;
-          font-size: 10px;
-          color: #888;
-        }
-
-        .no-templates {
+          color: #adb5bd;
           text-align: center;
-          padding: 20px;
-          color: #666;
         }
-
-        .no-templates p {
-          margin: 0 0 8px 0;
+        .placeholder-icon {
+          font-size: 48px;
+          margin-bottom: 10px;
+          opacity: 0.5;
         }
-
-        .no-templates small {
-          font-size: 11px;
+        .no-data {
+          text-align: center;
+          padding: 30px !important;
+          color: #adb5bd;
+          font-style: italic;
         }
-
-        .work-area {
-          flex: 1;
-          padding: 12px;
-          overflow-y: auto;
-          background: white;
-          transition: margin-left 0.3s ease;
+        .focused-row {
+          background-color: #e7f3ff !important;
+          outline: 2px solid #007bff;
         }
-
-        .work-area.with-templates {
-          margin-left: 0;
-        }
-
-        .alert {
-          padding: 8px 12px;
-          margin-bottom: 12px;
+        .kb-shortcut {
+          background: #343a40;
+          color: #fff;
+          padding: 2px 5px;
           border-radius: 3px;
-          font-size: 12px;
-        }
-
-        .alert-error {
-          background: #f8d7da;
-          border: 1px solid #f5c6cb;
-          color: #721c24;
-        }
-
-        .status-bar {
-          background: #c0c0c0;
-          padding: 2px 8px;
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          font-size: 11px;
-          border-top: 1px solid #808080;
-        }
-
-        .status-item {
-          padding: 0 8px;
-        }
-
-        .status-panel {
-          background: #008000;
-          color: white;
-          padding: 1px 6px;
-          font-weight: bold;
           font-size: 10px;
+          margin-right: 6px;
+          vertical-align: middle;
         }
-
-        /* Responsive design */
-        @media (max-width: 768px) {
-          .templates-panel {
-            width: 200px;
-          }
-          
-          .tool-button {
-            padding: 4px 8px;
-            font-size: 10px;
-          }
+        .erp-error-banner {
+          background: #f8d7da;
+          color: #721c24;
+          padding: 10px 15px;
+          border: 1px solid #f5c6cb;
+          border-radius: 4px;
         }
       `}</style>
     </div>

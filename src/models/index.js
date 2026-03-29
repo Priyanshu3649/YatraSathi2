@@ -1,3 +1,5 @@
+const { sequelize, sequelizeTVL } = require('../../config/db');
+
 // Export all models
 console.log('Loading models/index.js...');
 const Company = require('./Company');
@@ -50,6 +52,7 @@ const ReportTemplate = require('./ReportTemplate');
 const Contra = require('./Contra');
 const Receipt = require('./Receipt');
 const Journal = require('./Journal');
+const ForensicAuditLog = require('./ForensicAuditLog');
 
 // Set up associations
 // Company associations
@@ -109,6 +112,10 @@ Booking.hasOne(Account, { foreignKey: 'ac_bkid', sourceKey: 'bk_bkid' });
 PassengerTVL.belongsTo(Booking, { foreignKey: 'ps_bkid', targetKey: 'bk_bkid' });
 PassengerTVL.belongsTo(Booking, { foreignKey: 'ps_bkid', targetKey: 'bk_bkid', as: 'booking' });
 Booking.hasMany(PassengerTVL, { foreignKey: 'ps_bkid', sourceKey: 'bk_bkid', as: 'passengers' });
+
+// TVL Passenger associations
+PassengerTVL.belongsTo(BookingTVL, { foreignKey: 'ps_bkid', targetKey: 'bk_bkid', as: 'bookingTVL' });
+BookingTVL.hasMany(PassengerTVL, { foreignKey: 'ps_bkid', sourceKey: 'bk_bkid', as: 'passengers' });
 
 // Pnr associations
 Pnr.belongsTo(Booking, { 
@@ -197,6 +204,12 @@ UserTVL.belongsTo(RoleTVL, { foreignKey: 'us_roid', targetKey: 'fn_fnid', as: 'f
 // TrainTVL associations
 TrainTVL.associate({ StationTVL });
 
+// BillTVL associations
+console.log('🔗 Defining BillTVL associations...');
+BillTVL.belongsTo(BookingTVL, { foreignKey: 'bl_booking_id', targetKey: 'bk_bkid', as: 'booking' });
+BookingTVL.hasOne(BillTVL, { foreignKey: 'bl_booking_id', sourceKey: 'bk_bkid', as: 'billing' });
+console.log('✅ BillTVL associations defined');
+
 module.exports = {
   Company,
   Role,
@@ -204,6 +217,8 @@ module.exports = {
   RolePermission,
   RolePermissionTVL,
   RoleTVL,
+  sequelize,
+  sequelizeTVL,
   User,
   Login,
   Employee,
@@ -253,5 +268,6 @@ module.exports = {
   Contra,
   Receipt,
   Journal,
-  PermissionTVL
+  PermissionTVL,
+  ForensicAuditLog
 };

@@ -3,10 +3,14 @@ import React from 'react';
 const BillList = ({ bills, loading, onEdit, onDelete, onFinalize, onExport, onView, user, selectedBill, onSelect }) => {
   const getStatusClass = (status) => {
     switch (status) {
-      case 'CONFIRMED':
-        return 'status-confirmed';
-      case 'CANCELLED':
-        return 'status-cancelled';
+      case 'DRAFT':
+        return 'status-draft';
+      case 'FINAL':
+        return 'status-final';
+      case 'PAID':
+        return 'status-paid';
+      case 'PARTIAL':
+        return 'status-partial';
       default:
         return '';
     }
@@ -14,11 +18,16 @@ const BillList = ({ bills, loading, onEdit, onDelete, onFinalize, onExport, onVi
 
   const canEdit = (bill) => {
     return user?.us_usertype === 'admin' || 
-           (user?.us_usertype === 'employee' && bill.status !== 'CANCELLED');
+           (user?.us_usertype === 'employee' && bill.status !== 'PAID');
   };
 
   const canDelete = (bill) => {
-    return user?.us_usertype === 'admin' && bill.status !== 'CANCELLED';
+    return user?.us_usertype === 'admin' && bill.status !== 'PAID';
+  };
+
+  const canFinalize = (bill) => {
+    return (user?.us_usertype === 'admin' || user?.us_usertype === 'employee') && 
+           bill.status === 'DRAFT';
   };
 
   // Handle row click for selection
@@ -30,7 +39,7 @@ const BillList = ({ bills, loading, onEdit, onDelete, onFinalize, onExport, onVi
   };
 
   // Handle keyboard navigation within the table
-  const handleKeyDown = (e, bill, index) => {
+  const handleKeyDown = (e, bill) => {
     switch(e.key) {
       case 'Enter':
         e.preventDefault();
@@ -39,26 +48,6 @@ const BillList = ({ bills, loading, onEdit, onDelete, onFinalize, onExport, onVi
       case ' ': // Spacebar
         e.preventDefault();
         onSelect(bill);
-        break;
-      case 'ArrowUp':
-        e.preventDefault();
-        if (index > 0) {
-          const prevRow = document.querySelector(`tr[data-index="${index - 1}"]`);
-          if (prevRow) {
-            prevRow.focus();
-            onSelect(bills[index - 1]);
-          }
-        }
-        break;
-      case 'ArrowDown':
-        e.preventDefault();
-        if (index < bills.length - 1) {
-          const nextRow = document.querySelector(`tr[data-index="${index + 1}"]`);
-          if (nextRow) {
-            nextRow.focus();
-            onSelect(bills[index + 1]);
-          }
-        }
         break;
       default:
         break;
@@ -94,13 +83,12 @@ const BillList = ({ bills, loading, onEdit, onDelete, onFinalize, onExport, onVi
         </tr>
       </thead>
       <tbody>
-        {bills.map((bill, index) => (
+        {bills.map((bill) => (
           <tr 
             key={bill.id || bill.billId} 
-            data-index={index}
             className={`${getStatusClass(bill.status)} ${selectedBill && (selectedBill.id === bill.id || selectedBill.billId === bill.billId) ? 'selected' : ''}`}
             onClick={(e) => handleRowClick(bill, e)}
-            onKeyDown={(e) => handleKeyDown(e, bill, index)}
+            onKeyDown={(e) => handleKeyDown(e, bill)}
             tabIndex={0}
             style={{ cursor: 'pointer' }}
           >
@@ -135,6 +123,15 @@ const BillList = ({ bills, loading, onEdit, onDelete, onFinalize, onExport, onVi
                     title="View Bill"
                   >
                     View
+                  </button>
+                )}
+                {canFinalize(bill) && (
+                  <button 
+                    className="tool-button" 
+                    onClick={() => onFinalize(bill.id || bill.billId)}
+                    title="Finalize Bill"
+                  >
+                    Finalize
                   </button>
                 )}
                 <button 

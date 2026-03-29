@@ -10,7 +10,8 @@ const {
   cancelBill,
   searchBills,
   getCustomerLedger,
-  getCustomerBalance
+  getCustomerBalance,
+  getBillingStats
 } = require('../controllers/billingController');
 const { getBillingByBookingId } = require('../controllers/billingIntegrationController');
 const authMiddleware = require('../middleware/authMiddleware');
@@ -34,6 +35,7 @@ router.get('/booking/:bookingId', getBillingByBookingId);
 
 // Admin routes
 router.get('/', getAllBills);
+router.get('/stats', getBillingStats);
 
 // Parameterized routes last (less specific paths)
 router.get('/:id', getBillById);

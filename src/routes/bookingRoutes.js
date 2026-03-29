@@ -1,4 +1,5 @@
 const express = require('express');
+// Import controller functions
 const {
   createBooking,
   getCustomerBookings,

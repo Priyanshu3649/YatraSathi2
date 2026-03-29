@@ -1,5 +1,5 @@
 const { DataTypes } = require('sequelize');
-const { sequelize } = require('../../config/db');
+const { sequelizeTVL: sequelize } = require('../../config/db');
 
 // Base model with audit fields
 const BaseModel = {

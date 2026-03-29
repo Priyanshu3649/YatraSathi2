@@ -349,8 +349,10 @@ export const bookingAPI = {
   },
   
   // Get all bookings for current user
-  getMyBookings: async () => {
-    const response = await fetch(`${API_BASE_URL}/bookings/my-bookings`, {
+  getMyBookings: async (params = {}) => {
+    const queryParams = new URLSearchParams(params).toString();
+    const url = queryParams ? `${API_BASE_URL}/bookings/my-bookings?${queryParams}` : `${API_BASE_URL}/bookings/my-bookings`;
+    const response = await fetch(url, {
       method: 'GET',
       headers: getHeaders(true)
     });
@@ -364,29 +366,22 @@ export const bookingAPI = {
     return data;
   },
   
+  // Alias for backward compatibility
+  getBookings: async (params = {}) => {
+    return bookingAPI.getAllBookings(params);
+  },
+  
   // Get all bookings (admin and employees) - accepts user role to avoid localStorage inconsistencies
-  getAllBookings: async (userRole = null) => {
-    // If user role is passed in, use it directly
-    let effectiveUserRole = userRole;
-    
-    // Otherwise, get user data from localStorage as fallback
-    if (!effectiveUserRole) {
-      try {
-        const userStr = localStorage.getItem('user');
-        if (userStr) {
-          const userData = JSON.parse(userStr);
-          effectiveUserRole = userData.us_roid || userData.role || 'customer';
-        }
-      } catch (e) {
-        console.warn('Could not get user data to determine role');
-      }
-    }
+  getAllBookings: async (params = {}) => {
+    const userRole = getUserRole();
       
     // Use employee-specific endpoint for employee roles
-    const isEmployee = ['AGT', 'ACC', 'HR', 'CC', 'MKT', 'MGT', 'ADM'].includes(effectiveUserRole);
-    const url = isEmployee 
+    const isEmployee = ['AGT', 'ACC', 'HR', 'CC', 'MKT', 'MGT', 'ADM'].includes(userRole);
+    const queryParams = new URLSearchParams(params).toString();
+    const baseUrl = isEmployee 
       ? `${API_BASE_URL}/employee/bookings`
       : `${API_BASE_URL}/bookings`;
+    const url = queryParams ? `${baseUrl}?${queryParams}` : baseUrl;
       
     const response = await fetch(url, {
       method: 'GET',
@@ -1014,8 +1009,11 @@ export const reportAPI = {
 // Employee API calls
 export const employeeAPI = {
   // Get all employees (admin only)
-  getAllEmployees: async () => {
-    const response = await fetch(`${API_BASE_URL}/employees`, {
+  getAllEmployees: async (params = {}) => {
+    const queryParams = new URLSearchParams(params).toString();
+    const url = queryParams ? `${API_BASE_URL}/employees?${queryParams}` : `${API_BASE_URL}/employees`;
+    
+    const response = await fetch(url, {
       method: 'GET',
       headers: getHeaders(true)
     });
@@ -1140,7 +1138,7 @@ export const billingAPI = {
   },
   
   // Get all bills for current user
-  getMyBills: async () => {
+  getMyBills: async (params = {}) => {
     const token = localStorage.getItem('token');
     // Try to decode token to check user role
     let userRole = 'customer'; // default
@@ -1155,9 +1153,12 @@ export const billingAPI = {
       
     // Use employee-specific endpoint for employee roles
     const isEmployee = ['AGT', 'ACC', 'HR', 'CC', 'MKT', 'MGT', 'ADM'].includes(userRole);
-    const url = isEmployee 
+    const baseUrl = isEmployee 
       ? `${API_BASE_URL}/employee/billing`
       : `${API_BASE_URL}/billing/my-bills`;
+    
+    const queryParams = new URLSearchParams(params).toString();
+    const url = queryParams ? `${baseUrl}?${queryParams}` : baseUrl;
       
     const response = await fetch(url, {
       method: 'GET',
@@ -1174,15 +1175,16 @@ export const billingAPI = {
   },
   
   // Get all bills (admin and employees)
-  // Get all bills (admin and employees)
-  getAllBills: async () => {
+  getAllBills: async (params = {}) => {
     const userRole = getUserRole();
     
     // Use employee-specific endpoint for employee roles
     const isEmployee = ['AGT', 'ACC', 'HR', 'CC', 'MKT', 'MGT', 'ADM'].includes(userRole);
-    const url = isEmployee 
+    const queryParams = new URLSearchParams(params).toString();
+    const baseUrl = isEmployee 
       ? `${API_BASE_URL}/employee/billing`
       : `${API_BASE_URL}/billing`;
+    const url = queryParams ? `${baseUrl}?${queryParams}` : baseUrl;
       
     const response = await fetch(url, {
       method: 'GET',
@@ -1376,6 +1378,7 @@ const getUserRole = () => {
     const userStr = localStorage.getItem('user');
     if (userStr) {
       const user = JSON.parse(userStr);
+      if (user.us_usertype === 'admin' || user.usertype === 'admin') return 'ADM';
       return user.us_roid || user.role || 'CUS';
     }
     
@@ -1466,6 +1469,91 @@ export const customerAPI = {
       throw new Error(data.message || 'Failed to get customer by ID');
     }
     
+    return data;
+  },
+
+  // Get all customers (admin only)
+  getAllCustomers: async (params = {}) => {
+    const queryParams = new URLSearchParams(params).toString();
+    const url = queryParams ? `${API_BASE_URL}/customers?${queryParams}` : `${API_BASE_URL}/customers`;
+    
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: getHeaders(true)
+    });
+    
+    const data = await response.json();
+    
+    if (!response.ok) {
+      throw new Error(data.message || 'Failed to get customers');
+    }
+    
+    return data;
+  }
+};
+
+// Receipt API calls
+export const receiptAPI = {
+  getAllReceipts: async (params = {}) => {
+    const queryParams = new URLSearchParams(params).toString();
+    const url = queryParams ? `${API_BASE_URL}/receipts?${queryParams}` : `${API_BASE_URL}/receipts`;
+    const response = await fetch(url, { method: 'GET', headers: getHeaders(true) });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.message || 'Failed to get receipts');
+    return data;
+  },
+  createReceipt: async (receiptData) => {
+    const response = await fetch(`${API_BASE_URL}/receipts`, {
+      method: 'POST',
+      headers: getHeaders(true),
+      body: JSON.stringify(receiptData)
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.message || 'Failed to create receipt');
+    return data;
+  }
+};
+
+// Contra API calls
+export const contraAPI = {
+  getAllContras: async (params = {}) => {
+    const queryParams = new URLSearchParams(params).toString();
+    const url = queryParams ? `${API_BASE_URL}/contras?${queryParams}` : `${API_BASE_URL}/contras`;
+    const response = await fetch(url, { method: 'GET', headers: getHeaders(true) });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.message || 'Failed to get contra entries');
+    return data;
+  },
+  createContra: async (contraData) => {
+    const response = await fetch(`${API_BASE_URL}/contras`, {
+      method: 'POST',
+      headers: getHeaders(true),
+      body: JSON.stringify(contraData)
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.message || 'Failed to create contra entry');
+    return data;
+  }
+};
+
+// Journal API calls
+export const journalAPI = {
+  getAllJournals: async (params = {}) => {
+    const queryParams = new URLSearchParams(params).toString();
+    const url = queryParams ? `${API_BASE_URL}/journals?${queryParams}` : `${API_BASE_URL}/journals`;
+    const response = await fetch(url, { method: 'GET', headers: getHeaders(true) });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.message || 'Failed to get journal entries');
+    return data;
+  },
+  createJournal: async (journalData) => {
+    const response = await fetch(`${API_BASE_URL}/journals`, {
+      method: 'POST',
+      headers: getHeaders(true),
+      body: JSON.stringify(journalData)
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.message || 'Failed to create journal entry');
     return data;
   }
 };
@@ -1804,5 +1892,8 @@ export default {
   employeeAPI,
   billingAPI,
   customerAPI,
-  masterPassengerAPI
+  masterPassengerAPI,
+  receiptAPI,
+  contraAPI,
+  journalAPI
 };

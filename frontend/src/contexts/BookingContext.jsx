@@ -16,8 +16,10 @@ export const BookingProvider = ({ children }) => {
     setError(null);
     
     try {
-      const data = await bookingAPI.getBookings(filters);
-      setBookings(data);
+      const response = await bookingAPI.getBookings(filters);
+      // Handle standardized paginated response
+      const bookingsArray = Array.isArray(response?.data) ? response.data : (Array.isArray(response) ? response : []);
+      setBookings(bookingsArray);
     } catch (err) {
       setError(err.message || 'Failed to fetch bookings');
     } finally {
@@ -31,7 +33,8 @@ export const BookingProvider = ({ children }) => {
     setError(null);
     
     try {
-      const booking = await bookingAPI.getBookingById(id);
+      const response = await bookingAPI.getBookingById(id);
+      const booking = response?.data || response;
       // Update or add to bookings list
       setBookings(prev => {
         const existingIndex = prev.findIndex(b => b.bk_bkid === id);
@@ -57,7 +60,8 @@ export const BookingProvider = ({ children }) => {
     setError(null);
     
     try {
-      const newBooking = await bookingAPI.createBooking(bookingData);
+      const response = await bookingAPI.createBooking(bookingData);
+      const newBooking = response?.data || response;
       setBookings(prev => [...prev, newBooking]);
       return newBooking;
     } catch (err) {
@@ -74,7 +78,8 @@ export const BookingProvider = ({ children }) => {
     setError(null);
     
     try {
-      const updatedBooking = await bookingAPI.updateBooking(id, bookingData);
+      const response = await bookingAPI.updateBooking(id, bookingData);
+      const updatedBooking = response?.data || response;
       setBookings(prev => 
         prev.map(booking => 
           booking.bk_bkid === id ? updatedBooking : booking

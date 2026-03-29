@@ -2,8 +2,13 @@ import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { bookingAPI, paymentAPI, billingAPI } from '../services/api';
+import { usePagination } from '../hooks/usePagination';
+import useERPFilters from '../hooks/useERPFilters';
+import PaginationControls from '../components/common/PaginationControls';
 import { useKeyboardNavigation } from '../contexts/KeyboardNavigationContext';
 import SaveConfirmationModal from '../components/common/SaveConfirmationModal';
+import BillPrintTemplate from '../components/Billing/BillPrintTemplate';
+import { printComponent } from '../utils/printUtils';
 import '../styles/vintage-erp-theme.css';
 import '../styles/classic-enterprise-global.css';
 import '../styles/vintage-admin-panel.css';
@@ -142,7 +147,6 @@ import BillCreationForm from '../components/Billing/BillCreationForm';
 import BillList from '../components/Billing/BillList';
 import BillDetails from '../components/Billing/BillDetails';
 import CustomerLedger from '../components/Billing/CustomerLedger';
-// Integrated Cancellation logic directly into Billing to avoid React Fiber HMR bugs
 
 const Billing = () => {
   const { user } = useAuth();
@@ -160,11 +164,23 @@ const Billing = () => {
     focusField,
     handleManualFocus
   } = useKeyboardNavigation();
-  const [bills, setBills] = useState([]);
-  const [filteredBills, setFilteredBills] = useState([]); // Add missing filteredBills state
-  const cancelModalRef = useRef(null);
+  const [bills, setBills] = useState([]); // Add missing bills state
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  
+  // Pagination state - 50 records per page with server-side support
+  const {
+    page,
+    limit,
+    pagination,
+    setPage,
+    setLimit,
+    nextPage,
+    prevPage,
+    changeLimit,
+    updatePagination
+  } = usePagination(1, 50);
+  
   const [showForm, setShowForm] = useState(false);
   const [activeView, setActiveView] = useState('list'); // 'list', 'create', 'ledger'
   const [selectedBill, setSelectedBill] = useState(null);
@@ -173,28 +189,17 @@ const Billing = () => {
   // Editing state (MOVED TO TOP to avoid TDZ)
   const [isEditing, setIsEditing] = useState(false);
   const [isPassengerSectionOpen, setIsPassengerSectionOpen] = useState(false);
+  
+  // Cancellation modal state
   const [showCancelModal, setShowCancelModal] = useState(false);
-  const [showCancelConfirmDialog, setShowCancelConfirmDialog] = useState(false);
-  
-  const [cancelData, setCancelData] = useState({
-    railwayCharge: '',
-    agentCharge: '',
-    stationBoyCharge: '',
-    remarks: '',
-    date: new Date().toISOString().split('T')[0],
+  const [isCancelling, setIsCancelling] = useState(false);
+  const [cancelError, setCancelError] = useState('');
+  const [cancelFormData, setCancelFormData] = useState({
+    railwayCharges: 0,
+    agentCharges: 0,
+    reason: ''
   });
-  
-  const cancelFormRef = useRef(null);
-  const cancelConfirmBtnRef = useRef(null);
-
-  // Derived Values for Cancellation
-  const railwayC = parseFloat(cancelData.railwayCharge) || 0;
-  const agentC = parseFloat(cancelData.agentCharge) || 0;
-  const stationBoyC = parseFloat(cancelData.stationBoyCharge) || 0;
-  const totalC = railwayC + agentC + stationBoyC;
-  const billTotalC = selectedBill ? (parseFloat(selectedBill.totalAmount || selectedBill.bl_total_amount) || 0) : 0;
-  const refundC = Math.max(0, billTotalC - totalC);
-  const isCancelValid = railwayC > 0 || agentC > 0 || stationBoyC > 0;
+  const cancelModalRef = useRef(null);
   
   // Booking integration state
   const [bookingData, setBookingData] = useState(null);
@@ -497,12 +502,19 @@ const Billing = () => {
     balanceDueOnly: false
   });
 
-  // Inline filters
-  const [inlineFilters, setInlineFilters] = useState({});
-
-  // Pagination state
-  const [currentPage, setCurrentPage] = useState(1);
-  const recordsPerPage = 100;
+  // Inline filters - Enable real-time filtering with 500ms debounce
+  const { 
+    draftFilters: inlineFilters, 
+    activeFilters, 
+    handleFilterChange: handleInlineFilterChange, 
+    applyFiltersManual: applyFilters, 
+    clearFiltersManual: clearFilters 
+  } = useERPFilters({}, () => { 
+    setPage(1); 
+  }, { 
+    realTime: true, 
+    debounceMs: 500 
+  });
 
   // Customer lookup state
   const [customerLookup, setCustomerLookup] = useState([]);
@@ -688,24 +700,42 @@ const Billing = () => {
     }
   }, [formData.railwayFare, formData.serviceCharges, formData.platformFees, formData.stationBoyIncentive, formData.miscCharges, formData.deliveryCharges, formData.cancellationCharges, formData.gst, formData.gstType, formData.surcharge, formData.amountReceived, isEditing]);
 
-  const fetchBills = async () => {
+  const fetchBills = useCallback(async () => {
     try {
       setLoading(true);
-      let data;
+      let billsArray = [];
+      let paginationData = null;
       
       // Check if user is admin or employee
-      const isEmployee = user && ['AGT', 'ACC', 'HR', 'CC', 'MKT', 'MGT', 'ADM'].includes(user.us_roid);
+      const isEmployee = user && (
+        ['AGT', 'ACC', 'HR', 'CC', 'MKT', 'MGT', 'ADM'].includes(user.us_roid) ||
+        user.us_usertype === 'admin' || 
+        user.usertype === 'admin'
+      );
+      
+      // Pass pagination params
+      const params = {
+        page: page,
+        limit: limit,
+        ...activeFilters
+      };
+      
       if (isEmployee) {
-        data = await billingAPI.getAllBills();
+        const response = await billingAPI.getAllBills(params);
+        billsArray = response?.data || [];
+        paginationData = response?.pagination || null;
       } else {
         // For customers, get user-specific bills
-        data = await billingAPI.getMyBills();
+        const response = await billingAPI.getMyBills(params);
+        billsArray = response?.data?.bills || response?.data || [];
+        paginationData = response?.data?.pagination || response?.pagination || null;
       }
       
-      // Handle the response structure
-      const billsData = data?.data?.bills || data?.bills || data || [];
+      // Safety check for arrays
+      const billsData = Array.isArray(billsArray) ? billsArray : [];
+      
       // Ensure numeric fields are properly converted to numbers and map database field names
-      const processedBills = Array.isArray(billsData) ? billsData.map(bill => ({
+      const processedBills = billsData.map(bill => ({
         ...bill,
         // Map database field names to frontend field names
         id: bill.bl_id || bill.id,
@@ -744,21 +774,38 @@ const Billing = () => {
         remarks: bill.remarks || '',
         createdOn: bill.bl_created_at || bill.createdOn,
         createdBy: bill.bl_created_by || bill.createdBy,
-        modifiedOn: bill.modifiedOn || '',
         modifiedBy: bill.modifiedBy || '',
         closedOn: bill.closedOn || '',
         closedBy: bill.closedBy || ''
-      })) : [];
+      }));
       setBills(processedBills);
-      setFilteredBills(processedBills);
+// Update pagination info from API response
+      if (paginationData) {
+        updatePagination(paginationData);
+      } else {
+        updatePagination({
+          currentPage: page,
+          totalPages: Math.ceil(processedBills.length / limit) || 1,
+          totalRecords: processedBills.length
+        });
+      }
+      
       setError('');
     } catch (err) {
+      console.error('❌ Error fetching bills:', err);
       setError(err.message || 'Failed to fetch bills');
       setBills([]);
     } finally {
       setLoading(false);
     }
-  };
+  }, [user, page, limit, activeFilters, updatePagination]);
+  
+  // Refetch when page or limit changes
+  useEffect(() => {
+    fetchBills();
+  }, [page, limit, activeFilters, fetchBills]);
+
+  
 
   // Helper function to get an available draft booking for testing
   const getAvailableDraftBookingId = async () => {
@@ -799,15 +846,24 @@ const Billing = () => {
     isCreatingDraftRef.current = true;
     
     try {
-      // Get available draft bookings for billing
-      // In a real implementation, you'd want to:
-      // 1. Show a dropdown of available draft bookings
-      // 2. Or create a proper workflow for linking bills to bookings
-      const bookingId = await getAvailableDraftBookingId();
+      // Use bookingId from billData if available, otherwise get an available draft booking
+      // Priority: 1) billData.bookingId, 2) getAvailableDraftBookingId()
+      let bookingId = billData.bookingId;
       
-      console.log('Using existing booking ID:', bookingId);
+      if (!bookingId) {
+        // Get available draft bookings for billing
+        // In a real implementation, you'd want to:
+        // 1. Show a dropdown of available draft bookings
+        // 2. Or create a proper workflow for linking bills to bookings
+        bookingId = await getAvailableDraftBookingId();
+        console.log('No bookingId in formData, fetched available booking ID:', bookingId);
+      } else {
+        console.log('Using bookingId from formData:', bookingId);
+      }
+      
+      console.log('Using booking ID for bill creation:', bookingId);
 
-      // Create the bill using the existing booking ID
+      // Create the bill using the booking ID
       const billPayload = {
         bookingId: bookingId,
         customerName: billData.customerName || '',
@@ -925,102 +981,56 @@ const Billing = () => {
     }
   };
 
-  const handleCancelBill = async (billId) => {
-    setCancelData({
-      railwayCharge: '', agentCharge: '', stationBoyCharge: '',
-      remarks: '', date: new Date().toISOString().split('T')[0],
-    });
-    setShowCancelModal(true);
-    setShowCancelConfirmDialog(false);
-    
-    // Auto focus first input
-    setTimeout(() => {
-      const firstInput = cancelFormRef.current?.querySelector('input[name="railwayCharge"]');
-      if (firstInput) {
-        firstInput.focus();
-        if (firstInput.select) firstInput.select();
-      }
-    }, 100);
-  };
-
-  const handleExecuteCancel = async () => {
-    if (!isCancelValid) return alert('Enter at least one cancellation charge.');
-    if (totalC > billTotalC) return alert(`Charges (₹${totalC}) exceed bill total.`);
-
-    try {
-      const payload = {
-        railwayCancellationCharge: railwayC,
-        agentCancellationCharge: agentC,
-        stationBoyCharges: stationBoyC,
-        totalCancellationCharges: totalC,
-        refundAmount: refundC,
-        cancellationRemarks: cancelData.remarks,
-        cancellationDate: cancelData.date
-      };
-
-      await billingAPI.cancelBill(selectedBill.id || selectedBill.bl_id, payload);
-      alert('Bill safely cancelled and booking updated.');
-      
-      setShowCancelModal(false);
-      setShowCancelConfirmDialog(false);
-      fetchBills();
-      setSelectedBill(null);
-    } catch (err) {
-      alert('Failed: ' + err.message);
-    }
-  };
-
-  const handleCancelModalKeys = (e) => {
-    e.stopPropagation();
-    if (e.key === 'Escape') {
-      e.preventDefault();
-      if (showCancelConfirmDialog) setShowCancelConfirmDialog(false);
-      else setShowCancelModal(false);
-      return;
-    }
-    
-    if (showCancelConfirmDialog) {
-      if (e.key === 'Enter') {
-        e.preventDefault();
-        handleExecuteCancel();
-      }
-      return;
-    }
-
-    const inputs = Array.from(cancelFormRef.current?.querySelectorAll('input:not([disabled]), textarea:not([disabled]), button:not([disabled])') || []);
-    const currentIndex = inputs.indexOf(e.target);
-
-    if (e.key === 'Tab') {
-      if (e.target.name === 'remarks' && !e.shiftKey) {
-        e.preventDefault();
-        if (isCancelValid) {
-            setShowCancelConfirmDialog(true);
-            setTimeout(() => cancelConfirmBtnRef.current?.focus(), 100);
-        } else {
-            inputs[inputs.length - 1]?.focus(); // Go to Review Button
-        }
-      }
-    } else if (e.key === 'Enter') {
-      if (e.target.tagName !== 'TEXTAREA' && e.target.tagName !== 'BUTTON') {
-        e.preventDefault();
-        if (currentIndex >= 0 && currentIndex < inputs.length - 1) {
-          inputs[currentIndex + 1].focus();
-        } else if (currentIndex === inputs.length - 1 || e.target.name === 'remarks') {
-          if (isCancelValid) {
-              setShowCancelConfirmDialog(true);
-              setTimeout(() => cancelConfirmBtnRef.current?.focus(), 100);
-          }
-        }
-      }
-    }
-  };
-
   const handleFinalizeBill = async (billId) => {
     try {
       await billingAPI.finalizeBill(billId);
       fetchBills();
     } catch (error) {
       setError(error.message);
+    }
+  };
+
+  const handleCancelBill = () => {
+    if (selectedBill) {
+      if (selectedBill.status === 'CANCELLED' || selectedBill.bl_status === 'CANCELLED') {
+        alert('This bill is already cancelled.');
+        return;
+      }
+      setCancelFormData({
+        railwayCharges: 0,
+        agentCharges: 0,
+        reason: ''
+      });
+      setShowCancelModal(true);
+      // Focus will be handled by useEffect
+    } else {
+      alert('Please select a bill to cancel');
+    }
+  };
+
+  const handleCancelSave = async () => {
+    setCancelError('');
+    if (!cancelFormData.reason) {
+      setCancelError('Cancellation reason is required');
+      return;
+    }
+
+    const totalCharges = (parseFloat(cancelFormData.railwayCharges) || 0) + (parseFloat(cancelFormData.agentCharges) || 0);
+    if (totalCharges > selectedBill.totalAmount) {
+      setCancelError('Total cancellation charges cannot exceed bill amount');
+      return;
+    }
+
+    try {
+      setIsCancelling(true);
+      await billingAPI.cancelBill(selectedBill.id, cancelFormData);
+      setShowCancelModal(false);
+      alert('Bill cancelled successfully');
+      fetchBills();
+    } catch (error) {
+      setCancelError('Error cancelling bill: ' + error.message);
+    } finally {
+      setIsCancelling(false);
     }
   };
 
@@ -1243,47 +1253,51 @@ const Billing = () => {
 
   // Handle navigation
   const handleNavigation = (direction) => {
-    const paginatedData = getPaginatedData();
-    if (paginatedData.length === 0) return;
+    if (bills.length === 0) return;
     
     let newIndex = 0;
     if (selectedBill) {
-      const currentIndex = paginatedData.findIndex(item => 
+      const currentIndex = bills.findIndex(item => 
         item.id === selectedBill.id
       );
       
       switch(direction) {
         case 'first': newIndex = 0; break;
         case 'prev': newIndex = currentIndex > 0 ? currentIndex - 1 : 0; break;
-        case 'next': newIndex = currentIndex < paginatedData.length - 1 ? currentIndex + 1 : paginatedData.length - 1; break;
-        case 'last': newIndex = paginatedData.length - 1; break;
+        case 'next': newIndex = currentIndex < bills.length - 1 ? currentIndex + 1 : bills.length - 1; break;
+        case 'last': newIndex = bills.length - 1; break;
         default: break;
       }
     }
     
-    handleRecordSelect(paginatedData[newIndex]);
+    handleRecordSelect(bills[newIndex]);
   };
-
-  // Pagination
-  const getPaginatedData = () => {
-    const startIndex = (currentPage - 1) * recordsPerPage;
-    const endIndex = startIndex + recordsPerPage;
-    return bills.slice(startIndex, endIndex);
-  };
-
-  const totalPages = Math.ceil(bills.length / recordsPerPage);
-  const paginatedData = getPaginatedData();
 
   // Check if navigation buttons should be disabled
-  const isFirstRecord = selectedBill && paginatedData.length > 0 && 
-    paginatedData[0].id === selectedBill.id;
-  const isLastRecord = selectedBill && paginatedData.length > 0 && 
-    paginatedData[paginatedData.length - 1].id === selectedBill.id;
+  const isFirstRecord = selectedBill && bills.length > 0 && 
+    bills[0].id === selectedBill.id;
+  const isLastRecord = selectedBill && bills.length > 0 && 
+    bills[bills.length - 1].id === selectedBill.id;
 
   // Keyboard navigation handler
   const handleKeyDown = (e) => {
-    // If modal or dialog is open, let them handle their own keys
-    if (showCancelModal || showCancelConfirmDialog) return;
+    // Global shortcuts that work even if form is not in edit mode
+    if (e.key === 'F6') {
+      e.preventDefault();
+      handleCancelBill();
+      return;
+    }
+
+    if (showCancelModal) {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        setShowCancelModal(false);
+      } else if (e.key === 'F10') {
+        e.preventDefault();
+        handleCancelSave();
+      }
+      return;
+    }
     
     if (!showForm || !isEditing) return;
     
@@ -1316,11 +1330,20 @@ const Billing = () => {
         // Refresh data
         fetchBills();
         break;
+      case 'F10':
+        e.preventDefault();
+        if (isEditing) {
+          handleSave();
+        }
+        break;
       case 'Tab':
         // Handle tab navigation within form
         // Note: Default browser tab behavior will be used
         break;
       case 'Enter':
+        // If we are in the cancellation modal, don't trigger general save
+        if (showCancelModal) return;
+
         e.preventDefault();
         // Save form on Enter
         if (isEditing) {
@@ -1339,6 +1362,50 @@ const Billing = () => {
       document.removeEventListener('keydown', handleKeyDown);
     };
   }, [showForm, isEditing]);
+
+  // Handle keyboard navigation in the cancellation modal
+  const handleCancelModalKeyDown = (e) => {
+    if (e.key === 'Tab') {
+      const focusableElements = cancelModalRef.current.querySelectorAll(
+        'input:not([disabled]), textarea:not([disabled]), button:not([disabled])'
+      );
+      const firstElement = focusableElements[0];
+      const lastElement = focusableElements[focusableElements.length - 1];
+
+      if (e.shiftKey) {
+        if (document.activeElement === firstElement) {
+          e.preventDefault();
+          lastElement.focus();
+        }
+      } else {
+        if (document.activeElement === lastElement) {
+          e.preventDefault();
+          firstElement.focus();
+        }
+      }
+    } else if (e.key === 'Enter' && e.target.tagName !== 'TEXTAREA') {
+      e.preventDefault();
+      const focusableElements = Array.from(cancelModalRef.current.querySelectorAll(
+        'input:not([disabled]), textarea:not([disabled]), button:not([disabled])'
+      ));
+      const currentIndex = focusableElements.indexOf(document.activeElement);
+      if (currentIndex > -1 && currentIndex < focusableElements.length - 1) {
+        focusableElements[currentIndex + 1].focus();
+      } else if (currentIndex === focusableElements.length - 1) {
+        handleCancelSave();
+      }
+    }
+  };
+
+  // Focus Railway Charges when modal opens
+  useEffect(() => {
+    if (showCancelModal && cancelModalRef.current) {
+      const firstInput = cancelModalRef.current.querySelector('input[name="railwayCharges"]');
+      if (firstInput) {
+        setTimeout(() => firstInput.focus(), 100);
+      }
+    }
+  }, [showCancelModal]);
 
   if (loading) {
     return (
@@ -1399,13 +1466,7 @@ const Billing = () => {
             alert('Please select a bill to delete');
           }
         }} title="Delete" disabled={!selectedBill || selectedBill.bl_status === 'CANCELLED'}>Delete</button>
-        <button className="erp-button" onClick={() => {
-          if (selectedBill) {
-            handleCancelBill(selectedBill.id);
-          } else {
-            alert('Please select a bill to cancel');
-          }
-        }} title="Cancel" disabled={!selectedBill || selectedBill.bl_status === 'CANCELLED'}>Cancel</button>
+        <button className="erp-button" onClick={handleCancelBill} title="Cancel Bill (F6)" disabled={!selectedBill || selectedBill.bl_status === 'CANCELLED' || selectedBill.status === 'CANCELLED'}>Cancel Bill</button>
         <div className="erp-tool-separator"></div>
         <button className="erp-button" onClick={handleSave} disabled={!isEditing}>Save</button>
         <button className="erp-button" onClick={fetchBills} title="Refresh">Refresh</button>
@@ -1426,6 +1487,11 @@ const Billing = () => {
             alert('Please select a bill to print');
           }
         }} title="Print" disabled={!selectedBill}>Print</button>
+        
+        <div style={{ flex: 1 }}></div>
+        <div style={{ fontWeight: 'bold', fontSize: '12px' }}>
+            {isEditing ? 'EDIT MODE' : 'READY'} | Total Records: {pagination.totalRecords || bills.length} | Total Pages: {pagination.totalPages || 1}
+        </div>
       </div>
 
       {/* Main Content Area - Scrollable */}
@@ -1765,13 +1831,14 @@ const Billing = () => {
               <select 
                 name="status" 
                 className="erp-input" 
-                value={formData.status || 'CONFIRMED'} 
+                value={formData.status || 'DRAFT'} 
                 onChange={(e) => setFormData({...formData, status: e.target.value})}
                 disabled={!isEditing}
                 tabIndex={14}
                 onKeyDown={(e) => handleEnhancedTabNavigation(e, 'status')}
               >
-                <option value="CONFIRMED">Confirmed</option>
+                <option value="DRAFT">Draft</option>
+                <option value="FINAL">Final</option>
                 <option value="CANCELLED">Cancelled</option>
               </select>
               <label className="erp-form-label">Special Request/Remarks</label>
@@ -1985,12 +2052,13 @@ const Billing = () => {
           </div>
 
           {/* Data Grid - Scrollable */}
-          <div className="layout-grid-section">
+          <div className="layout-grid-section" style={{ display: 'flex', flexDirection: 'column', flex: 1, height: '100%' }}>
             <div className="erp-panel-header">Billing Records</div>
             {loading ? (
               <div style={{ padding: '20px', textAlign: 'center' }}>Loading...</div>
             ) : (
-              <div className="erp-grid-container" style={{ maxHeight: 'calc(100vh - 450px)', overflowY: 'auto' }}>
+              <div className="erp-grid-section" style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+                <div className="erp-grid-container" style={{ flex: 1, overflowY: 'auto' }}>
                 <table className="erp-table">
                   <thead>
                     <tr>
@@ -2021,8 +2089,8 @@ const Billing = () => {
                         <input
                           type="text"
                           className="inline-filter-input"
-                          value={inlineFilters.billId || ''}
-                          onChange={(e) => setInlineFilters({...inlineFilters, billId: e.target.value})}
+                          value={inlineFilters.bl_bill_no || ''}
+                          onChange={(e) => handleInlineFilterChange('bl_bill_no', e.target.value)}
                           placeholder="Filter Bill ID..."
                           style={{ width: '100%', padding: '2px', fontSize: '12px', backgroundColor: '#f0f0f0' }}
                         />
@@ -2031,8 +2099,8 @@ const Billing = () => {
                         <input
                           type="date"
                           className="inline-filter-input"
-                          value={inlineFilters.billDate || ''}
-                          onChange={(e) => setInlineFilters({...inlineFilters, billDate: e.target.value})}
+                          value={inlineFilters.bl_billing_date || ''}
+                          onChange={(e) => handleInlineFilterChange('bl_billing_date', e.target.value)}
                           placeholder="Filter Date..."
                           style={{ width: '100%', padding: '2px', fontSize: '12px', backgroundColor: '#f0f0f0' }}
                         />
@@ -2041,8 +2109,8 @@ const Billing = () => {
                         <input
                           type="text"
                           className="inline-filter-input"
-                          value={inlineFilters.bookingId || ''}
-                          onChange={(e) => setInlineFilters({...inlineFilters, bookingId: e.target.value})}
+                          value={inlineFilters.bl_booking_id || ''}
+                          onChange={(e) => handleInlineFilterChange('bl_booking_id', e.target.value)}
                           placeholder="Filter Booking ID..."
                           style={{ width: '100%', padding: '2px', fontSize: '12px', backgroundColor: '#f0f0f0' }}
                         />
@@ -2051,8 +2119,8 @@ const Billing = () => {
                         <input
                           type="text"
                           className="inline-filter-input"
-                          value={inlineFilters.subBillNo || ''}
-                          onChange={(e) => setInlineFilters({...inlineFilters, subBillNo: e.target.value})}
+                          value={inlineFilters.bl_sub_bill_no || ''}
+                          onChange={(e) => handleInlineFilterChange('bl_sub_bill_no', e.target.value)}
                           placeholder="Filter Sub Bill No..."
                           style={{ width: '100%', padding: '2px', fontSize: '12px', backgroundColor: '#f0f0f0' }}
                         />
@@ -2061,8 +2129,8 @@ const Billing = () => {
                         <input
                           type="text"
                           className="inline-filter-input"
-                          value={inlineFilters.customerName || ''}
-                          onChange={(e) => setInlineFilters({...inlineFilters, customerName: e.target.value})}
+                          value={inlineFilters.bl_customer_name || ''}
+                          onChange={(e) => handleInlineFilterChange('bl_customer_name', e.target.value)}
                           placeholder="Filter Name..."
                           style={{ width: '100%', padding: '2px', fontSize: '12px', backgroundColor: '#f0f0f0' }}
                         />
@@ -2071,8 +2139,8 @@ const Billing = () => {
                         <input
                           type="text"
                           className="inline-filter-input"
-                          value={inlineFilters.phoneNumber || ''}
-                          onChange={(e) => setInlineFilters({...inlineFilters, phoneNumber: e.target.value})}
+                          value={inlineFilters.bl_customer_phone || ''}
+                          onChange={(e) => handleInlineFilterChange('bl_customer_phone', e.target.value)}
                           placeholder="Filter Phone..."
                           style={{ width: '100%', padding: '2px', fontSize: '12px', backgroundColor: '#f0f0f0' }}
                         />
@@ -2081,8 +2149,8 @@ const Billing = () => {
                         <input
                           type="text"
                           className="inline-filter-input"
-                          value={inlineFilters.stationBoy || ''}
-                          onChange={(e) => setInlineFilters({...inlineFilters, stationBoy: e.target.value})}
+                          value={inlineFilters.bl_station_boy || ''}
+                          onChange={(e) => handleInlineFilterChange('bl_station_boy', e.target.value)}
                           placeholder="Filter Station Boy..."
                           style={{ width: '100%', padding: '2px', fontSize: '12px', backgroundColor: '#f0f0f0' }}
                         />
@@ -2091,8 +2159,8 @@ const Billing = () => {
                         <input
                           type="text"
                           className="inline-filter-input"
-                          value={inlineFilters.fromStation || ''}
-                          onChange={(e) => setInlineFilters({...inlineFilters, fromStation: e.target.value})}
+                          value={inlineFilters.bl_from_station || ''}
+                          onChange={(e) => handleInlineFilterChange('bl_from_station', e.target.value)}
                           placeholder="Filter From Station..."
                           style={{ width: '100%', padding: '2px', fontSize: '12px', backgroundColor: '#f0f0f0' }}
                         />
@@ -2101,8 +2169,8 @@ const Billing = () => {
                         <input
                           type="text"
                           className="inline-filter-input"
-                          value={inlineFilters.toStation || ''}
-                          onChange={(e) => setInlineFilters({...inlineFilters, toStation: e.target.value})}
+                          value={inlineFilters.bl_to_station || ''}
+                          onChange={(e) => handleInlineFilterChange('bl_to_station', e.target.value)}
                           placeholder="Filter To Station..."
                           style={{ width: '100%', padding: '2px', fontSize: '12px', backgroundColor: '#f0f0f0' }}
                         />
@@ -2111,8 +2179,8 @@ const Billing = () => {
                         <input
                           type="date"
                           className="inline-filter-input"
-                          value={inlineFilters.journeyDate || ''}
-                          onChange={(e) => setInlineFilters({...inlineFilters, journeyDate: e.target.value})}
+                          value={inlineFilters.bl_journey_date || ''}
+                          onChange={(e) => handleInlineFilterChange('bl_journey_date', e.target.value)}
                           placeholder="Filter Journey Date..."
                           style={{ width: '100%', padding: '2px', fontSize: '12px', backgroundColor: '#f0f0f0' }}
                         />
@@ -2121,8 +2189,8 @@ const Billing = () => {
                         <input
                           type="text"
                           className="inline-filter-input"
-                          value={inlineFilters.trainNumber || ''}
-                          onChange={(e) => setInlineFilters({...inlineFilters, trainNumber: e.target.value})}
+                          value={inlineFilters.bl_train_no || ''}
+                          onChange={(e) => handleInlineFilterChange('bl_train_no', e.target.value)}
                           placeholder="Filter Train Number..."
                           style={{ width: '100%', padding: '2px', fontSize: '12px', backgroundColor: '#f0f0f0' }}
                         />
@@ -2130,8 +2198,8 @@ const Billing = () => {
                       <td>
                         <select
                           className="inline-filter-input"
-                          value={inlineFilters.reservationClass || ''}
-                          onChange={(e) => setInlineFilters({...inlineFilters, reservationClass: e.target.value})}
+                          value={inlineFilters.bl_class || ''}
+                          onChange={(e) => handleInlineFilterChange('bl_class', e.target.value)}
                           style={{ width: '100%', padding: '2px', fontSize: '12px', backgroundColor: '#f0f0f0' }}
                         >
                           <option value="">All</option>
@@ -2145,8 +2213,8 @@ const Billing = () => {
                       <td>
                         <select
                           className="inline-filter-input"
-                          value={inlineFilters.ticketType || ''}
-                          onChange={(e) => setInlineFilters({...inlineFilters, ticketType: e.target.value})}
+                          value={inlineFilters.bl_ticket_type || ''}
+                          onChange={(e) => handleInlineFilterChange('bl_ticket_type', e.target.value)}
                           style={{ width: '100%', padding: '2px', fontSize: '12px', backgroundColor: '#f0f0f0' }}
                         >
                           <option value="">All</option>
@@ -2159,18 +2227,32 @@ const Billing = () => {
                         <input
                           type="text"
                           className="inline-filter-input"
-                          value={inlineFilters.pnrNumbers || ''}
-                          onChange={(e) => setInlineFilters({...inlineFilters, pnrNumbers: e.target.value})}
+                          value={inlineFilters.bl_pnr || ''}
+                          onChange={(e) => handleInlineFilterChange('bl_pnr', e.target.value)}
                           placeholder="Filter PNR Numbers..."
                           style={{ width: '100%', padding: '2px', fontSize: '12px', backgroundColor: '#f0f0f0' }}
                         />
                       </td>
                       <td>
+                        <select
+                          className="inline-filter-input"
+                          value={inlineFilters.bl_status || ''}
+                          onChange={(e) => handleInlineFilterChange('bl_status', e.target.value)}
+                          style={{ width: '100%', padding: '2px', fontSize: '12px', backgroundColor: '#f0f0f0' }}
+                        >
+                          <option value="">All</option>
+                          <option value="DRAFT">DRAFT</option>
+                          <option value="FINAL">FINAL</option>
+                          <option value="PAID">PAID</option>
+                          <option value="CANCELLED">CANCELLED</option>
+                        </select>
+                      </td>
+                      <td>
                         <input
                           type="number"
                           className="inline-filter-input"
-                          value={inlineFilters.totalAmount || ''}
-                          onChange={(e) => setInlineFilters({...inlineFilters, totalAmount: e.target.value})}
+                          value={inlineFilters.bl_total_amount || ''}
+                          onChange={(e) => handleInlineFilterChange('bl_total_amount', e.target.value)}
                           placeholder="Filter Amount..."
                           style={{ width: '100%', padding: '2px', fontSize: '12px', backgroundColor: '#f0f0f0' }}
                         />
@@ -2180,7 +2262,7 @@ const Billing = () => {
                           type="text"
                           className="inline-filter-input"
                           value={inlineFilters.passengerCount || ''}
-                          onChange={(e) => setInlineFilters({...inlineFilters, passengerCount: e.target.value})}
+                          onChange={(e) => handleInlineFilterChange('passengerCount', e.target.value)}
                           placeholder="Filter Passengers..."
                           style={{ width: '100%', padding: '2px', fontSize: '12px', backgroundColor: '#f0f0f0' }}
                         />
@@ -2189,8 +2271,8 @@ const Billing = () => {
                         <input
                           type="text"
                           className="inline-filter-input"
-                          value={inlineFilters.remarks || ''}
-                          onChange={(e) => setInlineFilters({...inlineFilters, remarks: e.target.value})}
+                          value={inlineFilters.bl_remarks || ''}
+                          onChange={(e) => handleInlineFilterChange('bl_remarks', e.target.value)}
                           placeholder="Filter Remarks..."
                           style={{ width: '100%', padding: '2px', fontSize: '12px', backgroundColor: '#f0f0f0' }}
                         />
@@ -2198,10 +2280,10 @@ const Billing = () => {
                     </tr>
                   </thead>
                   <tbody>
-                    {paginatedData.length === 0 ? (
+                    {bills.length === 0 ? (
                       <tr><td colSpan={18} style={{ textAlign: 'center' }}>No records found</td></tr>
                     ) : (
-                      paginatedData.map((bill, idx) => {
+                      bills.map((bill, idx) => {
                         const isSelected = selectedBill && selectedBill.id === bill.id;
                         const balanceDue = (Number(bill.totalAmount) || 0) - (Number(bill.paidAmount) || 0);
                         return (
@@ -2239,282 +2321,69 @@ const Billing = () => {
                     )}
                   </tbody>
                 </table>
+                </div>
+                {/* STICKY PAGINATION COMPONENT */}
+                <PaginationControls
+                  pagination={pagination}
+                  onPageChange={setPage}
+                  limit={limit}
+                  onLimitChange={changeLimit}
+                />
               </div>
             )}
           </div>
         </div>
 
-        {/* Right Filter Panel */}
+        {/* Right Sidebar: Filters */}
         <div className="layout-right-sidebar">
-          <div className="layout-header">
-            Filter Criteria
-            {(bills.length !== getPaginatedData().length) && (
-              <span className="erp-filter-count">{getPaginatedData().length}/{bills.length}</span>
-            )}
-          </div>
           <div className="layout-filters-content">
-          
-          <div className="erp-filter-section">
-            <div className="erp-filter-row">
-              <div className="erp-filter-field">
-                <label className="erp-filter-label">Bill ID</label>
+             <div className="section-title">FILTERS</div>
+             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '80px 1fr', gap: '6px', alignItems: 'center' }}>
+                   <label style={{ fontSize: '11px', textAlign: 'right' }}>Bill ID:</label>
+                   <input type="text" className="erp-input inline-filter-input" value={inlineFilters['bl_bill_no']||''} onChange={(e)=>handleInlineFilterChange('bl_bill_no', e.target.value)} />
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '80px 1fr', gap: '6px', alignItems: 'center' }}>
+                   <label style={{ fontSize: '11px', textAlign: 'right' }}>Date:</label>
+                   <input type="date" className="erp-input inline-filter-input" value={inlineFilters['bl_billing_date']||''} onChange={(e)=>handleInlineFilterChange('bl_billing_date', e.target.value)} />
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '80px 1fr', gap: '6px', alignItems: 'center' }}>
+                   <label style={{ fontSize: '11px', textAlign: 'right' }}>Customer:</label>
+                   <input type="text" className="erp-input inline-filter-input" value={inlineFilters['bl_customer_name']||''} onChange={(e)=>handleInlineFilterChange('bl_customer_name', e.target.value)} />
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '80px 1fr', gap: '6px', alignItems: 'center' }}>
+                   <label style={{ fontSize: '11px', textAlign: 'right' }}>Phone:</label>
+                   <input type="text" className="erp-input inline-filter-input" value={inlineFilters['bl_customer_phone']||''} onChange={(e)=>handleInlineFilterChange('bl_customer_phone', e.target.value)} />
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '80px 1fr', gap: '6px', alignItems: 'center' }}>
+                   <label style={{ fontSize: '11px', textAlign: 'right' }}>From:</label>
+                   <input type="text" className="erp-input inline-filter-input" value={inlineFilters['bl_from_station']||''} onChange={(e)=>handleInlineFilterChange('bl_from_station', e.target.value)} />
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '80px 1fr', gap: '6px', alignItems: 'center' }}>
+                   <label style={{ fontSize: '11px', textAlign: 'right' }}>To:</label>
+                   <input type="text" className="erp-input inline-filter-input" value={inlineFilters['bl_to_station']||''} onChange={(e)=>handleInlineFilterChange('bl_to_station', e.target.value)} />
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '80px 1fr', gap: '6px', alignItems: 'center' }}>
+                   <label style={{ fontSize: '11px', textAlign: 'right' }}>Status:</label>
+                   <input type="text" className="erp-input inline-filter-input" value={inlineFilters['bl_status']||''} onChange={(e)=>handleInlineFilterChange('bl_status', e.target.value)} />
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '4px', gap: '4px' }}>
+                    <button onClick={clearFilters} className="erp-button small">Clear (ESC)</button>
+                </div>
+             </div>
+             <div style={{ flex: 1 }}></div>
+             <div style={{ padding: '4px', borderTop: '1px solid #ccc' }}>
                 <input 
                   type="text" 
-                  name="billId" 
-                  className="erp-filter-input" 
-                  value={filters.billId || ''} 
-                  onChange={(e) => setFilters({...filters, billId: e.target.value})}
-                  placeholder="Search bill ID..."
+                  placeholder="Quick search..." 
+                  className="filter-input" 
+                  style={{ width: '100%' }} 
                 />
-              </div>
-            </div>
-            
-            <div className="erp-filter-row">
-              <div className="erp-filter-field">
-                <label className="erp-filter-label">Customer ID</label>
-                <input 
-                  type="text" 
-                  name="customerId" 
-                  className="erp-filter-input" 
-                  value={filters.customerId || ''} 
-                  onChange={(e) => setFilters({...filters, customerId: e.target.value})}
-                  placeholder="Search customer ID..."
-                />
-              </div>
-              
-              <div className="erp-filter-field">
-                <label className="erp-filter-label">Customer Name</label>
-                <input 
-                  type="text" 
-                  name="customerName" 
-                  className="erp-filter-input" 
-                  value={filters.customerName || ''} 
-                  onChange={(e) => setFilters({...filters, customerName: e.target.value})}
-                  placeholder="Search customer name..."
-                />
-              </div>
-            </div>
-            
-            <div className="erp-filter-row">
-              <div className="erp-filter-field">
-                <label className="erp-filter-label">PNR Number</label>
-                <input 
-                  type="text" 
-                  name="pnrNumber" 
-                  className="erp-filter-input" 
-                  value={filters.pnrNumber || ''} 
-                  onChange={(e) => setFilters({...filters, pnrNumber: e.target.value})}
-                  placeholder="Search PNR number..."
-                />
-              </div>
-              
-              <div className="erp-filter-field">
-                <label className="erp-filter-label">Bill Date From</label>
-                <input 
-                  type="date" 
-                  name="billDateFrom" 
-                  className="erp-filter-input" 
-                  value={filters.billDateFrom || ''} 
-                  onChange={(e) => setFilters({...filters, billDateFrom: e.target.value})}
-                />
-              </div>
-            </div>
-            
-            <div className="erp-filter-row">
-              <div className="erp-filter-field">
-                <label className="erp-filter-label">Bill Date To</label>
-                <input 
-                  type="date" 
-                  name="billDateTo" 
-                  className="erp-filter-input" 
-                  value={filters.billDateTo || ''} 
-                  onChange={(e) => setFilters({...filters, billDateTo: e.target.value})}
-                />
-              </div>
-              
-              <div className="erp-filter-field">
-                <label className="erp-filter-label">Status</label>
-                <select 
-                  name="status" 
-                  className="erp-filter-select" 
-                  value={filters.status || ''} 
-                  onChange={(e) => setFilters({...filters, status: e.target.value})}
-                >
-                  <option value="">All</option>
-                  <option value="DRAFT">Draft</option>
-                  <option value="FINAL">Final</option>
-                  <option value="CANCELLED">Cancelled</option>
-                </select>
-              </div>
-            </div>
-            
-            <div className="erp-filter-row">
-              <div className="erp-filter-field">
-                <label className="erp-filter-label">Amount Range From</label>
-                <input 
-                  type="number" 
-                  name="amountFrom" 
-                  className="erp-filter-input" 
-                  value={filters.amountFrom || ''} 
-                  onChange={(e) => setFilters({...filters, amountFrom: e.target.value})}
-                  placeholder="Min amount"
-                />
-              </div>
-              
-              <div className="erp-filter-field">
-                <label className="erp-filter-label">Amount Range To</label>
-                <input 
-                  type="number" 
-                  name="amountTo" 
-                  className="erp-filter-input" 
-                  value={filters.amountTo || ''} 
-                  onChange={(e) => setFilters({...filters, amountTo: e.target.value})}
-                  placeholder="Max amount"
-                />
-              </div>
-            </div>
-            
-            <div className="erp-filter-row">
-              <div className="erp-filter-field">
-                <label className="erp-filter-label">Reservation Class</label>
-                <select 
-                  name="reservationClass" 
-                  className="erp-filter-select" 
-                  value={filters.reservationClass || ''} 
-                  onChange={(e) => setFilters({...filters, reservationClass: e.target.value})}
-                >
-                  <option value="">All</option>
-                  <option value="SL">SL</option>
-                  <option value="3A">3A</option>
-                  <option value="2A">2A</option>
-                  <option value="1A">1A</option>
-                  <option value="CC">CC</option>
-                </select>
-              </div>
-              
-              <div className="erp-filter-field">
-                <label className="erp-filter-label">Ticket Type</label>
-                <select 
-                  name="ticketType" 
-                  className="erp-filter-select" 
-                  value={filters.ticketType || ''} 
-                  onChange={(e) => setFilters({...filters, ticketType: e.target.value})}
-                >
-                  <option value="">All</option>
-                  <option value="NORMAL">Normal</option>
-                  <option value="TATKAL">Tatkal</option>
-                  <option value="PREMIUM_TATKAL">Premium Tatkal</option>
-                </select>
-              </div>
-            </div>
-            
-            <div className="erp-checkbox-group">
-              <div className="erp-checkbox-item">
-                <input
-                  type="checkbox"
-                  id="balanceDueOnly"
-                  name="balanceDueOnly"
-                  checked={filters.balanceDueOnly || false}
-                  onChange={(e) => setFilters({...filters, balanceDueOnly: e.target.checked})}
-                />
-                <label htmlFor="balanceDueOnly">Balance Due Only</label>
-              </div>
-            </div>
-          </div>
-          
-          <div className="erp-filter-actions" style={{ marginTop: '12px', display: 'flex', gap: '4px' }}>
-            <button 
-              className="erp-button erp-filter-btn erp-filter-btn-primary" 
-              style={{ flex: 1 }}
-              onClick={() => {
-                // Apply filters logic here
-                console.log('Filters applied:', filters);
-                // Here we would typically filter the data based on the selected criteria
-                // For now, we'll just log the filters
-                alert('Filters applied: ' + JSON.stringify(filters, null, 2));
-              }}
-              title="Apply filter criteria"
-            >
-              Apply Filters
-            </button>
-            <button 
-              className="erp-button erp-filter-btn erp-filter-btn-clear" 
-              style={{ flex: 1 }}
-              onClick={() => {
-                setFilters({
-                  billId: '',
-                  customerId: '',
-                  customerName: '',
-                  pnrNumber: '',
-                  billDateFrom: '',
-                  billDateTo: '',
-                  status: '',
-                  amountFrom: '',
-                  amountTo: '',
-                  reservationClass: '',
-                  ticketType: '',
-                  balanceDueOnly: false
-                });
-                // Reset inline filters
-                setInlineFilters({});
-                // Reload data
-                fetchBills();
-              }}
-              title="Clear all filters and reload data"
-            >
-              Clear Filters
-            </button>
+             </div>
           </div>
         </div>
       </div>
-    </div>
 
-      {/* Status Bar - Static */}
-      <div className="erp-status-bar">
-        <div className="erp-status-item">{isEditing ? 'Editing' : 'Ready'}</div>
-        <div className="erp-status-item">
-          Records: {bills.length}
-        </div>
-        <div className="erp-status-item">
-          Showing: {paginatedData.length > 0 ? `${((currentPage - 1) * recordsPerPage) + 1}-${Math.min(currentPage * recordsPerPage, bills.length)}` : '0'} of {bills.length}
-        </div>
-        <div className="erp-status-item" style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '4px' }}>
-          <button 
-            className="erp-icon-button" 
-            onClick={() => setCurrentPage(1)}
-            disabled={currentPage === 1}
-            title="First Page"
-          >
-            |◀
-          </button>
-          <button 
-            className="erp-icon-button" 
-            onClick={() => setCurrentPage(currentPage - 1)}
-            disabled={currentPage === 1}
-            title="Previous Page"
-          >
-            ◀
-          </button>
-          <span style={{ margin: '0 4px', fontSize: '12px' }}>Page {currentPage}/{totalPages || 1}</span>
-          <button 
-            className="erp-icon-button" 
-            onClick={() => setCurrentPage(currentPage + 1)}
-            disabled={currentPage === totalPages || totalPages === 0}
-            title="Next Page"
-          >
-            ▶
-          </button>
-          <button 
-            className="erp-icon-button" 
-            onClick={() => setCurrentPage(totalPages)}
-            disabled={currentPage === totalPages || totalPages === 0}
-            title="Last Page"
-          >
-            ▶|
-          </button>
-        </div>
-      </div>
-      
       {/* Save Confirmation Modal */}
       {showSaveModal && (
         <SaveConfirmationModal 
@@ -2525,76 +2394,144 @@ const Billing = () => {
         />
       )}
 
-      {showCancelModal && selectedBill && !showCancelConfirmDialog && (
-        <div className="erp-modal-overlay" onKeyDown={handleCancelModalKeys}>
-          <div className="erp-modal" ref={cancelFormRef}>
+      {/* Cancellation Modal - Fully Accessible */}
+      {showCancelModal && selectedBill && (
+        <div 
+          className="erp-modal-overlay" 
+          onClick={(e) => e.target === e.currentTarget && setShowCancelModal(false)}
+          onKeyDown={(e) => e.key === 'Escape' && setShowCancelModal(false)}
+        >
+          <div 
+            className="erp-modal" 
+            style={{ maxWidth: '550px' }} 
+            ref={cancelModalRef} 
+            onKeyDown={handleCancelModalKeyDown}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="cancel-modal-title"
+          >
             <div className="erp-modal-header">
-              <h3>🚫 Cancel Bill - {selectedBill.billId || selectedBill.bl_bill_no}</h3>
-              <button className="erp-modal-close" onClick={() => setShowCancelModal(false)}>×</button>
-            </div>
-            <div className="erp-modal-body">
-              <div className="erp-form-group" style={{ marginBottom: '12px' }}>
-                <label className="erp-form-label">Railway Cancellation Charge (₹): *</label>
-                <input type="number" name="railwayCharge" className="erp-input" value={cancelData.railwayCharge} onChange={e => setCancelData({...cancelData, railwayCharge: e.target.value})} min="0" step="0.01" />
-              </div>
-              <div className="erp-form-group" style={{ marginBottom: '12px' }}>
-                <label className="erp-form-label">Agent Cancellation Charge (₹): *</label>
-                <input type="number" name="agentCharge" className="erp-input" value={cancelData.agentCharge} onChange={e => setCancelData({...cancelData, agentCharge: e.target.value})} min="0" step="0.01" />
-              </div>
-              <div className="erp-form-group" style={{ marginBottom: '12px' }}>
-                <label className="erp-form-label">Station Boy Charges (₹): *</label>
-                <input type="number" name="stationBoyCharge" className="erp-input" value={cancelData.stationBoyCharge} onChange={e => setCancelData({...cancelData, stationBoyCharge: e.target.value})} min="0" step="0.01" />
-              </div>
-              <div className="erp-form-group" style={{ marginBottom: '12px' }}>
-                <label className="erp-form-label">Total Cancellation (₹):</label>
-                <input type="text" className="erp-input" value={`₹${totalC.toFixed(2)}`} readOnly style={{ background: '#f5f5f5', fontWeight: 'bold' }} tabIndex={-1} />
-              </div>
-              <div className="erp-form-group" style={{ marginBottom: '12px' }}>
-                <label className="erp-form-label">Refundable Amount (₹):</label>
-                <input type="text" className="erp-input" value={`₹${refundC.toFixed(2)}`} readOnly style={{ background: '#e8f5e9', fontWeight: 'bold', color: '#2e7d32' }} tabIndex={-1} />
-              </div>
-              <div className="erp-form-group" style={{ marginBottom: '12px' }}>
-                <label className="erp-form-label">Cancellation Date:</label>
-                <input type="date" name="date" className="erp-input" value={cancelData.date} onChange={e => setCancelData({...cancelData, date: e.target.value})} />
-              </div>
-              <div className="erp-form-group" style={{ marginBottom: '12px' }}>
-                <label className="erp-form-label">Cancellation Remarks:</label>
-                <textarea name="remarks" className="erp-input" value={cancelData.remarks} onChange={e => setCancelData({...cancelData, remarks: e.target.value})} rows="3" />
-              </div>
-            </div>
-            <div className="erp-modal-footer">
-              <button className="erp-button erp-button-secondary" onClick={() => setShowCancelModal(false)}>Close</button>
-              <button className="erp-button erp-button-danger" onClick={() => { setShowCancelConfirmDialog(true); setTimeout(() => cancelConfirmBtnRef.current?.focus(), 100); }} disabled={!isCancelValid}>
-                Review & Confirm Cancel
+              <h3 id="cancel-modal-title">🚫 Cancel Bill - {selectedBill.billNo || selectedBill.id}</h3>
+              <button 
+                className="erp-modal-close" 
+                onClick={() => setShowCancelModal(false)}
+                aria-label="Close modal"
+              >
+                ×
               </button>
             </div>
-          </div>
-        </div>
-      )}
-
-      {showCancelConfirmDialog && selectedBill && (
-        <div className="erp-modal-overlay" onKeyDown={handleCancelModalKeys}>
-          <div className="erp-modal" style={{ maxWidth: '450px' }}>
-            <div className="erp-modal-header">
-              <h3>⚠️ Confirm Cancellation</h3>
-            </div>
+            
             <div className="erp-modal-body">
-              <p>Proceed to confirm cancellation?</p>
-              <div style={{ background: '#fff3cd', padding: '12px', border: '1px solid #ffeeba', marginBottom: '15px' }}>
-                <strong>CANCELLATION SUMMARY</strong>
-                <ul>
-                  <li>Railway Charge: ₹{railwayC.toFixed(2)}</li>
-                  <li>Agent Charge: ₹{agentC.toFixed(2)}</li>
-                  <li>Station Boy Charge: ₹{stationBoyC.toFixed(2)}</li>
-                  <li style={{ color: '#d32f2f', fontWeight: 'bold' }}>Total: ₹{totalC.toFixed(2)}</li>
-                  <li style={{ color: '#2e7d32', fontWeight: 'bold' }}>Refund: ₹{refundC.toFixed(2)}</li>
-                </ul>
+              {cancelError && (
+                <div className="erp-error-message" style={{ margin: '0 0 15px 0', padding: '10px', background: '#ffebee', color: '#c62828', border: '1px solid #ef9a9a', borderRadius: '4px' }}>
+                  {cancelError}
+                </div>
+              )}
+              {/* Summary Section (Read-only) */}
+              <div className="erp-container" style={{ marginBottom: '15px', padding: '10px', background: '#f8f9fa' }}>
+                <div className="erp-form-row-compact-2">
+                  <div>
+                    <label className="erp-form-label">Booking ID</label>
+                    <div className="erp-value-text">{selectedBill.bookingId}</div>
+                  </div>
+                  <div>
+                    <label className="erp-form-label">Customer</label>
+                    <div className="erp-value-text">{selectedBill.customerName}</div>
+                  </div>
+                </div>
+                <div className="erp-form-row-compact-2" style={{ marginTop: '8px' }}>
+                  <div>
+                    <label className="erp-form-label">Total Amount</label>
+                    <div className="erp-value-text">₹{parseFloat(selectedBill.totalAmount).toFixed(2)}</div>
+                  </div>
+                  <div>
+                    <label className="erp-form-label">Amount Paid</label>
+                    <div className="erp-value-text">₹{parseFloat(selectedBill.amountReceived || 0).toFixed(2)}</div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Editable Charges Section */}
+              <div className="erp-form-section">
+                <div className="erp-form-group" style={{ marginBottom: '12px' }}>
+                  <label className="erp-form-label required">Railway Cancellation Charge (₹)</label>
+                  <input
+                    type="number"
+                    name="railwayCharges"
+                    className="erp-input"
+                    value={cancelFormData.railwayCharges}
+                    onChange={(e) => setCancelFormData({...cancelFormData, railwayCharges: e.target.value})}
+                    placeholder="0.00"
+                    min="0"
+                    step="0.01"
+                    disabled={isCancelling}
+                    autoFocus
+                    required
+                  />
+                </div>
+                <div className="erp-form-group" style={{ marginBottom: '12px' }}>
+                  <label className="erp-form-label required">Agent Cancellation Charge (₹)</label>
+                  <input
+                    type="number"
+                    name="agentCharges"
+                    className="erp-input"
+                    value={cancelFormData.agentCharges}
+                    onChange={(e) => setCancelFormData({...cancelFormData, agentCharges: e.target.value})}
+                    placeholder="0.00"
+                    min="0"
+                    step="0.01"
+                    disabled={isCancelling}
+                    required
+                  />
+                </div>
+                <div className="erp-form-group">
+                  <label className="erp-form-label required">Cancellation Reason</label>
+                  <textarea
+                    className="erp-input"
+                    value={cancelFormData.reason}
+                    onChange={(e) => setCancelFormData({...cancelFormData, reason: e.target.value})}
+                    placeholder="Provide reason for cancellation..."
+                    rows="3"
+                    disabled={isCancelling}
+                    required
+                  />
+                </div>
+              </div>
+
+              {/* Auto Calculations Section */}
+              <div style={{ marginTop: '15px', padding: '12px', background: '#fff3cd', border: '1px solid #ffeeba', borderRadius: '4px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '5px' }}>
+                  <span style={{ fontSize: '12px', fontWeight: 'bold' }}>Total Charges:</span>
+                  <span style={{ fontSize: '14px', color: '#d32f2f', fontWeight: 'bold' }}>
+                    ₹{((parseFloat(cancelFormData.railwayCharges) || 0) + (parseFloat(cancelFormData.agentCharges) || 0)).toFixed(2)}
+                  </span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span style={{ fontSize: '12px', fontWeight: 'bold' }}>Refundable Amount:</span>
+                  <span style={{ fontSize: '16px', color: '#2e7d32', fontWeight: 'bold' }}>
+                    ₹{Math.max(0, parseFloat(selectedBill.totalAmount) - ((parseFloat(cancelFormData.railwayCharges) || 0) + (parseFloat(cancelFormData.agentCharges) || 0))).toFixed(2)}
+                  </span>
+                </div>
               </div>
             </div>
+            
             <div className="erp-modal-footer">
-              <button className="erp-button erp-button-secondary" onClick={() => setShowCancelConfirmDialog(false)}>No, Go Back</button>
-              <button ref={cancelConfirmBtnRef} className="erp-button erp-button-danger" onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleExecuteCancel(); }}>
-                Yes, Cancel Bill
+              <button 
+                className="erp-button erp-button-secondary" 
+                onClick={() => setShowCancelModal(false)}
+                disabled={isCancelling}
+                title="Cancel and close (Esc)"
+              >
+                Cancel (Esc)
+              </button>
+              <button 
+                className="erp-button erp-button-primary" 
+                onClick={handleCancelSave}
+                style={{ marginLeft: '10px' }}
+                disabled={isCancelling}
+                title="Save cancellation (F10 or Enter)"
+              >
+                {isCancelling ? 'Processing...' : 'Confirm Cancellation (F10)'}
               </button>
             </div>
           </div>

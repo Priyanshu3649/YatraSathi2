@@ -16,8 +16,10 @@ export const PaymentProvider = ({ children }) => {
     setError(null);
     
     try {
-      const data = await paymentAPI.getPayments(filters);
-      setPayments(data);
+      const response = await paymentAPI.getPayments(filters);
+      // Handle standardized paginated response
+      const paymentsArray = Array.isArray(response?.data) ? response.data : (Array.isArray(response) ? response : []);
+      setPayments(paymentsArray);
     } catch (err) {
       setError(err.message || 'Failed to fetch payments');
     } finally {
@@ -31,7 +33,8 @@ export const PaymentProvider = ({ children }) => {
     setError(null);
     
     try {
-      const payment = await paymentAPI.getPaymentById(id);
+      const response = await paymentAPI.getPaymentById(id);
+      const payment = response?.data || response;
       // Update or add to payments list
       setPayments(prev => {
         const existingIndex = prev.findIndex(p => p.pt_ptid === id);
@@ -57,7 +60,8 @@ export const PaymentProvider = ({ children }) => {
     setError(null);
     
     try {
-      const newPayment = await paymentAPI.createPayment(paymentData);
+      const response = await paymentAPI.createPayment(paymentData);
+      const newPayment = response?.data || response;
       setPayments(prev => [...prev, newPayment]);
       return newPayment;
     } catch (err) {
@@ -74,7 +78,8 @@ export const PaymentProvider = ({ children }) => {
     setError(null);
     
     try {
-      const refund = await paymentAPI.processRefund(paymentId, refundData);
+      const response = await paymentAPI.processRefund(paymentId, refundData);
+      const refund = response?.data || response;
       // Add refund to payments list
       setPayments(prev => [...prev, refund]);
       return refund;

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
+import { useRealTime } from '../contexts/RealTimeContext';
 import { dashboardAPI } from '../services/api';
 import '../styles/dashboard.css';
 import '../styles/vintage-erp-theme.css';
@@ -11,42 +12,57 @@ import '../styles/vintage-erp-dashboard.css';
 
 const Dashboard = () => {
   const { user } = useAuth();
+  const { socket, isConnected, lastUpdate: rtLastUpdate } = useRealTime();
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  useEffect(() => {
-    const fetchDashboardData = async () => {
-      try {
-        setLoading(true);
-        let data;
-        
-        if (user && user.us_usertype === 'admin') {
-          data = await dashboardAPI.getAdminStats();
-        } else if (user && user.us_usertype === 'employee') {
-          data = await dashboardAPI.getEmployeeStats();
-        } else {
-          data = await dashboardAPI.getCustomerStats();
-        }
-        
-        setStats(data);
-      } catch (err) {
-        setError(err.message || 'Failed to load dashboard data');
-      } finally {
-        setLoading(false);
+  const fetchDashboardData = async () => {
+    try {
+      // Don't set loading true for background refreshes
+      let data;
+      
+      if (user && user.us_usertype === 'admin') {
+        data = await dashboardAPI.getAdminStats();
+      } else if (user && user.us_usertype === 'employee') {
+        data = await dashboardAPI.getEmployeeStats();
+      } else {
+        data = await dashboardAPI.getCustomerStats();
       }
-    };
+      
+      setStats(data);
+    } catch (err) {
+      setError(err.message || 'Failed to load dashboard data');
+    } finally {
+      setLoading(false);
+    }
+  };
 
+  useEffect(() => {
     if (user) {
       fetchDashboardData();
-      
-      // Set up interval to refresh data every 30 seconds
-      const interval = setInterval(fetchDashboardData, 30000);
-      
-      // Clean up interval on component unmount
-      return () => clearInterval(interval);
     }
   }, [user]);
+
+  // Real-time socket listeners
+  useEffect(() => {
+    if (socket) {
+      const handleUpdate = () => {
+        console.log('🔄 Real-time update received, refreshing dashboard...');
+        fetchDashboardData();
+      };
+
+      socket.on('booking_update', handleUpdate);
+      socket.on('payment_update', handleUpdate);
+      socket.on('billing_update', handleUpdate);
+
+      return () => {
+        socket.off('booking_update', handleUpdate);
+        socket.off('payment_update', handleUpdate);
+        socket.off('billing_update', handleUpdate);
+      };
+    }
+  }, [socket]);
 
   if (loading) {
     return <div className="dashboard panel">Loading dashboard...</div>;
@@ -62,7 +78,7 @@ const Dashboard = () => {
 
   // Render dashboard based on user type
   if (user && user.us_usertype === 'admin') {
-    return <AdminDashboard stats={stats} />;
+    return <AdminDashboard stats={stats} isConnected={isConnected} rtLastUpdate={rtLastUpdate} />;
   } else if (user && user.us_usertype === 'employee') {
     return <EmployeeDashboard stats={stats} />;
   } else {
@@ -71,7 +87,7 @@ const Dashboard = () => {
 };
 
 // Admin Dashboard Component with Vintage ERP Styling
-const AdminDashboard = ({ stats }) => {
+const AdminDashboard = ({ stats, isConnected, rtLastUpdate }) => {
   const { overview, bookingStats, employeePerformance, recentActivity, alerts } = stats || {};
   
   // Calculate financial metrics
@@ -143,26 +159,38 @@ const AdminDashboard = ({ stats }) => {
         {/* Center Content */}
         <div className="erp-center-content">
           {/* System Summary - Top Row */}
-          <div className="section-header">SYSTEM SUMMARY</div>
+          <div className="section-header">
+            SYSTEM SUMMARY 
+            {isConnected && <span className="live-indicator">● LIVE</span>}
+          </div>
           <div className="dashboard-summary">
             <div className="summary-panel">
               <div className="summary-title">TOTAL BOOKINGS</div>
-              <div className="summary-value">{overview?.totalBookings || 0}</div>
+              <div className="summary-value">
+                {overview?.totalBookings || 0}
+                {overview?.trends?.bookings && (
+                  <span className={`trend-tag ${parseFloat(overview.trends.bookings.percent) >= 0 ? 'up' : 'down'}`}>
+                    {parseFloat(overview.trends.bookings.percent) >= 0 ? '↑' : '↓'} {Math.abs(overview.trends.bookings.percent)}%
+                  </span>
+                )}
+              </div>
               <div className="summary-desc">All time bookings</div>
             </div>
             <div className="summary-panel">
-              <div className="summary-title">ACTIVE PNRS</div>
-              <div className="summary-value">{overview?.totalActivePnrs || overview?.activePnrs || 0}</div>
-              <div className="summary-desc">Currently active</div>
-            </div>
-            <div className="summary-panel">
-              <div className="summary-title">BILLS GENERATED TODAY</div>
-              <div className="summary-value">{overview?.billsGeneratedToday || 0}</div>
-              <div className="summary-desc">Current day</div>
+              <div className="summary-title">TOTAL REVENUE</div>
+              <div className="summary-value">
+                ₹{(overview?.totalRevenue || 0).toLocaleString()}
+                {overview?.trends?.revenue && (
+                  <span className={`trend-tag ${parseFloat(overview.trends.revenue.percent) >= 0 ? 'up' : 'down'}`}>
+                    {parseFloat(overview.trends.revenue.percent) >= 0 ? '↑' : '↓'} {Math.abs(overview.trends.revenue.percent)}%
+                  </span>
+                )}
+              </div>
+              <div className="summary-desc">Processed payments</div>
             </div>
             <div className="summary-panel">
               <div className="summary-title">PENDING PAYMENTS</div>
-              <div className="summary-value">{overview?.totalPending || 0}</div>
+              <div className="summary-value">₹{(overview?.totalPending || 0).toLocaleString()}</div>
               <div className="summary-desc">Awaiting clearance</div>
             </div>
             <div className="summary-panel">
@@ -300,10 +328,15 @@ const AdminDashboard = ({ stats }) => {
 
       {/* Audit Footer */}
       <div className="erp-status-bar">
-        <div className="erp-status-item">System Date & Time: {new Date().toLocaleString()}</div>
-        <div className="erp-status-item">Logged-in User: ADMIN</div>
-        <div className="erp-status-item">Role: ADMIN</div>
-        <div className="erp-status-item">Last Login Time: N/A</div>
+        <div className="erp-status-item">
+          System Sync: {rtLastUpdate ? rtLastUpdate.toLocaleTimeString() : new Date().toLocaleTimeString()} 
+          <span style={{ marginLeft: '10px', color: isConnected ? '#2ecc71' : '#e74c3c' }}>
+            {isConnected ? '[CONNECTED]' : '[OFFLINE]'}
+          </span>
+        </div>
+        <div className="erp-status-item">Logged-in User: {user?.us_fname || 'ADMIN'}</div>
+        <div className="erp-status-item">Role: {user?.us_roid || 'ADMIN'}</div>
+        <div className="erp-status-item">Last Update: {stats?.lastUpdated ? new Date(stats.lastUpdated).toLocaleTimeString() : 'N/A'}</div>
       </div>
     </div>
   );

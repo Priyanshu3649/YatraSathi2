@@ -1,6 +1,7 @@
 const { UserTVL: User, EmployeeTVL: Employee, BookingTVL: Booking, CorporateCustomer, LoginTVL: Login } = require('../models');
 const { Op } = require('sequelize');
 const bcrypt = require('bcryptjs');
+const queryHelper = require('../utils/queryHelper');
 
 // Get all employees (admin only)
 const getAllEmployees = async (req, res) => {
@@ -10,7 +11,21 @@ const getAllEmployees = async (req, res) => {
       return res.status(403).json({ message: 'Access denied' });
     }
     
-    const employees = await Employee.findAll({ 
+    const { limit, offset, page } = queryHelper.getPaginationOptions(req.query);
+    const sortBy = req.query.sortBy || 'em_joindt';
+    const sortOrder = (req.query.sortOrder || 'DESC').toUpperCase();
+    
+    // Build search filters
+    const whereClause = {};
+    if (req.query.search) {
+      whereClause[Op.or] = [
+        { em_empno: { [Op.like]: `%${req.query.search}%` } },
+        { em_dept: { [Op.like]: `%${req.query.search}%` } }
+      ];
+    }
+    
+    const { count, rows: employees } = await Employee.findAndCountAll({ 
+      where: whereClause,
       attributes: [
         'em_usid', 'em_empno', 'em_dept', 'em_salary', 
         'em_joindt', 'em_status', 'em_manager', 'em_address', 'em_city', 
@@ -22,7 +37,10 @@ const getAllEmployees = async (req, res) => {
           attributes: ['us_fname', 'us_lname', 'us_email', 'us_phone', 'us_aadhaar'], 
           as: 'user' 
         }
-      ] 
+      ],
+      order: [[sortBy, sortOrder]],
+      limit,
+      offset
     });
     
     // Get manager details separately for each employee
@@ -43,8 +61,9 @@ const getAllEmployees = async (req, res) => {
       employeesWithManagers.push(employeeWithManager);
     }
     
-    res.json(employeesWithManagers);
+    res.json(queryHelper.formatPaginatedResponse(count, employeesWithManagers, page, limit));
   } catch (error) {
+    console.error('Get all employees error:', error);
     res.status(500).json({ success: false, error: { code: 'SERVER_ERROR', message: error.message } });
   }
 };

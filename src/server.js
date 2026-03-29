@@ -154,6 +154,19 @@ connectDB().then(async () => {
   const server = app.listen(PORT, HOST, () => {
     console.log(`Server running on http://${HOST}:${PORT}`);
   });
+
+  // Initialize Socket.IO
+  const { Server } = require('socket.io');
+  const io = new Server(server, {
+    cors: {
+      origin: "*", // Adjust in production
+      methods: ["GET", "POST"]
+    }
+  });
+
+  // Initialize Real-Time Service
+  const RealTimeService = require('./services/realTimeService');
+  RealTimeService.init(io);
   
   server.on('listening', () => {
     const address = server.address();

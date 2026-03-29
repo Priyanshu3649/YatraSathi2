@@ -100,10 +100,6 @@ const BillingMaster = sequelizeTVL.define('billingMaster', {
     type: DataTypes.DECIMAL(10, 2),
     defaultValue: 0
   },
-  bl_cancellation_charge: {
-    type: DataTypes.DECIMAL(10, 2),
-    defaultValue: 0
-  },
   bl_surcharge: {
     type: DataTypes.DECIMAL(10, 2),
     defaultValue: 0
@@ -168,29 +164,17 @@ const BillingMaster = sequelizeTVL.define('billingMaster', {
     comment: 'Timestamp when record was closed'
   },
   status: {
-    type: DataTypes.ENUM('OPEN', 'CLOSED', 'CANCELLED'),
+    type: DataTypes.ENUM('OPEN', 'CLOSED'),
     defaultValue: 'OPEN',
     comment: 'Record status'
   },
-  bl_railway_cancellation_charge: {
-    type: DataTypes.DECIMAL(10, 2),
-    defaultValue: 0
-  },
   bl_status: {
-    type: DataTypes.ENUM('CONFIRMED', 'CANCELLED', 'PENDING', 'PAID'),
+    type: DataTypes.ENUM('CONFIRMED', 'PENDING', 'PAID'),
     defaultValue: 'CONFIRMED',
     comment: 'Billing status'
   },
   bl_modified_at: {
     type: DataTypes.DATE,
-    allowNull: true
-  },
-  bl_agent_cancellation_charge: {
-    type: DataTypes.DECIMAL(10, 2),
-    defaultValue: 0
-  },
-  bl_cancellation_remarks: {
-    type: DataTypes.TEXT,
     allowNull: true
   },
   bl_bill_date: {
@@ -201,44 +185,28 @@ const BillingMaster = sequelizeTVL.define('billingMaster', {
     type: DataTypes.STRING(30),
     allowNull: true
   },
-  // Comprehensive cancellation fields
   is_cancelled: {
-    type: DataTypes.TINYINT(1),
-    defaultValue: 0,
-    comment: 'Flag indicating if bill is cancelled'
+    type: DataTypes.BOOLEAN,
+    defaultValue: false
   },
   cancelled_on: {
     type: DataTypes.DATE,
-    allowNull: true,
-    comment: 'Timestamp when bill was cancelled'
+    allowNull: true
   },
   cancelled_by: {
-    type: DataTypes.INTEGER,
-    allowNull: true,
-    comment: 'User ID who cancelled the bill'
-  },
-  cancellation_date: {
-    type: DataTypes.DATEONLY,
-    allowNull: true,
-    comment: 'Effective date of cancellation'
+    type: DataTypes.STRING(15),
+    allowNull: true
   },
   total_cancel_charges: {
     type: DataTypes.DECIMAL(10, 2),
-    defaultValue: 0,
-    comment: 'Total cancellation charges (railway + agent)'
+    defaultValue: 0
   },
   refund_amount: {
     type: DataTypes.DECIMAL(10, 2),
-    defaultValue: 0,
-    comment: 'Refund amount after cancellation'
-  },
-  payment_status: {
-    type: DataTypes.ENUM('UNPAID', 'PARTIALLY_PAID', 'FULLY_PAID', 'REFUND_DUE'),
-    defaultValue: 'UNPAID',
-    comment: 'Payment status for cancelled bill'
+    defaultValue: 0
   }
 }, {
-  tableName: 'blXbilling',
+  tableName: 'billingMaster',
   timestamps: false,
   hooks: {
     beforeCreate: (bill, options) => {
@@ -256,28 +224,16 @@ const BillingMaster = sequelizeTVL.define('billingMaster', {
       if (options.userId) {
         bill.modified_by = options.userId;
         bill.modified_on = new Date();
-        bill.bl_modified_by = options.userId;
         bill.bl_modified_at = new Date();
       }
       
-      // If status is being changed to CLOSED or CANCELLED, set closed_by/closed_on
+      // If status is being changed to CLOSED, set closed_by/closed_on
       if (bill.changed('status')) {
         const newStatus = bill.getDataValue('status');
-        if (newStatus && ['CLOSED', 'CANCELLED'].includes(newStatus.toUpperCase())) {
+        if (newStatus && ['CLOSED'].includes(newStatus.toUpperCase())) {
           if (options.userId && !bill.closed_by) {
             bill.closed_by = options.userId;
             bill.closed_on = new Date();
-          }
-        }
-      }
-      
-      // If bill is being cancelled (is_cancelled flag set), populate cancellation fields
-      if (bill.changed('is_cancelled') && bill.is_cancelled === 1) {
-        if (options.userId) {
-          bill.cancelled_by = options.userId;
-          bill.cancelled_on = new Date();
-          if (!bill.cancellation_date) {
-            bill.cancellation_date = new Date().toISOString().split('T')[0];
           }
         }
       }

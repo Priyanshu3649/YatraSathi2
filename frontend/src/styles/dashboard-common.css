@@ -399,3 +399,99 @@ tbody tr:hover {
     padding: 10px 15px;
   }
 }
+
+/* Pagination & Filtering Styles */
+.erp-pagination {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 15px 30px;
+  background: #f8f9fa;
+  border-top: 1px solid #e1e8ed;
+  font-size: 13px;
+  color: #6c757d;
+}
+
+.pagination-controls {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+}
+
+.pagination-button {
+  padding: 5px 12px;
+  border: 1px solid #dee2e6;
+  background: white;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.pagination-button:hover:not(:disabled) {
+  background: #e9ecef;
+  border-color: #adb5bd;
+}
+
+.pagination-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.erp-filter-panel {
+  background: #f8f9fa;
+  padding: 20px 30px;
+  border-bottom: 1px solid #e1e8ed;
+}
+
+.erp-filter-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 15px;
+  margin-bottom: 15px;
+}
+
+.erp-filter-item {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.erp-filter-item label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #495057;
+}
+
+.erp-input-compact, .erp-select-compact {
+  padding: 6px 10px;
+  border: 1px solid #ced4da;
+  border-radius: 4px;
+  font-size: 13px;
+  width: 100%;
+}
+
+.erp-filter-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
+.erp-button-primary {
+  background: #007bff;
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: 500;
+}
+
+.erp-button-secondary {
+  background: #6c757d;
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: 500;
+}

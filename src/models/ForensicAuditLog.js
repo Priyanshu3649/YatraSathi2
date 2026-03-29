@@ -76,14 +76,14 @@ const ForensicAuditLog = sequelizeTVL.define('forensicAuditLog', {
   tableName: 'audit_forensic_log',
   timestamps: false,
   // Make table append-only - no updates or deletes allowed
-  paranoid: false
+  paranoid: false,
+  indexes: [
+    { fields: ['entity_name', 'entity_id'] },
+    { fields: ['performed_on'] },
+    { fields: ['performed_by'] },
+    { fields: ['action_type'] }
+  ]
 });
-
-// Add indexes for performance
-ForensicAuditLog.addIndex(['entityName', 'entityId']);
-ForensicAuditLog.addIndex(['performedOn']);
-ForensicAuditLog.addIndex(['performedBy']);
-ForensicAuditLog.addIndex(['actionType']);
 
 // Prevent any updates or deletes at model level
 ForensicAuditLog.addHook('beforeUpdate', () => {

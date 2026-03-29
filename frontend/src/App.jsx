@@ -1,5 +1,6 @@
 import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { RealTimeProvider } from './contexts/RealTimeContext';
 import { BookingProvider } from './contexts/BookingContext';
 import { PaymentProvider } from './contexts/PaymentContext';
 import { ReportProvider } from './contexts/ReportContext';
@@ -150,10 +151,11 @@ function App() {
 
   return (
     <AuthProvider>
-      <BookingProvider>
-        <PaymentProvider>
-          <ReportProvider>
-            <KeyboardNavigationProvider>
+      <RealTimeProvider>
+        <BookingProvider>
+          <PaymentProvider>
+            <ReportProvider>
+              <KeyboardNavigationProvider>
               <Router future={{ 
                 v7_startTransition: true,
                 v7_relativeSplatPath: true 
@@ -286,7 +288,8 @@ function App() {
           </ReportProvider>
         </PaymentProvider>
       </BookingProvider>
-    </AuthProvider>
+    </RealTimeProvider>
+  </AuthProvider>
   );
 }
 

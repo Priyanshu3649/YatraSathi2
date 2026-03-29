@@ -119,11 +119,6 @@ const BillTVL = sequelizeTVL.define('blXbilling', {
     defaultValue: 0.00,
     comment: 'Delivery Charge'
   },
-  bl_cancellation_charge: {
-    type: DataTypes.DECIMAL(10, 2),
-    defaultValue: 0.00,
-    comment: 'Cancellation Charge'
-  },
   bl_surcharge: {
     type: DataTypes.DECIMAL(10, 2),
     defaultValue: 0.00,

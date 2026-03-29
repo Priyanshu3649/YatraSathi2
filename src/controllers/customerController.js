@@ -438,12 +438,29 @@ const cancelBooking = async (req, res) => {
  */
 const getAllCustomers = async (req, res) => {
   try {
+    const queryHelper = require('../utils/queryHelper');
+    
     // Only admin can get all customers
     if (req.user.us_roid !== 'ADM') {
       return res.status(403).json({ message: 'Access denied' });
     }
     
-    const customers = await Customer.findAll({ 
+    const { limit, offset, page } = queryHelper.getPaginationOptions(req.query);
+    const sortBy = req.query.sortBy || 'edtm';
+    const sortOrder = (req.query.sortOrder || 'DESC').toUpperCase();
+    
+    // Build search filters
+    const whereClause = {};
+    if (req.query.search) {
+      whereClause[Op.or] = [
+        { cu_custno: { [Op.like]: `%${req.query.search}%` } },
+        { cu_panno: { [Op.like]: `%${req.query.search}%` } },
+        { cu_gstno: { [Op.like]: `%${req.query.search}%` } }
+      ];
+    }
+    
+    const { count, rows: customers } = await Customer.findAndCountAll({ 
+      where: whereClause,
       attributes: [
         'cu_cusid', 'cu_usid', 'cu_custno', 'cu_custtype', 'cu_creditlimit', 
         'cu_creditdays', 'cu_discount', 'cu_active', 'cu_panno', 'cu_gstno'
@@ -455,11 +472,15 @@ const getAllCustomers = async (req, res) => {
           as: 'user',
           required: true
         }
-      ] 
+      ],
+      order: [[sortBy, sortOrder]],
+      limit,
+      offset
     });
     
-    res.json(customers);
+    res.json(queryHelper.formatPaginatedResponse(count, customers, page, limit));
   } catch (error) {
+    console.error('Get all customers error:', error);
     res.status(500).json({ success: false, error: { code: 'SERVER_ERROR', message: error.message } });
   }
 };

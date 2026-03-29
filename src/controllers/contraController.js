@@ -1,5 +1,7 @@
 const { Contra, User } = require('../models');
 const { validationResult } = require('express-validator');
+const { Op } = require('sequelize');
+const queryHelper = require('../utils/queryHelper');
 
 /**
  * Contra Controller
@@ -8,16 +10,17 @@ const { validationResult } = require('express-validator');
 class ContraController {
   async getAllContras(req, res) {
     try {
-      const { page = 1, limit = 20, search, sortBy = 'ct_date', sortOrder = 'DESC' } = req.query;
-      const offset = (page - 1) * limit;
+      const { limit, offset, page } = queryHelper.getPaginationOptions(req.query);
+      const sortBy = req.query.sortBy || 'ct_date';
+      const sortOrder = (req.query.sortOrder || 'DESC').toUpperCase();
       
       const whereClause = { ct_status: 'Active' };
       
-      if (search) {
+      if (req.query.search) {
         whereClause[Op.or] = [
-          { ct_entry_no: { [Op.like]: `%${search}%` } },
-          { ct_from_account: { [Op.like]: `%${search}%` } },
-          { ct_to_account: { [Op.like]: `%${search}%` } }
+          { ct_entry_no: { [Op.like]: `%${req.query.search}%` } },
+          { ct_from_account: { [Op.like]: `%${req.query.search}%` } },
+          { ct_to_account: { [Op.like]: `%${req.query.search}%` } }
         ];
       }
       
@@ -29,21 +32,13 @@ class ContraController {
           attributes: ['us_usid', 'us_fname', 'us_lname']
         }],
         order: [[sortBy, sortOrder]],
-        limit: parseInt(limit),
-        offset: parseInt(offset)
+        limit,
+        offset
       });
       
-      res.json({
-        success: true,
-        data: contras,
-        pagination: {
-          currentPage: parseInt(page),
-          totalPages: Math.ceil(count / limit),
-          totalRecords: count
-        },
-        message: 'Contra entries retrieved successfully'
-      });
+      res.json(queryHelper.formatPaginatedResponse(count, contras, page, limit));
     } catch (error) {
+      console.error('Get contras error:', error);
       res.status(500).json({
         success: false,
         message: 'Failed to retrieve contra entries',
