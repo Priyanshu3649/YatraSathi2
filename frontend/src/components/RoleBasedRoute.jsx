@@ -199,8 +199,8 @@ const RoleBasedRoute = ({ children, requiredRole, requiredModule, requiredOperat
         // Also check for common admin role variations
         const userRoleId = user?.us_roid;
         if (requiredRole === 'ADM') {
-          // For admin panel access, check if user has admin role
-          access = userRoleId === 'ADM';
+          const userType = (user?.us_usertype || user?.usertype || '').toLowerCase();
+          access = userRoleId === 'ADM' || userType === 'admin';
         } else {
           access = userRoleId === requiredRole;
         }

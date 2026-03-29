@@ -21,8 +21,8 @@ const EmployeeDashboard = () => {
       const user = JSON.parse(storedUser);
       setUserInfo(user);
       
-      // Set default navigation based on role
-      const defaultNavigation = getDefaultNavigation(user.role);
+      const roleKey = user.us_roid || user.role;
+      const defaultNavigation = getDefaultNavigation(roleKey);
       setNavigation(defaultNavigation);
     }
     setLoading(false);
@@ -84,7 +84,7 @@ const EmployeeDashboard = () => {
       'MGT': '/employee/management'
     };
     
-    return routeMap[userInfo.role] || '/employee/dashboard';
+    return routeMap[userInfo.us_roid || userInfo.role] || '/employee/dashboard';
   };
 
   if (loading) {

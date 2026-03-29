@@ -4,6 +4,8 @@ const {
   getCustomerBills,
   getAllBills,
   getBillById,
+  getPrintableBill,
+  downloadBillPDF,
   updateBill,
   finalizeBill,
   deleteBill,
@@ -11,7 +13,8 @@ const {
   searchBills,
   getCustomerLedger,
   getCustomerBalance,
-  getBillingStats
+  getBillingStats,
+  getCancellationHistory
 } = require('../controllers/billingController');
 const { getBillingByBookingId } = require('../controllers/billingIntegrationController');
 const authMiddleware = require('../middleware/authMiddleware');
@@ -25,6 +28,9 @@ router.use(authMiddleware);
 router.post('/', createBill);
 router.get('/my-bills', getCustomerBills);
 router.get('/search', searchBills);
+router.get('/cancellations/history', getCancellationHistory);
+router.get('/print/:billId', getPrintableBill);
+router.get('/download/:billId', downloadBillPDF);
 
 // Customer-specific routes
 router.get('/customer/:customerId/ledger', getCustomerLedger);

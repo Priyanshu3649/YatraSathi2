@@ -140,9 +140,9 @@ const BillsPayments = () => {
                   <div className="bill-id">Bill #{bill.bill_id || bill.billId || bill.id}</div>
                   <div 
                     className="status-badge"
-                    style={{ backgroundColor: getBillStatusColor(bill.status) }}
+                    style={{ backgroundColor: getBillStatusColor(bill.status || bill.bl_status) }}
                   >
-                    {bill.status.replace('_', ' ')}
+                    {(bill.status || bill.bl_status || 'UNPAID').replace(/_/g, ' ')}
                   </div>
                 </div>
                 
@@ -162,15 +162,29 @@ const BillsPayments = () => {
                 </div>
                 
                 <div className="bill-actions">
+                  <button
+                    type="button"
+                    className="view-btn"
+                    onClick={() => {
+                      const bid = bill.bl_id ?? bill.bill_id ?? bill.id;
+                      if (bid != null) {
+                        navigate(`/print/bill/${encodeURIComponent(bid)}`, {
+                          state: { returnTo: '/customer/bills-payments' }
+                        });
+                      }
+                    }}
+                  >
+                    Tax invoice (print)
+                  </button>
                   <button 
                     className="pay-btn"
-                    onClick={() => navigate(`/payments/new?billId=${bill.bill_id || bill.billId || bill.id}`)}
+                    onClick={() => navigate(`/payments/new?billId=${bill.bl_id ?? bill.bill_id ?? bill.billId ?? bill.id}`)}
                   >
                     Pay Now
                   </button>
                   <button 
                     className="view-btn"
-                    onClick={() => navigate(`/bills/${bill.bill_id || bill.billId || bill.id}`)}
+                    onClick={() => navigate(`/bills/${bill.bl_id ?? bill.bill_id ?? bill.billId ?? bill.id}`)}
                   >
                     View Details
                   </button>

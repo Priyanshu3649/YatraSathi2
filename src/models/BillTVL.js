@@ -255,6 +255,21 @@ const BillTVL = sequelizeTVL.define('blXbilling', {
   bl_booking_no: {
     type: DataTypes.STRING(30),
     allowNull: true
+  },
+  bl_cancellation_ref: {
+    type: DataTypes.STRING(32),
+    allowNull: true,
+    comment: 'Generated cancellation voucher / reference number'
+  },
+  bl_cancel_approver_usid: {
+    type: DataTypes.STRING(15),
+    allowNull: true,
+    comment: 'Authorizing approver user id'
+  },
+  bl_cancel_approver_name: {
+    type: DataTypes.STRING(150),
+    allowNull: true,
+    comment: 'Authorizing approver display name'
   }
 }, {
   tableName: 'blXbilling',

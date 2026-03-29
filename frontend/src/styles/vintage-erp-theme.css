@@ -73,6 +73,15 @@ body {
   min-height: 24px;
 }
 
+a.erp-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+  box-sizing: border-box;
+  vertical-align: middle;
+}
+
 .erp-button:hover {
   background: linear-gradient(to bottom, #fff, #e8e8e8);
 }

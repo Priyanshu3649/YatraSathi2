@@ -4,12 +4,15 @@ const {
   getCustomerBills,
   getAllBills,
   getBillById,
+  getPrintableBill,
   updateBill,
   finalizeBill,
   deleteBill,
+  cancelBill,
   searchBills,
   getCustomerLedger,
-  getCustomerBalance
+  getCustomerBalance,
+  getCancellationHistory
 } = require('../controllers/billingController');
 const { getBillingByBookingId } = require('../controllers/billingIntegrationController');
 const authMiddleware = require('../middleware/authMiddleware');
@@ -21,20 +24,42 @@ router.use(authMiddleware);
 
 // Check if user is an employee (has employee role)
 router.use((req, res, next) => {
-  // Allow access for employees and admin
   const allowedRoles = ['AGT', 'ACC', 'HR', 'CC', 'MKT', 'MGT', 'ADM'];
-  if (!allowedRoles.includes(req.user.us_roid)) {
-    return res.status(403).json({ 
-      success: false, 
-      error: { code: 'FORBIDDEN', message: 'Access denied. Employee role required.' } 
-    });
+  const userType = (req.user.us_usertype || req.user.usertype || '').toLowerCase();
+  if (allowedRoles.includes(req.user.us_roid) || userType === 'admin') {
+    return next();
   }
-  next();
+  return res.status(403).json({ 
+    success: false, 
+    error: { code: 'FORBIDDEN', message: 'Access denied. Employee role required.' } 
+  });
 });
 
 // Employee billing routes
 // For employees who need to view all bills (based on role)
 router.get('/', getAllBills);
+
+// Printable tax invoice (same handler as main billing; must be before /:id)
+router.get('/print/:billId', getPrintableBill);
+
+router.get('/cancellations/history', getCancellationHistory);
+
+router.post('/:id/cancel', async (req, res, next) => {
+  const ut = (req.user.us_usertype || req.user.usertype || '').toLowerCase();
+  const allowed = ['ACC', 'ADM', 'MGT'].includes(req.user.us_roid) || ut === 'admin';
+  if (!allowed) {
+    return res.status(403).json({
+      success: false,
+      message: 'Only Accounts, Management, or Admin may cancel bills.'
+    });
+  }
+  next();
+}, cancelBill);
+
+router.get('/search', searchBills);
+router.get('/customer/:customerId/ledger', getCustomerLedger);
+router.get('/customer/:customerId/balance', getCustomerBalance);
+router.get('/booking/:bookingId', getBillingByBookingId);
 
 // Get bill by ID (employees can view based on their permissions)
 router.get('/:id', getBillById);
@@ -73,15 +98,5 @@ router.delete('/:id', async (req, res, next) => {
   }
   next();
 }, deleteBill);
-
-// Search bills
-router.get('/search', searchBills);
-
-// Customer-specific routes
-router.get('/customer/:customerId/ledger', getCustomerLedger);
-router.get('/customer/:customerId/balance', getCustomerBalance);
-
-// Booking integration routes
-router.get('/booking/:bookingId', getBillingByBookingId);
 
 module.exports = router;

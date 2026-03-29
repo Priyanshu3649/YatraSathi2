@@ -1,6 +1,8 @@
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
 
 const BillDetails = ({ bill, onClose }) => {
+  const navigate = useNavigate();
   if (!bill) {
     return <p>No bill selected.</p>;
   }
@@ -71,7 +73,19 @@ const BillDetails = ({ bill, onClose }) => {
       </div>
       
       <div className="form-actions">
-        <button className="tool-button" onClick={() => window.print()}>Print Bill</button>
+        <button
+          type="button"
+          className="tool-button"
+          onClick={() => {
+            const id = bill.bl_id ?? bill.id;
+            if (!id) return;
+            navigate(`/print/bill/${encodeURIComponent(id)}`, {
+              state: { returnTo: `${window.location.pathname}${window.location.search}` }
+            });
+          }}
+        >
+          Print Bill
+        </button>
         <button className="tool-button">Export PDF</button>
         <button className="tool-button" onClick={onClose}>Close</button>
       </div>

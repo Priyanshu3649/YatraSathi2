@@ -64,7 +64,13 @@ const PaginationControls = ({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [currentPage, totalPages, hasNextPage, hasPrevPage, onPageChange, onPrev, onNext]);
 
-  if (totalRecords === 0) return null;
+  if (totalRecords === 0) {
+    return (
+      <nav className="erp-pagination" aria-label="Pagination Navigation">
+        <div className="erp-pagination-info">No records match the current filters.</div>
+      </nav>
+    );
+  }
 
   const renderPageButtons = () => {
     const buttons = [];

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useRealTime } from '../contexts/RealTimeContext';
 import { dashboardAPI } from '../services/api';
@@ -12,6 +13,7 @@ import '../styles/vintage-erp-dashboard.css';
 
 const Dashboard = () => {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const { socket, isConnected, lastUpdate: rtLastUpdate } = useRealTime();
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -78,16 +80,25 @@ const Dashboard = () => {
 
   // Render dashboard based on user type
   if (user && user.us_usertype === 'admin') {
-    return <AdminDashboard stats={stats} isConnected={isConnected} rtLastUpdate={rtLastUpdate} />;
+    return (
+      <AdminDashboard
+        stats={stats}
+        isConnected={isConnected}
+        rtLastUpdate={rtLastUpdate}
+        onNavigate={navigate}
+        onRefresh={fetchDashboardData}
+      />
+    );
   } else if (user && user.us_usertype === 'employee') {
-    return <EmployeeDashboard stats={stats} />;
+    return <EmployeeDashboard stats={stats} onNavigate={navigate} />;
   } else {
-    return <CustomerDashboard stats={stats} />;
+    return <CustomerDashboard stats={stats} onNavigate={navigate} />;
   }
 };
 
 // Admin Dashboard Component with Vintage ERP Styling
-const AdminDashboard = ({ stats, isConnected, rtLastUpdate }) => {
+const AdminDashboard = ({ stats, isConnected, rtLastUpdate, onNavigate, onRefresh }) => {
+  const { user } = useAuth();
   const { overview, bookingStats, employeePerformance, recentActivity, alerts } = stats || {};
   
   // Calculate financial metrics
@@ -122,7 +133,7 @@ const AdminDashboard = ({ stats, isConnected, rtLastUpdate }) => {
     { name: 'Payments', path: '/payments' },
     { name: 'Refunds', path: '/refunds' },
     { name: 'Reports', path: '/reports' },
-    { name: 'Admin Panel', path: '/admin-panel' }
+    { name: 'Admin Panel', path: '/admin-dashboard' }
   ];
   
   const defaultAlerts = [
@@ -147,7 +158,7 @@ const AdminDashboard = ({ stats, isConnected, rtLastUpdate }) => {
 
       {/* Toolbar - Static */}
       <div className="erp-toolbar">
-        <button className="erp-button">Refresh</button>
+        <button type="button" className="erp-button" onClick={() => onRefresh?.()}>Refresh</button>
         <div className="erp-tool-separator"></div>
         <button className="erp-button">Filters</button>
         <button className="erp-button">Print</button>
@@ -318,7 +329,7 @@ const AdminDashboard = ({ stats, isConnected, rtLastUpdate }) => {
           <div className="section-header">QUICK NAVIGATION</div>
           <div className="quick-nav-section">
             {navigationLinks.map((link, index) => (
-              <button key={index} className="nav-button" onClick={() => window.location.hash = link.path}>
+              <button key={index} type="button" className="nav-button" onClick={() => onNavigate(link.path)}>
                 {link.name}
               </button>
             ))}
@@ -343,48 +354,58 @@ const AdminDashboard = ({ stats, isConnected, rtLastUpdate }) => {
 };
 
 // Employee Dashboard Component
-const EmployeeDashboard = ({ stats }) => {
+const EmployeeDashboard = ({ stats, onNavigate }) => {
   const { overview } = stats || {};
+  const empQuickLinks = [
+    { name: 'Bookings', path: '/bookings' },
+    { name: 'Billing', path: '/billing' },
+    { name: 'Payments', path: '/payments' },
+    { name: 'Reports', path: '/reports' },
+    { name: 'Role workspace', path: '/employee' }
+  ];
 
   return (
-    <div className="dashboard employee-dashboard">
-      <div className="panel-header">
-        <h2>Employee Dashboard</h2>
+    <div className="admin-dashboard erp-admin-container employee-dashboard">
+      <div className="erp-menu-bar">
+        <div className="erp-menu-item">Employee</div>
+        <div className="erp-user-info">OPERATIONS</div>
       </div>
-      
-      {/* Overview Stats */}
-      <div className="row">
-        <div className="col-3">
-          <div className="stat-card">
-            <h3>Total Bookings</h3>
-            <p>{overview?.totalBookings || 0}</p>
-          </div>
-        </div>
-        <div className="col-3">
-          <div className="stat-card">
-            <h3>Pending Bookings</h3>
-            <p>{overview?.pendingBookings || 0}</p>
-          </div>
-        </div>
-        <div className="col-3">
-          <div className="stat-card">
-            <h3>Confirmed Bookings</h3>
-            <p>{overview?.confirmedBookings || 0}</p>
-          </div>
-        </div>
-        <div className="col-3">
-          <div className="stat-card">
-            <h3>Revenue Generated</h3>
-            <p>₹{overview?.revenueGenerated?.toLocaleString() || '0'}</p>
-          </div>
-        </div>
+      <div className="erp-toolbar">
+        <button type="button" className="erp-button" onClick={() => window.location.reload()}>Refresh</button>
       </div>
-      
-      {/* Recent Activity */}
-      <div className="panel">
-        <h3>Your Recent Bookings</h3>
-        <div className="summary-details">
-          <p>Recent booking activity will be displayed here.</p>
+      <div className="erp-main-content">
+        <div className="erp-center-content">
+          <div className="section-header">YOUR METRICS</div>
+          <div className="dashboard-summary">
+            <div className="summary-panel">
+              <div className="summary-title">BOOKINGS</div>
+              <div className="summary-value">{overview?.totalBookings || 0}</div>
+            </div>
+            <div className="summary-panel">
+              <div className="summary-title">PENDING</div>
+              <div className="summary-value">{overview?.pendingBookings || 0}</div>
+            </div>
+            <div className="summary-panel">
+              <div className="summary-title">CONFIRMED</div>
+              <div className="summary-value">{overview?.confirmedBookings || 0}</div>
+            </div>
+            <div className="summary-panel">
+              <div className="summary-title">REVENUE</div>
+              <div className="summary-value">₹{(overview?.revenueGenerated ?? 0).toLocaleString()}</div>
+            </div>
+          </div>
+          <div className="section-header">QUICK NAVIGATION</div>
+          <div className="quick-nav-section">
+            {empQuickLinks.map((link, i) => (
+              <button key={i} type="button" className="nav-button" onClick={() => onNavigate(link.path)}>
+                {link.name}
+              </button>
+            ))}
+          </div>
+          <div className="section-header">RECENT BOOKINGS</div>
+          <div className="panel" style={{ padding: '12px' }}>
+            <p className="summary-details" style={{ margin: 0 }}>Use Bookings for full history; metrics refresh from the live dashboard API.</p>
+          </div>
         </div>
       </div>
     </div>
@@ -392,65 +413,76 @@ const EmployeeDashboard = ({ stats }) => {
 };
 
 // Customer Dashboard Component
-const CustomerDashboard = ({ stats }) => {
+const CustomerDashboard = ({ stats, onNavigate }) => {
   const { overview, corporateInfo } = stats || {};
+  const custQuickLinks = [
+    { name: 'My Bookings', path: '/customer/bookings' },
+    { name: 'Bills & payments', path: '/customer/bills-payments' },
+    { name: 'New booking', path: '/customer/booking/new' },
+    { name: 'Profile', path: '/customer/profile' }
+  ];
 
   return (
-    <div className="dashboard customer-dashboard">
-      <div className="panel-header">
-        <h2>Customer Dashboard</h2>
+    <div className="admin-dashboard erp-admin-container customer-dashboard">
+      <div className="erp-menu-bar">
+        <div className="erp-menu-item">Customer portal</div>
+        <div className="erp-user-info">SELF-SERVICE</div>
       </div>
-      
-      {/* Overview Stats */}
-      <div className="row">
-        <div className="col-3">
-          <div className="stat-card">
-            <h3>Total Bookings</h3>
-            <p>{overview?.totalBookings || 0}</p>
+      <div className="erp-main-content">
+        <div className="erp-center-content">
+          <div className="section-header">YOUR TRAVEL SUMMARY</div>
+          <div className="dashboard-summary">
+            <div className="summary-panel">
+              <div className="summary-title">BOOKINGS</div>
+              <div className="summary-value">{overview?.totalBookings || 0}</div>
+            </div>
+            <div className="summary-panel">
+              <div className="summary-title">PENDING</div>
+              <div className="summary-value">{overview?.pendingBookings || 0}</div>
+            </div>
+            <div className="summary-panel">
+              <div className="summary-title">CONFIRMED</div>
+              <div className="summary-value">{overview?.confirmedBookings || 0}</div>
+            </div>
+            <div className="summary-panel">
+              <div className="summary-title">PAID</div>
+              <div className="summary-value">₹{(overview?.totalPaid ?? 0).toLocaleString()}</div>
+            </div>
           </div>
-        </div>
-        <div className="col-3">
-          <div className="stat-card">
-            <h3>Pending Bookings</h3>
-            <p>{overview?.pendingBookings || 0}</p>
+
+          <div className="section-header">PAYMENT SUMMARY</div>
+          <div className="section-content">
+            <table className="financial-table">
+              <tbody>
+                <tr><td>Total amount</td><td>₹{(overview?.totalAmount ?? 0).toLocaleString()}</td></tr>
+                <tr><td>Paid</td><td>₹{(overview?.totalPaid ?? 0).toLocaleString()}</td></tr>
+                <tr><td>Pending</td><td>₹{(overview?.totalPending ?? 0).toLocaleString()}</td></tr>
+              </tbody>
+            </table>
           </div>
-        </div>
-        <div className="col-3">
-          <div className="stat-card">
-            <h3>Confirmed Bookings</h3>
-            <p>{overview?.confirmedBookings || 0}</p>
+
+          <div className="section-header">QUICK NAVIGATION</div>
+          <div className="quick-nav-section">
+            {custQuickLinks.map((link, i) => (
+              <button key={i} type="button" className="nav-button" onClick={() => onNavigate(link.path)}>
+                {link.name}
+              </button>
+            ))}
           </div>
-        </div>
-        <div className="col-3">
-          <div className="stat-card">
-            <h3>Total Paid</h3>
-            <p>₹{overview?.totalPaid?.toLocaleString() || '0'}</p>
-          </div>
+
+          {corporateInfo && (
+            <>
+              <div className="section-header">CORPORATE</div>
+              <div className="section-content">
+                <p><strong>Company:</strong> {corporateInfo.companyName}</p>
+                <p><strong>Credit limit:</strong> ₹{corporateInfo.creditLimit?.toLocaleString() || '0'}</p>
+                <p><strong>Credit used:</strong> ₹{corporateInfo.creditUsed?.toLocaleString() || '0'}</p>
+                <p><strong>Available:</strong> ₹{(corporateInfo.creditLimit - corporateInfo.creditUsed)?.toLocaleString() || '0'}</p>
+              </div>
+            </>
+          )}
         </div>
       </div>
-      
-      {/* Payment Summary */}
-      <div className="panel">
-        <h3>Payment Summary</h3>
-        <div className="summary-details">
-          <p><strong>Total Amount:</strong> ₹{overview?.totalAmount?.toLocaleString() || '0'}</p>
-          <p><strong>Paid:</strong> ₹{overview?.totalPaid?.toLocaleString() || '0'}</p>
-          <p><strong>Pending:</strong> ₹{overview?.totalPending?.toLocaleString() || '0'}</p>
-        </div>
-      </div>
-      
-      {/* Corporate Info (if applicable) */}
-      {corporateInfo && (
-        <div className="panel">
-          <h3>Corporate Information</h3>
-          <div className="info-details">
-            <p><strong>Company:</strong> {corporateInfo.companyName}</p>
-            <p><strong>Credit Limit:</strong> ₹{corporateInfo.creditLimit?.toLocaleString() || '0'}</p>
-            <p><strong>Credit Used:</strong> ₹{corporateInfo.creditUsed?.toLocaleString() || '0'}</p>
-            <p><strong>Credit Available:</strong> ₹{(corporateInfo.creditLimit - corporateInfo.creditUsed)?.toLocaleString() || '0'}</p>
-          </div>
-        </div>
-      )}
     </div>
   );
 };

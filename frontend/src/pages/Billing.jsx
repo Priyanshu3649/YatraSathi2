@@ -1,14 +1,12 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { bookingAPI, paymentAPI, billingAPI } from '../services/api';
 import { usePagination } from '../hooks/usePagination';
 import useERPFilters from '../hooks/useERPFilters';
 import PaginationControls from '../components/common/PaginationControls';
 import { useKeyboardNavigation } from '../contexts/KeyboardNavigationContext';
 import SaveConfirmationModal from '../components/common/SaveConfirmationModal';
-import BillPrintTemplate from '../components/Billing/BillPrintTemplate';
-import { printComponent } from '../utils/printUtils';
 import '../styles/vintage-erp-theme.css';
 import '../styles/classic-enterprise-global.css';
 import '../styles/vintage-admin-panel.css';
@@ -197,7 +195,10 @@ const Billing = () => {
   const [cancelFormData, setCancelFormData] = useState({
     railwayCharges: 0,
     agentCharges: 0,
-    reason: ''
+    reason: '',
+    cancellationDate: '',
+    approverUserId: '',
+    approverName: ''
   });
   const cancelModalRef = useRef(null);
   
@@ -996,10 +997,23 @@ const Billing = () => {
         alert('This bill is already cancelled.');
         return;
       }
+      const ps = (selectedBill.payment_status || '').toUpperCase();
+      if (ps === 'FULLY_PAID' || ps === 'PARTIALLY_PAID') {
+        alert('Cannot cancel: bill shows payments recorded. Reconcile receipts first.');
+        return;
+      }
+      const st = (selectedBill.bl_status || selectedBill.status || '').toUpperCase();
+      if (st === 'PAID' || st === 'FINAL') {
+        alert('Cannot cancel: bill is paid or finalized.');
+        return;
+      }
       setCancelFormData({
         railwayCharges: 0,
         agentCharges: 0,
-        reason: ''
+        reason: '',
+        cancellationDate: new Date().toISOString().slice(0, 10),
+        approverUserId: user?.us_usid || '',
+        approverName: [user?.us_fname, user?.us_lname].filter(Boolean).join(' ').trim() || user?.us_usid || ''
       });
       setShowCancelModal(true);
       // Focus will be handled by useEffect
@@ -1012,6 +1026,18 @@ const Billing = () => {
     setCancelError('');
     if (!cancelFormData.reason) {
       setCancelError('Cancellation reason is required');
+      return;
+    }
+    if (!cancelFormData.cancellationDate) {
+      setCancelError('Cancellation date is required');
+      return;
+    }
+    if (!cancelFormData.approverUserId || !String(cancelFormData.approverUserId).trim()) {
+      setCancelError('Approver user id is required');
+      return;
+    }
+    if (!cancelFormData.approverName || !String(cancelFormData.approverName).trim()) {
+      setCancelError('Approver name is required');
       return;
     }
 
@@ -1048,6 +1074,21 @@ const Billing = () => {
     } catch (error) {
       setError(error.message);
     }
+  };
+
+  const handlePrintBill = (billOrId) => {
+    const id =
+      billOrId && typeof billOrId === 'object'
+        ? (billOrId.bl_id ?? billOrId.id)
+        : billOrId;
+    if (id === undefined || id === null || id === '') {
+      setError('Please select a bill to print');
+      return;
+    }
+
+    navigate(`/print/bill/${encodeURIComponent(id)}`, {
+      state: { returnTo: `${location.pathname}${location.search || ''}` }
+    });
   };
 
   // Handle record selection
@@ -1282,6 +1323,16 @@ const Billing = () => {
   // Keyboard navigation handler
   const handleKeyDown = (e) => {
     // Global shortcuts that work even if form is not in edit mode
+    if (e.ctrlKey && e.key.toLowerCase() === 'p') {
+      e.preventDefault();
+      if (selectedBill && (selectedBill.id != null || selectedBill.bl_id != null)) {
+        handlePrintBill(selectedBill);
+      } else {
+        setError('Please select a bill to print');
+      }
+      return;
+    }
+
     if (e.key === 'F6') {
       e.preventDefault();
       handleCancelBill();
@@ -1361,7 +1412,7 @@ const Billing = () => {
     return () => {
       document.removeEventListener('keydown', handleKeyDown);
     };
-  }, [showForm, isEditing]);
+  }, [showForm, isEditing, selectedBill, showCancelModal]);
 
   // Handle keyboard navigation in the cancellation modal
   const handleCancelModalKeyDown = (e) => {
@@ -1479,14 +1530,23 @@ const Billing = () => {
             alert('Please select a bill to export');
           }
         }} title="Export" disabled={!selectedBill}>Export</button>
-        <button className="erp-button" onClick={() => {
-          if (selectedBill) {
-            // Print bill functionality
-            window.print();
-          } else {
-            alert('Please select a bill to print');
-          }
-        }} title="Print" disabled={!selectedBill}>Print</button>
+        {selectedBill ? (
+          <Link
+            className="erp-button"
+            to={`/print/bill/${encodeURIComponent(selectedBill.bl_id ?? selectedBill.id)}`}
+            state={{ returnTo: `${location.pathname}${location.search || ''}` }}
+            title="Print invoice (same tab)"
+          >
+            Print
+          </Link>
+        ) : (
+          <button type="button" className="erp-button" disabled title="Print">
+            Print
+          </button>
+        )}
+        <Link className="erp-button" to="/billing/cancellations" title="Cancellation history">
+          Cancellations
+        </Link>
         
         <div style={{ flex: 1 }}></div>
         <div style={{ fontWeight: 'bold', fontSize: '12px' }}>
@@ -2453,6 +2513,41 @@ const Billing = () => {
 
               {/* Editable Charges Section */}
               <div className="erp-form-section">
+                <div className="erp-form-group" style={{ marginBottom: '12px' }}>
+                  <label className="erp-form-label required">Cancellation date</label>
+                  <input
+                    type="date"
+                    className="erp-input"
+                    value={cancelFormData.cancellationDate}
+                    onChange={(e) => setCancelFormData({ ...cancelFormData, cancellationDate: e.target.value })}
+                    disabled={isCancelling}
+                    required
+                  />
+                </div>
+                <div className="erp-form-group" style={{ marginBottom: '12px' }}>
+                  <label className="erp-form-label required">Approver user id</label>
+                  <input
+                    type="text"
+                    className="erp-input"
+                    value={cancelFormData.approverUserId}
+                    onChange={(e) => setCancelFormData({ ...cancelFormData, approverUserId: e.target.value })}
+                    disabled={isCancelling}
+                    placeholder="e.g. ADM001"
+                    required
+                  />
+                </div>
+                <div className="erp-form-group" style={{ marginBottom: '12px' }}>
+                  <label className="erp-form-label required">Approver name</label>
+                  <input
+                    type="text"
+                    className="erp-input"
+                    value={cancelFormData.approverName}
+                    onChange={(e) => setCancelFormData({ ...cancelFormData, approverName: e.target.value })}
+                    disabled={isCancelling}
+                    placeholder="Authorizing manager / accounts lead"
+                    required
+                  />
+                </div>
                 <div className="erp-form-group" style={{ marginBottom: '12px' }}>
                   <label className="erp-form-label required">Railway Cancellation Charge (₹)</label>
                   <input

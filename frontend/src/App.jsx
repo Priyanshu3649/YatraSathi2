@@ -1,4 +1,4 @@
-import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Link, useLocation, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { RealTimeProvider } from './contexts/RealTimeContext';
 import { BookingProvider } from './contexts/BookingContext';
@@ -45,6 +45,8 @@ import TravelPlans from './pages/TravelPlans';
 import TravelPlanDetail from './pages/TravelPlanDetail';
 import EditTravelPlan from './pages/EditTravelPlan';
 import Billing from './pages/Billing';
+import CancellationHistory from './pages/CancellationHistory';
+import PrintBill from './pages/PrintBill';
 
 // Import customer pages
 import MyBookings from './pages/MyBookings';
@@ -130,9 +132,11 @@ function App() {
   const ConditionalHeader = () => {
     try {
       const { user, loading } = useAuth();
+      const location = useLocation();
+      const isPrintRoute = location.pathname.startsWith('/print/');
       
       // Show nothing while loading to prevent flash of incorrect header
-      if (loading) {
+      if (loading || isPrintRoute) {
         return null;
       }
       
@@ -147,6 +151,15 @@ function App() {
       console.warn('Auth context not available, skipping header rendering');
       return null;
     }
+  };
+
+  const ConditionalFooter = () => {
+    const location = useLocation();
+    if (location.pathname.startsWith('/print/')) {
+      return null;
+    }
+
+    return <Footer />;
   };
 
   return (
@@ -173,9 +186,6 @@ function App() {
                       <Route path="/forgot-password" element={<ForgotPassword />} />
                       <Route path="/reset-password" element={<ResetPassword />} />
                       
-                      {/* Employee Portal Routes */}
-                      <Route path="/employee/*" element={<EmployeeDashboard />} />
-                      
                       {/* Legacy Routes - Protected */}
                       <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
                       <Route path="/bookings" element={<ProtectedRoute><Bookings /></ProtectedRoute>} />
@@ -185,7 +195,9 @@ function App() {
                       <Route path="/travel-plans/:id" element={<ProtectedRoute><TravelPlanDetail /></ProtectedRoute>} />
                       <Route path="/travel-plans/edit/:id" element={<ProtectedRoute><EditTravelPlan /></ProtectedRoute>} />
                       <Route path="/travel-plans/new" element={<ProtectedRoute><EditTravelPlan /></ProtectedRoute>} />
+                      <Route path="/billing/cancellations" element={<RoleBasedRoute requiredModule="billing"><CancellationHistory /></RoleBasedRoute>} />
                       <Route path="/billing" element={<RoleBasedRoute requiredModule="billing"><Billing /></RoleBasedRoute>} />
+                      <Route path="/print/bill/:billId" element={<ProtectedRoute><PrintBill /></ProtectedRoute>} />
                       <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
                       
                       {/* Unauthorized Access Route */}
@@ -193,6 +205,7 @@ function App() {
                       
                       {/* Admin Routes with Role-Based Access Control */}
                       <Route path="/admin-dashboard" element={<RoleBasedRoute requiredRole="ADM"><DynamicAdminPanel /></RoleBasedRoute>} />
+                      <Route path="/admin-panel" element={<Navigate to="/admin-dashboard" replace />} />
                       <Route path="/admin/*" element={<RoleBasedRoute requiredRole="ADM"><DynamicAdminPanel /></RoleBasedRoute>} />
                       
                       {/* Employee Routes with Role-Based Access Control */}
@@ -281,7 +294,7 @@ function App() {
                       } />
                     </Routes>
                   </main>
-                  <Footer />
+                  <ConditionalFooter />
                 </div>
               </Router>
             </KeyboardNavigationProvider>

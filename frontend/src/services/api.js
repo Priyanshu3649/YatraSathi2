@@ -1212,8 +1212,49 @@ export const billingAPI = {
     if (!response.ok) {
       throw new Error(data.message || 'Failed to get bill');
     }
-    
+
     return data;
+  },
+
+  getPrintableBill: async (billId) => {
+    const userRole = getUserRole();
+    const isEmployee = ['AGT', 'ACC', 'HR', 'CC', 'MKT', 'MGT', 'ADM'].includes(userRole);
+    const basePath = isEmployee ? `${API_BASE_URL}/employee/billing` : `${API_BASE_URL}/billing`;
+    const response = await fetch(`${basePath}/print/${encodeURIComponent(billId)}`, {
+      method: 'GET',
+      headers: getHeaders(true)
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      const msg = data.message || data.error?.message || 'Failed to get printable bill';
+      throw new Error(msg);
+    }
+
+    return data;
+  },
+
+  // Download bill as PDF (PDFKit server-side, triggers browser download)
+  downloadBillPDF: async (billId, billNumber) => {
+    const response = await fetch(`${API_BASE_URL}/billing/download/${encodeURIComponent(billId)}`, {
+      method: 'GET',
+      headers: getHeaders(true)
+    });
+
+    if (!response.ok) {
+      const errData = await response.json().catch(() => ({}));
+      throw new Error(errData.message || 'Failed to download PDF');
+    }
+
+    const blob = await response.blob();
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href     = url;
+    a.download = `${billNumber || `BILL-${billId}`}.pdf`;
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => { URL.revokeObjectURL(url); document.body.removeChild(a); }, 300);
   },
   
   // Update bill
@@ -1267,7 +1308,10 @@ export const billingAPI = {
   
   // Cancel bill
   cancelBill: async (id, cancellationData) => {
-    const response = await fetch(`${API_BASE_URL}/billing/${id}/cancel`, {
+    const userRole = getUserRole();
+    const isEmployee = ['AGT', 'ACC', 'HR', 'CC', 'MKT', 'MGT', 'ADM'].includes(userRole);
+    const basePath = isEmployee ? `${API_BASE_URL}/employee/billing` : `${API_BASE_URL}/billing`;
+    const response = await fetch(`${basePath}/${id}/cancel`, {
       method: 'POST',
       headers: getHeaders(true),
       body: JSON.stringify(cancellationData)
@@ -1279,6 +1323,20 @@ export const billingAPI = {
       throw new Error(data.message || 'Failed to cancel bill');
     }
     
+    return data;
+  },
+
+  getCancellationHistory: async (params = {}) => {
+    const userRole = getUserRole();
+    const isEmployee = ['AGT', 'ACC', 'HR', 'CC', 'MKT', 'MGT', 'ADM'].includes(userRole);
+    const basePath = isEmployee ? `${API_BASE_URL}/employee/billing` : `${API_BASE_URL}/billing`;
+    const query = new URLSearchParams(params).toString();
+    const url = query ? `${basePath}/cancellations/history?${query}` : `${basePath}/cancellations/history`;
+    const response = await fetch(url, { headers: getHeaders(true) });
+    const data = await response.json();
+    if (!response.ok) {
+      throw new Error(data.message || 'Failed to load cancellation history');
+    }
     return data;
   },
   

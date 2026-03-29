@@ -22,9 +22,21 @@ const Reports = () => {
   const filterFormRef = useRef(null);
 
   const REPORT_TYPES = [
-    'JOURNAL', 'SALES', 'PURCHASE', 'RECEIPT', 'PAYMENT', 
-    'CANCELLATION', 'OUTSTANDING', 'AGING', 'PROFITABILITY'
+    'JOURNAL', 'SALES', 'PURCHASE', 'RECEIPT', 'PAYMENT',
+    'BILLING', 'BOOKINGS', 'CUSTOMER_LEDGER', 'TAX_SUMMARY',
+    'CANCELLATION', 'OUTSTANDING', 'AGING', 'PROFITABILITY', 'AUDIT_TRAIL'
   ];
+
+  const formatSummaryValue = (key, value) => {
+    if (value === null || value === undefined) return '-';
+    if (typeof value !== 'number') return value;
+    const k = String(key).toLowerCase();
+    const hints = ['amount', 'charges', 'refund', 'total', 'balance', 'paid', 'due', 'fare', 'tax', 'gst', 'net', 'revenue'];
+    if (hints.some((h) => k.includes(h))) {
+      return `₹${value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    }
+    return value;
+  };
   const PERIOD_TYPES = ['DAILY', 'MONTHLY', 'QUARTERLY', 'ANNUAL', 'CUSTOM'];
 
   // Register form for keyboard navigation
@@ -125,7 +137,10 @@ const Reports = () => {
       <div className="report-main-content">
         {/* Filters Section */}
         <section className="erp-section filter-section" ref={filterFormRef}>
-          <div className="section-header">🔍 Report Filters</div>
+          <div className="section-header">Report filters (JESPR)</div>
+          <p style={{ margin: '8px 16px 0', fontSize: '12px', color: '#555', lineHeight: 1.4 }}>
+            Choose a report family, period, and optional customer scope. The same engine can be extended for any ledger or operational dataset; backend handlers map each type to the correct queries and exports.
+          </p>
           <div className="erp-form-row-compact-5">
             <div className="erp-form-group">
               <label>Report Type</label>
@@ -161,9 +176,7 @@ const Reports = () => {
               <div key={key} className="summary-card">
                 <div className="summary-label">{key.replace(/([A-Z])/g, ' $1').toUpperCase()}</div>
                 <div className="summary-value">
-                  {typeof value === 'number' && key.toLowerCase().includes('amount' || 'charges' || 'refund') 
-                    ? `₹${value.toLocaleString(undefined, { minimumFractionDigits: 2 })}` 
-                    : value}
+                  {formatSummaryValue(key, value)}
                 </div>
               </div>
             ))}

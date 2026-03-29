@@ -22,7 +22,9 @@ export const AuthProvider = ({ children }) => {
       if (storedUser && token) {
         try {
           const userData = JSON.parse(storedUser);
-          console.log('Using stored user data as fallback:', userData);
+          if (import.meta.env.DEV) {
+            console.log('Using stored user data as fallback until profile loads');
+          }
           setUser(userData);
           setIsAuthenticated(true);
         } catch (error) {
@@ -33,7 +35,9 @@ export const AuthProvider = ({ children }) => {
       if (token) {
         try {
           const profile = await authAPI.getProfile();
-          console.log('Profile data received:', profile);
+          if (import.meta.env.DEV) {
+            console.log('Profile data received');
+          }
           
           // Create user object with the correct field names
           // Handle the actual API response structure from getUserProfile
@@ -61,7 +65,9 @@ export const AuthProvider = ({ children }) => {
             us_pan: profileData.us_pan || profileData.pan || existingUser.us_pan || ''
           };
           
-          console.log('User object created from API:', userObject);
+          if (import.meta.env.DEV) {
+            console.log('User object synced from API');
+          }
           setUser(userObject);
           setIsAuthenticated(true);
           // Update localStorage with fresh data
