@@ -80,16 +80,19 @@ const DynamicAdminPanel = () => {
   });
   
   // Inline filter state for grid filtering - Enable real-time filtering with 500ms debounce
+  const handleApplyFilters = React.useCallback((newFilters) => {
+    handlePageChange(1);
+    fetchData(1, limit || 50, newFilters);
+  }, [limit, activeModule]);
+
+  // Inline filter state for grid filtering - Enable real-time filtering with 500ms debounce
   const { 
     draftFilters: inlineFilters, 
     activeFilters, 
     handleFilterChange: handleInlineFilterChange, 
     applyFiltersManual: applyFilters, 
     clearFiltersManual: clearFilters 
-  } = useERPFilters({}, () => { 
-    handlePageChange(1); 
-    fetchData(1, pagination.pageSize || 50); 
-  }, { 
+  } = useERPFilters({}, handleApplyFilters, { 
     realTime: true, 
     debounceMs: 500 
   });
@@ -752,7 +755,7 @@ const DynamicAdminPanel = () => {
   }, [activeModule]);
 
   useEffect(() => {
-    fetchData(currentPage, limit);
+    fetchData(currentPage, limit, activeFilters);
   }, [activeModule, currentPage, limit]);
 
   const handlePageChange = (newPage) => {
@@ -800,11 +803,19 @@ const DynamicAdminPanel = () => {
     }
   };
 
-  const fetchData = async (page = 1, pageSize = 50) => {
+  const fetchData = async (page = 1, pageSize = 50, currentFilters = null) => {
     setLoading(true);
     try {
+      const filtersToUse = currentFilters || activeFilters || {};
       const token = localStorage.getItem('token');
-      const response = await fetch(`${API_BASE_URL}${modules[activeModule].endpoint}?page=${page}&limit=${pageSize}&${new URLSearchParams(activeFilters).toString()}`, {
+      
+      const queryParams = new URLSearchParams({
+        page,
+        limit: pageSize,
+        ...filtersToUse
+      });
+      
+      const response = await fetch(`${API_BASE_URL}${modules[activeModule].endpoint}?${queryParams.toString()}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       
@@ -1163,6 +1174,112 @@ const DynamicAdminPanel = () => {
     }
   };
 
+  const handleExportPDF = async () => {
+    try {
+      setLoading(true);
+      const token = localStorage.getItem('token');
+      
+      // Determine report type based on active module
+      const reportType = activeModule.toUpperCase();
+      
+      // Get column definitions for the report
+      const reportColumns = currentModule.columns.map((col, idx) => ({
+        key: col,
+        label: currentModule.columnLabels[idx]
+      }));
+      
+      const response = await fetch(`${API_BASE_URL}/reports/export`, {
+        method: 'POST',
+        headers: { 
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          reportType,
+          format: 'PDF',
+          filters: {
+            ...filters,
+            ...inlineFilters
+          },
+          columns: reportColumns
+        })
+      });
+
+      if (response.ok) {
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${activeModule}_report_${new Date().toISOString().split('T')[0]}.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        showMessage('success', 'Report Generated', 'Your PDF report has been downloaded');
+      } else {
+        const errorData = await response.json();
+        showMessage('error', 'Export Failed', errorData.message || 'Could not generate report');
+      }
+    } catch (error) {
+      console.error('Export error:', error);
+      showMessage('error', 'Export Error', 'An unexpected error occurred during export');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleExportGroupedPDF = async () => {
+    try {
+      setLoading(true);
+      const token = localStorage.getItem('token');
+      
+      // Determine grouped report type
+      let reportType = '';
+      if (activeModule === 'employees') reportType = 'EMPLOYEES_GROUPED_DEPT';
+      else if (activeModule === 'bookings') reportType = 'BOOKINGS_GROUPED';
+      else if (activeModule === 'billings') reportType = 'BILLINGS_GROUPED';
+      else {
+        showMessage('warning', 'Grouping Not Supported', 'Grouping is not yet supported for this module');
+        return;
+      }
+      
+      const response = await fetch(`${API_BASE_URL}/reports/export`, {
+        method: 'POST',
+        headers: { 
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          reportType,
+          format: 'PDF',
+          filters: {
+            ...filters,
+            ...inlineFilters
+          }
+        })
+      });
+
+      if (response.ok) {
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${activeModule}_grouped_report_${new Date().toISOString().split('T')[0]}.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        showMessage('success', 'Grouped Report Generated', 'Your hierarchical PDF report has been downloaded');
+      } else {
+        const errorData = await response.json();
+        showMessage('error', 'Export Failed', errorData.message || 'Could not generate grouped report');
+      }
+    } catch (error) {
+      console.error('Grouped export error:', error);
+      showMessage('error', 'Export Error', 'An unexpected error occurred during grouped export');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleNavigation = (direction) => {
     if (data.length === 0) return;
     
@@ -1259,6 +1376,11 @@ const DynamicAdminPanel = () => {
         <div className="erp-tool-separator"></div>
         <button className="erp-button" onClick={handleSave} disabled={!isEditing}>Save</button>
         <button className="erp-button" onClick={fetchData}>Refresh</button>
+        <div className="erp-tool-separator"></div>
+        <button className="erp-button" onClick={handleExportPDF} disabled={loading} title="Export current view to PDF">Export PDF</button>
+        {['employees', 'bookings', 'billings'].includes(activeModule) && (
+          <button className="erp-button" onClick={handleExportGroupedPDF} disabled={loading} title="Export hierarchically grouped PDF">Grouped PDF</button>
+        )}
       </div>
 
       {/* Main Content Area - Scrollable */}

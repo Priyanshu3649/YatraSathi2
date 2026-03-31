@@ -569,45 +569,45 @@ export const bookingAPI = {
 
 // Payment API calls
 export const paymentAPI = {
-  // Create a new payment (updated to match new backend API)
+  // Create a new payment
   createPayment: async (paymentData) => {
     const response = await fetch(`${API_BASE_URL}/payments`, {
       method: 'POST',
       headers: getHeaders(true),
       body: JSON.stringify({
-        customerId: paymentData.customerId,
-        amount: paymentData.amount,
-        mode: paymentData.mode,
-        refNo: paymentData.refNo || paymentData.transactionId || null,
-        paymentDate: paymentData.paymentDate,
-        remarks: paymentData.remarks || null,
-        autoAllocate: paymentData.autoAllocate || false,
-        allocations: paymentData.allocations || []
+        py_entry_type: paymentData.py_entry_type,
+        py_customer_name: paymentData.py_customer_name,
+        py_customer_phone: paymentData.py_customer_phone,
+        py_amount: paymentData.py_amount,
+        py_ref_number: paymentData.py_ref_number,
+        py_bank_account: paymentData.py_bank_account,
+        py_narration: paymentData.py_narration
       })
     });
     
     const data = await response.json();
-    
-    if (!response.ok) {
-      throw new Error(data.message || 'Failed to create payment');
-    }
-    
+    if (!response.ok) throw new Error(data.message || 'Failed to create payment');
     return data;
   },
   
-  // Get all payments for current user
+  // Get all payments
+  getAllPayments: async (params = {}) => {
+    const queryParams = new URLSearchParams(params).toString();
+    const url = queryParams ? `${API_BASE_URL}/payments?${queryParams}` : `${API_BASE_URL}/payments`;
+    const response = await fetch(url, { method: 'GET', headers: getHeaders(true) });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.message || 'Failed to get payments');
+    return data;
+  },
+  
+  // Get all payments for current user (kept for backward compatibility if used elsewhere)
   getMyPayments: async () => {
     const response = await fetch(`${API_BASE_URL}/payments/my-payments`, {
       method: 'GET',
       headers: getHeaders(true)
     });
-      
     const data = await response.json();
-      
-    if (!response.ok) {
-      throw new Error(data.message || 'Failed to get payments');
-    }
-      
+    if (!response.ok) throw new Error(data.message || 'Failed to get payments');
     return data;
   },
   
@@ -1237,7 +1237,11 @@ export const billingAPI = {
 
   // Download bill as PDF (PDFKit server-side, triggers browser download)
   downloadBillPDF: async (billId, billNumber) => {
-    const response = await fetch(`${API_BASE_URL}/billing/download/${encodeURIComponent(billId)}`, {
+    const userRole = getUserRole();
+    const isEmployee = ['AGT', 'ACC', 'HR', 'CC', 'MKT', 'MGT', 'ADM'].includes(userRole);
+    const basePath = isEmployee ? `${API_BASE_URL}/employee/billing` : `${API_BASE_URL}/billing`;
+    
+    const response = await fetch(`${basePath}/download/${encodeURIComponent(billId)}`, {
       method: 'GET',
       headers: getHeaders(true)
     });

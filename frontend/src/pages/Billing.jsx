@@ -164,7 +164,9 @@ const Billing = () => {
   } = useKeyboardNavigation();
   const [bills, setBills] = useState([]); // Add missing bills state
   const [loading, setLoading] = useState(true);
+  const [isFetching, setIsFetching] = useState(false); // background fetch — no table unmount
   const [error, setError] = useState('');
+  const [aggregates, setAggregates] = useState({ totalAmount: 0, totalFare: 0, totalGST: 0, count: 0 });
   
   // Pagination state - 50 records per page with server-side support
   const {
@@ -183,6 +185,8 @@ const Billing = () => {
   const [activeView, setActiveView] = useState('list'); // 'list', 'create', 'ledger'
   const [selectedBill, setSelectedBill] = useState(null);
   const [showBillDetails, setShowBillDetails] = useState(false);
+  const [showPreview, setShowPreview] = useState(false);
+  const [previewBill, setPreviewBill] = useState(null);
   
   // Editing state (MOVED TO TOP to avoid TDZ)
   const [isEditing, setIsEditing] = useState(false);
@@ -504,18 +508,38 @@ const Billing = () => {
   });
 
   // Inline filters - Enable real-time filtering with 500ms debounce
+  // NOTE: do NOT call setPage(1) here — that extra state update causes a re-render
+  // that steals focus from the filter input. Page reset is handled inside fetchBills.
+  const handleFilterApply = useCallback(() => {
+    // intentionally empty — fetchBills reacts to activeFilters changing
+  }, []);
+
   const { 
     draftFilters: inlineFilters, 
     activeFilters, 
     handleFilterChange: handleInlineFilterChange, 
     applyFiltersManual: applyFilters, 
     clearFiltersManual: clearFilters 
-  } = useERPFilters({}, () => { 
-    setPage(1); 
-  }, { 
+  } = useERPFilters({
+    startDate: '',
+    endDate: '',
+    minAmount: '',
+    maxAmount: ''
+  }, handleFilterApply, { 
     realTime: true, 
     debounceMs: 500 
   });
+
+  // Date range validation
+  useEffect(() => {
+    if (inlineFilters.startDate && inlineFilters.endDate) {
+      if (new Date(inlineFilters.endDate) < new Date(inlineFilters.startDate)) {
+        setError('End Date cannot be earlier than Start Date');
+      } else {
+        setError('');
+      }
+    }
+  }, [inlineFilters.startDate, inlineFilters.endDate]);
 
   // Customer lookup state
   const [customerLookup, setCustomerLookup] = useState([]);
@@ -633,20 +657,18 @@ const Billing = () => {
     if (value.length >= 3) {
       fetchCustomerLookup(value);
     } else {
-      setCustomerLookup([]);
-      setShowCustomerDropdown(false);
     }
   };
-  
-  // Handle customer selection from dropdown
+
   const handleCustomerSelect = (customer) => {
     setFormData(prev => ({
       ...prev,
-      customerId: customer.id,
-      customerName: customer.name
+      customerName: customer.name || (customer.us_fname + ' ' + (customer.us_lname || '')),
+      phoneNumber: customer.phone || customer.us_phone || '',
+      id: customer.id || customer.cu_cusid
     }));
-    setShowCustomerDropdown(false);
-    fetchCustomerDetails(customer.id); // Fetch detailed customer info
+    setShowCustomerLookup(false);
+    fetchCustomerDetails(customer.id || customer.cu_cusid); // Fetch detailed customer info
   };
   
   // Fetch bills when component mounts
@@ -666,11 +688,19 @@ const Billing = () => {
       const deliveryCharges = parseFloat(formData.deliveryCharges) || 0;
       const cancellationCharges = parseFloat(formData.cancellationCharges) || 0;
       
-      // Calculate subtotal (base fare + all charges)
+      // Calculate subtotal (base fare + all charges before GST)
       const subtotal = railwayFare + serviceCharges + platformFees + stationBoyIncentive + miscCharges + deliveryCharges + cancellationCharges;
       
-      // Calculate GST
-      const gstRate = parseFloat(formData.gst) || 0;
+      // Auto-calculate GST (5% of subtotal) if it's empty or subtotal changed and it's 0
+      // We check if the field was empty to avoid overriding manual input constantly
+      let currentGstRate = parseFloat(formData.gst);
+      
+      // If GST is empty or 0, or if we want to force auto-calc on subtotal change
+      // Here we choose to only auto-calculate if it's empty or 0 to allow manual override
+      if (isNaN(currentGstRate) || currentGstRate === 0) {
+        currentGstRate = 5; // Default 5% for travel services
+      }
+      
       const surcharge = parseFloat(formData.surcharge) || 0;
       
       // Calculate tax based on GST type
@@ -678,128 +708,141 @@ const Billing = () => {
       let grandTotal = 0;
       
       if (formData.gstType === 'EXCLUSIVE') {
-        taxAmount = (subtotal * gstRate) / 100;
+        taxAmount = (subtotal * currentGstRate) / 100;
         grandTotal = subtotal + taxAmount + surcharge;
       } else if (formData.gstType === 'INCLUSIVE') {
         // If GST is inclusive, the GST is already included in the subtotal
-        taxAmount = (subtotal * gstRate) / (100 + gstRate);
+        taxAmount = (subtotal * currentGstRate) / (100 + currentGstRate);
         grandTotal = subtotal + surcharge;
       } else { // C type
-        taxAmount = (subtotal * gstRate) / 100;
+        taxAmount = (subtotal * currentGstRate) / 100;
         grandTotal = subtotal + taxAmount + surcharge;
       }
       
-      // Calculate balance due (assuming amount received is tracked separately)
-      const amountReceived = parseFloat(formData.amountReceived) || 0;
-      const balanceDue = grandTotal - amountReceived;
-      
       // Update form data with calculated values
-      setFormData(prev => ({
-        ...prev,
-        totalAmount: Math.round(grandTotal * 100) / 100 // Round to 2 decimal places
-      }));
+      setFormData(prev => {
+        // Only update if values actually changed to prevent loops
+        const newTotal = Math.round(grandTotal * 100) / 100;
+        const updates = {};
+        
+        if (prev.totalAmount !== newTotal) {
+          updates.totalAmount = newTotal;
+        }
+        
+        // Auto-fill GST field if it was empty/zero
+        if ((!prev.gst || parseFloat(prev.gst) === 0) && currentGstRate !== 0) {
+          updates.gst = currentGstRate.toString();
+        }
+        
+        if (Object.keys(updates).length > 0) {
+          return { ...prev, ...updates };
+        }
+        return prev;
+      });
     }
-  }, [formData.railwayFare, formData.serviceCharges, formData.platformFees, formData.stationBoyIncentive, formData.miscCharges, formData.deliveryCharges, formData.cancellationCharges, formData.gst, formData.gstType, formData.surcharge, formData.amountReceived, isEditing]);
+  }, [formData.railwayFare, formData.serviceCharges, formData.platformFees, formData.stationBoyIncentive, formData.miscCharges, formData.deliveryCharges, formData.cancellationCharges, formData.gst, formData.gstType, formData.surcharge, isEditing]);
+
+  // Track previous activeFilters ref to detect filter changes vs page changes
+  const prevActiveFiltersRef = useRef(activeFilters);
 
   const fetchBills = useCallback(async () => {
-    try {
+    // Detect whether this is a filter change (background fetch) or initial/page load
+    const isFilterChange = prevActiveFiltersRef.current !== activeFilters;
+    prevActiveFiltersRef.current = activeFilters;
+
+    // On filter change: use isFetching (no table unmount, no focus loss)
+    // On initial load or page change: use loading (shows spinner)
+    if (isFilterChange) {
+      setIsFetching(true);
+    } else {
       setLoading(true);
-      let billsArray = [];
-      let paginationData = null;
-      
-      // Check if user is admin or employee
+    }
+
+    try {
       const isEmployee = user && (
         ['AGT', 'ACC', 'HR', 'CC', 'MKT', 'MGT', 'ADM'].includes(user.us_roid) ||
-        user.us_usertype === 'admin' || 
+        user.us_usertype === 'admin' ||
         user.usertype === 'admin'
       );
-      
-      // Pass pagination params
+
+      // When filters change, always fetch from page 1
+      const effectivePage = isFilterChange ? 1 : page;
+
       const params = {
-        page: page,
+        page: effectivePage,
         limit: limit,
         ...activeFilters
       };
-      
+
+      let response;
       if (isEmployee) {
-        const response = await billingAPI.getAllBills(params);
-        billsArray = response?.data || [];
-        paginationData = response?.pagination || null;
+        response = await billingAPI.getAllBills(params);
       } else {
-        // For customers, get user-specific bills
-        const response = await billingAPI.getMyBills(params);
-        billsArray = response?.data?.bills || response?.data || [];
-        paginationData = response?.data?.pagination || response?.pagination || null;
+        response = await billingAPI.getMyBills(params);
       }
-      
-      // Safety check for arrays
+
+      const billsArray = response?.data?.bills || response?.data || [];
+      const paginationData = response?.pagination || response?.data?.pagination || null;
+      const responseAggregates = response?.aggregates || null;
+
       const billsData = Array.isArray(billsArray) ? billsArray : [];
-      
-      // Ensure numeric fields are properly converted to numbers and map database field names
+
       const processedBills = billsData.map(bill => ({
         ...bill,
-        // Map database field names to frontend field names
         id: bill.bl_id || bill.id,
-        billNo: bill.bl_bill_no || bill.billNo, // Add bill number mapping
+        billNo: bill.bl_bill_no || bill.billNo || bill.bl_entry_no,
         billDate: bill.bl_billing_date || bill.billDate,
         bookingId: bill.bl_booking_id || bill.bookingId,
         subBillNo: bill.bl_sub_bill_no || bill.subBillNo,
         customerName: bill.bl_customer_name || bill.customerName,
-        phoneNumber: bill.bl_customer_phone || bill.phoneNumber,
+        phoneNumber: bill.bl_customer_phone || bill.customerPhone || bill.phoneNumber || bill.phone,
         stationBoy: bill.bl_station_boy || bill.stationBoy,
         fromStation: bill.bl_from_station || bill.fromStation,
         toStation: bill.bl_to_station || bill.toStation,
         journeyDate: bill.bl_journey_date || bill.journeyDate,
-        trainNumber: bill.bl_train_no || bill.trainNumber,
-        reservationClass: bill.bl_class || bill.reservationClass,
+        trainNumber: bill.bl_train_no || bill.trainNumber || bill.trainNo,
+        reservationClass: bill.bl_class || bill.reservationClass || bill.class,
         ticketType: bill.bl_ticket_type || bill.ticketType || 'NORMAL',
-        pnrNumbers: bill.bl_pnr || bill.pnrNumbers,
-        // Seat allocation field mapping
-        seatsReserved: bill.bl_seats_reserved || bill.seatsReserved || bill.seatsAlloted,
-        // Financial fields
-        railwayFare: bill.bl_railway_fare ? Number(bill.bl_railway_fare) : (bill.railwayFare ? Number(bill.railwayFare) : 0),
-        serviceCharges: bill.bl_service_charge ? Number(bill.bl_service_charge) : (bill.serviceCharges ? Number(bill.serviceCharges) : 0),
-        platformFees: bill.bl_platform_fee ? Number(bill.bl_platform_fee) : (bill.platformFees ? Number(bill.platformFees) : 0),
-        stationBoyIncentive: bill.bl_sb_incentive ? Number(bill.bl_sb_incentive) : (bill.stationBoyIncentive ? Number(bill.stationBoyIncentive) : 0),
-        miscCharges: bill.bl_misc_charges ? Number(bill.bl_misc_charges) : (bill.miscCharges ? Number(bill.miscCharges) : 0),
-        deliveryCharges: bill.bl_delivery_charge ? Number(bill.bl_delivery_charge) : (bill.deliveryCharges ? Number(bill.deliveryCharges) : 0),
-        cancellationCharges: bill.bl_cancellation_charge ? Number(bill.bl_cancellation_charge) : (bill.cancellationCharges ? Number(bill.cancellationCharges) : 0),
-        gst: bill.bl_gst ? Number(bill.bl_gst) : (bill.gst ? Number(bill.gst) : 0),
-        surcharge: bill.bl_surcharge ? Number(bill.bl_surcharge) : (bill.surcharge ? Number(bill.surcharge) : 0),
-        discount: bill.bl_discount ? Number(bill.bl_discount) : (bill.discount ? Number(bill.discount) : 0),
-        gstType: bill.bl_gst_type || bill.gstType || 'EXCLUSIVE',
-        totalAmount: bill.bl_total_amount ? Number(bill.bl_total_amount) : (bill.totalAmount ? Number(bill.totalAmount) : 0),
-        paidAmount: bill.paidAmount ? Number(bill.paidAmount) : 0,
-        // Status and audit fields
-        status: bill.status || 'DRAFT',
-        remarks: bill.remarks || '',
-        createdOn: bill.bl_created_at || bill.createdOn,
-        createdBy: bill.bl_created_by || bill.createdBy,
-        modifiedBy: bill.modifiedBy || '',
-        closedOn: bill.closedOn || '',
-        closedBy: bill.closedBy || ''
+        pnrNumbers: bill.bl_pnr || bill.pnrNumber || bill.pnrNumbers || bill.pnr,
+        status: bill.bl_status || bill.status || 'DRAFT',
+        totalAmount: Number(bill.bl_total_amount || bill.totalAmount || 0),
+        paidAmount: Number(bill.paidAmount || 0)
       }));
+
       setBills(processedBills);
-// Update pagination info from API response
+
       if (paginationData) {
         updatePagination(paginationData);
+        // Sync page state to page 1 when filters changed
+        if (isFilterChange) setPage(1);
       } else {
         updatePagination({
-          currentPage: page,
+          currentPage: effectivePage,
           totalPages: Math.ceil(processedBills.length / limit) || 1,
-          totalRecords: processedBills.length
+          totalRecords: processedBills.length,
+        });
+        if (isFilterChange) setPage(1);
+      }
+
+      if (responseAggregates) {
+        setAggregates(responseAggregates);
+      } else {
+        const totalAmount = processedBills.reduce((sum, b) => sum + (Number(b.totalAmount) || 0), 0);
+        setAggregates({
+          totalAmount,
+          count: paginationData?.totalRecords || processedBills.length
         });
       }
-      
+
       setError('');
-    } catch (err) {
-      console.error('❌ Error fetching bills:', err);
-      setError(err.message || 'Failed to fetch bills');
-      setBills([]);
+    } catch (error) {
+      console.error('Error fetching bills:', error);
+      setError('Failed to load billing records');
     } finally {
       setLoading(false);
+      setIsFetching(false);
     }
-  }, [user, page, limit, activeFilters, updatePagination]);
+  }, [user, page, limit, activeFilters, updatePagination, setPage]);
   
   // Refetch when page or limit changes
   useEffect(() => {
@@ -1062,27 +1105,32 @@ const Billing = () => {
 
   const handleExportBill = async (billId) => {
     try {
-      const blob = await billingAPI.exportBill(billId);
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `bill_${billId}.pdf`;
-      document.body.appendChild(a);
-      a.click();
-      window.URL.revokeObjectURL(url);
-      document.body.removeChild(a);
+      if (process.env.NODE_ENV === 'development') {
+        console.log('📤 Exporting bill as PDF:', billId);
+      }
+      setLoading(true); // Show a brief loading indicator if possible, or just use the local state
+      const billNo = selectedBill?.billNo || selectedBill?.bl_bill_no || `BILL-${billId}`;
+      await billingAPI.downloadBillPDF(billId, billNo);
     } catch (error) {
-      setError(error.message);
+      console.error('❌ PDF Export failed:', error);
+      setError('PDF Export failed: ' + error.message);
+    } finally {
+      setLoading(false);
     }
   };
 
   const handlePrintBill = (billOrId) => {
     const id =
       billOrId && typeof billOrId === 'object'
-        ? (billOrId.bl_id ?? billOrId.id)
+        ? (billOrId.id || billOrId.bl_id)
         : billOrId;
-    if (id === undefined || id === null || id === '') {
-      setError('Please select a bill to print');
+    
+    if (process.env.NODE_ENV === 'development') {
+      console.log('🖨️ HandlePrintBill called with:', { billOrId, resolvedId: id });
+    }
+
+    if (!id) {
+      setError('Please select a valid bill to print');
       return;
     }
 
@@ -1533,9 +1581,14 @@ const Billing = () => {
         {selectedBill ? (
           <Link
             className="erp-button"
-            to={`/print/bill/${encodeURIComponent(selectedBill.bl_id ?? selectedBill.id)}`}
+            to={`/print/bill/${encodeURIComponent(selectedBill.id || selectedBill.bl_id)}`}
             state={{ returnTo: `${location.pathname}${location.search || ''}` }}
             title="Print invoice (same tab)"
+            onClick={() => {
+              if (process.env.NODE_ENV === 'development') {
+                console.log('🖱️ Print Link clicked for bill ID:', selectedBill.id || selectedBill.bl_id);
+              }
+            }}
           >
             Print
           </Link>
@@ -1555,9 +1608,9 @@ const Billing = () => {
       </div>
 
       {/* Main Content Area - Scrollable */}
-      <div className="layout-content-wrapper">
+      <div className="layout-content-wrapper" style={{ display: 'flex', height: 'calc(100vh - 110px)', overflow: 'hidden' }}>
         {/* Center Content */}
-        <div className="layout-main-column">
+        <div className="layout-main-column" style={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0, height: '100%' }}>
           {/* Form Panel - Static */}
           <div className="layout-form-section">
             {/* Row 1: Bill ID, Bill Date, Booking ID, Sub Bill No, Status (5 fields) */}
@@ -2113,289 +2166,357 @@ const Billing = () => {
 
           {/* Data Grid - Scrollable */}
           <div className="layout-grid-section" style={{ display: 'flex', flexDirection: 'column', flex: 1, height: '100%' }}>
-            <div className="erp-panel-header">Billing Records</div>
+            <div className="erp-panel-header">
+              Billing Records
+              {isFetching && <span style={{ marginLeft: '10px', fontSize: '10px', color: '#adb5bd', fontWeight: 'normal' }}>fetching…</span>}
+            </div>
             {loading ? (
               <div style={{ padding: '20px', textAlign: 'center' }}>Loading...</div>
             ) : (
-              <div className="erp-grid-section" style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-                <div className="erp-grid-container" style={{ flex: 1, overflowY: 'auto' }}>
-                <table className="erp-table">
-                  <thead>
-                    <tr>
-                      <th style={{ width: '30px' }}></th>
-                      <th style={{ width: '100px' }}>Bill ID</th>
-                      <th style={{ width: '100px' }}>Bill Date</th>
-                      <th style={{ width: '100px' }}>Booking ID</th>
-                      <th style={{ width: '100px' }}>Sub bill number</th>
-                      <th style={{ width: '150px' }}>Customer Name</th>
-                      <th style={{ width: '120px' }}>Phone number</th>
-                      <th style={{ width: '120px' }}>Station boy name</th>
-                      <th style={{ width: '120px' }}>From station</th>
-                      <th style={{ width: '120px' }}>To station</th>
-                      <th style={{ width: '100px' }}>Journey date</th>
-                      <th style={{ width: '100px' }}>Train Number</th>
-                      <th style={{ width: '120px' }}>Reservation Class</th>
-                      <th style={{ width: '100px' }}>Ticket Type</th>
-                      <th style={{ width: '150px' }}>PNR Number(s)</th>
-                      <th style={{ width: '120px' }}>Status</th>
-                      <th style={{ width: '120px' }}>Total amount</th>
-                      <th style={{ width: '120px' }}>Passenger Count</th>
-                      <th style={{ width: '150px' }}>Special Request/Remarks</th>
-                    </tr>
-                    {/* Inline Filter Row */}
-                    <tr className="inline-filter-row">
-                      <td></td>
-                      <td>
-                        <input
-                          type="text"
-                          className="inline-filter-input"
-                          value={inlineFilters.bl_bill_no || ''}
-                          onChange={(e) => handleInlineFilterChange('bl_bill_no', e.target.value)}
-                          placeholder="Filter Bill ID..."
-                          style={{ width: '100%', padding: '2px', fontSize: '12px', backgroundColor: '#f0f0f0' }}
-                        />
-                      </td>
-                      <td>
-                        <input
-                          type="date"
-                          className="inline-filter-input"
-                          value={inlineFilters.bl_billing_date || ''}
-                          onChange={(e) => handleInlineFilterChange('bl_billing_date', e.target.value)}
-                          placeholder="Filter Date..."
-                          style={{ width: '100%', padding: '2px', fontSize: '12px', backgroundColor: '#f0f0f0' }}
-                        />
-                      </td>
-                      <td>
-                        <input
-                          type="text"
-                          className="inline-filter-input"
-                          value={inlineFilters.bl_booking_id || ''}
-                          onChange={(e) => handleInlineFilterChange('bl_booking_id', e.target.value)}
-                          placeholder="Filter Booking ID..."
-                          style={{ width: '100%', padding: '2px', fontSize: '12px', backgroundColor: '#f0f0f0' }}
-                        />
-                      </td>
-                      <td>
-                        <input
-                          type="text"
-                          className="inline-filter-input"
-                          value={inlineFilters.bl_sub_bill_no || ''}
-                          onChange={(e) => handleInlineFilterChange('bl_sub_bill_no', e.target.value)}
-                          placeholder="Filter Sub Bill No..."
-                          style={{ width: '100%', padding: '2px', fontSize: '12px', backgroundColor: '#f0f0f0' }}
-                        />
-                      </td>
-                      <td>
-                        <input
-                          type="text"
-                          className="inline-filter-input"
-                          value={inlineFilters.bl_customer_name || ''}
-                          onChange={(e) => handleInlineFilterChange('bl_customer_name', e.target.value)}
-                          placeholder="Filter Name..."
-                          style={{ width: '100%', padding: '2px', fontSize: '12px', backgroundColor: '#f0f0f0' }}
-                        />
-                      </td>
-                      <td>
-                        <input
-                          type="text"
-                          className="inline-filter-input"
-                          value={inlineFilters.bl_customer_phone || ''}
-                          onChange={(e) => handleInlineFilterChange('bl_customer_phone', e.target.value)}
-                          placeholder="Filter Phone..."
-                          style={{ width: '100%', padding: '2px', fontSize: '12px', backgroundColor: '#f0f0f0' }}
-                        />
-                      </td>
-                      <td>
-                        <input
-                          type="text"
-                          className="inline-filter-input"
-                          value={inlineFilters.bl_station_boy || ''}
-                          onChange={(e) => handleInlineFilterChange('bl_station_boy', e.target.value)}
-                          placeholder="Filter Station Boy..."
-                          style={{ width: '100%', padding: '2px', fontSize: '12px', backgroundColor: '#f0f0f0' }}
-                        />
-                      </td>
-                      <td>
-                        <input
-                          type="text"
-                          className="inline-filter-input"
-                          value={inlineFilters.bl_from_station || ''}
-                          onChange={(e) => handleInlineFilterChange('bl_from_station', e.target.value)}
-                          placeholder="Filter From Station..."
-                          style={{ width: '100%', padding: '2px', fontSize: '12px', backgroundColor: '#f0f0f0' }}
-                        />
-                      </td>
-                      <td>
-                        <input
-                          type="text"
-                          className="inline-filter-input"
-                          value={inlineFilters.bl_to_station || ''}
-                          onChange={(e) => handleInlineFilterChange('bl_to_station', e.target.value)}
-                          placeholder="Filter To Station..."
-                          style={{ width: '100%', padding: '2px', fontSize: '12px', backgroundColor: '#f0f0f0' }}
-                        />
-                      </td>
-                      <td>
-                        <input
-                          type="date"
-                          className="inline-filter-input"
-                          value={inlineFilters.bl_journey_date || ''}
-                          onChange={(e) => handleInlineFilterChange('bl_journey_date', e.target.value)}
-                          placeholder="Filter Journey Date..."
-                          style={{ width: '100%', padding: '2px', fontSize: '12px', backgroundColor: '#f0f0f0' }}
-                        />
-                      </td>
-                      <td>
-                        <input
-                          type="text"
-                          className="inline-filter-input"
-                          value={inlineFilters.bl_train_no || ''}
-                          onChange={(e) => handleInlineFilterChange('bl_train_no', e.target.value)}
-                          placeholder="Filter Train Number..."
-                          style={{ width: '100%', padding: '2px', fontSize: '12px', backgroundColor: '#f0f0f0' }}
-                        />
-                      </td>
-                      <td>
-                        <select
-                          className="inline-filter-input"
-                          value={inlineFilters.bl_class || ''}
-                          onChange={(e) => handleInlineFilterChange('bl_class', e.target.value)}
-                          style={{ width: '100%', padding: '2px', fontSize: '12px', backgroundColor: '#f0f0f0' }}
-                        >
-                          <option value="">All</option>
-                          <option value="SL">SL</option>
-                          <option value="3A">3A</option>
-                          <option value="2A">2A</option>
-                          <option value="1A">1A</option>
-                          <option value="CC">CC</option>
-                        </select>
-                      </td>
-                      <td>
-                        <select
-                          className="inline-filter-input"
-                          value={inlineFilters.bl_ticket_type || ''}
-                          onChange={(e) => handleInlineFilterChange('bl_ticket_type', e.target.value)}
-                          style={{ width: '100%', padding: '2px', fontSize: '12px', backgroundColor: '#f0f0f0' }}
-                        >
-                          <option value="">All</option>
-                          <option value="NORMAL">NORMAL</option>
-                          <option value="TATKAL">TATKAL</option>
-                          <option value="PREMIUM_TATKAL">PREMIUM_TATKAL</option>
-                        </select>
-                      </td>
-                      <td>
-                        <input
-                          type="text"
-                          className="inline-filter-input"
-                          value={inlineFilters.bl_pnr || ''}
-                          onChange={(e) => handleInlineFilterChange('bl_pnr', e.target.value)}
-                          placeholder="Filter PNR Numbers..."
-                          style={{ width: '100%', padding: '2px', fontSize: '12px', backgroundColor: '#f0f0f0' }}
-                        />
-                      </td>
-                      <td>
-                        <select
-                          className="inline-filter-input"
-                          value={inlineFilters.bl_status || ''}
-                          onChange={(e) => handleInlineFilterChange('bl_status', e.target.value)}
-                          style={{ width: '100%', padding: '2px', fontSize: '12px', backgroundColor: '#f0f0f0' }}
-                        >
-                          <option value="">All</option>
-                          <option value="DRAFT">DRAFT</option>
-                          <option value="FINAL">FINAL</option>
-                          <option value="PAID">PAID</option>
-                          <option value="CANCELLED">CANCELLED</option>
-                        </select>
-                      </td>
-                      <td>
-                        <input
-                          type="number"
-                          className="inline-filter-input"
-                          value={inlineFilters.bl_total_amount || ''}
-                          onChange={(e) => handleInlineFilterChange('bl_total_amount', e.target.value)}
-                          placeholder="Filter Amount..."
-                          style={{ width: '100%', padding: '2px', fontSize: '12px', backgroundColor: '#f0f0f0' }}
-                        />
-                      </td>
-                      <td>
-                        <input
-                          type="text"
-                          className="inline-filter-input"
-                          value={inlineFilters.passengerCount || ''}
-                          onChange={(e) => handleInlineFilterChange('passengerCount', e.target.value)}
-                          placeholder="Filter Passengers..."
-                          style={{ width: '100%', padding: '2px', fontSize: '12px', backgroundColor: '#f0f0f0' }}
-                        />
-                      </td>
-                      <td>
-                        <input
-                          type="text"
-                          className="inline-filter-input"
-                          value={inlineFilters.bl_remarks || ''}
-                          onChange={(e) => handleInlineFilterChange('bl_remarks', e.target.value)}
-                          placeholder="Filter Remarks..."
-                          style={{ width: '100%', padding: '2px', fontSize: '12px', backgroundColor: '#f0f0f0' }}
-                        />
-                      </td>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {bills.length === 0 ? (
-                      <tr><td colSpan={18} style={{ textAlign: 'center' }}>No records found</td></tr>
-                    ) : (
-                      bills.map((bill, idx) => {
-                        const isSelected = selectedBill && selectedBill.id === bill.id;
-                        const balanceDue = (Number(bill.totalAmount) || 0) - (Number(bill.paidAmount) || 0);
-                        return (
-                          <tr 
-                            key={bill.id || idx}
-                            className={isSelected ? 'selected' : ''}
-                            onClick={() => handleRecordSelect(bill)}
+              /* Table fills all space; footer is position:fixed so it always shows */
+              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', border: '1px solid var(--erp-border)', background: '#fff', minHeight: 0 }}>
+                {/* Scrollable table — paddingBottom reserves space for the two fixed footer bars */}
+                <div style={{ flex: 1, overflowY: 'auto', overflowX: 'auto', backgroundColor: '#fff', paddingBottom: '58px' }}>
+                  <table className="erp-table" style={{ width: '100%', borderCollapse: 'collapse' }}>
+                    <thead style={{ position: 'sticky', top: 0, zIndex: 10, backgroundColor: 'var(--erp-bg-panel)' }}>
+                      <tr>
+                        <th style={{ width: '30px' }}></th>
+                        <th style={{ width: '100px' }}>Bill ID</th>
+                        <th style={{ width: '100px' }}>Bill Date</th>
+                        <th style={{ width: '100px' }}>Booking ID</th>
+                        <th style={{ width: '100px' }}>Sub bill number</th>
+                        <th style={{ width: '150px' }}>Customer Name</th>
+                        <th style={{ width: '120px' }}>Phone number</th>
+                        <th style={{ width: '120px' }}>Station boy name</th>
+                        <th style={{ width: '120px' }}>From station</th>
+                        <th style={{ width: '120px' }}>To station</th>
+                        <th style={{ width: '100px' }}>Journey date</th>
+                        <th style={{ width: '100px' }}>Train Number</th>
+                        <th style={{ width: '120px' }}>Reservation Class</th>
+                        <th style={{ width: '100px' }}>Ticket Type</th>
+                        <th style={{ width: '150px' }}>PNR Number(s)</th>
+                        <th style={{ width: '120px' }}>Status</th>
+                        <th style={{ width: '120px' }}>Total amount</th>
+                        <th style={{ width: '120px' }}>Passenger Count</th>
+                        <th style={{ width: '150px' }}>Special Request/Remarks</th>
+                      </tr>
+                      {/* Inline Filter Row */}
+                      <tr className="inline-filter-row" style={{ position: 'sticky', top: '24px', zIndex: 10, backgroundColor: '#f0f0f0' }}>
+                        <td></td>
+                        <td>
+                          <input
+                            type="text"
+                            className="inline-filter-input"
+                            value={inlineFilters.bl_bill_no || ''}
+                            onChange={(e) => handleInlineFilterChange('bl_bill_no', e.target.value)}
+                            placeholder="Filter Bill ID..."
+                            style={{ width: '100%', padding: '2px', fontSize: '12px' }}
+                          />
+                        </td>
+                        <td>
+                          <input
+                            type="date"
+                            className="inline-filter-input"
+                            value={inlineFilters.bl_billing_date || ''}
+                            onChange={(e) => handleInlineFilterChange('bl_billing_date', e.target.value)}
+                            placeholder="Filter Date..."
+                            style={{ width: '100%', padding: '2px', fontSize: '12px' }}
+                          />
+                        </td>
+                        <td>
+                          <input
+                            type="text"
+                            className="inline-filter-input"
+                            value={inlineFilters.bl_booking_id || ''}
+                            onChange={(e) => handleInlineFilterChange('bl_booking_id', e.target.value)}
+                            placeholder="Filter Booking ID..."
+                            style={{ width: '100%', padding: '2px', fontSize: '12px' }}
+                          />
+                        </td>
+                        <td>
+                          <input
+                            type="text"
+                            className="inline-filter-input"
+                            value={inlineFilters.bl_sub_bill_no || ''}
+                            onChange={(e) => handleInlineFilterChange('bl_sub_bill_no', e.target.value)}
+                            placeholder="Filter Sub Bill No..."
+                            style={{ width: '100%', padding: '2px', fontSize: '12px' }}
+                          />
+                        </td>
+                        <td>
+                          <input
+                            type="text"
+                            className="inline-filter-input"
+                            value={inlineFilters.bl_customer_name || ''}
+                            onChange={(e) => handleInlineFilterChange('bl_customer_name', e.target.value)}
+                            placeholder="Filter Name..."
+                            style={{ width: '100%', padding: '2px', fontSize: '12px' }}
+                          />
+                        </td>
+                        <td>
+                          <input
+                            type="text"
+                            className="inline-filter-input"
+                            value={inlineFilters.bl_customer_phone || ''}
+                            onChange={(e) => handleInlineFilterChange('bl_customer_phone', e.target.value)}
+                            placeholder="Filter Phone..."
+                            style={{ width: '100%', padding: '2px', fontSize: '12px' }}
+                          />
+                        </td>
+                        <td>
+                          <input
+                            type="text"
+                            className="inline-filter-input"
+                            value={inlineFilters.bl_station_boy || ''}
+                            onChange={(e) => handleInlineFilterChange('bl_station_boy', e.target.value)}
+                            placeholder="Filter Station Boy..."
+                            style={{ width: '100%', padding: '2px', fontSize: '12px' }}
+                          />
+                        </td>
+                        <td>
+                          <input
+                            type="text"
+                            className="inline-filter-input"
+                            value={inlineFilters.bl_from_station || ''}
+                            onChange={(e) => handleInlineFilterChange('bl_from_station', e.target.value)}
+                            placeholder="Filter From Station..."
+                            style={{ width: '100%', padding: '2px', fontSize: '12px' }}
+                          />
+                        </td>
+                        <td>
+                          <input
+                            type="text"
+                            className="inline-filter-input"
+                            value={inlineFilters.bl_to_station || ''}
+                            onChange={(e) => handleInlineFilterChange('bl_to_station', e.target.value)}
+                            placeholder="Filter To Station..."
+                            style={{ width: '100%', padding: '2px', fontSize: '12px' }}
+                          />
+                        </td>
+                        <td>
+                          <input
+                            type="date"
+                            className="inline-filter-input"
+                            value={inlineFilters.bl_journey_date || ''}
+                            onChange={(e) => handleInlineFilterChange('bl_journey_date', e.target.value)}
+                            placeholder="Filter Journey Date..."
+                            style={{ width: '100%', padding: '2px', fontSize: '12px' }}
+                          />
+                        </td>
+                        <td>
+                          <input
+                            type="text"
+                            className="inline-filter-input"
+                            value={inlineFilters.bl_train_no || ''}
+                            onChange={(e) => handleInlineFilterChange('bl_train_no', e.target.value)}
+                            placeholder="Filter Train Number..."
+                            style={{ width: '100%', padding: '2px', fontSize: '12px' }}
+                          />
+                        </td>
+                        <td>
+                          <select
+                            className="inline-filter-input"
+                            value={inlineFilters.bl_class || ''}
+                            onChange={(e) => handleInlineFilterChange('bl_class', e.target.value)}
+                            style={{ width: '100%', padding: '2px', fontSize: '12px' }}
                           >
-                            <td><input type="checkbox" checked={!!isSelected} onChange={() => {}} /></td>
-                            <td>{bill.bl_bill_no || bill.billNo || bill.id || 'N/A'}</td>
-                            <td>{bill.billDate || 'N/A'}</td>
-                            <td>{bill.bookingId || 'N/A'}</td>
-                            <td>{bill.subBillNo || 'N/A'}</td>
-                            <td>{bill.customerName || 'N/A'}</td>
-                            <td>{bill.phoneNumber || 'N/A'}</td>
-                            <td>{bill.stationBoy || 'N/A'}</td>
-                            <td>{bill.fromStation || 'N/A'}</td>
-                            <td>{bill.toStation || 'N/A'}</td>
-                            <td>{bill.journeyDate || 'N/A'}</td>
-                            <td>{bill.trainNumber || 'N/A'}</td>
-                            <td>{bill.reservationClass || 'N/A'}</td>
-                            <td>{bill.ticketType || 'N/A'}</td>
-                            <td>{bill.pnrNumbers || 'N/A'}</td>
-                            <td>
-                              <span className={`erp-status-badge status-${(bill.bl_status || bill.status || 'DRAFT').toLowerCase()}`}>
-                                {bill.bl_status || bill.status || 'DRAFT'}
-                              </span>
-                            </td>
-                            <td>{bill.totalAmount ? Number(bill.totalAmount).toFixed(2) : '0.00'}</td>
-                            <td>{bill.passengerList ? bill.passengerList.length : '0'} passengers</td>
-                            <td>{bill.remarks || 'N/A'}</td>
-                          </tr>
-                        );
-                      })
-                    )}
-                  </tbody>
-                </table>
+                            <option value="">All</option>
+                            <option value="SL">SL</option>
+                            <option value="3A">3A</option>
+                            <option value="2A">2A</option>
+                            <option value="1A">1A</option>
+                            <option value="CC">CC</option>
+                          </select>
+                        </td>
+                        <td>
+                          <select
+                            className="inline-filter-input"
+                            value={inlineFilters.bl_ticket_type || ''}
+                            onChange={(e) => handleInlineFilterChange('bl_ticket_type', e.target.value)}
+                            style={{ width: '100%', padding: '2px', fontSize: '12px' }}
+                          >
+                            <option value="">All</option>
+                            <option value="NORMAL">NORMAL</option>
+                            <option value="TATKAL">TATKAL</option>
+                            <option value="PREMIUM_TATKAL">PREMIUM_TATKAL</option>
+                          </select>
+                        </td>
+                        <td>
+                          <input
+                            type="text"
+                            className="inline-filter-input"
+                            value={inlineFilters.bl_pnr || ''}
+                            onChange={(e) => handleInlineFilterChange('bl_pnr', e.target.value)}
+                            placeholder="Filter PNR Numbers..."
+                            style={{ width: '100%', padding: '2px', fontSize: '12px' }}
+                          />
+                        </td>
+                        <td>
+                          <select
+                            className="inline-filter-input"
+                            value={inlineFilters.bl_status || ''}
+                            onChange={(e) => handleInlineFilterChange('bl_status', e.target.value)}
+                            style={{ width: '100%', padding: '2px', fontSize: '12px' }}
+                          >
+                            <option value="">All</option>
+                            <option value="DRAFT">DRAFT</option>
+                            <option value="FINAL">FINAL</option>
+                            <option value="PAID">PAID</option>
+                            <option value="CANCELLED">CANCELLED</option>
+                          </select>
+                        </td>
+                        <td>
+                          <input
+                            type="number"
+                            className="inline-filter-input"
+                            value={inlineFilters.bl_total_amount || ''}
+                            onChange={(e) => handleInlineFilterChange('bl_total_amount', e.target.value)}
+                            placeholder="Filter Amount..."
+                            style={{ width: '100%', padding: '2px', fontSize: '12px' }}
+                          />
+                        </td>
+                        <td>
+                          <input
+                            type="text"
+                            className="inline-filter-input"
+                            value={inlineFilters.passengerCount || ''}
+                            onChange={(e) => handleInlineFilterChange('passengerCount', e.target.value)}
+                            placeholder="Filter Passengers..."
+                            style={{ width: '100%', padding: '2px', fontSize: '12px' }}
+                          />
+                        </td>
+                        <td>
+                          <input
+                            type="text"
+                            className="inline-filter-input"
+                            value={inlineFilters.bl_remarks || ''}
+                            onChange={(e) => handleInlineFilterChange('bl_remarks', e.target.value)}
+                            placeholder="Filter Remarks..."
+                            style={{ width: '100%', padding: '2px', fontSize: '12px' }}
+                          />
+                        </td>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {bills.length === 0 ? (
+                        <tr><td colSpan={19} style={{ textAlign: 'center', padding: '20px' }}>No records found</td></tr>
+                      ) : (
+                        bills.map((bill, idx) => {
+                          const isSelected = selectedBill && selectedBill.id === bill.id;
+                          return (
+                            <tr 
+                              key={bill.id || idx}
+                              className={isSelected ? 'selected' : ''}
+                              onClick={() => handleRecordSelect(bill)}
+                              style={{ cursor: 'pointer' }}
+                            >
+                              <td>
+                                <div style={{ display: 'flex', gap: '4px' }}>
+                                  <input type="checkbox" checked={!!isSelected} onChange={() => {}} />
+                                  <button 
+                                    className="erp-button small" 
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setPreviewBill(bill);
+                                      setShowPreview(true);
+                                    }}
+                                    title="Inline Preview"
+                                    style={{ padding: '0 4px', height: '18px', fontSize: '10px' }}
+                                  >
+                                    👁️
+                                  </button>
+                                </div>
+                              </td>
+                              <td>{bill.bl_bill_no || bill.billNo || bill.id || 'N/A'}</td>
+                              <td>{bill.billDate || 'N/A'}</td>
+                              <td>{bill.bookingId || 'N/A'}</td>
+                              <td>{bill.subBillNo || 'N/A'}</td>
+                              <td>{bill.customerName || 'N/A'}</td>
+                              <td>{bill.phoneNumber || 'N/A'}</td>
+                              <td>{bill.stationBoy || 'N/A'}</td>
+                              <td>{bill.fromStation || 'N/A'}</td>
+                              <td>{bill.toStation || 'N/A'}</td>
+                              <td>{bill.journeyDate || 'N/A'}</td>
+                              <td>{bill.trainNumber || 'N/A'}</td>
+                              <td>{bill.reservationClass || 'N/A'}</td>
+                              <td>{bill.ticketType || 'N/A'}</td>
+                              <td>{bill.pnrNumbers || 'N/A'}</td>
+                              <td>
+                                <span className={`erp-status-badge status-${(bill.bl_status || bill.status || 'DRAFT').toLowerCase()}`}>
+                                  {bill.bl_status || bill.status || 'DRAFT'}
+                                </span>
+                              </td>
+                              <td style={{ textAlign: 'right', fontWeight: 'bold' }}>{bill.totalAmount ? Number(bill.totalAmount).toFixed(2) : '0.00'}</td>
+                              <td style={{ textAlign: 'center' }}>{bill.passengerList ? bill.passengerList.length : '0'}</td>
+                              <td>{bill.remarks || ''}</td>
+                            </tr>
+                          );
+                        })
+                      )}
+                    </tbody>
+                  </table>
                 </div>
-                {/* STICKY PAGINATION COMPONENT */}
-                <PaginationControls
-                  pagination={pagination}
-                  onPageChange={setPage}
-                  limit={limit}
-                  onLimitChange={changeLimit}
-                />
+                {/* ── end scrollable table container ── */}
+
+                {/* ── FIXED FOOTER: always visible at bottom of viewport ── */}
+                <div style={{
+                  position: 'fixed',
+                  bottom: 0,
+                  left: 0,
+                  right: 0,
+                  zIndex: 200,
+                }}>
+                  {/* Totals summary bar */}
+                  <div style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    padding: '3px 12px',
+                    backgroundColor: '#5a6268',
+                    borderTop: '2px solid #495057',
+                    fontSize: '11px',
+                    fontWeight: 'bold',
+                    color: '#ffffff',
+                  }}>
+                    <div style={{ display: 'flex', gap: '20px' }}>
+                      <span>TOTAL RECORDS: <span style={{ color: '#ffcc00' }}>{aggregates?.count ?? bills.length}</span></span>
+                      <span>DISPLAYED: <span style={{ color: '#ffcc00' }}>{bills.length}</span></span>
+                    </div>
+                    <div style={{ display: 'flex', gap: '20px', alignItems: 'center' }}>
+                      <span>SUMMARY TOTAL:</span>
+                      <div style={{
+                        backgroundColor: '#343a40',
+                        padding: '2px 10px',
+                        border: '1px inset #212529',
+                        minWidth: '120px',
+                        textAlign: 'right',
+                        color: '#00ff00',
+                        fontSize: '13px',
+                        fontFamily: 'monospace',
+                      }}>
+                        ₹{Number(aggregates?.totalAmount || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Pagination bar */}
+                  <PaginationControls
+                    pagination={pagination}
+                    onPageChange={setPage}
+                    limit={limit}
+                    onLimitChange={changeLimit}
+                    recordCount={bills.length}
+                  />
+                </div>
+                {/* ── end fixed footer ── */}
+
               </div>
             )}
           </div>
         </div>
 
         {/* Right Sidebar: Filters */}
-        <div className="layout-right-sidebar">
+        <div className="layout-right-sidebar" style={{ overflowY: 'auto', height: '100%' }}>
           <div className="layout-filters-content">
              <div className="section-title">FILTERS</div>
              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
@@ -2427,6 +2548,27 @@ const Billing = () => {
                    <label style={{ fontSize: '11px', textAlign: 'right' }}>Status:</label>
                    <input type="text" className="erp-input inline-filter-input" value={inlineFilters['bl_status']||''} onChange={(e)=>handleInlineFilterChange('bl_status', e.target.value)} />
                 </div>
+                
+                <div className="section-subtitle" style={{ fontSize: '10px', fontWeight: 'bold', marginTop: '8px', borderTop: '1px solid #eee', paddingTop: '4px' }}>DATE RANGE</div>
+                <div style={{ display: 'grid', gridTemplateColumns: '80px 1fr', gap: '6px', alignItems: 'center' }}>
+                   <label style={{ fontSize: '11px', textAlign: 'right' }}>Start Date:</label>
+                   <input type="date" className="erp-input inline-filter-input" value={inlineFilters['startDate']||''} onChange={(e)=>handleInlineFilterChange('startDate', e.target.value)} />
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '80px 1fr', gap: '6px', alignItems: 'center' }}>
+                   <label style={{ fontSize: '11px', textAlign: 'right' }}>End Date:</label>
+                   <input type="date" className="erp-input inline-filter-input" value={inlineFilters['endDate']||''} onChange={(e)=>handleInlineFilterChange('endDate', e.target.value)} />
+                </div>
+
+                <div className="section-subtitle" style={{ fontSize: '10px', fontWeight: 'bold', marginTop: '8px', borderTop: '1px solid #eee', paddingTop: '4px' }}>AMOUNT RANGE</div>
+                <div style={{ display: 'grid', gridTemplateColumns: '80px 1fr', gap: '6px', alignItems: 'center' }}>
+                   <label style={{ fontSize: '11px', textAlign: 'right' }}>Min Amt:</label>
+                   <input type="number" step="0.01" className="erp-input inline-filter-input" placeholder="0.00" value={inlineFilters['minAmount']||''} onChange={(e)=>handleInlineFilterChange('minAmount', e.target.value)} />
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '80px 1fr', gap: '6px', alignItems: 'center' }}>
+                   <label style={{ fontSize: '11px', textAlign: 'right' }}>Max Amt:</label>
+                   <input type="number" step="0.01" className="erp-input inline-filter-input" placeholder="0.00" value={inlineFilters['maxAmount']||''} onChange={(e)=>handleInlineFilterChange('maxAmount', e.target.value)} />
+                </div>
+
                 <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '4px', gap: '4px' }}>
                     <button onClick={clearFilters} className="erp-button small">Clear (ESC)</button>
                 </div>
@@ -2628,6 +2770,41 @@ const Billing = () => {
               >
                 {isCancelling ? 'Processing...' : 'Confirm Cancellation (F10)'}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Inline Preview Modal */}
+      {showPreview && previewBill && (
+        <div className="erp-modal-overlay" onClick={() => setShowPreview(false)}>
+          <div className="erp-modal" style={{ maxWidth: '800px' }} onClick={(e) => e.stopPropagation()}>
+            <div className="erp-modal-header">
+              <h3>📋 Bill Preview: {previewBill.billNo}</h3>
+              <button className="erp-modal-close" onClick={() => setShowPreview(false)}>×</button>
+            </div>
+            <div className="erp-modal-body" style={{ maxHeight: '70vh', overflowY: 'auto' }}>
+              <div className="erp-form-section">
+                <div className="erp-form-row-compact-3">
+                  <div><label className="erp-form-label">Customer</label><div className="erp-value-text">{previewBill.customerName}</div></div>
+                  <div><label className="erp-form-label">Phone</label><div className="erp-value-text">{previewBill.phoneNumber}</div></div>
+                  <div><label className="erp-form-label">Status</label><span className={`erp-status-badge status-${(previewBill.status || 'DRAFT').toLowerCase()}`}>{previewBill.status}</span></div>
+                </div>
+                <div className="erp-form-row-compact-3" style={{ marginTop: '10px' }}>
+                  <div><label className="erp-form-label">From</label><div className="erp-value-text">{previewBill.fromStation}</div></div>
+                  <div><label className="erp-form-label">To</label><div className="erp-value-text">{previewBill.toStation}</div></div>
+                  <div><label className="erp-form-label">Journey Date</label><div className="erp-value-text">{previewBill.journeyDate}</div></div>
+                </div>
+                <div className="erp-form-row-compact-3" style={{ marginTop: '10px' }}>
+                  <div><label className="erp-form-label">PNR</label><div className="erp-value-text">{previewBill.pnrNumbers}</div></div>
+                  <div><label className="erp-form-label">Total Amount</label><div className="erp-value-text" style={{ fontSize: '16px', fontWeight: 'bold', color: '#005fcc' }}>₹{Number(previewBill.totalAmount).toFixed(2)}</div></div>
+                  <div><label className="erp-form-label">Remarks</label><div className="erp-value-text">{previewBill.remarks || '-'}</div></div>
+                </div>
+              </div>
+            </div>
+            <div className="erp-modal-footer">
+              <button className="erp-button erp-button-secondary" onClick={() => setShowPreview(false)}>Close</button>
+              <button className="erp-button erp-button-primary" onClick={() => { setShowPreview(false); handlePrintBill(previewBill); }}>Print PDF</button>
             </div>
           </div>
         </div>

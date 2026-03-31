@@ -5,6 +5,7 @@ const {
   getAllBills,
   getBillById,
   getPrintableBill,
+  downloadBillPDF,
   updateBill,
   finalizeBill,
   deleteBill,
@@ -41,6 +42,7 @@ router.get('/', getAllBills);
 
 // Printable tax invoice (same handler as main billing; must be before /:id)
 router.get('/print/:billId', getPrintableBill);
+router.get('/download/:billId', downloadBillPDF);
 
 router.get('/cancellations/history', getCancellationHistory);
 

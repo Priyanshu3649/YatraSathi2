@@ -23,16 +23,15 @@ export const usePagination = (initialPage = 1, initialLimit = 50) => {
    */
   const updatePagination = useCallback((paginationData) => {
     if (paginationData) {
+      const cp = paginationData.currentPage || paginationData.page || 1;
+      const tp = paginationData.totalPages || 1;
       setPagination({
-        currentPage: paginationData.currentPage || paginationData.page || 1,
-        totalPages: paginationData.totalPages || 1,
+        currentPage: cp,
+        totalPages: tp,
         totalRecords: paginationData.totalRecords || paginationData.count || 0,
-        hasNextPage: paginationData.hasNextPage !== undefined 
-          ? paginationData.hasNextPage 
-          : (paginationData.currentPage < paginationData.totalPages),
-        hasPrevPage: paginationData.hasPrevPage !== undefined 
-          ? paginationData.hasPrevPage 
-          : (paginationData.currentPage > 1)
+        // support both hasNextPage (Bookings) and hasNext (Billing queryHelper)
+        hasNextPage: paginationData.hasNextPage ?? paginationData.hasNext ?? (cp < tp),
+        hasPrevPage: paginationData.hasPrevPage ?? paginationData.hasPrev ?? (cp > 1),
       });
     }
   }, []);

@@ -36,6 +36,30 @@ export const ReportProvider = ({ children }) => {
   }, []);
 
   /**
+   * Run the New JESPR Generic Reporting Engine
+   */
+  const generateGenericReport = useCallback(async (options) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const response = await axios.post('/api/reports/generate', options, {
+        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
+      });
+      
+      if (response.data.success) {
+        setCurrentReport(response.data.data);
+        return response.data.data;
+      } else {
+        setError(response.data.message || 'Failed to generate generic report');
+      }
+    } catch (err) {
+      setError(err.response?.data?.message || err.message);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  /**
    * Export report
    */
   const exportReport = useCallback(async (reportType, format, filters) => {
@@ -72,6 +96,7 @@ export const ReportProvider = ({ children }) => {
       loading,
       error,
       runReport,
+      generateGenericReport,
       exportReport,
       resetReport
     }}>

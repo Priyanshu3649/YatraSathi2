@@ -1,16 +1,16 @@
-const ApplicationTVL = require('../models/ApplicationTVL');
-const ModuleTVL = require('../models/ModuleTVL');
-const PermissionTVL = require('../models/PermissionTVL');
-const RoleTVL = require('../models/RoleTVL');
-const UserTVL = require('../models/UserTVL');
-const RolePermissionTVL = require('../models/RolePermissionTVL');
-const UserPermissionTVL = require('../models/UserPermissionTVL');
-const CustomerTVL = require('../models/CustomerTVL');
-const Employee = require('../models/Employee');
-const EmployeeTVL = require('../models/EmployeeTVL');
-const Role = require('../models/Role'); // Add the regular Role model
-const Login = require('../models/Login');
-const LoginTVL = require('../models/LoginTVL');
+const queryHelper = require('../utils/queryHelper');
+const { 
+  ApplicationTVL, 
+  ModuleTVL, 
+  PermissionTVL, 
+  RoleTVL, 
+  UserTVL, 
+  RolePermissionTVL, 
+  UserPermissionTVL, 
+  CustomerTVL, 
+  EmployeeTVL, 
+  LoginTVL 
+} = require('../models');
 const bcrypt = require('bcryptjs');
 
 // Helper function to parse database errors into user-friendly messages
@@ -629,13 +629,13 @@ const getAllCustomers = async (req, res) => {
         cu_email: custData.user?.us_email || '',
         cu_phone: custData.user?.us_phone || '',
         cu_name: custData.user ? `${custData.user.us_fname || ''} ${custData.user.us_lname || ''}`.trim() : 'N/A',
-        cu_gst: custData.cu_gst,
-        cu_creditlmt: custData.cu_creditlmt,
-        cu_status: custData.cu_status,
-        edtm: custData.edtm,
-        eby: custData.eby,
-        mdtm: custData.mdtm,
-        mby: custData.mby,
+        cu_gst: custData.cu_gstno || custData.cu_gst || '', // Handle multiple naming conventions
+        cu_creditlmt: custData.cu_creditlimit || custData.cu_creditlmt || 0,
+        cu_status: custData.cu_status || custData.status || '',
+        edtm: custData.entered_on || custData.edtm, // Map TVL date fields to frontend expectation
+        eby: custData.entered_by || custData.eby,
+        mdtm: custData.modified_on || custData.mdtm,
+        mby: custData.modified_by || custData.mby,
         fullName: custData.user ? `${custData.user.us_fname || ''} ${custData.user.us_lname || ''}`.trim() : 'N/A'
       };
     });
@@ -1052,11 +1052,6 @@ const getAllEmployees = async (req, res) => {
   try {
     const { limit, offset, page } = queryHelper.getPaginationOptions(req.query);
     
-    // Ensure core association exists
-    if (!EmployeeTVL.associations.user) {
-      EmployeeTVL.belongsTo(UserTVL, { foreignKey: 'em_usid', targetKey: 'us_usid', as: 'user' });
-    }
-
     const { count, rows: employees } = await EmployeeTVL.findAndCountAll({
       attributes: [
         'em_usid', 'em_empno', 'em_dept', 'em_salary',

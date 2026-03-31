@@ -1,24 +1,24 @@
 'use strict';
 
 const PDFDocument = require('pdfkit');
+const QRCode = require('qrcode');
 
 // ─── colour palette ───────────────────────────────────────────────────────────
 const CLR = {
-  primary:    '#4A2C0A',   // dark warm brown  (headings, borders)
-  accent:     '#7B4A1E',   // medium brown      (section labels, kicker)
-  light:      '#F5ECD7',   // parchment         (table header bg)
-  muted:      '#9E7B5A',   // muted brown       (small labels)
-  black:      '#1A1008',   // near-black        (body text)
+  primary:    '#2C3E50',   // Professional dark blue/charcoal
+  accent:     '#8E44AD',   // Professional purple
+  light:      '#F4F6F7',   // Light gray bg
+  muted:      '#7F8C8D',   // Muted gray
+  black:      '#2C3E50',   // Body text
   white:      '#FFFFFF',
-  cancel:     '#8B1A1A',   // deep red          (cancelled watermark)
-  line:       '#C9A97A',   // light brown       (dividers)
-  tableAlt:   '#FAF4E8',   // light parchment   (alternate row)
+  cancel:     '#E74C3C',   // Red for cancellation
+  line:       '#BDC3C7',   // Border color
+  tableAlt:   '#FBFCFC',   // Alt row
 };
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
 function fmt(value) {
-  // format a number as Indian Rupee currency
   const n = Number.parseFloat(value);
   if (!Number.isFinite(n)) return '₹0.00';
   return '₹' + n.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -44,7 +44,7 @@ function drawRect(doc, x, y, w, h, fillColor, strokeColor) {
 }
 
 // Simple table renderer
-function drawTable(doc, { x, y, colWidths, headers, rows, pageWidth }) {
+function drawTable(doc, { x, y, colWidths, headers, rows }) {
   const rowH = 18;
   const headerH = 20;
   const totalW = colWidths.reduce((a, b) => a + b, 0);
@@ -75,274 +75,192 @@ function drawTable(doc, { x, y, colWidths, headers, rows, pageWidth }) {
   return y; // return new y position after table
 }
 
-// ─── main generator ──────────────────────────────────────────────────────────
+async function generateBillPDF(payload) {
+  const { company, bill, customer, booking, passengers, financials, gst, upi, signature, irn, cancellation, audit, jespr } = payload;
 
-/**
- * generateBillPDF(payload)
- * Accepts the same JSON returned by getBillPrintPayload() and streams a PDF buffer.
- *
- * @param {object} payload  - { company, bill, customer, booking, passengers, financials, cancellation, audit, jespr }
- * @returns {Promise<Buffer>}
- */
-function generateBillPDF(payload) {
-  return new Promise((resolve, reject) => {
-    try {
-      const { company, bill, customer, booking, passengers, financials, cancellation, audit, jespr } = payload;
+  const doc = new PDFDocument({ size: 'A4', margin: 36 });
+  const buffers = [];
+  doc.on('data', buffers.push.bind(buffers));
 
-      const doc = new PDFDocument({ size: 'A4', margin: 0, info: {
-        Title: `Tax Invoice – ${bill.billNumber}`,
-        Author: company.name,
-        Subject: 'Tax Invoice',
-      }});
+  const M = 36;
+  const PW = 595.28;
+  const PH = 841.89;
+  const CW = PW - M * 2;
 
-      const buffers = [];
-      doc.on('data', (chunk) => buffers.push(chunk));
-      doc.on('end', () => resolve(Buffer.concat(buffers)));
-      doc.on('error', reject);
+  // Watermark (Cancelled)
+  if (cancellation.isCancelled) {
+    doc.save()
+       .fontSize(80).fillColor(CLR.cancel).fillOpacity(0.05)
+       .font('Helvetica-Bold')
+       .translate(PW/2, PH/2)
+       .rotate(-45)
+       .text('CANCELLED', -250, -40, { characterSpacing: 10 })
+       .restore();
+  } else {
+    doc.save()
+       .fontSize(60).fillColor(CLR.muted).fillOpacity(0.04)
+       .font('Helvetica-Bold')
+       .translate(PW/2, PH/2)
+       .rotate(-45)
+       .text('ANMOL TRAVELS', -250, -40, { characterSpacing: 5 })
+       .restore();
+  }
 
-      const M = 36;           // page margin
-      const PW = 595.28;      // A4 width
-      const PH = 841.89;      // A4 height
-      const CW = PW - M * 2; // content width
+  let y = M;
 
-      // ── CANCELLED WATERMARK ──────────────────────────────────────────────
-      if (cancellation.isCancelled) {
-        doc.save()
-           .fontSize(80).fillColor(CLR.cancel).fillOpacity(0.08)
-           .font('Helvetica-Bold')
-           .translate(PW / 2, PH / 2)
-           .rotate(-45)
-           .text('CANCELLED', -200, -40, { lineBreak: false, characterSpacing: 10 })
-           .restore();
-      }
+  // Header: Logo Placeholder & Company Info
+  doc.fontSize(20).font('Helvetica-Bold').fillColor(CLR.primary).text(company.name, M, y);
+  y += 24;
+  doc.fontSize(10).font('Helvetica').fillColor(CLR.black).text(company.address, M, y, { width: 300 });
+  y += 24;
+  doc.fontSize(10).text(`GSTIN: ${company.gst} | State: ${company.state} (${company.stateCode})`, M, y);
+  y += 18;
 
-      let y = M;
+  const headerRightX = PW - M - 150;
+  doc.fontSize(22).font('Helvetica-Bold').fillColor(CLR.accent).text('TAX INVOICE', headerRightX, M, { align: 'right' });
+  
+  // Invoice Details Box
+  y += 10;
+  const invBoxY = y;
+  drawRect(doc, headerRightX, y, 150, 70, CLR.light, CLR.line);
+  let iy = y + 8;
+  const labelX = headerRightX + 5;
+  const valueX = headerRightX + 65;
+  doc.fontSize(8).font('Helvetica').fillColor(CLR.muted).text('Invoice No:', labelX, iy);
+  doc.font('Helvetica-Bold').fillColor(CLR.primary).text(bill.billNumber, valueX, iy);
+  iy += 12;
+  doc.font('Helvetica').fillColor(CLR.muted).text('Date:', labelX, iy);
+  doc.font('Helvetica-Bold').fillColor(CLR.primary).text(fmtDate(bill.date), valueX, iy);
+  iy += 12;
+  doc.font('Helvetica').fillColor(CLR.muted).text('Place of Supply:', labelX, iy);
+  doc.font('Helvetica-Bold').fillColor(CLR.primary).text(bill.placeOfSupply, valueX, iy);
+  iy += 12;
+  doc.font('Helvetica').fillColor(CLR.muted).text('Reverse Charge:', labelX, iy);
+  doc.font('Helvetica-Bold').fillColor(CLR.primary).text(bill.reverseCharge, valueX, iy);
 
-      // ── TOP COLOUR BAR ───────────────────────────────────────────────────
-      drawRect(doc, 0, 0, PW, 6, CLR.primary);
-      y = 18;
+  y = Math.max(y + 80, iy + 20);
 
-      // ── HEADER: Company Info + Bill Meta ──────────────────────────────────
-      // Left: company
-      doc.font('Helvetica').fontSize(8).fillColor(CLR.accent)
-         .text('TAX INVOICE', M, y, { characterSpacing: 2 });
-      y += 12;
+  // Customer Details
+  drawHRule(doc, M, y, CW, CLR.line);
+  y += 10;
+  doc.fontSize(10).font('Helvetica-Bold').fillColor(CLR.primary).text('Bill To (Customer Details)', M, y);
+  y += 14;
+  doc.fontSize(9).font('Helvetica-Bold').text(customer.name, M, y);
+  y += 12;
+  doc.font('Helvetica').text(customer.address, M, y, { width: 250 });
+  y += 24;
+  doc.text(`GSTIN: ${customer.gstNo} | State: ${customer.state}`, M, y);
+  y += 20;
 
-      doc.font('Helvetica-Bold').fontSize(16).fillColor(CLR.primary)
-         .text(company.name, M, y);
-      y += 20;
+  // Booking & Service Details Table
+  doc.fontSize(10).font('Helvetica-Bold').fillColor(CLR.primary).text('Booking & Service Details', M, y);
+  y += 14;
+  const serviceHeads = ['Description', 'SAC Code', 'Qty', 'Rate', 'Amount'];
+  const serviceRows = [
+    [`Booking ${booking.bookingNumber || booking.bookingId}: ${booking.travelDetails}`, '998551', '1', fmt(baseAmount), fmt(baseAmount)]
+  ];
+  y = drawTable(doc, { x: M, y, colWidths: [220, 80, 40, 90, 93.28], headers: serviceHeads, rows: serviceRows });
+  y += 15;
 
-      doc.font('Helvetica').fontSize(8).fillColor(CLR.muted)
-         .text(company.address, M, y, { width: 220 });
-      y += doc.heightOfString(company.address, { width: 220, fontSize: 8 }) + 2;
+  // Passenger Table
+  doc.fontSize(9).font('Helvetica-Bold').fillColor(CLR.primary).text('Passengers', M, y);
+  y += 12;
+  const passHeads = ['#', 'Name', 'Age/Gender', 'Coach/Seat', 'PNR'];
+  const passRows = passengers.map((p, i) => [i + 1, p.name, `${p.age}/${p.gender}`, `${p.coach}/${p.seatNo}`, booking.pnr || '-']);
+  y = drawTable(doc, { x: M, y, colWidths: [30, 180, 100, 100, 113.28], headers: passHeads, rows: passRows });
+  y += 20;
 
-      doc.text(`Tel: ${company.phone}   |   GSTIN: ${company.gst}`, M, y);
-      y += 14;
+  // Tax Breakdown & Totals (Right Aligned Column)
+  const totalX = PW - M - 200;
+  const rowH = 15;
+  let ty = y;
 
-      // Right: bill meta box
-      const metaBoxX = PW - M - 180;
-      const metaBoxY = 18;
-      const metaBoxW = 180;
-      const metaH    = 68;
-      drawRect(doc, metaBoxX, metaBoxY, metaBoxW, metaH, CLR.light, CLR.line);
+  const taxRows = [
+    ['Subtotal (Taxable Value)', fmt(baseAmount)],
+    ...(gst.isIntraState ? [
+      [`CGST (9%)`, fmt(gst.cgst)],
+      [`SGST (9%)`, fmt(gst.sgst)]
+    ] : [
+      [`IGST (18%)`, fmt(gst.igst)]
+    ]),
+    ['Grand Total', fmt(financials.total)]
+  ];
 
-      const metaRows = [
-        ['Bill No',  bill.billNumber],
-        ['Bill ID',  String(bill.billId)],
-        ['Date',     fmtDate(bill.date)],
-        ['Status',   bill.status],
-      ];
-      let my = metaBoxY + 6;
-      metaRows.forEach(([label, val]) => {
-        doc.font('Helvetica').fontSize(7.5).fillColor(CLR.muted)
-           .text(label, metaBoxX + 8, my, { continued: false });
-        doc.font('Helvetica-Bold').fontSize(7.5).fillColor(CLR.primary)
-           .text(val, metaBoxX + 70, my);
-        my += 13;
-      });
+  taxRows.forEach((row, i) => {
+    const isTotal = i === taxRows.length - 1;
+    if (isTotal) drawHRule(doc, totalX, ty, 200, CLR.primary, 1);
+    doc.fontSize(isTotal ? 10 : 9).font(isTotal ? 'Helvetica-Bold' : 'Helvetica').fillColor(CLR.primary);
+    doc.text(row[0], totalX, ty + 4, { width: 120 });
+    doc.text(row[1], totalX + 120, ty + 4, { width: 80, align: 'right' });
+    ty += rowH + 4;
+  });
 
-      // ── DIVIDER ───────────────────────────────────────────────────────────
-      y = Math.max(y, metaBoxY + metaH) + 10;
-      drawHRule(doc, M, y, CW, CLR.primary, 1.5);
-      y += 8;
+  // Amount in Words (Left Aligned)
+  doc.fontSize(9).font('Helvetica').fillColor(CLR.muted).text('Amount in Words:', M, y);
+  doc.fontSize(9).font('Helvetica-Bold').fillColor(CLR.primary).text(financials.amountInWords, M, y + 12, { width: 300 });
 
-      // ── CUSTOMER + BOOKING ────────────────────────────────────────────────
-      const halfW = (CW - 12) / 2;
+  y = Math.max(ty + 20, y + 50);
 
-      // Customer card
-      drawRect(doc, M, y, halfW, 70, CLR.light, CLR.line);
-      doc.font('Helvetica-Bold').fontSize(9).fillColor(CLR.primary)
-         .text('CUSTOMER', M + 8, y + 6);
-      doc.font('Helvetica-Bold').fontSize(10).fillColor(CLR.black)
-         .text(customer.name, M + 8, y + 19, { width: halfW - 16 });
-      doc.font('Helvetica').fontSize(8.5).fillColor(CLR.muted)
-         .text(customer.phone, M + 8, y + 33);
+  // QR Codes Section
+  const qrY = y;
+  try {
+    const upiQrData = await QRCode.toBuffer(upi.upiString);
+    doc.image(upiQrData, M, qrY, { width: 80 });
+    doc.fontSize(8).fillColor(CLR.muted).text('Scan to Pay (UPI)', M, qrY + 85, { width: 80, align: 'center' });
+    
+    // For GST verification QR, use a summary string
+    const gstQrString = `GSTIN:${company.gst},Inv:${bill.billNumber},Amt:${financials.total},Date:${bill.date}`;
+    const gstQrData = await QRCode.toBuffer(gstQrString);
+    doc.image(gstQrData, M + 100, qrY, { width: 80 });
+    doc.fontSize(8).fillColor(CLR.muted).text('GST Invoice Verification', M + 100, qrY + 85, { width: 80, align: 'center' });
+  } catch (err) {
+    console.error('QR Gen error', err);
+  }
 
-      // Booking card
-      const bx = M + halfW + 12;
-      drawRect(doc, bx, y, halfW, 70, CLR.light, CLR.line);
-      doc.font('Helvetica-Bold').fontSize(9).fillColor(CLR.primary)
-         .text('JOURNEY DETAILS', bx + 8, y + 6);
-      doc.font('Helvetica').fontSize(8).fillColor(CLR.black);
-      const bLines = [
-        `Booking: ${booking.bookingNumber || booking.bookingId || 'N/A'}`,
-        `Route:   ${booking.travelDetails || 'N/A'}`,
-        `Date:    ${fmtDate(booking.journeyDate)}`,
-        `Train: ${booking.trainNumber || 'N/A'}   Class: ${booking.reservationClass || 'N/A'}`,
-        `PNR: ${booking.pnr || 'N/A'}`,
-      ];
-      bLines.forEach((line, i) => {
-        doc.text(line, bx + 8, y + 19 + i * 10, { width: halfW - 16 });
-      });
+  // Signature Section (Right)
+  const sigX = PW - M - 150;
+  doc.fontSize(9).font('Helvetica-Bold').fillColor(CLR.primary).text('For Anmol Travels', sigX, qrY, { align: 'right', width: 150 });
+  y += 50;
+  doc.fontSize(8).font('Helvetica').fillColor(CLR.muted).text('Authorized Signatory', sigX, qrY + 85, { align: 'right', width: 150 });
+  
+  if (signature.hash) {
+    doc.fontSize(6).fillColor(CLR.muted).text(`Digitally Signed Hash: ${signature.hash.substring(0, 32)}...`, sigX, qrY + 95, { align: 'right', width: 150 });
+    doc.text(`Signed On: ${fmtDate(signature.signedOn)}`, sigX, qrY + 105, { align: 'right', width: 150 });
+  }
 
-      y += 82;
+  y = qrY + 120;
 
-      // ── PASSENGERS ────────────────────────────────────────────────────────
-      doc.font('Helvetica-Bold').fontSize(9).fillColor(CLR.primary)
-         .text('PASSENGERS', M, y);
-      doc.font('Helvetica').fontSize(8).fillColor(CLR.muted)
-         .text(`(${passengers.length} traveller${passengers.length !== 1 ? 's' : ''})`, M + 85, y + 1);
-      y += 14;
+  // JESPR Summary Section
+  drawHRule(doc, M, y, CW, CLR.line);
+  y += 10;
+  doc.fontSize(10).font('Helvetica-Bold').fillColor(CLR.primary).text('JESPR Summary (Accounting Context)', M, y);
+  y += 14;
+  doc.fontSize(8).font('Helvetica').fillColor(CLR.muted).text('Sales Entry:', M, y);
+  doc.font('Helvetica-Bold').text(jespr.sales.entryNo, M + 60, y);
+  y += 12;
+  doc.font('Helvetica').text('Linked Receipts:', M, y);
+  const rcList = jespr.receipts.map(r => `${r.receiptNo} (${fmt(r.amount)})`).join(', ') || 'None';
+  doc.font('Helvetica').text(rcList, M + 80, y, { width: 440 });
+  y += 20;
 
-      const passCols  = [24, 130, 32, 50, 40, 38, 48];
-      const passHeads = ['#', 'Name', 'Age', 'Gender', 'Coach', 'Seat', 'Berth'];
-      const passRows  = passengers.length > 0
-        ? passengers.map((p, i) => [i + 1, p.name, p.age, p.gender, p.coach, p.seatNo, p.berth])
-        : [['—', 'No passenger data', '', '', '', '', '']];
+  // IRN Section (If exists)
+  if (irn.irn) {
+    drawRect(doc, M, y, CW, 40, CLR.light, CLR.line);
+    let irny = y + 8;
+    doc.fontSize(8).font('Helvetica-Bold').fillColor(CLR.accent).text('E-Invoice (IRN) Details', M + 10, irny);
+    irny += 12;
+    doc.font('Helvetica').fillColor(CLR.black).text(`IRN: ${irn.irn}`, M + 10, irny);
+    doc.text(`Ack No: ${irn.ackNo} | Date: ${irn.ackDate}`, M + 10, irny + 10);
+    y += 50;
+  }
 
-      y = drawTable(doc, { x: M, y, colWidths: passCols, headers: passHeads, rows: passRows, pageWidth: CW });
-      y += 14;
+  // Footer
+  doc.fontSize(8).font('Helvetica').fillColor(CLR.muted).text('E. & O.E. | This is a computer-generated invoice and does not require a physical signature.', M, PH - 50, { width: CW, align: 'center' });
+  
+  doc.end();
 
-      // ── CHARGES ───────────────────────────────────────────────────────────
-      doc.font('Helvetica-Bold').fontSize(9).fillColor(CLR.primary).text('CHARGES', M, y);
-      y += 14;
-
-      const chargeRows = [
-        ['Railway Fare (Base)',   fmt(financials.baseAmount)],
-        ['Tax / GST',             fmt(financials.tax)],
-        ['Total Bill Amount',     fmt(financials.total)],
-        ['Amount Paid',           fmt(financials.paid)],
-        ['Balance Due',           fmt(financials.balance)],
-        ...(cancellation.isCancelled ? [
-          ['Cancellation Charges', fmt(cancellation.charges)],
-          ['Refund Amount',        fmt(cancellation.refundAmount)],
-        ] : []),
-      ];
-
-      const chargeW = 260;
-      const labelW  = 170;
-      const valW    = chargeW - labelW;
-      chargeRows.forEach((row, ri) => {
-        const isTotalRow = row[0] === 'Total Bill Amount';
-        const bg = isTotalRow ? CLR.light : (ri % 2 === 1 ? CLR.tableAlt : CLR.white);
-        drawRect(doc, M, y, chargeW, 18, bg, CLR.line);
-        doc.font(isTotalRow ? 'Helvetica-Bold' : 'Helvetica').fontSize(8)
-           .fillColor(CLR.black)
-           .text(row[0], M + 6, y + 5, { width: labelW - 12, lineBreak: false });
-        doc.font('Helvetica-Bold').fontSize(8)
-           .fillColor(isTotalRow ? CLR.primary : CLR.black)
-           .text(row[1], M + labelW, y + 5, { width: valW - 6, align: 'right', lineBreak: false });
-        y += 18;
-      });
-      y += 14;
-
-      // ── JESPR: Sales Entry ────────────────────────────────────────────────
-      doc.font('Helvetica-Bold').fontSize(9).fillColor(CLR.primary).text('JESPR — ACCOUNTING ENTRIES', M, y);
-      y += 5;
-      drawHRule(doc, M, y, CW, CLR.accent, 0.5);
-      y += 10;
-
-      // Sales sub-section
-      doc.font('Helvetica-Bold').fontSize(8).fillColor(CLR.accent).text('Sales Entry', M, y);
-      y += 12;
-      const salesDetail = [
-        ['Entry No', jespr.sales.entryNo || 'N/A'],
-        ['Date',     fmtDate(jespr.sales.date)],
-        ['Account',  jespr.sales.account],
-        ['Amount',   fmt(jespr.sales.amount)],
-      ];
-      salesDetail.forEach((row) => {
-        doc.font('Helvetica').fontSize(8).fillColor(CLR.muted)
-           .text(row[0] + ':', M, y, { continued: false });
-        doc.font('Helvetica-Bold').fontSize(8).fillColor(CLR.black)
-           .text(row[1], M + 70, y);
-        y += 11;
-      });
-      doc.font('Helvetica').fontSize(7.5).fillColor(CLR.muted)
-         .text(jespr.sales.narration || '', M, y, { width: CW });
-      y += 14;
-
-      // Receipts sub-section
-      doc.font('Helvetica-Bold').fontSize(8).fillColor(CLR.accent).text('Receipts', M, y);
-      y += 10;
-
-      const rcCols  = [70, 60, 55, 100, 77];
-      const rcHeads = ['Receipt No', 'Date', 'Mode', 'Reference', 'Amount'];
-      const rcRows  = jespr.receipts.length > 0
-        ? jespr.receipts.map(r => [r.receiptNo, fmtDate(r.date), r.mode, r.reference || '—', fmt(r.amount)])
-        : [['—', '—', '—', 'No linked receipts', '—']];
-
-      y = drawTable(doc, { x: M, y, colWidths: rcCols, headers: rcHeads, rows: rcRows, pageWidth: CW });
-      y += 12;
-
-      // Journal Entries sub-section
-      doc.font('Helvetica-Bold').fontSize(8).fillColor(CLR.accent).text('Journal Entries', M, y);
-      y += 10;
-
-      const jeCols  = [70, 52, 110, 52, 78];
-      const jeHeads = ['Entry No', 'Date', 'Account', 'Type', 'Amount'];
-      const jeRows  = jespr.journal.length > 0
-        ? jespr.journal.map(e => [e.entryNo, fmtDate(e.date), e.account, e.type, fmt(e.amount)])
-        : [['—', '—', '—', 'No journal adjustments', '—']];
-
-      y = drawTable(doc, { x: M, y, colWidths: jeCols, headers: jeHeads, rows: jeRows, pageWidth: CW });
-      y += 14;
-
-      // ── AUDIT TRAIL ───────────────────────────────────────────────────────
-      doc.font('Helvetica-Bold').fontSize(9).fillColor(CLR.primary).text('AUDIT TRAIL', M, y);
-      y += 14;
-
-      const auditCols = [['Entered By', audit.enteredBy], ['Entered On', fmtDate(audit.enteredOn)],
-                         ['Modified By', audit.modifiedBy || 'N/A'], ['Modified On', fmtDate(audit.modifiedOn)],
-                         ['Closed By', audit.closedBy || 'N/A'], ['Closed On', fmtDate(audit.closedOn)]];
-      const aColW = CW / 3;
-      auditCols.forEach(([label, val], i) => {
-        const ax = M + (i % 3) * aColW;
-        const ay = y;
-        if (i % 3 === 0 && i > 0) y += 20;
-        drawRect(doc, ax, ay, aColW - 4, 18, i % 2 === 0 ? CLR.light : CLR.white, CLR.line);
-        doc.font('Helvetica').fontSize(7).fillColor(CLR.muted)
-           .text(label, ax + 5, ay + 3, { width: aColW - 14, lineBreak: false });
-        doc.font('Helvetica-Bold').fontSize(8).fillColor(CLR.black)
-           .text(val, ax + 5, ay + 10, { width: aColW - 14, lineBreak: false });
-      });
-      y += 30;
-
-      // ── SIGNATURE LINE ───────────────────────────────────────────────────
-      const sigY = Math.min(y + 16, PH - 80);
-      drawHRule(doc, M, sigY, 140, CLR.muted, 0.5);
-      drawHRule(doc, PW - M - 140, sigY, 140, CLR.muted, 0.5);
-      doc.font('Helvetica').fontSize(7.5).fillColor(CLR.muted)
-         .text('Customer Signature', M, sigY + 4, { width: 140, align: 'center' })
-         .text('Authorised Signatory', PW - M - 140, sigY + 4, { width: 140, align: 'center' });
-      doc.font('Helvetica-Bold').fontSize(7.5).fillColor(CLR.primary)
-         .text(company.name, PW - M - 140, sigY + 14, { width: 140, align: 'center' });
-
-      // ── FOOTER ────────────────────────────────────────────────────────────
-      drawRect(doc, 0, PH - 28, PW, 28, CLR.primary);
-      doc.font('Helvetica').fontSize(7).fillColor('#EDD9B0')
-         .text(
-           `E. & O.E.  |  This is a computer-generated document and does not require a physical signature.  |  Generated: ${new Date().toLocaleString('en-IN')}`,
-           M, PH - 18, { width: CW, align: 'center' }
-         );
-
-      // ── BOTTOM COLOUR ACCENT ──────────────────────────────────────────────
-      // Already handled by footer rect above
-
-      doc.end();
-    } catch (err) {
-      reject(err);
-    }
+  return new Promise((resolve) => {
+    doc.on('end', () => resolve(Buffer.concat(buffers)));
   });
 }
 

@@ -4,9 +4,65 @@ const { Op } = require('sequelize');
 const financialReportService = require('../services/financialReportService');
 const { getDateRange, getFinancialYear, getQuarter } = require('../utils/dateRangeUtils');
 
-// ============================================================================
-// JESPR REPORTING ENGINE - NEW ENDPOINTS
-// ============================================================================
+const ReportEngineService = require('../services/reportEngineService');
+
+/**
+ * Generic Report Generation Engine (JESPR)
+ * POST /api/reports/generate
+ */
+const generateGenericReport = async (req, res) => {
+  try {
+    const { 
+      module, 
+      filters = {}, 
+      groupBy = [], 
+      metrics = [], 
+      pagination = { page: 1, limit: 50 },
+      sort = 'createdAt:DESC'
+    } = req.body;
+
+    if (!module) {
+      return res.status(400).json({ success: false, message: 'Module is required' });
+    }
+
+    // 1. Generate the report using the Generic Engine
+    const result = await ReportEngineService.generateReport({
+      module,
+      filters,
+      groupBy,
+      metrics,
+      pagination,
+      sort
+    });
+
+    // 2. Audit Logging (Forensic Audit)
+    if (models.ForensicAuditLog) {
+      try {
+        await models.ForensicAuditLog.create({
+          fal_usid: req.user?.us_usid || 'SYSTEM',
+          fal_action: 'GENERATE_REPORT',
+          fal_module: module,
+          fal_details: JSON.stringify({ filters, groupBy, metrics }),
+          fal_ip: req.ip,
+          fal_timestamp: new Date()
+        });
+      } catch (auditError) {
+        console.error('Failed to log report audit:', auditError);
+      }
+    }
+
+    res.json({
+      success: true,
+      data: result
+    });
+  } catch (error) {
+    console.error('Generic Report Engine Error:', error.stack || error);
+    res.status(500).json({
+      success: false,
+      message: error.message || 'Failed to generate dynamic report'
+    });
+  }
+};
 
 /**
  * Run a report based on configuration
@@ -706,6 +762,7 @@ const generatePaymentReport = async (req, res) => {
 
 module.exports = {
   // JESPR Reporting Engine
+  generateGenericReport,
   runReport,
   getReportSchema,
   saveReportTemplate,

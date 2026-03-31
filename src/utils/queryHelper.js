@@ -162,9 +162,10 @@ class QueryHelper {
    * @param {Object} where - Sequelize where clause
    * @param {Array} groupColumns - Columns to group by
    * @param {Array} sumColumns - Columns to sum
+   * @param {Array} include - Sequelize model associations
    * @returns {Object} Aggregation results
    */
-  async getAggregation(model, where, groupColumns = [], sumColumns = []) {
+  async getAggregation(model, where, groupColumns = [], sumColumns = [], include = []) {
     const attributes = [...groupColumns];
     
     sumColumns.forEach(col => {
@@ -176,7 +177,8 @@ class QueryHelper {
     return await model.findAll({
       attributes,
       where,
-      group: groupColumns,
+      include,
+      group: groupColumns.length > 0 ? groupColumns : undefined,
       raw: true
     });
   }

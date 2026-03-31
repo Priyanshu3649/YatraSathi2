@@ -1,34 +1,8 @@
-import { useCallback, useEffect, useState } from 'react';
-import { useLocation, useNavigate, useParams } from 'react-router-dom';
+import { useEffect, useState, useCallback, useRef } from 'react';
+import { useNavigate, useParams, useLocation } from 'react-router-dom';
+import QRCode from 'qrcode';
 import { billingAPI } from '../services/api';
 import '../styles/print-bill.css';
-
-const formatCurrency = (value) => {
-  const amount = Number.parseFloat(value);
-  return new Intl.NumberFormat('en-IN', {
-    style: 'currency',
-    currency: 'INR',
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2
-  }).format(Number.isFinite(amount) ? amount : 0);
-};
-
-const formatDate = (value) => {
-  if (!value) {
-    return 'N/A';
-  }
-
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    return 'N/A';
-  }
-
-  return date.toLocaleDateString('en-IN', {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric'
-  });
-};
 
 const PrintBill = () => {
   const { billId } = useParams();
@@ -37,338 +11,315 @@ const PrintBill = () => {
   const [printData, setPrintData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [copyType, setCopyType] = useState('both'); // 'customer', 'office', 'both'
+  const [upiQr, setUpiQr] = useState('');
+  const [gstQr, setGstQr] = useState('');
   const [downloading, setDownloading] = useState(false);
-  const [downloadError, setDownloadError] = useState('');
+
+  const qrRefs = useRef({ upi: null, gst: null });
 
   const handleClose = useCallback(() => {
     const returnTo = location.state?.returnTo;
-    if (typeof returnTo === 'string' && returnTo.length > 0) {
+    if (returnTo) {
       navigate(returnTo);
-      return;
+    } else {
+      navigate('/billing');
     }
-    if (window.history.length > 1) {
-      navigate(-1);
-      return;
-    }
-    navigate('/billing');
   }, [navigate, location.state]);
 
-  useEffect(() => {
-    let isMounted = true;
+  const generateQRs = async (data) => {
+    if (!data) return;
+    try {
+      if (data.upi?.upiString) {
+        const upiUrl = await QRCode.toDataURL(data.upi.upiString, { margin: 1, scale: 4 });
+        setUpiQr(upiUrl);
+      }
 
-    const loadBill = async () => {
+      if (data.company?.gst) {
+        const gstString = `GSTIN:${data.company.gst},Inv:${data.bill?.billNumber},Amt:${data.financials?.total},Date:${data.bill?.date}`;
+        const gstUrl = await QRCode.toDataURL(gstString, { margin: 1, scale: 4 });
+        setGstQr(gstUrl);
+      }
+    } catch (err) {
+      console.error('QR generation failed', err);
+    }
+  };
+
+  useEffect(() => {
+    const loadData = async () => {
       try {
         setLoading(true);
         const response = await billingAPI.getPrintableBill(billId);
-        if (isMounted) {
+        if (response && response.data) {
           setPrintData(response.data);
+          await generateQRs(response.data);
+        } else {
+          throw new Error('Invalid bill data received from server');
         }
-      } catch (loadError) {
-        if (isMounted) {
-          setError(loadError.message || 'Failed to load printable bill');
-        }
+      } catch (err) {
+        setError(err.message || 'Failed to load bill data');
       } finally {
-        if (isMounted) {
-          setLoading(false);
-        }
+        setLoading(false);
       }
     };
-
-    loadBill();
-
-    return () => {
-      isMounted = false;
-    };
+    loadData();
   }, [billId]);
 
   useEffect(() => {
-    if (!printData) {
-      return undefined;
-    }
-
-    document.title = `Bill ${printData.bill.billNumber}`;
-    return undefined;
-  }, [printData]);
-
-  useEffect(() => {
-    const handleKeyDown = (event) => {
-      if (event.ctrlKey && event.key.toLowerCase() === 'p') {
-        event.preventDefault();
+    const handleKeyDown = (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'p') {
+        e.preventDefault();
         window.print();
       }
-
-      if (event.key === 'Escape') {
+      if (e.key === 'Escape') {
         handleClose();
       }
     };
-
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [handleClose]);
 
   const handleDownloadPDF = async () => {
-    setDownloading(true);
-    setDownloadError('');
     try {
+      setDownloading(true);
       await billingAPI.downloadBillPDF(billId, printData?.bill?.billNumber);
     } catch (err) {
-      setDownloadError(err.message || 'PDF download failed');
+      alert('PDF generation failed: ' + err.message);
     } finally {
       setDownloading(false);
     }
   };
 
-  if (loading) {
-    return <div className="print-bill-state">Preparing print document...</div>;
-  }
-
+  if (loading) return <div className="print-bill-state">Generating professional invoice...</div>;
   if (error || !printData) {
     return (
-      <div className="print-bill-state print-bill-error">
-        <h1>Bill not available</h1>
-        <p>{error || 'The printable bill could not be generated.'}</p>
-        <div className="print-bill-actions no-print" style={{ marginTop: '16px' }}>
-          <button type="button" onClick={handleClose}>Back</button>
+      <div className="print-bill-state">
+        <div className="print-bill-error">
+          <h1>System Error</h1>
+          <p>{error || 'Unable to retrieve tax invoice.'}</p>
+          <button onClick={handleClose} className="btn-close">Back to Billing</button>
         </div>
       </div>
     );
   }
 
-  const { company, bill, customer, booking, passengers, financials, cancellation, audit, jespr } = printData;
+  const renderInvoiceSheet = (type) => {
+    const isOffice = type === 'office';
+    const { 
+      company = {}, 
+      bill = {}, 
+      customer = {}, 
+      booking = {}, 
+      passengers = [], 
+      financials = {}, 
+      gst = {}, 
+      signature = {}, 
+      irn = {}, 
+      cancellation = {}, 
+      audit = {}, 
+      jespr = {} 
+    } = printData || {};
 
-  return (
-    <div className="print-bill-page">
-      {cancellation.isCancelled ? <div className="print-bill-watermark">CANCELLED</div> : null}
-
-      <div className="print-bill-actions no-print">
-        <button
-          type="button"
-          className="print-bill-btn print-bill-btn-download"
-          onClick={handleDownloadPDF}
-          disabled={downloading}
-          title="Download bill as PDF (Ctrl+D)"
-        >
-          {downloading ? '⏳ Generating PDF…' : '⬇ Download PDF'}
-        </button>
-        <button
-          type="button"
-          className="print-bill-btn"
-          onClick={() => window.print()}
-          title="Print bill (Ctrl+P)"
-        >
-          🖨 Print
-        </button>
-        <button
-          type="button"
-          className="print-bill-btn print-bill-btn-close"
-          onClick={handleClose}
-        >
-          ✕ Close
-        </button>
-      </div>
-
-      {downloadError && (
-        <div className="print-bill-download-error no-print">
-          ⚠ {downloadError}
+    return (
+      <div className={`print-bill-sheet ${isOffice ? 'office-copy' : 'customer-copy'}`}>
+        {/* Watermark */}
+        <div className={`watermark ${cancellation?.isCancelled ? 'cancelled' : ''}`}>
+          {cancellation?.isCancelled ? 'CANCELLED' : (company?.name?.toUpperCase() || 'ANMOL TRAVELS')}
         </div>
-      )}
 
-      <article className="print-bill-sheet">
-        <header className="print-bill-header">
-          <div>
-            <p className="print-bill-kicker">Tax Invoice</p>
-            <h1>{company.name}</h1>
-            <p>{company.address}</p>
-            <p>Phone: {company.phone} | GST: {company.gst}</p>
+        {/* Header */}
+        <header className="bill-header">
+          <div className="company-info">
+            <div className="logo-placeholder" style={{ marginBottom: '10px' }}>
+              <img src="/assets/logo.png" alt="" style={{ height: '50px', display: 'block' }} 
+                   onError={(e) => e.target.style.display = 'none'} />
+              <h1 style={{fontSize: '24px', letterSpacing: '1px'}}>{company?.name || 'Anmol Travels'}</h1>
+            </div>
+            <p>{company?.address}</p>
+            <p><strong>GSTIN:</strong> {company?.gst} | <strong>State:</strong> {company?.state} ({company?.stateCode})</p>
           </div>
-          <div className="print-bill-meta">
-            <div><span>Bill No</span><strong>{bill.billNumber}</strong></div>
-            <div><span>Bill ID</span><strong>{bill.billId}</strong></div>
-            <div><span>Date</span><strong>{formatDate(bill.date)}</strong></div>
-            <div><span>Status</span><strong>{bill.status}</strong></div>
+          <div className="invoice-title">
+            <h2>TAX INVOICE</h2>
+            <div className="copy-type">{isOffice ? 'Office Copy' : 'Customer Copy'}</div>
           </div>
         </header>
 
-        <section className="print-bill-grid">
-          <div className="print-bill-card">
-            <h2>Customer</h2>
-            <p><strong>{customer.name}</strong></p>
-            <p>{customer.phone || 'N/A'}</p>
+        {/* Details Grid */}
+        <div className="details-grid">
+          <div className="details-box">
+            <h3>Invoice Details</h3>
+            <div className="details-row"><label>Invoice No:</label> <span>{bill?.billNumber}</span></div>
+            <div className="details-row"><label>Date:</label> <span>{bill?.date ? new Date(bill.date).toLocaleDateString('en-IN') : 'N/A'}</span></div>
+            <div className="details-row"><label>Place of Supply:</label> <span>{bill?.placeOfSupply}</span></div>
+            <div className="details-row"><label>Reverse Charge:</label> <span>{bill?.reverseCharge}</span></div>
           </div>
-          <div className="print-bill-card">
-            <h2>Booking</h2>
-            <p>Booking ID: {booking.bookingId || 'N/A'}</p>
-            <p>Booking No: {booking.bookingNumber || 'N/A'}</p>
-            <p>{booking.travelDetails || 'Travel details unavailable'}</p>
-            <p>Journey: {formatDate(booking.journeyDate)}</p>
-            <p>Train: {booking.trainNumber || 'N/A'} | Class: {booking.reservationClass || 'N/A'}</p>
-          </div>
-        </section>
-
-        <section className="print-bill-section">
-          <div className="print-bill-section-title">
-            <h2>Passengers</h2>
-            <span>{passengers.length} traveller(s)</span>
-          </div>
-          <table className="print-bill-table">
-            <thead>
-              <tr>
-                <th>#</th>
-                <th>Name</th>
-                <th>Age</th>
-                <th>Gender</th>
-                <th>Coach</th>
-                <th>Seat</th>
-                <th>Berth</th>
-              </tr>
-            </thead>
-            <tbody>
-              {passengers.length > 0 ? passengers.map((passenger, index) => (
-                <tr key={passenger.id || `${passenger.name}-${index}`}>
-                  <td>{index + 1}</td>
-                  <td>{passenger.name}</td>
-                  <td>{passenger.age}</td>
-                  <td>{passenger.gender}</td>
-                  <td>{passenger.coach}</td>
-                  <td>{passenger.seatNo}</td>
-                  <td>{passenger.berth}</td>
-                </tr>
-              )) : (
-                <tr>
-                  <td colSpan="7" className="print-bill-empty">No passenger data available</td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </section>
-
-        <section className="print-bill-section print-bill-break-avoid">
-          <div className="print-bill-section-title">
-            <h2>Charges</h2>
-          </div>
-          <div className="print-bill-summary">
-            <div><span>Base Amount</span><strong>{formatCurrency(financials.baseAmount)}</strong></div>
-            <div><span>Tax</span><strong>{formatCurrency(financials.tax)}</strong></div>
-            <div><span>Total</span><strong>{formatCurrency(financials.total)}</strong></div>
-            <div><span>Paid</span><strong>{formatCurrency(financials.paid)}</strong></div>
-            <div><span>Balance</span><strong>{formatCurrency(financials.balance)}</strong></div>
-            {cancellation.isCancelled ? (
-              <>
-                <div><span>Cancellation Charges</span><strong>{formatCurrency(cancellation.charges)}</strong></div>
-                <div><span>Refund Amount</span><strong>{formatCurrency(cancellation.refundAmount)}</strong></div>
-              </>
-            ) : null}
-          </div>
-        </section>
-
-        <section className="print-bill-section">
-          <div className="print-bill-section-title">
-            <h2>JESPR</h2>
-          </div>
-
-          <div className="print-bill-jespr-block print-bill-break-avoid">
-            <h3>Sales Entry</h3>
-            <div className="print-bill-summary compact">
-              <div><span>Entry No</span><strong>{jespr.sales.entryNo}</strong></div>
-              <div><span>Date</span><strong>{formatDate(jespr.sales.date)}</strong></div>
-              <div><span>Account</span><strong>{jespr.sales.account}</strong></div>
-              <div><span>Amount</span><strong>{formatCurrency(jespr.sales.amount)}</strong></div>
-            </div>
-            <p className="print-bill-note">{jespr.sales.narration}</p>
-          </div>
-
-          <div className="print-bill-jespr-block">
-            <h3>Receipts</h3>
-            <table className="print-bill-table">
-              <thead>
-                <tr>
-                  <th>Receipt No</th>
-                  <th>Date</th>
-                  <th>Mode</th>
-                  <th>Reference</th>
-                  <th>Amount</th>
-                </tr>
-              </thead>
-              <tbody>
-                {jespr.receipts.length > 0 ? jespr.receipts.map((receipt) => (
-                  <tr key={receipt.receiptNo}>
-                    <td>{receipt.receiptNo}</td>
-                    <td>{formatDate(receipt.date)}</td>
-                    <td>{receipt.mode}</td>
-                    <td>{receipt.reference || '-'}</td>
-                    <td>{formatCurrency(receipt.amount)}</td>
-                  </tr>
-                )) : (
-                  <tr>
-                    <td colSpan="5" className="print-bill-empty">No linked receipts found</td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-
-          <div className="print-bill-jespr-block">
-            <h3>Journal Entries</h3>
-            <table className="print-bill-table">
-              <thead>
-                <tr>
-                  <th>Entry No</th>
-                  <th>Date</th>
-                  <th>Account</th>
-                  <th>Type</th>
-                  <th>Amount</th>
-                </tr>
-              </thead>
-              <tbody>
-                {jespr.journal.length > 0 ? jespr.journal.map((entry) => (
-                  <tr key={entry.entryNo}>
-                    <td>{entry.entryNo}</td>
-                    <td>{formatDate(entry.date)}</td>
-                    <td>{entry.account}</td>
-                    <td>{entry.type}</td>
-                    <td>{formatCurrency(entry.amount)}</td>
-                  </tr>
-                )) : (
-                  <tr>
-                    <td colSpan="5" className="print-bill-empty">No journal adjustments found</td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </section>
-
-        <section className="print-bill-section print-bill-break-avoid">
-          <div className="print-bill-section-title">
-            <h2>Audit</h2>
-          </div>
-          <div className="print-bill-summary compact">
-            <div><span>Entered By</span><strong>{audit.enteredBy || 'N/A'}</strong></div>
-            <div><span>Entered On</span><strong>{formatDate(audit.enteredOn)}</strong></div>
-            <div><span>Modified By</span><strong>{audit.modifiedBy || 'N/A'}</strong></div>
-            <div><span>Modified On</span><strong>{formatDate(audit.modifiedOn)}</strong></div>
-            <div><span>Closed By</span><strong>{audit.closedBy || 'N/A'}</strong></div>
-            <div><span>Closed On</span><strong>{formatDate(audit.closedOn)}</strong></div>
-          </div>
-        </section>
-
-        
-        <div className="print-bill-signatures print-bill-break-avoid">
-          <div className="print-bill-signature-box">
-            <p>Customer Signature</p>
-          </div>
-          <div className="print-bill-signature-box">
-            <p>Authorized Signatory</p>
-            <p className="print-bill-company-name">{company.name}</p>
+          <div className="details-box customer-info">
+            <h3>Bill To (Customer)</h3>
+            <p><strong>{customer?.name}</strong></p>
+            <p style={{ fontSize: '11px', color: '#666' }}>{customer?.address}</p>
+            <div className="details-row" style={{ marginTop: '5px' }}><label>GSTIN:</label> <span>{customer?.gstNo}</span></div>
+            <div className="details-row"><label>State:</label> <span>{customer?.state}</span></div>
           </div>
         </div>
 
-        <footer className="print-bill-footer">
-          <p>E.& O.E. | This is a computer-generated tax invoice and does not require a physical signature.</p>
-          <p>Generated on {new Date().toLocaleString('en-IN')}</p>
+        {/* Service Table */}
+        <div className="bill-table-section">
+          <table className="bill-table">
+            <thead>
+              <tr>
+                <th style={{ width: '40%' }}>Description of Service</th>
+                <th>SAC</th>
+                <th>Qty</th>
+                <th>Rate</th>
+                <th>Amount</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>
+                  <strong>Travel Booking Service</strong><br/>
+                  <small style={{ color: '#666' }}>{booking?.travelDetails} | JDate: {booking?.journeyDate ? new Date(booking.journeyDate).toLocaleDateString('en-IN') : 'N/A'}</small>
+                </td>
+                <td>998551</td>
+                <td>1.00</td>
+                <td className="text-right">{(financials?.baseAmount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                <td className="text-right">{(financials?.baseAmount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        {/* Passengers */}
+        <div className="bill-table-section">
+          <h4 style={{ fontSize: '11px', textTransform: 'uppercase', color: '#777', margin: '0 0 5px 0' }}>Passengers</h4>
+          <table className="bill-table">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Passenger Name</th>
+                <th>Age/Sex</th>
+                <th>Coach/Seat</th>
+                <th>PNR</th>
+              </tr>
+            </thead>
+            <tbody>
+              {passengers && passengers.length > 0 ? passengers.map((p, i) => (
+                <tr key={i}>
+                  <td>{i + 1}</td>
+                  <td>{p.name}</td>
+                  <td>{p.age}/{p.gender}</td>
+                  <td>{p.coach}/{p.seatNo}</td>
+                  <td>{booking?.pnr}</td>
+                </tr>
+              )) : (
+                <tr><td colSpan="5">No passenger list available</td></tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Totals & Tax */}
+        <div className="totals-section">
+          <div className="amount-words">
+            <p>Amount in Words:</p>
+            <p>{financials?.amountInWords}</p>
+            
+            {/* JESPR Context */}
+            {jespr?.sales && (
+              <div style={{ marginTop: '20px', padding: '10px', border: '1px solid #EEE', borderRadius: '4px' }}>
+                <h5 style={{ margin: '0 0 5px 0', fontSize: '10px', color: '#999' }}>JESPR ACCOUNTING CONTEXT</h5>
+                <p style={{ fontSize: '9px', margin: '2px 0' }}><strong>Sales Ref:</strong> {jespr.sales.entryNo}</p>
+                <p style={{ fontSize: '9px', margin: '2px 0' }}><strong>Linked Receipts:</strong> {jespr.receipts?.map(r => r.receiptNo).join(', ') || 'NONE'}</p>
+              </div>
+            )}
+          </div>
+          <div>
+            <div className="totals-table">
+              <div className="total-row"><label>Taxable Value</label> <span>{(financials?.baseAmount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span></div>
+              {gst?.isIntraState ? (
+                <>
+                  <div className="total-row"><label>CGST (9%)</label> <span>{(gst.cgst || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span></div>
+                  <div className="total-row"><label>SGST (9%)</label> <span>{(gst.sgst || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span></div>
+                </>
+              ) : (
+                <div className="total-row"><label>IGST (18%)</label> <span>{(gst?.igst || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span></div>
+              )}
+              <div className="total-row grand-total"><label>Total Invoice Value</label> <span>{(financials?.total || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span></div>
+              <div className="total-row" style={{ color: '#27ae60', fontWeight: 'bold' }}><label>Amount Paid</label> <span>{(financials?.paid || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span></div>
+              <div className="total-row" style={{ color: (financials?.balance || 0) > 0 ? '#e74c3c' : '#27ae60' }}><label>Balance Due</label> <span>{(financials?.balance || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span></div>
+            </div>
+          </div>
+        </div>
+
+        {/* IRN Section */}
+        {irn?.irn && (
+          <div style={{ background: '#F9F9F9', border: '1px solid #DDD', padding: '10px', marginBottom: '20px', fontSize: '10px' }}>
+            <p><strong>IRN:</strong> {irn.irn}</p>
+            <p><strong>Ack No:</strong> {irn.ackNo} | <strong>Date:</strong> {irn.ackDate}</p>
+          </div>
+        )}
+
+        {/* Footer Grid */}
+        <footer className="footer-grid">
+          <div className="qr-codes">
+            {upiQr && (
+              <div className="qr-item">
+                <img src={upiQr} alt="UPI QR" />
+                <p>Scan to Pay (UPI)</p>
+              </div>
+            )}
+            {gstQr && (
+              <div className="qr-item">
+                <img src={gstQr} alt="GST QR" />
+                <p>Verify Invoice</p>
+              </div>
+            )}
+          </div>
+          <div className="signature-section">
+            <p>For {company?.name || 'Anmol Travels'}</p>
+            <div className="sig-space"></div>
+            <p>Authorised Signatory</p>
+            {signature?.hash && (
+              <div className="digital-sig-info">
+                Digitally Signed Hash: {signature.hash.substring(0, 32)}...<br/>
+                Signed On: {signature.signedOn ? new Date(signature.signedOn).toLocaleString('en-IN') : 'N/A'}
+              </div>
+            )}
+          </div>
         </footer>
 
-      </article>
+        <div style={{ textAlign: 'center', marginTop: '30px', borderTop: '1px solid #EEE', paddingTop: '10px', fontSize: '9px', color: '#999' }}>
+          E. & O.E. | This is a computer-generated tax invoice and does not require a physical signature.
+        </div>
+      </div>
+    );
+  };
+
+  return (
+    <div className="print-bill-page">
+      <nav className="print-controls">
+        <div className="copy-selector">
+          <label>Select Copy Type:</label>
+          <select value={copyType} onChange={(e) => setCopyType(e.target.value)}>
+            <option value="customer">Customer Copy Only</option>
+            <option value="office">Office Copy Only</option>
+            <option value="both">Both (Multi-Copy)</option>
+          </select>
+        </div>
+        <div className="btn-group">
+          <button onClick={handleDownloadPDF} disabled={downloading} className="btn-close">
+            {downloading ? 'Processing...' : 'Download PDF'}
+          </button>
+          <button onClick={() => window.print()} className="btn-print">Print Invoice (Ctrl+P)</button>
+          <button onClick={handleClose} className="btn-close">✕ Close</button>
+        </div>
+      </nav>
+
+      <div className="print-bill-container">
+        {(copyType === 'customer' || copyType === 'both') && renderInvoiceSheet('customer')}
+        {copyType === 'both' && <div className="page-break"></div>}
+        {(copyType === 'office' || copyType === 'both') && renderInvoiceSheet('office')}
+      </div>
     </div>
   );
 };

@@ -4,6 +4,8 @@ const { sequelize, sequelizeTVL } = require('../../config/db');
 console.log('Loading models/index.js...');
 const Company = require('./Company');
 const Role = require('./Role');
+const ApplicationTVL = require('./ApplicationTVL');
+const ModuleTVL = require('./ModuleTVL');
 const Permission = require('./Permission');
 const RolePermission = require('./RolePermission');
 const RolePermissionTVL = require('./RolePermissionTVL');
@@ -204,6 +206,10 @@ UserTVL.belongsTo(RoleTVL, { foreignKey: 'us_roid', targetKey: 'fn_fnid', as: 'f
 // TrainTVL associations
 TrainTVL.associate({ StationTVL });
 
+// ApplicationTVL and ModuleTVL associations
+ApplicationTVL.hasMany(ModuleTVL, { foreignKey: 'mo_apid', sourceKey: 'ap_apid', as: 'modules' });
+ModuleTVL.belongsTo(ApplicationTVL, { foreignKey: 'mo_apid', targetKey: 'ap_apid', as: 'application' });
+
 // BillTVL associations
 console.log('🔗 Defining BillTVL associations...');
 BillTVL.belongsTo(BookingTVL, { foreignKey: 'bl_booking_id', targetKey: 'bk_bkid', as: 'booking' });
@@ -269,5 +275,7 @@ module.exports = {
   Receipt,
   Journal,
   PermissionTVL,
-  ForensicAuditLog
+  ForensicAuditLog,
+  ApplicationTVL,
+  ModuleTVL
 };

@@ -19,7 +19,9 @@ const PaymentForm = ({ onBack }) => {
     customer_phone: '',
     account_name: '',
     amount: '',
-    ref_number: ''
+    payment_mode: 'Cash',
+    ref_number: '',
+    narration: ''
   });
 
   const [auditData, setAuditData] = useState({
@@ -63,7 +65,7 @@ const PaymentForm = ({ onBack }) => {
 
   const fieldOrder = useMemo(() => [
     'receipt_no', 'date', 'type', 'customer_name', 'customer_phone', 
-    'account_name', 'amount', 'ref_number', 'save_button'
+    'account_name', 'amount', 'payment_mode', 'ref_number', 'save_button'
   ], []);
 
   const {
@@ -78,11 +80,31 @@ const PaymentForm = ({ onBack }) => {
     onCancel: onBack
   });
 
+  const fetchPayments = useCallback(async () => {
+    try {
+      setLoading(true);
+      const response = await paymentAPI.getAllPayments({ page, limit });
+      setPaymentRecords(response.data || []);
+      updatePagination(response.pagination);
+    } catch (err) {
+      console.error('Error fetching payments:', err);
+      setError('Failed to load payment history');
+    } finally {
+      setLoading(false);
+    }
+  }, [page, limit, updatePagination]);
+
+  useEffect(() => {
+    if (mode === 'records') {
+        fetchPayments();
+    }
+  }, [mode, fetchPayments]);
+
   useEffect(() => {
     if (!formData.receipt_no && mode === 'form') {
       generateReceiptNo();
     }
-  }, [mode]);
+  }, [mode, formData.type]);
 
   const generateReceiptNo = useCallback(() => {
     const date = new Date();
@@ -104,11 +126,37 @@ const PaymentForm = ({ onBack }) => {
 
   async function handleSave() {
     if (!formData.customer_name || !formData.amount || !formData.account_name) {
-      setError('Required fields are missing');
+      setError('Required fields are missing (Customer, Account, Amount)');
       return;
     }
-    setSuccess('Payment saved successfully');
-    setTimeout(() => onBack(), 1500);
+
+    try {
+      setLoading(true);
+      setError('');
+      
+      const payload = {
+        py_entry_type: formData.type,
+        py_customer_name: formData.customer_name,
+        py_customer_phone: formData.customer_phone,
+        py_amount: formData.amount,
+        py_ref_number: formData.ref_number,
+        py_bank_account: formData.account_name,
+        py_narration: formData.narration || `Payment for ${formData.customer_name}`
+      };
+
+      await paymentAPI.createPayment(payload);
+      
+      setSuccess('Payment saved successfully');
+      setTimeout(() => {
+        setSuccess('');
+        onBack();
+      }, 1500);
+    } catch (err) {
+      console.error('Error saving payment:', err);
+      setError(err.message || 'Failed to save payment');
+    } finally {
+      setLoading(false);
+    }
   }
 
   return (
@@ -162,7 +210,7 @@ const PaymentForm = ({ onBack }) => {
                 </div>
               </div>
 
-              <div className="erp-form-row-compact-3" style={{ marginTop: '15px' }}>
+              <div className="erp-form-row-compact-4" style={{ marginTop: '15px' }}>
                 <div className="erp-form-group">
                   <label className="erp-form-label required">Account</label>
                   <select className="erp-input" value={formData.account_name} onChange={(e) => handleInputChange('account_name', e.target.value)}>
@@ -175,9 +223,31 @@ const PaymentForm = ({ onBack }) => {
                   <input type="number" className="erp-input" value={formData.amount} onChange={(e) => handleInputChange('amount', e.target.value)} placeholder="0.00" />
                 </div>
                 <div className="erp-form-group">
+                  <label className="erp-form-label">Payment Mode</label>
+                  <select className="erp-input" value={formData.payment_mode} onChange={(e) => handleInputChange('payment_mode', e.target.value)}>
+                    <option value="Cash">Cash</option>
+                    <option value="UPI">UPI</option>
+                    <option value="Bank Transfer">Bank Transfer</option>
+                    <option value="Demand Draft">Demand Draft</option>
+                    <option value="Debit Card">Debit Card</option>
+                    <option value="Credit Card">Credit Card</option>
+                  </select>
+                </div>
+                <div className="erp-form-group">
                   <label className="erp-form-label">Ref Number</label>
                   <input type="text" className="erp-input" value={formData.ref_number} onChange={(e) => handleInputChange('ref_number', e.target.value)} placeholder="Chq/UTR No." />
                 </div>
+              </div>
+
+              <div className="erp-form-group" style={{ marginTop: '15px' }}>
+                <label className="erp-form-label">Narration</label>
+                <textarea 
+                  className="erp-input" 
+                  style={{ height: '60px', resize: 'none' }}
+                  value={formData.narration}
+                  onChange={(e) => handleInputChange('narration', e.target.value)}
+                  placeholder="Additional notes..."
+                />
               </div>
             </div>
             
@@ -191,22 +261,40 @@ const PaymentForm = ({ onBack }) => {
           <div className="erp-grid-section">
             <div className="erp-panel-header">PAYMENT HISTORY</div>
             <div className="erp-grid-container" style={{ maxHeight: '500px', overflowY: 'auto' }}>
-              <table className="erp-table">
-                <thead>
-                  <tr>
-                    <th>Date</th>
-                    <th>Receipt No</th>
-                    <th>Customer</th>
-                    <th>Account</th>
-                    <th>Amount</th>
-                    <th>Type</th>
-                    <th>Ref No</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr><td colSpan="7" style={{ textAlign: 'center' }}>No records found</td></tr>
-                </tbody>
-              </table>
+              {loading ? (
+                <div style={{ textAlign: 'center', padding: '40px' }}>Loading history...</div>
+              ) : (
+                <table className="erp-table">
+                  <thead>
+                    <tr>
+                      <th>Date</th>
+                      <th>Entry No</th>
+                      <th>Customer</th>
+                      <th>Account</th>
+                      <th>Mode</th>
+                      <th className="text-right">Amount</th>
+                      <th>Type</th>
+                      <th>Ref No</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {paymentRecords.length > 0 ? paymentRecords.map((r, i) => (
+                      <tr key={i}>
+                        <td>{new Date(r.py_date || r.date).toLocaleDateString()}</td>
+                        <td className="font-bold">{r.py_entry_no || r.receipt_no}</td>
+                        <td>{r.py_customer_name || r.customer_name}</td>
+                        <td>{r.py_bank_account || r.account_name}</td>
+                        <td>{r.py_payment_mode || 'Cash'}</td>
+                        <td className="text-right font-bold">₹{parseFloat(r.py_amount || r.amount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                        <td><span className={`erp-badge ${r.py_entry_type === 'Debit' ? 'danger' : 'success'}`}>{r.py_entry_type || r.type}</span></td>
+                        <td>{r.py_ref_number || r.ref_number}</td>
+                      </tr>
+                    )) : (
+                      <tr><td colSpan="8" style={{ textAlign: 'center' }}>No historical records found</td></tr>
+                    )}
+                  </tbody>
+                </table>
+              )}
             </div>
             <PaginationControls
               pagination={pagination}

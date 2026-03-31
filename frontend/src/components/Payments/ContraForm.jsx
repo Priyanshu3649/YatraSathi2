@@ -20,6 +20,8 @@ const ContraForm = ({ onBack }) => {
     narration: ''
   });
 
+  const [paymentRecords, setPaymentRecords] = useState([]); // For history
+  const [loading, setLoading] = useState(false);
   const [mode, setMode] = useState('form'); 
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -28,12 +30,13 @@ const ContraForm = ({ onBack }) => {
     page,
     limit,
     pagination,
+    updatePagination,
     setPage,
     setLimit
   } = usePagination(1, 50);
 
   const fieldOrder = useMemo(() => [
-    'contra_no', 'date', 'from_account', 'to_account', 'amount', 'ref_number', 'narration', 'save_button'
+    'entry_no', 'date', 'from_account', 'to_account', 'amount', 'ref_number', 'save_button'
   ], []);
 
   const {
@@ -47,23 +50,67 @@ const ContraForm = ({ onBack }) => {
     onCancel: onBack
   });
 
+  const fetchContras = useCallback(async () => {
+    try {
+      setLoading(true);
+      const response = await contraAPI.getAllContras({ page, limit });
+      setPaymentRecords(response.data || []);
+      updatePagination(response.pagination);
+    } catch (err) {
+      console.error('Error fetching contras:', err);
+      setError('Failed to load contra history');
+    } finally {
+      setLoading(false);
+    }
+  }, [page, limit, updatePagination]);
+
   useEffect(() => {
-    if (!formData.contra_no && mode === 'form') {
+    if (mode === 'records') {
+        fetchContras();
+    }
+  }, [mode, fetchContras]);
+
+  useEffect(() => {
+    if (!formData.entry_no && mode === 'form') {
       const date = new Date();
       setFormData(prev => ({
         ...prev,
-        contra_no: `CN${date.getTime().toString().slice(-8)}`
+        entry_no: `CT${date.getTime().toString().slice(-8)}`
       }));
     }
   }, [mode]);
 
   const handleSave = async () => {
     if (!formData.from_account || !formData.to_account || !formData.amount) {
-      setError('Required fields are missing');
+      setError('Required fields are missing (From Account, To Account, Amount)');
       return;
     }
-    setSuccess('Contra entry saved successfully');
-    setTimeout(() => onBack(), 1500);
+    
+    try {
+        setLoading(true);
+        setError('');
+        
+        const payload = {
+            ct_from_account: formData.from_account,
+            ct_to_account: formData.to_account,
+            ct_amount: formData.amount,
+            ct_ref_number: formData.ref_number,
+            ct_narration: formData.narration || `Contra: ${formData.from_account} to ${formData.to_account}`
+        };
+
+        await contraAPI.createContra(payload);
+        
+        setSuccess('Contra entry saved successfully');
+        setTimeout(() => {
+            setSuccess('');
+            onBack();
+        }, 1500);
+    } catch (err) {
+        console.error('Error saving contra:', err);
+        setError(err.message || 'Failed to save contra entry');
+    } finally {
+        setLoading(false);
+    }
   };
 
   return (
@@ -130,15 +177,37 @@ const ContraForm = ({ onBack }) => {
         ) : (
           <div className="erp-grid-section">
             <div className="erp-panel-header">CONTRA HISTORY</div>
-            <div className="erp-grid-container">
-              <table className="erp-table">
-                <thead>
-                  <tr><th>Date</th><th>Contra No</th><th>From</th><th>To</th><th>Amount</th></tr>
-                </thead>
-                <tbody>
-                  <tr><td colSpan="5" style={{ textAlign: 'center' }}>No records found</td></tr>
-                </tbody>
-              </table>
+            <div className="erp-grid-container" style={{ minHeight: '300px' }}>
+              {loading ? (
+                <div style={{ textAlign: 'center', padding: '40px' }}>Loading history...</div>
+              ) : (
+                <table className="erp-table">
+                  <thead>
+                    <tr>
+                      <th>Date</th>
+                      <th>Entry No</th>
+                      <th>From Account</th>
+                      <th>To Account</th>
+                      <th className="text-right">Amount</th>
+                      <th>Reference</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {paymentRecords.length > 0 ? paymentRecords.map((r, i) => (
+                      <tr key={i}>
+                        <td>{new Date(r.ct_date || r.date).toLocaleDateString()}</td>
+                        <td className="font-bold">{r.ct_entry_no || r.entry_no}</td>
+                        <td>{r.ct_from_account || r.from_account}</td>
+                        <td>{r.ct_to_account || r.to_account}</td>
+                        <td className="text-right font-bold">₹{parseFloat(r.ct_amount || r.amount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                        <td>{r.ct_ref_number || r.ref_number}</td>
+                      </tr>
+                    )) : (
+                      <tr><td colSpan="6" style={{ textAlign: 'center' }}>No historical records found</td></tr>
+                    )}
+                  </tbody>
+                </table>
+              )}
             </div>
             <PaginationControls pagination={pagination} onPageChange={setPage} limit={limit} onLimitChange={setLimit} />
           </div>

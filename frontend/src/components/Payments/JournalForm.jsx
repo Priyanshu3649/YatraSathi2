@@ -14,12 +14,15 @@ const JournalForm = ({ onBack }) => {
     journal_no: '',
     date: new Date().toISOString().split('T')[0],
     account_debit: '',
-    account_credit: '',
+    debit_account: '',
+    credit_account: '',
     amount: '',
     ref_number: '',
     narration: ''
   });
 
+  const [journalRecords, setJournalRecords] = useState([]); // For history
+  const [loading, setLoading] = useState(false);
   const [mode, setMode] = useState('form'); 
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -28,12 +31,13 @@ const JournalForm = ({ onBack }) => {
     page,
     limit,
     pagination,
+    updatePagination,
     setPage,
     setLimit
   } = usePagination(1, 50);
 
   const fieldOrder = useMemo(() => [
-    'journal_no', 'date', 'account_debit', 'account_credit', 'amount', 'ref_number', 'narration', 'save_button'
+    'entry_no', 'date', 'debit_account', 'credit_account', 'amount', 'ref_number', 'save_button'
   ], []);
 
   const {
@@ -47,23 +51,67 @@ const JournalForm = ({ onBack }) => {
     onCancel: onBack
   });
 
+  const fetchJournals = useCallback(async () => {
+    try {
+      setLoading(true);
+      const response = await journalAPI.getAllJournals({ page, limit });
+      setJournalRecords(response.data || []);
+      updatePagination(response.pagination);
+    } catch (err) {
+      console.error('Error fetching journals:', err);
+      setError('Failed to load journal history');
+    } finally {
+      setLoading(false);
+    }
+  }, [page, limit, updatePagination]);
+
   useEffect(() => {
-    if (!formData.journal_no && mode === 'form') {
+    if (mode === 'records') {
+        fetchJournals();
+    }
+  }, [mode, fetchJournals]);
+
+  useEffect(() => {
+    if (!formData.entry_no && mode === 'form') {
       const date = new Date();
       setFormData(prev => ({
         ...prev,
-        journal_no: `JR${date.getTime().toString().slice(-8)}`
+        entry_no: `JN${date.getTime().toString().slice(-8)}`
       }));
     }
   }, [mode]);
 
   const handleSave = async () => {
-    if (!formData.account_debit || !formData.account_credit || !formData.amount) {
-      setError('Required fields are missing');
+    if (!formData.debit_account || !formData.credit_account || !formData.amount) {
+      setError('Required fields are missing (Debit Account, Credit Account, Amount)');
       return;
     }
-    setSuccess('Journal entry saved successfully');
-    setTimeout(() => onBack(), 1500);
+    
+    try {
+        setLoading(true);
+        setError('');
+        
+        const payload = {
+            jr_debit_account: formData.debit_account,
+            jr_credit_account: formData.credit_account,
+            jr_amount: formData.amount,
+            jr_ref_number: formData.ref_number,
+            jr_narration: formData.narration || `Journal: ${formData.debit_account} / ${formData.credit_account}`
+        };
+
+        await journalAPI.createJournal(payload);
+        
+        setSuccess('Journal entry saved successfully');
+        setTimeout(() => {
+            setSuccess('');
+            onBack();
+        }, 1500);
+    } catch (err) {
+        console.error('Error saving journal:', err);
+        setError(err.message || 'Failed to save journal entry');
+    } finally {
+        setLoading(false);
+    }
   };
 
   return (
@@ -130,15 +178,37 @@ const JournalForm = ({ onBack }) => {
         ) : (
           <div className="erp-grid-section">
             <div className="erp-panel-header">JOURNAL HISTORY</div>
-            <div className="erp-grid-container">
-              <table className="erp-table">
-                <thead>
-                  <tr><th>Date</th><th>Journal No</th><th>Debit Acc</th><th>Credit Acc</th><th>Amount</th></tr>
-                </thead>
-                <tbody>
-                  <tr><td colSpan="5" style={{ textAlign: 'center' }}>No records found</td></tr>
-                </tbody>
-              </table>
+            <div className="erp-grid-container" style={{ minHeight: '300px' }}>
+              {loading ? (
+                <div style={{ textAlign: 'center', padding: '40px' }}>Loading history...</div>
+              ) : (
+                <table className="erp-table">
+                  <thead>
+                    <tr>
+                      <th>Date</th>
+                      <th>Entry No</th>
+                      <th>Debit Account</th>
+                      <th>Credit Account</th>
+                      <th className="text-right">Amount</th>
+                      <th>Reference</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {journalRecords.length > 0 ? journalRecords.map((r, i) => (
+                      <tr key={i}>
+                        <td>{new Date(r.jr_date || r.date).toLocaleDateString()}</td>
+                        <td className="font-bold">{r.jr_entry_no || r.entry_no}</td>
+                        <td>{r.jr_debit_account || r.debit_account}</td>
+                        <td>{r.jr_credit_account || r.credit_account}</td>
+                        <td className="text-right font-bold">₹{parseFloat(r.jr_amount || r.amount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                        <td>{r.jr_ref_number || r.ref_number}</td>
+                      </tr>
+                    )) : (
+                      <tr><td colSpan="6" style={{ textAlign: 'center' }}>No historical records found</td></tr>
+                    )}
+                  </tbody>
+                </table>
+              )}
             </div>
             <PaginationControls pagination={pagination} onPageChange={setPage} limit={limit} onLimitChange={setLimit} />
           </div>

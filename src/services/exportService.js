@@ -1,5 +1,5 @@
 const ExcelJS = require('exceljs');
-const PDFDocument = require('pdfkit');
+const tablePdfGenerator = require('../utils/tablePdfGenerator');
 
 /**
  * Exports report data to Excel
@@ -21,46 +21,46 @@ const exportToExcel = async (reportType, data) => {
   // Add summary
   worksheet.addRow([]);
   worksheet.addRow(["Summary"]);
-  Object.entries(data.summary).forEach(([key, value]) => {
-    worksheet.addRow([key, value]);
-  });
+  if (data.summary) {
+    Object.entries(data.summary).forEach(([key, value]) => {
+      worksheet.addRow([key, value]);
+    });
+  }
 
   return await workbook.xlsx.writeBuffer();
 };
 
 /**
- * Exports report data to PDF
+ * Exports report data to PDF using the enhanced table generator
+ * Supports both flat and grouped data structures
  * @param {string} reportType 
- * @param {Object} data - { columns, rows, summary }
+ * @param {Object} data - { columns, rows, summary } OR { title, groups: [...] }
  */
 const exportToPDF = async (reportType, data) => {
-  const doc = new PDFDocument();
-  let buffers = [];
-  
-  doc.on('data', buffers.push.bind(buffers));
-  
-  // Header
-  doc.fontSize(18).text(`${reportType} Report`, { align: 'center' });
-  doc.moveDown();
-
-  // Draw Table (simple version)
-  doc.fontSize(10);
-  data.rows.forEach((row, i) => {
-    doc.text(JSON.stringify(row), { width: 500 });
-  });
-
-  doc.moveDown();
-  doc.fontSize(12).text('Summary', { underline: true });
-  Object.entries(data.summary).forEach(([key, value]) => {
-    doc.text(`${key}: ${value}`);
-  });
-
-  doc.end();
-
-  return new Promise((resolve) => {
-    doc.on('end', () => {
-      resolve(Buffer.concat(buffers));
+  // If data already follows the grouped structure, use the specific generator
+  if (data.groups) {
+    return await tablePdfGenerator.generateGroupedTablePDF({
+      title: data.title || `${reportType} Grouped Report`,
+      subtitle: data.subtitle || `Exported on ${new Date().toLocaleDateString()}`,
+      groups: data.groups,
+      summary: data.summary
     });
+  }
+
+  // Fallback to flat table structure
+  const formattedColumns = (data.columns || []).map(col => {
+    if (typeof col === 'string') {
+      return { key: col.toLowerCase(), label: col };
+    }
+    return col;
+  });
+
+  return await tablePdfGenerator.generateTablePDF({
+    title: `${reportType} Report`,
+    subtitle: `Exported on ${new Date().toLocaleDateString()}`,
+    columns: formattedColumns,
+    rows: data.rows || [],
+    summary: data.summary
   });
 };
 

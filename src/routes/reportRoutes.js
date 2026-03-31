@@ -1,11 +1,14 @@
 const express = require('express');
 const router = express.Router();
-const { generateReport } = require('../reports/reportService');
+const { 
+  generateReport, 
+  generateGenericReport 
+} = require('../controllers/reportController');
 const { exportToExcel, exportToPDF } = require('../services/exportService');
 
 /**
  * @route GET /api/reports
- * @desc Generate report data
+ * @desc Generate report data (Legacy)
  */
 router.get('/', async (req, res) => {
   try {
@@ -26,19 +29,30 @@ router.get('/', async (req, res) => {
 });
 
 /**
+ * @route POST /api/reports/generate
+ * @desc Generate generic report data (New Engine)
+ */
+router.post('/generate', generateGenericReport);
+
+/**
  * @route POST /api/reports/export
  * @desc Export report to Excel or PDF
  */
 router.post('/export', async (req, res) => {
   try {
-    const { reportType, format, filters } = req.body;
+    const { reportType, format, filters, columns } = req.body;
     
     // First generate the data
     const data = await generateReport(reportType, filters);
     
+    // Override columns if provided by user (e.g. for specific grid views)
+    if (columns) {
+      data.columns = columns;
+    }
+    
     let buffer;
     let contentType;
-    let fileName = `${reportType}_Report_${Date.now()}`;
+    let fileName = `${reportType}_Report_${new Date().toISOString().split('T')[0]}`;
 
     if (format === 'EXCEL') {
       buffer = await exportToExcel(reportType, data);
@@ -57,6 +71,7 @@ router.post('/export', async (req, res) => {
     res.send(buffer);
 
   } catch (err) {
+    console.error('Export error:', err);
     res.status(500).json({ success: false, message: err.message });
   }
 });

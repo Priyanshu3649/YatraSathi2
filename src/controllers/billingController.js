@@ -7,6 +7,8 @@ const { notifyBillCancelled } = require('../services/emailService');
 const queryHelper = require('../utils/queryHelper');
 const RealTimeService = require('../services/realTimeService');
 const { generateBillPDF } = require('../utils/billPdfGenerator');
+const crypto = require('crypto');
+const numberToWords = require('../utils/numberToWords');
 
 // Helper function to generate journal entry number
 function generateJournalEntryNo(prefix) {
@@ -204,6 +206,21 @@ async function getBillPrintPayload(bill, booking, user) {
     })
   ]);
 
+  // Fetch customer details for GST logic
+  let customerDetails = { state: '', gstNo: '', address: '' };
+  if (booking?.bk_cusid || bill.bl_customer_id) {
+    const customerRecord = await Customer.findByPk(booking?.bk_cusid || bill.bl_customer_id, {
+      include: [{ model: UserTVL, as: 'user' }]
+    });
+    if (customerRecord) {
+      customerDetails = {
+        state: customerRecord.user?.us_state || '',
+        gstNo: customerRecord.cu_gstno || 'Unregistered',
+        address: [customerRecord.user?.us_addr1, customerRecord.user?.us_city, customerRecord.user?.us_state].filter(Boolean).join(', ')
+      };
+    }
+  }
+
   const totalAmount = parseAmount(bill.bl_total_amount);
   const baseAmount = parseAmount(bill.bl_railway_fare);
   const taxAmount = parseAmount(bill.bl_gst);
@@ -218,6 +235,27 @@ async function getBillPrintPayload(bill, booking, user) {
   const paidAmount = isCancelled ? Math.max(0, totalAmount - refundAmount) : receiptTotal;
   const balanceAmount = isCancelled ? refundAmount : Math.max(0, totalAmount - paidAmount);
 
+  // GST Logic
+  const companyState = company.state || 'Delhi'; 
+  const isIntraState = !customerDetails.state || customerDetails.state.toLowerCase() === companyState.toLowerCase();
+  
+  const gst = {
+    isIntraState,
+    cgst: isIntraState ? taxAmount / 2 : 0,
+    sgst: isIntraState ? taxAmount / 2 : 0,
+    igst: isIntraState ? 0 : taxAmount,
+    rate: 18 // Default GST rate
+  };
+
+  // UPI Logic
+  const upiId = 'anmoltravels@upi'; // Default UPI ID
+  const upiString = `upi://pay?pa=${upiId}&pn=${encodeURIComponent(company.name)}&am=${totalAmount}&cu=INR&tn=${encodeURIComponent('Bill ' + (bill.bl_bill_no || bill.bl_id))}`;
+
+  // Signature (HMAC-SHA256)
+  const secret = process.env.SIGNATURE_SECRET || 'yatrasathi-secret-key';
+  const invoiceData = `${bill.bl_bill_no || bill.bl_id}|${totalAmount}|${bill.bl_billing_date}`;
+  const signature = crypto.createHmac('sha256', secret).update(invoiceData).digest('hex');
+
   // Resolve audit users
   const createdAudit = auditLogs.find(entry => entry.actionType === 'CREATE');
   const updatedAudit = auditLogs.find(entry => entry.actionType === 'UPDATE');
@@ -230,16 +268,29 @@ async function getBillPrintPayload(bill, booking, user) {
   ]);
 
   return {
-    company,
+    company: {
+      name: 'Anmol Travels',
+      address: 'Address unavailable',
+      phone: 'N/A',
+      gst: 'N/A',
+      ...company,
+      state: companyState,
+      stateCode: '07' // Delhi default
+    },
     bill: {
       billId: bill.bl_id,
       billNumber: bill.bl_bill_no || `BILL-${bill.bl_id}`,
       date: bill.bl_bill_date || bill.bl_billing_date,
-      status: bill.bl_status || bill.status || 'ACTIVE'
+      status: bill.bl_status || bill.status || 'ACTIVE',
+      placeOfSupply: customerDetails.state || companyState,
+      reverseCharge: 'No'
     },
     customer: {
       name: bill.bl_customer_name || booking?.bk_customername || 'Unknown Customer',
-      phone: bill.bl_customer_phone || booking?.bk_phonenumber || 'N/A'
+      phone: bill.bl_customer_phone || booking?.bk_phonenumber || 'N/A',
+      address: customerDetails.address || 'N/A',
+      gstNo: customerDetails.gstNo || 'Unregistered',
+      state: customerDetails.state || companyState
     },
     booking: {
       bookingId: bill.bl_booking_id,
@@ -251,18 +302,42 @@ async function getBillPrintPayload(bill, booking, user) {
       pnr: bill.bl_pnr || booking?.bk_pnr || null,
       seatsReserved: bill.bl_seats_reserved || null
     },
-    passengers,
+    passengers: passengers || [],
     financials: {
-      baseAmount,
-      tax: taxAmount,
-      total: totalAmount,
-      paid: paidAmount,
-      balance: balanceAmount
+      baseAmount: baseAmount || 0,
+      tax: taxAmount || 0,
+      total: totalAmount || 0,
+      paid: paidAmount || 0,
+      balance: balanceAmount || 0,
+      amountInWords: numberToWords(totalAmount) || 'Zero Rupees Only'
+    },
+    gst: gst || {
+      isIntraState: true,
+      cgst: 0,
+      sgst: 0,
+      igst: 0,
+      rate: 18
+    },
+    upi: {
+      upiId: upiId || 'anmoltravels@upi',
+      upiString: upiString || '',
+      amount: totalAmount || 0,
+      name: company.name || 'Anmol Travels'
+    },
+    signature: {
+      hash: signature || '',
+      signedBy: company.name || 'Anmol Travels',
+      signedOn: new Date().toISOString()
+    },
+    irn: {
+      irn: bill.irn || null,
+      ackNo: bill.ack_no || null,
+      ackDate: bill.ack_date || null
     },
     cancellation: {
-      isCancelled,
-      charges: cancellationCharges,
-      refundAmount
+      isCancelled: isCancelled || false,
+      charges: cancellationCharges || 0,
+      refundAmount: refundAmount || 0
     },
     audit: {
       enteredBy: enteredBy || 'System',
@@ -277,10 +352,10 @@ async function getBillPrintPayload(bill, booking, user) {
         entryNo: bill.bl_entry_no || bill.bl_bill_no,
         date: bill.bl_bill_date || bill.bl_billing_date,
         account: 'Sales',
-        amount: totalAmount,
+        amount: totalAmount || 0,
         narration: `Sales against bill ${bill.bl_bill_no || bill.bl_id}`
       },
-      receipts: receiptEntries.map(receipt => ({
+      receipts: (receiptEntries || []).map(receipt => ({
         receiptNo: receipt.rc_entry_no,
         date: receipt.rc_date,
         amount: parseAmount(receipt.rc_amount),
@@ -288,7 +363,7 @@ async function getBillPrintPayload(bill, booking, user) {
         reference: receipt.rc_ref_number || '',
         narration: receipt.rc_narration || ''
       })),
-      journal: journalEntries.map(entry => ({
+      journal: (journalEntries || []).map(entry => ({
         entryNo: entry.je_entry_no,
         date: entry.je_date,
         account: entry.je_account,
@@ -639,55 +714,81 @@ const getAllBills = async (req, res) => {
       }
     }
     
+    const include = [{
+      model: BookingTVL,
+      as: 'booking',
+      attributes: ['bk_usid'],
+      required: false // Use LEFT JOIN to show bills even if booking association fails
+    }];
+
     const { count, rows: bills } = await BillTVL.findAndCountAll({
       where,
-      include: [{
-        model: BookingTVL,
-        as: 'booking',
-        attributes: ['bk_usid'],
-        required: false // Use LEFT JOIN to show bills even if booking association fails
-      }],
+      include,
       order,
       limit,
       offset
     });
+
+    // Calculate aggregates for the total row (across all filtered records)
+    // We pass attributes: [] to includes to avoid 'only_full_group_by' error in MySQL
+    let aggregates = { totalAmount: 0, totalFare: 0, totalGST: 0, count: count || 0 };
+    
+    try {
+      const aggregateResults = await queryHelper.getAggregation(
+        BillTVL, 
+        where, 
+        [], 
+        ['bl_total_amount', 'bl_railway_fare', 'bl_gst'],
+        include.map(inc => ({ ...inc, attributes: [] }))
+      );
+
+      if (aggregateResults && aggregateResults.length > 0) {
+        aggregates = {
+          totalAmount: parseFloat(aggregateResults[0]?.total_bl_total_amount || 0),
+          totalFare: parseFloat(aggregateResults[0]?.total_bl_railway_fare || 0),
+          totalGST: parseFloat(aggregateResults[0]?.total_bl_gst || 0),
+          count: parseInt(aggregateResults[0]?.count || count || 0)
+        };
+      }
+    } catch (aggError) {
+      console.error('⚠️ Aggregation Error in getAllBills:', aggError.message);
+      // Main query succeeded, so we provide fallback aggregates instead of failing the whole request
+    }
     
     // Batch fetch passenger counts/details for these bills
-    const billNumbers = bills.map(b => b.bl_bill_no).filter(Boolean);
     const bookingIds = bills.map(b => b.bl_booking_id).filter(Boolean);
-    
-    // Simple cache for passengers to avoid repeated DB calls
     const billPassengersMap = {};
     
-    if (billNumbers.length > 0 || bookingIds.length > 0) {
-      const passengers = await Passenger.findAll({
+    if (bookingIds.length > 0) {
+      const passengerResults = await Passenger.findAll({
         where: {
-          [Op.or]: [
-            { bl_bill_no: { [Op.in]: billNumbers } },
-            { ps_bkid: { [Op.in]: bookingIds } }
-          ],
+          ps_bkid: bookingIds,
           ps_active: 1
         }
       });
-      
-      passengers.forEach(p => {
-        const key = p.bl_bill_no || p.ps_bkid;
-        if (!billPassengersMap[key]) billPassengersMap[key] = [];
-        billPassengersMap[key].push({
-          id: p.ps_psid,
-          name: p.ps_fname + (p.ps_lname ? ' ' + p.ps_lname : ''),
-          age: p.ps_age,
-          gender: p.ps_gender,
-          berth: p.ps_berthalloc || p.ps_berthpref,
-          seatNo: p.ps_seatno,
-          coach: p.ps_coach
+
+      if (passengerResults && passengerResults.length > 0) {
+        passengerResults.forEach(p => {
+          const bkid = p.ps_bkid;
+          if (!billPassengersMap[bkid]) {
+            billPassengersMap[bkid] = [];
+          }
+          billPassengersMap[bkid].push({
+            id: p.ps_psid,
+            name: p.ps_fname + (p.ps_lname ? ' ' + p.ps_lname : ''),
+            age: p.ps_age,
+            gender: p.ps_gender,
+            berth: p.ps_berthalloc || p.ps_berthpref,
+            seatNo: p.ps_seatno,
+            coach: p.ps_coach
+          });
         });
-      });
+      }
     }
     
     const transformedBills = bills.map(bill => {
       const billData = bill.toJSON();
-      const passengerList = billPassengersMap[billData.bl_bill_no] || billPassengersMap[billData.bl_booking_id] || [];
+      const passengerList = billPassengersMap[billData.bl_booking_id] || [];
       
       return {
         ...billData,
@@ -717,7 +818,11 @@ const getAllBills = async (req, res) => {
       return res.send(csv);
     }
     
-    res.json(queryHelper.formatPaginatedResponse(count, transformedBills, page, limit));
+    const response = queryHelper.formatPaginatedResponse(count, transformedBills, page, limit);
+    res.json({
+      ...response,
+      aggregates
+    });
   } catch (error) {
     console.error('Get all bills error:', error);
     res.status(500).json({ 
