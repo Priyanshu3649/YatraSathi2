@@ -50,11 +50,11 @@ const MyBookings = () => {
 
   const getStatusColor = (status) => {
     const statusColors = {
-      'DRAFT': '#FFA500',
+      'DRF': '#FFA500',
       'REQUESTED': '#1E90FF',
-      'PENDING': '#FFA500',
-      'CONFIRMED': '#32CD32',
-      'CANCELLED': '#DC143C',
+      'PND': '#FFA500',
+      'CNF': '#32CD32',
+      'CAN': '#DC143C',
       'CLOSED': '#696969'
     };
     return statusColors[status] || '#696969';
@@ -62,11 +62,11 @@ const MyBookings = () => {
 
   const getStatusLabel = (status) => {
     const statusLabels = {
-      'DRAFT': 'Draft',
+      'DRF': 'Draft',
       'REQUESTED': 'Pending',
-      'PENDING': 'Pending',
-      'CONFIRMED': 'Confirmed',
-      'CANCELLED': 'Cancelled',
+      'PND': 'Pending',
+      'CNF': 'Confirmed',
+      'CAN': 'Cancelled',
       'CLOSED': 'Closed'
     };
     return statusLabels[status] || status;
@@ -244,10 +244,10 @@ const MyBookings = () => {
               {bookings.map((booking, index) => {
                 // Determine status color
                 const statusClass = 
-                  booking.bk_status === 'DRAFT' ? 'status-draft' :
-                  booking.bk_status === 'PENDING' || booking.bk_status === 'REQUESTED' ? 'status-pending' :
-                  booking.bk_status === 'CONFIRMED' ? 'status-confirmed' :
-                  booking.bk_status === 'CANCELLED' ? 'status-cancelled' :
+                  booking.bk_status === 'DRF' ? 'status-draft' :
+                  booking.bk_status === 'PND' || booking.bk_status === 'REQUESTED' ? 'status-pending' :
+                  booking.bk_status === 'CNF' ? 'status-confirmed' :
+                  booking.bk_status === 'CAN' ? 'status-cancelled' :
                   'status-default';
                 
                 return (
@@ -288,7 +288,7 @@ const MyBookings = () => {
                       >
                         View Details
                       </button>
-                      {(booking.bk_status !== 'CONFIRMED' && booking.bk_status !== 'CANCELLED' && booking.bk_status !== 'CLOSED') && (
+                      {(booking.bk_status !== 'CNF' && booking.bk_status !== 'CAN' && booking.bk_status !== 'CLOSED') && (
                         <button 
                           onClick={async () => {
                             if (window.confirm('Are you sure you want to cancel this booking?')) {

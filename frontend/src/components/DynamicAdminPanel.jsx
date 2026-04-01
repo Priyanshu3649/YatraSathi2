@@ -392,11 +392,11 @@ const DynamicAdminPanel = () => {
           { value: 'SIDE_UPPER', label: 'Side Upper' }
         ]},
         { name: 'bk_totalpass', label: 'Total Passengers', type: 'number', required: true, min: 1 },
-        { name: 'bk_status', label: 'Status', type: 'select', required: true, defaultValue: 'DRAFT', options: [
-          { value: 'DRAFT', label: 'Draft' },
-          { value: 'PENDING', label: 'Pending' },
-          { value: 'CONFIRMED', label: 'Confirmed' },
-          { value: 'CANCELLED', label: 'Cancelled' }
+        { name: 'bk_status', label: 'Status', type: 'select', required: true, defaultValue: 'DRF', options: [
+          { value: 'DRF', label: 'Draft' },
+          { value: 'PND', label: 'Pending' },
+          { value: 'CNF', label: 'Confirmed' },
+          { value: 'CAN', label: 'Cancelled' }
         ]},
         { name: 'bk_agent', label: 'Assigned Agent', type: 'text' },
         { name: 'bk_remarks', label: 'Remarks', type: 'textarea' }

@@ -6,6 +6,8 @@ const {
 } = require('../controllers/reportController');
 const { exportToExcel, exportToPDF } = require('../services/exportService');
 
+const ReportEngineService = require('../services/reportEngineService');
+
 /**
  * @route GET /api/reports
  * @desc Generate report data (Legacy)
@@ -36,30 +38,38 @@ router.post('/generate', generateGenericReport);
 
 /**
  * @route POST /api/reports/export
- * @desc Export report to Excel or PDF
+ * @desc Export report to Excel or PDF (Engine Aware)
  */
 router.post('/export', async (req, res) => {
   try {
-    const { reportType, format, filters, columns } = req.body;
+    const { reportType, module, format, filters, groupBy, metrics, columns } = req.body;
     
-    // First generate the data
-    const data = await generateReport(reportType, filters);
+    // Support both 'reportType' (legacy) and 'module' (new engine)
+    const targetModule = module || reportType;
+
+    // Generate data using the new JESPR Engine
+    const data = await ReportEngineService.generateReport({
+      module: targetModule,
+      filters: filters || {},
+      groupBy: groupBy || [],
+      metrics: metrics || []
+    });
     
-    // Override columns if provided by user (e.g. for specific grid views)
+    // Override columns if provided by user
     if (columns) {
       data.columns = columns;
     }
     
     let buffer;
     let contentType;
-    let fileName = `${reportType}_Report_${new Date().toISOString().split('T')[0]}`;
+    let fileName = `${targetModule}_Report_${new Date().toISOString().split('T')[0]}`;
 
     if (format === 'EXCEL') {
-      buffer = await exportToExcel(reportType, data);
+      buffer = await exportToExcel(targetModule, data);
       contentType = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
       fileName += '.xlsx';
     } else if (format === 'PDF') {
-      buffer = await exportToPDF(reportType, data);
+      buffer = await exportToPDF(targetModule, data);
       contentType = 'application/pdf';
       fileName += '.pdf';
     } else {
@@ -71,7 +81,7 @@ router.post('/export', async (req, res) => {
     res.send(buffer);
 
   } catch (err) {
-    console.error('Export error:', err);
+    console.error('Export error:', err.stack || err);
     res.status(500).json({ success: false, message: err.message });
   }
 });

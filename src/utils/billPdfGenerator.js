@@ -152,14 +152,39 @@ async function generateBillPDF(payload) {
   doc.text(`GSTIN: ${customer.gstNo} | State: ${customer.state}`, M, y);
   y += 20;
 
-  // Booking & Service Details Table
-  doc.fontSize(10).font('Helvetica-Bold').fillColor(CLR.primary).text('Booking & Service Details', M, y);
+  // Booking Details Summary (Above Table)
+  doc.fontSize(10).font('Helvetica-Bold').fillColor(CLR.primary).text('Service Details', M, y);
   y += 14;
-  const serviceHeads = ['Description', 'SAC Code', 'Qty', 'Rate', 'Amount'];
-  const serviceRows = [
-    [`Booking ${booking.bookingNumber || booking.bookingId}: ${booking.travelDetails}`, '998551', '1', fmt(baseAmount), fmt(baseAmount)]
-  ];
-  y = drawTable(doc, { x: M, y, colWidths: [220, 80, 40, 90, 93.28], headers: serviceHeads, rows: serviceRows });
+  
+  // Build professional service rows
+  const serviceHeads = ['Description', 'SAC/HSN', 'Taxable Val', 'GST', 'Total'];
+  const serviceRows = [];
+  
+  // 1. Railway Fare
+  if (financials.railwayFare > 0) {
+    serviceRows.push(['Railway Fare (Train Reservation)', '998511', fmt(financials.railwayFare), '-', fmt(financials.railwayFare)]);
+  }
+  
+  // 2. Service Charges
+  if (financials.serviceCharges > 0) {
+    serviceRows.push(['Service Charges', '998551', fmt(financials.serviceCharges), '18%', fmt(financials.serviceCharges * 1.18)]);
+  }
+
+  // 3. Station Boy Incentive
+  if (financials.sbIncentive > 0) {
+    serviceRows.push(['Station Boy Incentive (Delivery)', '998551', fmt(financials.sbIncentive), '-', fmt(financials.sbIncentive)]);
+  }
+
+  // 4. Platform Fees / Others
+  const misc = (financials.platformFees || 0) + (financials.miscCharges || 0) + (financials.deliveryCharges || 0);
+  if (misc > 0) {
+    serviceRows.push(['Misc / Platform / Porter Charges', '998551', fmt(misc), '-', fmt(misc)]);
+  }
+
+  // 5. Booking Info Summary
+  doc.fontSize(8).font('Helvetica').fillColor(CLR.muted).text(`Journey: ${booking.travelDetails} | Date: ${fmtDate(booking.journeyDate)} | Train: ${booking.trainNumber || '-'}`, M, y - 10);
+
+  y = drawTable(doc, { x: M, y, colWidths: [200, 80, 80, 70, 93.28], headers: serviceHeads, rows: serviceRows });
   y += 15;
 
   // Passenger Table
@@ -176,13 +201,15 @@ async function generateBillPDF(payload) {
   let ty = y;
 
   const taxRows = [
-    ['Subtotal (Taxable Value)', fmt(baseAmount)],
+    ['Subtotal (Taxable)', fmt(financials.railwayFare + financials.serviceCharges + financials.sbIncentive + (financials.platformFees || 0) + (financials.miscCharges || 0))],
     ...(gst.isIntraState ? [
       [`CGST (9%)`, fmt(gst.cgst)],
       [`SGST (9%)`, fmt(gst.sgst)]
     ] : [
       [`IGST (18%)`, fmt(gst.igst)]
     ]),
+    ['Surcharges / Fees', fmt(financials.surcharge || 0)],
+    ['Discounts', fmt(financials.discount || 0)],
     ['Grand Total', fmt(financials.total)]
   ];
 

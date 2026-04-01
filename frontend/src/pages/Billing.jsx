@@ -114,13 +114,13 @@ const keyboardNavigationStyles = `
     text-transform: uppercase;
   }
   
-  .status-cancelled {
+  .status-cancelled, .status-can {
     background-color: #ffebee;
     color: #c62828;
     border: 1px solid #ef9a9a;
   }
   
-  .status-confirmed, .status-final {
+  .status-confirmed, .status-cnf, .status-final {
     background-color: #e8f5e9;
     color: #2e7d32;
     border: 1px solid #a5d6a7;
@@ -166,7 +166,14 @@ const Billing = () => {
   const [loading, setLoading] = useState(true);
   const [isFetching, setIsFetching] = useState(false); // background fetch — no table unmount
   const [error, setError] = useState('');
-  const [aggregates, setAggregates] = useState({ totalAmount: 0, totalFare: 0, totalGST: 0, count: 0 });
+  const [aggregates, setAggregates] = useState({ 
+    totalAmount: 0, 
+    totalFare: 0, 
+    totalServiceCharges: 0, 
+    totalSBIncentive: 0, 
+    totalGST: 0, 
+    count: 0 
+  });
   
   // Pagination state - 50 records per page with server-side support
   const {
@@ -827,10 +834,14 @@ const Billing = () => {
       if (responseAggregates) {
         setAggregates(responseAggregates);
       } else {
-        const totalAmount = processedBills.reduce((sum, b) => sum + (Number(b.totalAmount) || 0), 0);
+        const billsToAggregate = processedBills;
         setAggregates({
-          totalAmount,
-          count: paginationData?.totalRecords || processedBills.length
+          totalAmount: billsToAggregate.reduce((sum, b) => sum + (parseFloat(b.totalAmount) || 0), 0),
+          totalFare: billsToAggregate.reduce((sum, b) => sum + (parseFloat(b.railwayFare) || 0), 0),
+          totalServiceCharges: billsToAggregate.reduce((sum, b) => sum + (parseFloat(b.serviceCharges) || 0), 0),
+          totalSBIncentive: billsToAggregate.reduce((sum, b) => sum + (parseFloat(b.stationBoyIncentive) || 0), 0),
+          totalGST: billsToAggregate.reduce((sum, b) => sum + (parseFloat(b.gst) || 0), 0),
+          count: billsToAggregate.length
         });
       }
 
@@ -2195,6 +2206,9 @@ const Billing = () => {
                         <th style={{ width: '120px' }}>Reservation Class</th>
                         <th style={{ width: '100px' }}>Ticket Type</th>
                         <th style={{ width: '150px' }}>PNR Number(s)</th>
+                        <th style={{ width: '100px' }}>Railway Fare</th>
+                        <th style={{ width: '100px' }}>Service Chg</th>
+                        <th style={{ width: '100px' }}>SB Inc.</th>
                         <th style={{ width: '120px' }}>Status</th>
                         <th style={{ width: '120px' }}>Total amount</th>
                         <th style={{ width: '120px' }}>Passenger Count</th>
@@ -2441,9 +2455,12 @@ const Billing = () => {
                               <td>{bill.reservationClass || 'N/A'}</td>
                               <td>{bill.ticketType || 'N/A'}</td>
                               <td>{bill.pnrNumbers || 'N/A'}</td>
+                              <td style={{ textAlign: 'right' }}>{bill.railwayFare || '0.00'}</td>
+                              <td style={{ textAlign: 'right' }}>{bill.serviceCharges || '0.00'}</td>
+                              <td style={{ textAlign: 'right' }}>{bill.stationBoyIncentive || '0.00'}</td>
                               <td>
-                                <span className={`erp-status-badge status-${(bill.bl_status || bill.status || 'DRAFT').toLowerCase()}`}>
-                                  {bill.bl_status || bill.status || 'DRAFT'}
+                                <span className={`erp-status-badge status-${(bill.bl_status || bill.status || 'CNF').toLowerCase()}`}>
+                                  {bill.bl_status || bill.status || 'CNF'}
                                 </span>
                               </td>
                               <td style={{ textAlign: 'right', fontWeight: 'bold' }}>{bill.totalAmount ? Number(bill.totalAmount).toFixed(2) : '0.00'}</td>
@@ -2483,7 +2500,10 @@ const Billing = () => {
                       <span>DISPLAYED: <span style={{ color: '#ffcc00' }}>{bills.length}</span></span>
                     </div>
                     <div style={{ display: 'flex', gap: '20px', alignItems: 'center' }}>
-                      <span>SUMMARY TOTAL:</span>
+                      <span>FARE: <span style={{ color: '#ffcc00' }}>₹{Number(aggregates?.totalFare || 0).toLocaleString()}</span></span>
+                      <span>SRV: <span style={{ color: '#ffcc00' }}>₹{Number(aggregates?.totalServiceCharges || 0).toLocaleString()}</span></span>
+                      <span>SBI: <span style={{ color: '#ffcc00' }}>₹{Number(aggregates?.totalSBIncentive || 0).toLocaleString()}</span></span>
+                      <span style={{ marginLeft: '10px' }}>NET TOTAL:</span>
                       <div style={{
                         backgroundColor: '#343a40',
                         padding: '2px 10px',

@@ -56,9 +56,9 @@ const FilterPanel = ({ onFilter, onClear, filters, module = 'generic' }) => {
               )}
               {module === 'booking' && (
                 <>
-                  <option value="PENDING">Pending</option>
-                  <option value="CONFIRMED">Confirmed</option>
-                  <option value="CANCELLED">Cancelled</option>
+                  <option value="PND">Pending</option>
+                  <option value="CNF">Confirmed</option>
+                  <option value="CAN">Cancelled</option>
                 </>
               )}
             </select>

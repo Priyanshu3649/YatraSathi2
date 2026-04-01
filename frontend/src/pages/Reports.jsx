@@ -202,8 +202,15 @@ const Reports = () => {
     setActiveZone('TABLE');
   }, [generateGenericReport, filters, groupBy, metrics, setActiveZone]);
 
+  /**
+   * Export handler (PDF/Excel)
+   */
   const handleExportClick = (format) => {
-    exportReport(filters.module, format, filters);
+    if (!filters.module) {
+      alert('Please select a report type first');
+      return;
+    }
+    exportReport(filters.module, format, filters, groupBy, metrics);
   };
 
   const handleClear = () => {

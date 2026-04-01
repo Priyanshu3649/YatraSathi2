@@ -115,7 +115,7 @@ const Bookings = () => {
     berthPreference: '',
     quotaType: '',
     remarks: '',
-    status: 'Draft',
+    status: 'DRF',
     createdBy: user?.us_name || 'system',
     createdOn: new Date().toISOString(),
     modifiedBy: '',
@@ -306,12 +306,17 @@ const Bookings = () => {
   // Status normalization function
   const normalizeStatus = useCallback((status) => {
     const statusMap = {
-      'Draft': 'DRAFT',
-      'Confirmed': 'CONFIRMED',
-      'Waitlisted': 'PENDING',
-      'Cancelled': 'CANCELLED'
+      'Draft': 'DRF',
+      'Confirmed': 'CNF',
+      'Waitlisted': 'PND',
+      'Pending': 'PND',
+      'Cancelled': 'CAN',
+      'DRAFT': 'DRF',
+      'CONFIRMED': 'CNF',
+      'PENDING': 'PND',
+      'CANCELLED': 'CAN'
     };
-    return statusMap[status] || 'DRAFT';
+    return statusMap[status] || 'DRF';
   }, []);
   
   // Ref to track if save is in progress
@@ -462,7 +467,7 @@ const Bookings = () => {
       quotaType: 'TQ', // Default to Tatkal quota
       pnrNumber: '', // NEW: PNR field
       remarks: '',
-      status: 'DRAFT', // ✓ Use uppercase DRAFT as default
+      status: 'DRF', // ✓ Use DRF as default (database compatible)
       createdBy: user?.us_name || 'system',
       createdOn: new Date().toISOString(),
       modifiedBy: '',
@@ -609,8 +614,8 @@ const Bookings = () => {
     options.push({
       id: 'generate_bill',
       label: 'Generate Bill',
-      enabled: (status === 'DRAFT' || status === 'PENDING' || status === 'CANCELLED') && !record.hasBilling,
-      reason: (status !== 'DRAFT' && status !== 'PENDING' && status !== 'CANCELLED') ? 'Can only bill Draft/Pending/Cancelled bookings' : 
+      enabled: (status === 'DRF' || status === 'PND' || status === 'CAN') && !record.hasBilling,
+      reason: (status !== 'DRF' && status !== 'PND' && status !== 'CAN') ? 'Can only bill Draft/Pending/Cancelled bookings' : 
               record.hasBilling ? 'Billing already exists' : null
     });
     
@@ -626,16 +631,16 @@ const Bookings = () => {
     options.push({
       id: 'edit_booking',
       label: 'Edit Booking',
-      enabled: status !== 'CANCELLED' && status !== 'COMPLETED',
-      reason: (status === 'CANCELLED' || status === 'COMPLETED') ? 'Cannot edit cancelled or completed bookings' : null
+      enabled: status !== 'CAN' && status !== 'FNL',
+      reason: (status === 'CAN' || status === 'FNL') ? 'Cannot edit cancelled or completed bookings' : null
     });
     
     // Cancel Booking - Available unless booking is already CANCELLED or COMPLETED
     options.push({
       id: 'cancel_booking',
       label: 'Cancel Booking',
-      enabled: status !== 'CANCELLED' && status !== 'COMPLETED',
-      reason: (status === 'CANCELLED' || status === 'COMPLETED') ? 'Booking is already cancelled or completed' : null
+      enabled: status !== 'CAN' && status !== 'FNL',
+      reason: (status === 'CAN' || status === 'FNL') ? 'Booking is already cancelled or completed' : null
     });
     
     return options;
@@ -1386,7 +1391,7 @@ setSelectedBooking(null); // Clear selection after deletion
     const items = [];
     
     // Generate Bill - Available for Draft/Pending/Cancelled bookings without existing billing
-    const canGenerateBill = (record.bk_status === 'DRAFT' || record.bk_status === 'PENDING' || record.bk_status === 'CANCELLED') && !record.hasBilling;
+    const canGenerateBill = (record.bk_status === 'DRF' || record.bk_status === 'PND' || record.bk_status === 'CAN') && !record.hasBilling;
     items.push({
       action: 'generate_bill',
       label: 'Generate Bill',
@@ -1403,7 +1408,7 @@ setSelectedBooking(null); // Clear selection after deletion
     });
     
     // Edit Booking
-    const canEdit = record.bk_status !== 'CANCELLED' && record.bk_status !== 'COMPLETED';
+    const canEdit = record.bk_status !== 'CAN' && record.bk_status !== 'FNL';
     items.push({
       action: 'edit_booking',
       label: 'Edit Booking',
@@ -1412,7 +1417,7 @@ setSelectedBooking(null); // Clear selection after deletion
     });
     
     // Cancel Booking
-    const canCancel = record.bk_status !== 'CANCELLED' && record.bk_status !== 'COMPLETED';
+    const canCancel = record.bk_status !== 'CAN' && record.bk_status !== 'FNL';
     items.push({
       action: 'cancel_booking',
       label: 'Cancel Booking',
@@ -1970,10 +1975,10 @@ setSelectedBooking(null); // Clear selection after deletion
                     onKeyDown={(e) => handleEnhancedTabNavigation(e, 'status')}
                     disabled={!isEditing}
                   >
-                    <option value="DRAFT">Draft</option>
-                    <option value="CONFIRMED">Confirmed</option>
-                    <option value="PENDING">Pending</option>
-                    <option value="CANCELLED">Cancelled</option>
+                    <option value="DRF">Draft</option>
+                    <option value="CNF">Confirmed</option>
+                    <option value="PND">Pending</option>
+                    <option value="CAN">Cancelled</option>
                   </select>
                </div>
             </div>
@@ -2204,7 +2209,17 @@ setSelectedBooking(null); // Clear selection after deletion
                             <td>{new Date(record.bk_trvldt || record.bk_travelldate || new Date()).toLocaleDateString()}</td>
                             <td>{record.bk_class || record.bk_travelclass || 'N/A'}</td>
                             <td>{mapQuotaValueToFrontend(record.quotaType || record.bk_quotatype || record.bk_quota) || 'N/A'}</td>
-                            <td>{record.bk_status || 'Draft'}</td>
+                            <td>{(() => {
+                              const statusMap = {
+                                'DRF': 'Draft',
+                                'CNF': 'Confirmed',
+                                'PND': 'Pending',
+                                'CAN': 'Cancelled',
+                                'DRAFT': 'Draft',
+                                'Dft': 'Draft'
+                              };
+                              return statusMap[record.bk_status] || record.bk_status || 'Draft';
+                            })()}</td>
                             <td 
                               style={{ 
                                 maxWidth: '150px', 

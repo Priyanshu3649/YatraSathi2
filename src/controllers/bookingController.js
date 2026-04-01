@@ -180,8 +180,8 @@ const createBooking = async (req, res) => {
       
       console.log('Using customer ID:', customerId);
       
-      // Validate status for creation (should not be INACTIVE)
-      if (status === 'INACTIVE') {
+      // Validate status for creation (should not be INA)
+      if (status === 'INA') {
         return res.status(400).json({ 
           success: false, 
           error: { code: 'VALIDATION_ERROR', message: 'Cannot create booking with INACTIVE status' } 
@@ -203,7 +203,7 @@ const createBooking = async (req, res) => {
         bk_berthpref: berthPreference,
         bk_totalpass: totalPassengers || 1,
         bk_remarks: remarks,
-        bk_status: status || 'DRAFT', // ✓ Use validated status from request body
+        bk_status: status || 'DRF', // ✓ Use validated status from request body
         eby: req.user.us_usid,
         mby: req.user.us_usid
       }, { 
@@ -303,7 +303,7 @@ const getCustomerBookings = async (req, res) => {
     const { count, rows: bookings } = await BookingTVL.findAndCountAll({ 
       where: { 
         bk_usid: req.user.us_usid,
-        bk_status: { [Op.ne]: 'INACTIVE' } // Exclude inactive bookings
+        bk_status: { [Op.ne]: 'INA' } // Exclude inactive bookings
       },
       order,
       limit,
@@ -407,7 +407,7 @@ const getAllBookings = async (req, res) => {
     }
     
     // Exclude inactive bookings
-    where.bk_status = { [Op.ne]: 'INACTIVE' };
+    where.bk_status = { [Op.ne]: 'INA' };
 
     const { count, rows: bookings } = await BookingTVL.findAndCountAll({
       where,
@@ -486,7 +486,7 @@ const getBookingById = async (req, res) => {
     const booking = await BookingTVL.findOne({
       where: {
         bk_bkid: req.params.id,
-        bk_status: { [Sequelize.Op.ne]: 'INACTIVE' } // Exclude inactive bookings
+        bk_status: { [Sequelize.Op.ne]: 'INA' } // Exclude inactive bookings
       }
     });
     
@@ -537,7 +537,7 @@ const updateBooking = async (req, res) => {
     const booking = await BookingTVL.findOne({
       where: {
         bk_bkid: req.params.id,
-        bk_status: { [Sequelize.Op.ne]: 'INACTIVE' } // Exclude inactive bookings
+        bk_status: { [Sequelize.Op.ne]: 'INA' } // Exclude inactive bookings
       }
     });
     
@@ -661,7 +661,7 @@ const cancelBooking = async (req, res) => {
     const booking = await BookingTVL.findOne({
       where: {
         bk_bkid: req.params.id,
-        bk_status: { [Sequelize.Op.ne]: 'INACTIVE' } // Exclude inactive bookings
+        bk_status: { [Sequelize.Op.ne]: 'INA' } // Exclude inactive bookings
       }
     });
     
@@ -675,12 +675,12 @@ const cancelBooking = async (req, res) => {
     }
     
     // Check if booking is already cancelled
-    if (booking.bk_status === 'CANCELLED') {
+    if (booking.bk_status === 'CAN') {
       return res.status(400).json({ message: 'Booking is already cancelled' });
     }
     
     await booking.update({ 
-      bk_status: 'CANCELLED',
+      bk_status: 'CAN',
       mby: req.user.us_usid 
     }, {
       userId: req.user.us_usid  // Pass userId for audit hooks
@@ -722,9 +722,9 @@ const deleteBooking = async (req, res) => {
     const transaction = await sequelize.transaction();
     
     try {
-      // Mark the booking as inactive instead of deleting it
+      // Mark the booking as inactive (INA) instead of deleting it
       await booking.update({ 
-        bk_status: 'INACTIVE',
+        bk_status: 'INA',
         mby: req.user.us_usid,
         mdtm: new Date()
       }, { 
@@ -806,13 +806,13 @@ const approveBooking = async (req, res) => {
     }
     
     // Check if booking is inactive before approving
-    if (booking.bk_status === 'INACTIVE') {
+    if (booking.bk_status === 'INA') {
       return res.status(400).json({ message: 'Cannot approve an inactive booking' });
     }
     
     // Update booking status to PENDING
     await booking.update({ 
-      bk_status: 'PENDING',
+      bk_status: 'PND',
       mby: req.user.us_usid 
     }, {
       userId: req.user.us_usid  // Pass userId for audit hooks
@@ -841,7 +841,7 @@ const confirmBooking = async (req, res) => {
     }
     
     // Check if booking is inactive before confirming
-    if (booking.bk_status === 'INACTIVE') {
+    if (booking.bk_status === 'INA') {
       return res.status(400).json({ message: 'Cannot confirm an inactive booking' });
     }
     
@@ -860,7 +860,7 @@ const confirmBooking = async (req, res) => {
     
     // Update booking status to CONFIRMED
     await booking.update({ 
-      bk_status: 'CONFIRMED',
+      bk_status: 'CNF',
       mby: req.user.us_usid 
     }, {
       userId: req.user.us_usid  // Pass userId for audit hooks
@@ -890,7 +890,7 @@ const confirmBooking = async (req, res) => {
       ac_bkid: booking.bk_bkid,
       ac_usid: booking.bk_usid,
       ac_totamt: totalAmount || 0,
-      ac_status: 'PENDING',
+      ac_status: 'PND',
       eby: req.user.us_usid,
       mby: req.user.us_usid
     });
@@ -965,7 +965,7 @@ const confirmBooking = async (req, res) => {
       bl_discount: discounts?.reduce((sum, discount) => sum + parseFloat(discount.amount || 0), 0) || 0,
       bl_total_amount: totalAmountCalculated,
       bl_created_by: req.user.us_usid,
-      bl_status: 'CONFIRMED',
+      bl_status: 'CNF',
       status: 'OPEN',
       // Standard audit fields
       entered_by: req.user.us_usid,
@@ -976,7 +976,7 @@ const confirmBooking = async (req, res) => {
     
     // Update booking status to CONFIRMED and mark as billed
     await booking.update({
-      bk_status: 'CONFIRMED',
+      bk_status: 'CNF',
       bk_billed: 1,
       mby: req.user.us_usid,
       mdtm: new Date()
@@ -1027,7 +1027,7 @@ const getBookingsByStatus = async (req, res) => {
     let whereConditions = { 
       [Sequelize.Op.and]: [
         { bk_status: status },
-        { bk_status: { [Sequelize.Op.ne]: 'INACTIVE' } } // Exclude inactive bookings
+        { bk_status: { [Sequelize.Op.ne]: 'INA' } } // Exclude inactive bookings
       ]
     };
     
@@ -1069,7 +1069,7 @@ const getBookingPassengers = async (req, res) => {
     const booking = await BookingTVL.findOne({
       where: {
         bk_bkid: bookingId,
-        bk_status: { [Sequelize.Op.ne]: 'INACTIVE' } // Exclude inactive bookings
+        bk_status: { [Sequelize.Op.ne]: 'INA' } // Exclude inactive bookings
       },
       attributes: ['bk_bkid', 'bk_usid', 'bk_agent']  // Only needed fields
     });
@@ -1175,7 +1175,7 @@ const searchBookings = async (req, res) => {
 
     // Build query conditions
     let whereConditions = {
-      bk_status: { [Sequelize.Op.ne]: 'INACTIVE' } // Exclude inactive bookings by default
+      bk_status: { [Sequelize.Op.ne]: 'INA' } // Exclude inactive bookings by default
     };
 
     // Status filter
@@ -1273,7 +1273,7 @@ const getAssignedBookings = async (req, res) => {
     const bookings = await BookingTVL.findAll({
       where: { 
         bk_agent: req.user.us_usid,
-        bk_status: { [Sequelize.Op.ne]: 'INACTIVE' } // Exclude inactive bookings
+        bk_status: { [Sequelize.Op.ne]: 'INA' } // Exclude inactive bookings
       },
       order: [['edtm', 'DESC']]
     });
@@ -1349,7 +1349,7 @@ const updateBookingStatus = async (req, res) => {
     const { status } = req.body;
     
     // Validate status
-    const validStatuses = ['DRAFT', 'PENDING', 'CONFIRMED', 'CANCELLED', 'COMPLETED', 'INACTIVE'];
+    const validStatuses = ['DRF', 'PND', 'CNF', 'CAN', 'FNL', 'INA'];
     if (!validStatuses.includes(status)) {
       return res.status(400).json({ 
         success: false, 
@@ -1361,7 +1361,7 @@ const updateBookingStatus = async (req, res) => {
     const booking = await BookingTVL.findOne({
       where: {
         bk_bkid: bookingId,
-        bk_status: { [Sequelize.Op.ne]: 'INACTIVE' } // Don't allow updates to inactive bookings
+        bk_status: { [Sequelize.Op.ne]: 'INA' } // Don't allow updates to inactive bookings
       }
     });
     if (!booking) {

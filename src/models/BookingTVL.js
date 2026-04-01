@@ -72,9 +72,9 @@ const BookingTVL = sequelizeTVL.define('bkXbooking', {
     comment: 'Request Date'
   },
   bk_status: {
-    type: DataTypes.STRING(15),
-    defaultValue: 'DRAFT',
-    comment: 'Booking Status'
+    type: DataTypes.ENUM('DRF', 'CNF', 'CAN', 'PND', 'PAD', 'FNL', 'INA'),
+    defaultValue: 'DRF',
+    comment: 'Booking Status (DRF: Draft, CNF: Confirmed, CAN: Cancelled, PND: Pending, etc.)'
   },
   bk_agent: {
     type: DataTypes.STRING(15),

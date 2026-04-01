@@ -142,6 +142,7 @@ const AdminDashboard = () => {
     { name: 'Billing', path: '/billing' },
     { name: 'Payments', path: '/payments' },
     { name: 'Refunds', path: '/refunds' },
+    { name: 'Service Charges', path: '/admin/service-charges' },
     { name: 'Reports', path: '/reports' },
     { name: 'Admin Panel', path: '/admin-panel' }
   ];

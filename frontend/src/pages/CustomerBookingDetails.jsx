@@ -40,11 +40,11 @@ const CustomerBookingDetails = () => {
 
   const getStatusColor = (status) => {
     const statusColors = {
-      'DRAFT': '#FFA500',
+      'DRF': '#FFA500',
       'REQUESTED': '#1E90FF',
-      'PENDING': '#FFA500',
-      'CONFIRMED': '#32CD32',
-      'CANCELLED': '#DC143C',
+      'PND': '#FFA500',
+      'CNF': '#32CD32',
+      'CAN': '#DC143C',
       'CLOSED': '#696969'
     };
     return statusColors[status] || '#696969';
@@ -205,7 +205,7 @@ const CustomerBookingDetails = () => {
                 <div className="timeline-status">Current status: {booking.bk_status}</div>
               </div>
             </div>
-            {booking.bk_status === 'CONFIRMED' && (
+            {booking.bk_status === 'CNF' && (
               <div className="timeline-item">
                 <div className="timeline-marker"></div>
                 <div className="timeline-content">
@@ -231,13 +231,13 @@ const CustomerBookingDetails = () => {
         </div>
 
         <div className="booking-actions">
-          {booking.bk_status === 'PENDING' || booking.bk_status === 'DRAFT' ? (
+          {booking.bk_status === 'PND' || booking.bk_status === 'DRF' ? (
             <button className="btn-outline" disabled>
               Cancel Booking
             </button>
           ) : (
-            <button className="btn-outline" disabled={booking.bk_status === 'CANCELLED'}>
-              {booking.bk_status === 'CANCELLED' ? 'Already Cancelled' : 'Cannot Cancel'}
+            <button className="btn-outline" disabled={booking.bk_status === 'CAN'}>
+              {booking.bk_status === 'CAN' ? 'Already Cancelled' : 'Cannot Cancel'}
             </button>
           )}
         </div>

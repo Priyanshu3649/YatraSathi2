@@ -66,7 +66,7 @@ const Booking = sequelize.define('bkBooking', {
   },
   bk_status: {
     type: DataTypes.STRING(15),
-    defaultValue: 'DRAFT',
+    defaultValue: 'DRF',
     comment: 'Booking Status'
   },
   bk_agent: {

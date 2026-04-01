@@ -60,14 +60,16 @@ export const ReportProvider = ({ children }) => {
   }, []);
 
   /**
-   * Export report
+   * Export report (Supports Grouping & Metrics)
    */
-  const exportReport = useCallback(async (reportType, format, filters) => {
+  const exportReport = useCallback(async (module, format, filters, groupBy = [], metrics = []) => {
     try {
       const response = await axios.post('/api/reports/export', {
-        reportType,
+        module,
         format,
-        filters
+        filters,
+        groupBy,
+        metrics
       }, {
         responseType: 'blob',
         headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
@@ -76,7 +78,7 @@ export const ReportProvider = ({ children }) => {
       const url = window.URL.createObjectURL(new Blob([response.data]));
       const link = document.createElement('a');
       link.href = url;
-      link.setAttribute('download', `${reportType}_Report_${Date.now()}.${format === 'EXCEL' ? 'xlsx' : 'pdf'}`);
+      link.setAttribute('download', `${module}_Report_${Date.now()}.${format === 'EXCEL' ? 'xlsx' : 'pdf'}`);
       document.body.appendChild(link);
       link.click();
       link.remove();

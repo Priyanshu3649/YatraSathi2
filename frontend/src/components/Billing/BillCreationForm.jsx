@@ -10,14 +10,17 @@ const BillCreationForm = ({ onCancel, onSubmit, user, error, setError }) => {
     ticketType: 'NORMAL',
     pnrNumbers: [''],
     netFare: '',
-    serviceCharges: '',
+    serviceCharges: 0,
+    passengerCount: 1,
     platformFees: '',
     agentFees: '',
     extraCharges: [{ label: '', amount: '' }],
     discounts: [{ label: '', amount: '', type: 'FIXED' }], // FIXED or PERCENTAGE
     billDate: new Date().toISOString().split('T')[0],
-    status: 'DRAFT',
-    remarks: ''
+    status: 'CNF',
+    remarks: '',
+    railwayFare: 0,
+    stationBoyIncentive: 0
   });
   const [customers, setCustomers] = useState([]);
   const [bookings, setBookings] = useState([]);
@@ -27,6 +30,34 @@ const BillCreationForm = ({ onCancel, onSubmit, user, error, setError }) => {
   useEffect(() => {
     fetchCustomers();
   }, []);
+
+  // Auto-calculate service charges when key fields change
+  useEffect(() => {
+    const fetchCalculatedCharge = async () => {
+      if (!formData.customerId || !formData.reservationClass || !formData.passengerCount) return;
+      
+      try {
+        const response = await fetch(
+          `/api/service-charge/calculate?customerId=${formData.customerId}&serviceType=RESERVATION&travelClass=${formData.reservationClass}&passengerCount=${formData.passengerCount}`,
+          {
+            headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+          }
+        );
+        
+        if (response.ok) {
+          const data = await response.json();
+          if (data.success) {
+            setFormData(prev => ({ ...prev, serviceCharges: data.amount }));
+          }
+        }
+      } catch (err) {
+        console.error('Failed to calculate service charge:', err);
+      }
+    };
+
+    const timer = setTimeout(fetchCalculatedCharge, 500); // Debounce
+    return () => clearTimeout(timer);
+  }, [formData.customerId, formData.reservationClass, formData.passengerCount]);
 
   const fetchCustomers = async () => {
     try {
@@ -151,6 +182,9 @@ const BillCreationForm = ({ onCancel, onSubmit, user, error, setError }) => {
       }
     });
 
+    // Add Station Boy Incentive
+    total += parseFloat(formData.stationBoyIncentive) || 0;
+
     return Math.max(0, total); // Ensure total is not negative
   };
 
@@ -184,6 +218,11 @@ const BillCreationForm = ({ onCancel, onSubmit, user, error, setError }) => {
   return (
     <form onSubmit={handleSubmit} className="erp-form">
       <div className="form-grid">
+        {error && (
+          <div className="erp-error-alert" style={{ gridColumn: '1 / -1', padding: '10px', background: '#ffebee', color: '#c62828', border: '1px solid #ef9a9a', borderRadius: '4px', marginBottom: '10px' }}>
+            <strong>Error:</strong> {error}
+          </div>
+        )}
         {/* Customer Information */}
         <label htmlFor="customerId" className="form-label required">Customer ID</label>
         <select
@@ -250,6 +289,17 @@ const BillCreationForm = ({ onCancel, onSubmit, user, error, setError }) => {
           <option value="PREMIUM_TATKAL">Premium Tatkal</option>
         </select>
 
+        <label htmlFor="passengerCount" className="form-label">Passenger Count</label>
+        <input
+          type="number"
+          id="passengerCount"
+          name="passengerCount"
+          value={formData.passengerCount}
+          onChange={handleInputChange}
+          min="1"
+          className="form-input"
+        />
+
         {/* PNR Numbers */}
         <label className="form-label">PNR Numbers</label>
         <div className="form-input-group">
@@ -285,12 +335,12 @@ const BillCreationForm = ({ onCancel, onSubmit, user, error, setError }) => {
         </div>
 
         {/* Fare & Charges */}
-        <label htmlFor="netFare" className="form-label">Net Journey Fare</label>
+        <label htmlFor="railwayFare" className="form-label">Railway Fare</label>
         <input
           type="number"
-          id="netFare"
-          name="netFare"
-          value={formData.netFare}
+          id="railwayFare"
+          name="railwayFare"
+          value={formData.railwayFare}
           onChange={handleInputChange}
           step="0.01"
           className="form-input"
@@ -302,6 +352,17 @@ const BillCreationForm = ({ onCancel, onSubmit, user, error, setError }) => {
           id="serviceCharges"
           name="serviceCharges"
           value={formData.serviceCharges}
+          onChange={handleInputChange}
+          step="0.01"
+          className="form-input"
+        />
+
+        <label htmlFor="stationBoyIncentive" className="form-label">SB Incentive</label>
+        <input
+          type="number"
+          id="stationBoyIncentive"
+          name="stationBoyIncentive"
+          value={formData.stationBoyIncentive}
           onChange={handleInputChange}
           step="0.01"
           className="form-input"
@@ -456,8 +517,8 @@ const BillCreationForm = ({ onCancel, onSubmit, user, error, setError }) => {
           onChange={handleInputChange}
           className="form-input"
         >
-          <option value="DRAFT">Draft</option>
-          <option value="FINAL">Final</option>
+          <option value="CNF">Confirmed (CNF)</option>
+          <option value="CAN">Cancelled (CAN)</option>
           <option value="PAID">Paid</option>
           <option value="PARTIAL">Partial</option>
         </select>
@@ -484,19 +545,19 @@ const BillCreationForm = ({ onCancel, onSubmit, user, error, setError }) => {
           type="button"
           className="tool-button"
           onClick={() => {
-            setFormData({ ...formData, status: 'FINAL' });
+            setFormData({ ...formData, status: 'CNF' });
           }}
         >
-          Save as Draft
+          Save as Confirmed
         </button>
         <button
           type="button"
           className="tool-button"
           onClick={() => {
-            setFormData({ ...formData, status: 'FINAL' });
+            setFormData({ ...formData, status: 'CAN' });
           }}
         >
-          Finalize Bill
+          Mark as Cancelled
         </button>
       </div>
     </form>

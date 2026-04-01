@@ -23,7 +23,7 @@ const ReportEngineService = {
     customers: {
       model: CustomerTVL,
       include: [{ model: UserTVL, as: 'user' }],
-      primaryDateField: 'createdAt',
+      primaryDateField: 'entered_on',
       allowedFilters: ['cu_status', 'cu_custtype'],
       defaultColumns: ['cu_custno', 'cu_name', 'cu_status', 'cu_custtype'],
       mapping: (item) => ({
@@ -39,7 +39,7 @@ const ReportEngineService = {
     employees: {
       model: EmployeeTVL,
       include: [{ model: UserTVL, as: 'user', include: [{ model: RoleTVL, as: 'fnXfunction' }] }],
-      primaryDateField: 'em_joindt',
+      primaryDateField: 'edtm',
       allowedFilters: ['em_dept', 'em_status'],
       defaultColumns: ['em_usid', 'em_dept', 'em_status'],
       mapping: (item) => ({
@@ -218,10 +218,14 @@ const ReportEngineService = {
     }
 
     // 2. Fetch Data (with Pagination if not grouped)
+    const primaryDate = moduleConfig.primaryDateField || 'id';
     const queryOptions = {
       where,
       include: moduleConfig.include || [],
-      order: sort ? [sort.split(':')] : [['createdAt', 'DESC']]
+      // If sort is 'createdAt:DESC' (default) and model doesn't have it, fallback to primaryDate
+      order: (sort && !sort.includes('createdAt')) 
+        ? [sort.split(':')] 
+        : [[primaryDate, 'DESC']]
     };
 
     // If grouping, we fetch all (to calculate global aggregates), but use limit for display

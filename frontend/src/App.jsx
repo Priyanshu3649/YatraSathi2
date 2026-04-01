@@ -47,6 +47,7 @@ import EditTravelPlan from './pages/EditTravelPlan';
 import Billing from './pages/Billing';
 import CancellationHistory from './pages/CancellationHistory';
 import PrintBill from './pages/PrintBill';
+import ServiceChargeManager from './pages/ServiceChargeManager';
 
 // Import customer pages
 import MyBookings from './pages/MyBookings';
@@ -206,6 +207,7 @@ function App() {
                       {/* Admin Routes with Role-Based Access Control */}
                       <Route path="/admin-dashboard" element={<RoleBasedRoute requiredRole="ADM"><DynamicAdminPanel /></RoleBasedRoute>} />
                       <Route path="/admin-panel" element={<Navigate to="/admin-dashboard" replace />} />
+                      <Route path="/admin/service-charges" element={<RoleBasedRoute requiredRole="ADM"><ServiceChargeManager /></RoleBasedRoute>} />
                       <Route path="/admin/*" element={<RoleBasedRoute requiredRole="ADM"><DynamicAdminPanel /></RoleBasedRoute>} />
                       
                       {/* Employee Routes with Role-Based Access Control */}

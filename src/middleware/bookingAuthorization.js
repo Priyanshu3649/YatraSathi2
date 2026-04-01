@@ -100,8 +100,8 @@ const canEditBooking = async (req, res, next) => {
         });
       }
 
-      // Check if booking is in DRAFT status
-      if (booking.bk_status !== 'DRAFT') {
+      // Check if booking is in DRF (Draft) status
+      if (booking.bk_status !== 'DRF') {
         return res.status(403).json({
           success: false,
           error: { 
@@ -252,7 +252,7 @@ const canCancelBooking = async (req, res, next) => {
       }
 
       // Check if booking is in a cancellable status
-      const cancellableStatuses = ['DRAFT', 'PENDING'];
+      const cancellableStatuses = ['DRF', 'PND'];
       if (!cancellableStatuses.includes(booking.bk_status)) {
         return res.status(403).json({
           success: false,

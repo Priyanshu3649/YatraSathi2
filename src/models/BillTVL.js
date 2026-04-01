@@ -191,7 +191,7 @@ const BillTVL = sequelizeTVL.define('blXbilling', {
     comment: 'Timestamp when record was closed'
   },
   status: {
-    type: DataTypes.ENUM('OPEN', 'CLOSED', 'CANCELLED', 'DRAFT', 'FINAL', 'PAID'),
+    type: DataTypes.ENUM('OPEN', 'CLOSED', 'CANCELLED', 'DRAFT', 'FINAL', 'PAID', 'CNF', 'CAN'),
     defaultValue: 'OPEN',
     comment: 'Record status'
   },
@@ -240,8 +240,8 @@ const BillTVL = sequelizeTVL.define('blXbilling', {
     allowNull: true
   },
   bl_status: {
-    type: DataTypes.ENUM('DRAFT', 'CONFIRMED', 'CANCELLED', 'PENDING', 'PAID', 'FINAL'),
-    defaultValue: 'DRAFT',
+    type: DataTypes.ENUM('DRAFT', 'CONFIRMED', 'CANCELLED', 'PENDING', 'PAID', 'FINAL', 'CNF', 'CAN'),
+    defaultValue: 'CNF',
     comment: 'Billing status'
   },
   bl_modified_at: {

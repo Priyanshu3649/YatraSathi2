@@ -55,6 +55,8 @@ const Contra = require('./Contra');
 const Receipt = require('./Receipt');
 const Journal = require('./Journal');
 const ForensicAuditLog = require('./ForensicAuditLog');
+const ServiceCharge = require('./ServiceCharge');
+const ServiceChargeDefault = require('./ServiceChargeDefault');
 
 // Set up associations
 // Company associations
@@ -87,6 +89,8 @@ Customer.belongsTo(User, { foreignKey: 'cu_usid', targetKey: 'us_usid' });
 Customer.hasMany(CustomerContact, { foreignKey: 'cc_usid', sourceKey: 'cu_usid' });
 Customer.hasMany(Booking, { foreignKey: 'bk_usid', sourceKey: 'cu_usid' });
 Customer.hasMany(Account, { foreignKey: 'ac_usid', sourceKey: 'cu_usid' });
+Customer.hasMany(ServiceCharge, { foreignKey: 'customer_id', sourceKey: 'cu_usid' });
+ServiceCharge.belongsTo(Customer, { foreignKey: 'customer_id', targetKey: 'cu_usid' });
 
 // CorporateCustomer associations
 CorporateCustomer.belongsTo(User, { foreignKey: 'cu_usid', targetKey: 'us_usid' });
@@ -210,11 +214,12 @@ TrainTVL.associate({ StationTVL });
 ApplicationTVL.hasMany(ModuleTVL, { foreignKey: 'mo_apid', sourceKey: 'ap_apid', as: 'modules' });
 ModuleTVL.belongsTo(ApplicationTVL, { foreignKey: 'mo_apid', targetKey: 'ap_apid', as: 'application' });
 
-// BillTVL associations
-console.log('🔗 Defining BillTVL associations...');
 BillTVL.belongsTo(BookingTVL, { foreignKey: 'bl_booking_id', targetKey: 'bk_bkid', as: 'booking' });
 BookingTVL.hasOne(BillTVL, { foreignKey: 'bl_booking_id', sourceKey: 'bk_bkid', as: 'billing' });
 console.log('✅ BillTVL associations defined');
+
+// ForensicAuditLog associations
+ForensicAuditLog.belongsTo(UserTVL, { foreignKey: 'performedBy', targetKey: 'us_usid', as: 'user' });
 
 module.exports = {
   Company,
@@ -277,5 +282,7 @@ module.exports = {
   PermissionTVL,
   ForensicAuditLog,
   ApplicationTVL,
-  ModuleTVL
+  ModuleTVL,
+  ServiceCharge,
+  ServiceChargeDefault
 };
