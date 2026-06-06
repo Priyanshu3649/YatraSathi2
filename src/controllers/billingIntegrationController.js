@@ -21,8 +21,6 @@ const generateBillingFromBooking = async (req, res) => {
     
     console.log(`Found booking with status: ${booking.bk_status}`);
 
-    // Check if booking status is CONFIRMED - prevent billing for already confirmed bookings
-    // REVISED LOGIC: Billing generation is permitted for bookings with ANY status EXCEPT 'CONFIRMED'
     if (booking.bk_status && booking.bk_status.toUpperCase() === 'CONFIRMED') {
       console.log(`Booking ${bookingId} is already CONFIRMED, billing not allowed`);
       return res.status(400).json({ 

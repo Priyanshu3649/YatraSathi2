@@ -1,4 +1,4 @@
-const { UserTVL, EmployeeTVL, BookingTVL, PaymentTVL, Customer, CorporateCustomer, Account, User, Employee, BillTVL } = require('../models');
+const { UserTVL, EmployeeTVL, BookingTVL, PaymentTVL, Customer, CorporateCustomer, Account, User, Employee, BillTVL, ForensicAuditLog } = require('../models');
 const { Op } = require('sequelize');
 
 /**
@@ -14,12 +14,16 @@ const getAdminDashboard = async (req, res) => {
       });
     }
 
-    const startOfToday = new Date();
+    const now = new Date();
+    const startOfToday = new Date(now);
     startOfToday.setHours(0, 0, 0, 0);
     
-    const startOfMonth = new Date();
+    const startOfMonth = new Date(now);
     startOfMonth.setDate(1);
     startOfMonth.setHours(0, 0, 0, 0);
+
+    const twentyFourHoursAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+    const fortyEightHoursAgo = new Date(now.getTime() - 48 * 60 * 60 * 1000);
     
     // 1. Overall Statistics & Trends
     const [
@@ -27,17 +31,21 @@ const getAdminDashboard = async (req, res) => {
       totalRevenueRecord,
       totalPendingRecord,
       bookingsToday,
-      bookingsThisMonth,
+      bookingsYesterday,
       revenueTodayRecord,
-      revenueThisMonthRecord
+      revenueYesterdayRecord
     ] = await Promise.all([
       BookingTVL.count(),
-      PaymentTVL.sum('pt_amount', { where: { pt_status: 'PROCESSED' } }),
+      // Using 'RECEIVED' as verified from DB scan for success payments
+      PaymentTVL.sum('pt_amount', { where: { pt_status: 'RECEIVED' } }),
       PaymentTVL.sum('pt_amount', { where: { pt_status: 'PENDING' } }),
-      BookingTVL.count({ where: { edtm: { [Op.gte]: startOfToday } } }),
-      BookingTVL.count({ where: { edtm: { [Op.gte]: startOfMonth } } }),
-      PaymentTVL.sum('pt_amount', { where: { pt_status: 'PROCESSED', edtm: { [Op.gte]: startOfToday } } }),
-      PaymentTVL.sum('pt_amount', { where: { pt_status: 'PROCESSED', edtm: { [Op.gte]: startOfMonth } } })
+      
+      // Trend calculation data
+      BookingTVL.count({ where: { edtm: { [Op.gte]: twentyFourHoursAgo } } }),
+      BookingTVL.count({ where: { edtm: { [Op.lt]: twentyFourHoursAgo, [Op.gte]: fortyEightHoursAgo } } }),
+      
+      PaymentTVL.sum('pt_amount', { where: { pt_status: 'RECEIVED', edtm: { [Op.gte]: twentyFourHoursAgo } } }),
+      PaymentTVL.sum('pt_amount', { where: { pt_status: 'RECEIVED', edtm: { [Op.lt]: twentyFourHoursAgo, [Op.gte]: fortyEightHoursAgo } } })
     ]);
 
     // 2. Financial Metrics Breakdown (from BillTVL)
@@ -54,7 +62,7 @@ const getAdminDashboard = async (req, res) => {
       raw: true
     });
 
-    // 3. Risk & Outstanding
+    // 3. Risk & Outstanding (from BillTVL)
     const [
       pendingBills,
       partialPayments,
@@ -93,7 +101,6 @@ const getAdminDashboard = async (req, res) => {
     ]);
 
     // 5. Recent Activity Log (from ForensicAuditLog)
-    const { ForensicAuditLog } = require('../models');
     const logs = await ForensicAuditLog.findAll({
       limit: 10,
       order: [['performed_on', 'DESC']],
@@ -112,27 +119,36 @@ const getAdminDashboard = async (req, res) => {
       user: log.user?.us_fname || 'SYS'
     }));
 
+    // Helper to format currency
+    const formatCurrency = (val) => {
+      const num = parseFloat(val || 0);
+      return `₹${num.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    };
+
     // Format for Frontend
     const dashboardData = {
       overview: {
         totalBookings,
-        totalRevenue: totalRevenueRecord || 0,
-        totalPending: totalPendingRecord || 0,
+        totalRevenue: parseFloat(totalRevenueRecord || 0),
+        totalPending: parseFloat(totalPendingRecord || 0),
         refundsInProcess: refundsPending || 0,
         
         // Detailed Financials
-        netFareCollected: `₹${(financialSummary.netFare || 0).toLocaleString()}`,
-        serviceCharges: `₹${(financialSummary.serviceCharges || 0).toLocaleString()}`,
-        platformFees: `₹${(financialSummary.platformFees || 0).toLocaleString()}`,
-        discountsGiven: `₹${(financialSummary.discounts || 0).toLocaleString()}`,
-        taxesCollected: `₹${(financialSummary.taxes || 0).toLocaleString()}`,
-        totalBilled: `₹${(financialSummary.totalBilled || 0).toLocaleString()}`,
+        netFareCollected: formatCurrency(financialSummary.netFare),
+        serviceCharges: formatCurrency(financialSummary.serviceCharges),
+        platformFees: formatCurrency(financialSummary.platformFees),
+        discountsGiven: formatCurrency(financialSummary.discounts),
+        taxesCollected: formatCurrency(financialSummary.taxes),
+        totalBilled: formatCurrency(financialSummary.totalBilled),
+        agentFees: "₹0.00", // Placeholder if not in model
 
         // Risk Metrics
-        pendingBillsCount: pendingBills[0]?.count || 0,
-        pendingBillsAmount: `₹${(pendingBills[0]?.amount || 0).toLocaleString()}`,
-        partialPaymentsCount: partialPayments[0]?.count || 0,
-        partialPaymentsAmount: `₹${(partialPayments[0]?.amount || 0).toLocaleString()}`,
+        pendingBillsCount: parseInt(pendingBills[0]?.count || 0),
+        pendingBillsAmount: formatCurrency(pendingBills[0]?.amount),
+        partialPaymentsCount: parseInt(partialPayments[0]?.count || 0),
+        partialPaymentsAmount: formatCurrency(partialPayments[0]?.amount),
+        refundPendingCount: refundsPending || 0,
+        refundPendingAmount: "₹0.00",
 
         // Operational
         trainsBookedToday: ticketsToday,
@@ -141,10 +157,18 @@ const getAdminDashboard = async (req, res) => {
         ticketsIssuedThisMonth: ticketsMonth,
         ticketsCancelledToday: cancelledToday,
         ticketsCancelledThisMonth: cancelledMonth,
+        waitlistedPnrsToday: 0,
+        waitlistedPnrsThisMonth: 0,
+        chartsPreparedToday: 0,
+        chartsPreparedThisMonth: 0,
 
         trends: {
-          bookings: { percent: "+5.2" }, // Placeholder for complex trend logic
-          revenue: { percent: "+12.1" }
+          bookings: { 
+            percent: bookingsYesterday > 0 ? (((bookingsToday - bookingsYesterday) / bookingsYesterday) * 100).toFixed(1) : (bookingsToday > 0 ? "100.0" : "0.0")
+          },
+          revenue: { 
+            percent: parseFloat(revenueYesterdayRecord || 0) > 0 ? (((parseFloat(revenueTodayRecord || 0) - parseFloat(revenueYesterdayRecord || 0)) / parseFloat(revenueYesterdayRecord || 0)) * 100).toFixed(1) : (parseFloat(revenueTodayRecord || 0) > 0 ? "100.0" : "0.0")
+          }
         }
       },
       recentActivity,

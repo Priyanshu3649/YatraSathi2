@@ -1,6 +1,27 @@
 const serviceChargeService = require('../services/serviceChargeService');
 const { ServiceCharge, ServiceChargeDefault, UserTVL } = require('../models');
 
+// Helper function to convert string user ID to integer for database compatibility
+function convertUserIdToInt(userId) {
+  if (!userId) return null;
+  if (typeof userId === 'number') {
+    return userId;
+  }
+  
+  if (typeof userId === 'string') {
+    // Try to extract numeric part from alphanumeric ID (e.g., 'ADM001' -> 1)
+    const numericPart = userId.match(/\d+/);
+    if (numericPart) {
+      return parseInt(numericPart[0]);
+    }
+    
+    // If no numeric part found, use character codes as fallback
+    return userId.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0) % 1000000;
+  }
+  
+  return null;
+}
+
 /**
  * Service Charge Controller
  * Handles calculation requests and admin CRUD operations for rules.
@@ -19,7 +40,7 @@ class ServiceChargeController {
       }
 
       const amount = await serviceChargeService.getServiceCharge({
-        customerId: parseInt(customerId),
+        customerId: convertUserIdToInt(customerId),
         serviceType: serviceType.toUpperCase(),
         travelClass: travelClass.toUpperCase(),
         passengerCount: parseInt(passengerCount)

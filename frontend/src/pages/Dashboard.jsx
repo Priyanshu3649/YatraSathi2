@@ -24,15 +24,26 @@ const Dashboard = () => {
       // Don't set loading true for background refreshes
       let data;
       
-      if (user && user.us_usertype === 'admin') {
+      if (user && (user.us_usertype === 'admin' || user.us_roid === 'ADM')) {
         data = await dashboardAPI.getAdminStats();
-      } else if (user && user.us_usertype === 'employee') {
+      } else if (user && (user.us_usertype === 'employee' || ['AGT', 'ACC', 'HR', 'CC', 'MKT', 'MGT'].includes(user.us_roid))) {
         data = await dashboardAPI.getEmployeeStats();
       } else {
         data = await dashboardAPI.getCustomerStats();
       }
       
-      setStats(data);
+      // Robust unpacking: try to find the inner data object if wrapped
+      let dashboardData = data;
+      if (data && typeof data === 'object') {
+        if (data.data) {
+          dashboardData = data.data;
+        } else if (data.success && data.result) {
+          dashboardData = data.result;
+        }
+      }
+      
+      console.log('📊 Dashboard data parsed:', dashboardData);
+      setStats(dashboardData);
     } catch (err) {
       setError(err.message || 'Failed to load dashboard data');
     } finally {

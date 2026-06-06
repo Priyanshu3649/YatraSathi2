@@ -774,3 +774,98 @@ a.erp-button {
   flex-direction: column;
   height: 100%;
 }
+
+/* Compact Form Grid Layouts - Matching Billing/Booking Modules */
+.erp-form-row-compact {
+  display: grid;
+  grid-template-columns: 120px 1fr 120px 1fr;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.erp-form-row-compact-2 {
+  display: grid;
+  grid-template-columns: 120px 1fr 120px 1fr;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.erp-form-row-compact-3 {
+  display: grid;
+  grid-template-columns: 100px 1fr 100px 1fr 100px 1fr;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.erp-form-row-compact-4 {
+  display: grid;
+  grid-template-columns: 80px 1fr 80px 1fr 80px 1fr 80px 1fr;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.erp-form-row-compact-5 {
+  display: grid;
+  grid-template-columns: 70px 1fr 70px 1fr 70px 1fr 70px 1fr 70px 1fr;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.erp-form-row-compact .erp-form-label,
+.erp-form-row-compact-2 .erp-form-label,
+.erp-form-row-compact-3 .erp-form-label,
+.erp-form-row-compact-4 .erp-form-label,
+.erp-form-row-compact-5 .erp-form-label {
+  text-align: right;
+  font-size: 11px;
+  font-weight: normal;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding-right: 8px;
+  color: #555;
+}
+
+.erp-form-row-compact .erp-input,
+.erp-form-row-compact-2 .erp-input,
+.erp-form-row-compact-3 .erp-input,
+.erp-form-row-compact-4 .erp-input,
+.erp-form-row-compact-5 .erp-input {
+  width: 100%;
+  min-width: 0;
+  padding: 3px 6px;
+  font-size: 11px;
+}
+
+/* Keyboard Navigation Highlighting */
+.erp-table tbody tr.highlighted {
+  background-color: #e3f2fd !important;
+  outline: 2px solid #1976d2 !important;
+  outline-offset: -2px;
+}
+
+.erp-input:focus, 
+.erp-table tbody tr:focus {
+  outline: 2px solid #005fcc;
+  outline-offset: -1px;
+  background-color: #fffde7 !important; /* Slight yellow tint on focus */
+}
+
+/* Status Badge Enhancements */
+.erp-status-badge {
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: bold;
+  text-transform: uppercase;
+  border: 1px solid transparent;
+}
+
+.status-active { background: #e8f5e9; color: #2e7d32; border-color: #a5d6a7; }
+.status-pending { background: #fff3e0; color: #ef6c00; border-color: #ffe0b2; }
+.status-cancelled { background: #ffebee; color: #c62828; border-color: #ffcdd2; }

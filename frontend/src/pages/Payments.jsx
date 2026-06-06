@@ -1,27 +1,26 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
-import { useKeyboardForm } from '../hooks/useKeyboardForm';
+import { useKeyboardNavigation } from '../contexts/KeyboardNavigationContext';
 import PaymentsMenu from '../components/Payments/PaymentsMenu';
 import ContraForm from '../components/Payments/ContraForm';
 import PaymentForm from '../components/Payments/PaymentForm';
 import ReceiptForm from '../components/Payments/ReceiptForm';
 import JournalForm from '../components/Payments/JournalForm';
-import '../styles/payments-menu.css';
-import '../styles/accounting-forms.css';
+import '../styles/vintage-erp-theme.css';
 
 const Payments = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [currentView, setCurrentView] = useState('menu'); // 'menu', 'contra', 'payment', 'receipt', 'journal'
-  
-  // MANDATORY: Initialize keyboard navigation (COMPLIANT)
-  const { isModalOpen } = useKeyboardForm({
-    formId: 'PAYMENTS_MODULE',
-    fields: ['menu_selection'], // Simple field for menu navigation
-    onSave: () => console.log('Payments module save'),
-    onCancel: () => navigate('/dashboard')
-  });
+  const { setActiveForm } = useKeyboardNavigation();
+
+  // Reset active form when returning to menu
+  useEffect(() => {
+    if (currentView === 'menu') {
+      setActiveForm(null);
+    }
+  }, [currentView, setActiveForm]);
 
   // Handle menu selection
   const handleMenuSelect = (menuType) => {
@@ -31,10 +30,8 @@ const Payments = () => {
   // Handle quit/back to menu
   const handleQuit = () => {
     if (currentView === 'menu') {
-      // Exit payments module entirely
       navigate('/dashboard');
     } else {
-      // Return to menu
       setCurrentView('menu');
     }
   };
@@ -61,44 +58,42 @@ const Payments = () => {
   };
 
   return (
-    <div className="payments-layout erp-page-container" style={{ display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden' }}>
-      {/* 1. Header Row - Consistency with other modules */}
+    <div className="erp-page-container payments-layout" style={{ height: '100vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      {/* Fixed ERP Header */}
       <div className="layout-header">
         <div className="erp-menu-bar">
-          <div className="erp-menu-item">File</div>
-          <div className="erp-menu-item">Edit</div>
-          <div className="erp-menu-item">View</div>
-          <div className="erp-menu-item">Account</div>
+          <div className="erp-menu-item">Voucher</div>
+          <div className="erp-menu-item">Transactions</div>
+          <div className="erp-menu-item">Accounts</div>
+          <div className="erp-menu-item">Audit</div>
           <div className="erp-menu-item">Reports</div>
           <div className="erp-menu-item">Help</div>
-          <div className="erp-user-info">USER: {user?.us_name || 'ADMIN'} ⚙</div>
+          <div className="erp-user-info">STATION: HQ | USER: {user?.us_name || 'ADMIN'} ⚙</div>
         </div>
       </div>
 
-      {currentView === 'menu' ? (
-        <>
-          {/* Action Bar for Menu */}
-          <div className="layout-action-bar">
-             <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                 <button className="erp-button" onClick={() => navigate('/dashboard')}>Back to Menu</button>
-             </div>
-             <div style={{ flex: 1 }}></div>
-             <div style={{ fontWeight: 'bold', fontSize: '12px' }}>
-                 ACCOUNTING MODULE | MENU
-             </div>
-          </div>
-          <div className="layout-content-wrapper" style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
-            <div className="layout-main-column" style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-              <PaymentsMenu 
-                onMenuSelect={handleMenuSelect}
-                onQuit={handleQuit}
-              />
+      {/* Dynamic Content Area */}
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+        {currentView === 'menu' ? (
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+            <div className="layout-action-bar">
+               <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                   <button className="erp-button" onClick={() => navigate('/dashboard')}>Main Dashboard (Esc)</button>
+               </div>
+               <div style={{ flex: 1 }}></div>
+               <div className="erp-status-badge">ACCOUNTING GATEWAY | READY</div>
+            </div>
+            <div className="layout-content-wrapper" style={{ flex: 1, overflowY: 'auto' }}>
+               <PaymentsMenu 
+                 onMenuSelect={handleMenuSelect}
+                 onQuit={handleQuit}
+               />
             </div>
           </div>
-        </>
-      ) : (
-        renderCurrentView()
-      )}
+        ) : (
+          renderCurrentView()
+        )}
+      </div>
     </div>
   );
 };

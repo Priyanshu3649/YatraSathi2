@@ -1,9 +1,50 @@
 const bcrypt = require('bcryptjs');
-const { User, Employee, Customer, Login, Booking, Payment, CorporateCustomer, sequelize } = require('../models');
+const { User, Employee, Customer, Login, Booking, Payment, CorporateCustomer, Company, Role, sequelize } = require('../models');
 
 const createDemoData = async () => {
   try {
     console.log('🌱 Creating demo data for YatraSathi portals...');
+
+    // 0. Ensure Company and Roles exist
+    console.log('🏢 Ensuring reference data exists...');
+    
+    // Create Company TRV
+    const [company] = await Company.findOrCreate({
+      where: { co_coid: 'TRV' },
+      defaults: {
+        co_coshort: 'TRAVEL',
+        co_codesc: 'YatraSathi Travel Solutions',
+        co_active: 1,
+        eby: 'SYSTEM',
+        mby: 'SYSTEM'
+      }
+    });
+    console.log('✅ Company TRV ready');
+
+    // Create Roles
+    const roles = [
+      { id: 'AGT', short: 'Agent', desc: 'Travel Agent' },
+      { id: 'ACC', short: 'Accounts', desc: 'Accounts Executive' },
+      { id: 'HR', short: 'HR', desc: 'Human Resources' },
+      { id: 'CC', short: 'Call Center', desc: 'Customer Support' },
+      { id: 'MKT', short: 'Marketing', desc: 'Marketing Executive' },
+      { id: 'MGT', short: 'Management', desc: 'Branch Manager' },
+      { id: 'CUS', short: 'Customer', desc: 'Regular Customer' }
+    ];
+
+    for (const roleData of roles) {
+      await Role.findOrCreate({
+        where: { fn_fnid: roleData.id },
+        defaults: {
+          fn_fnshort: roleData.short,
+          fn_fndesc: roleData.desc,
+          fn_active: 1,
+          fn_eby: 'SYSTEM',
+          fn_mby: 'SYSTEM'
+        }
+      });
+    }
+    console.log('✅ Roles ready');
 
     // Check if demo data already exists
     const existingUser = await User.findOne({ where: { us_usid: 'EMP001' } });
@@ -284,6 +325,10 @@ const createDemoData = async () => {
           us_lname: 'Mehta',
           us_email: 'arjun.mehta@gmail.com',
           us_phone: '9123456789',
+          us_addr1: '123 MG Road',
+          us_city: 'Bangalore',
+          us_state: 'Karnataka',
+          us_pin: '560001',
           us_usertype: 'customer',
           us_roid: 'CUS',
           us_coid: 'TRV',
@@ -291,14 +336,9 @@ const createDemoData = async () => {
         },
         customer: {
           cu_usid: 'CUS001',
-          cu_name: 'Arjun Mehta',
-          cu_email: 'arjun.mehta@gmail.com',
-          cu_phone: '9123456789',
-          cu_address: '123 MG Road, Bangalore',
-          cu_city: 'Bangalore',
-          cu_state: 'Karnataka',
-          cu_pincode: '560001',
-          cu_active: 1
+          cu_custno: 'C001',
+          cu_custtype: 'INDIVIDUAL',
+          cu_status: 'ACTIVE'
         },
         login: {
           lg_usid: 'CUS001',
@@ -315,6 +355,10 @@ const createDemoData = async () => {
           us_lname: 'Reddy',
           us_email: 'kavya.reddy@yahoo.com',
           us_phone: '9123456790',
+          us_addr1: '456 Park Street',
+          us_city: 'Mumbai',
+          us_state: 'Maharashtra',
+          us_pin: '400001',
           us_usertype: 'customer',
           us_roid: 'CUS',
           us_coid: 'TRV',
@@ -322,14 +366,9 @@ const createDemoData = async () => {
         },
         customer: {
           cu_usid: 'CUS002',
-          cu_name: 'Kavya Reddy',
-          cu_email: 'kavya.reddy@yahoo.com',
-          cu_phone: '9123456790',
-          cu_address: '456 Park Street, Mumbai',
-          cu_city: 'Mumbai',
-          cu_state: 'Maharashtra',
-          cu_pincode: '400001',
-          cu_active: 1
+          cu_custno: 'C002',
+          cu_custtype: 'INDIVIDUAL',
+          cu_status: 'ACTIVE'
         },
         login: {
           lg_usid: 'CUS002',
@@ -346,6 +385,10 @@ const createDemoData = async () => {
           us_lname: 'Iyer',
           us_email: 'ravi.iyer@hotmail.com',
           us_phone: '9123456791',
+          us_addr1: '789 CP',
+          us_city: 'New Delhi',
+          us_state: 'Delhi',
+          us_pin: '110001',
           us_usertype: 'customer',
           us_roid: 'CUS',
           us_coid: 'TRV',
@@ -353,14 +396,9 @@ const createDemoData = async () => {
         },
         customer: {
           cu_usid: 'CUS003',
-          cu_name: 'Ravi Iyer',
-          cu_email: 'ravi.iyer@hotmail.com',
-          cu_phone: '9123456791',
-          cu_address: '789 CP, New Delhi',
-          cu_city: 'New Delhi',
-          cu_state: 'Delhi',
-          cu_pincode: '110001',
-          cu_active: 1
+          cu_custno: 'C003',
+          cu_custtype: 'INDIVIDUAL',
+          cu_status: 'ACTIVE'
         },
         login: {
           lg_usid: 'CUS003',
@@ -382,53 +420,82 @@ const createDemoData = async () => {
     // 3. Create Corporate Customers for Marketing Dashboard
     const corporateCustomers = [
       {
-        cc_ccid: 'CC001',
-        cc_company: 'TechCorp Solutions',
-        cc_contact_person: 'Rajesh Kumar',
-        cc_email: 'rajesh@techcorp.com',
-        cc_phone: '9876543220',
-        cc_address: 'Tech Park, Whitefield',
-        cc_city: 'Bangalore',
-        cc_state: 'Karnataka',
-        cc_pincode: '560066',
-        cc_active: 1,
-        eby: 'EMP005',
-        mby: 'EMP005'
+        user: {
+          us_usid: 'CORP001',
+          us_fname: 'Rajesh',
+          us_lname: 'Kumar',
+          us_email: 'rajesh@techcorp.com',
+          us_phone: '9876543220',
+          us_addr1: 'Tech Park, Whitefield',
+          us_city: 'Bangalore',
+          us_state: 'Karnataka',
+          us_pin: '560066',
+          us_usertype: 'customer',
+          us_roid: 'CUS',
+          us_coid: 'TRV',
+          us_active: 1
+        },
+        customer: {
+          cu_usid: 'CORP001',
+          cu_custno: 'CORP001',
+          cu_company: 'TechCorp Solutions',
+          cu_status: 'ACTIVE'
+        }
       },
       {
-        cc_ccid: 'CC002',
-        cc_company: 'Global Industries Ltd',
-        cc_contact_person: 'Priya Sharma',
-        cc_email: 'priya@globalind.com',
-        cc_phone: '9876543221',
-        cc_address: 'Industrial Area, Gurgaon',
-        cc_city: 'Gurgaon',
-        cc_state: 'Haryana',
-        cc_pincode: '122001',
-        cc_active: 1,
-        eby: 'EMP005',
-        mby: 'EMP005'
+        user: {
+          us_usid: 'CORP002',
+          us_fname: 'Priya',
+          us_lname: 'Sharma',
+          us_email: 'priya@globalind.com',
+          us_phone: '9876543221',
+          us_addr1: 'Industrial Area, Gurgaon',
+          us_city: 'Gurgaon',
+          us_state: 'Haryana',
+          us_pin: '122001',
+          us_usertype: 'customer',
+          us_roid: 'CUS',
+          us_coid: 'TRV',
+          us_active: 1
+        },
+        customer: {
+          cu_usid: 'CORP002',
+          cu_custno: 'CORP002',
+          cu_company: 'Global Industries Ltd',
+          cu_status: 'ACTIVE'
+        }
       },
       {
-        cc_ccid: 'CC003',
-        cc_company: 'Innovative Systems',
-        cc_contact_person: 'Amit Patel',
-        cc_email: 'amit@innovative.com',
-        cc_phone: '9876543222',
-        cc_address: 'IT Hub, Pune',
-        cc_city: 'Pune',
-        cc_state: 'Maharashtra',
-        cc_pincode: '411001',
-        cc_active: 1,
-        eby: 'EMP005',
-        mby: 'EMP005'
+        user: {
+          us_usid: 'CORP003',
+          us_fname: 'Amit',
+          us_lname: 'Patel',
+          us_email: 'amit@innovative.com',
+          us_phone: '9876543222',
+          us_addr1: 'IT Hub, Pune',
+          us_city: 'Pune',
+          us_state: 'Maharashtra',
+          us_pin: '411001',
+          us_usertype: 'customer',
+          us_roid: 'CUS',
+          us_coid: 'TRV',
+          us_active: 1
+        },
+        customer: {
+          cu_usid: 'CORP003',
+          cu_custno: 'CORP003',
+          cu_company: 'Innovative Systems',
+          cu_status: 'ACTIVE'
+        }
       }
     ];
 
     for (const corp of corporateCustomers) {
-      await CorporateCustomer.create(corp);
+      await User.create({ ...corp.user, eby: 'EMP005', mby: 'EMP005' });
+      await CorporateCustomer.create({ ...corp.customer, eby: 'EMP005', mby: 'EMP005' });
     }
 
+    /* 
     // 4. Create Bookings with different statuses and dates
     const bookings = [
       // Recent bookings for different agents
@@ -626,6 +693,7 @@ const createDemoData = async () => {
     for (const payment of payments) {
       await Payment.create(payment);
     }
+    */
 
     console.log('✅ Demo data created successfully!');
     console.log('\n🔐 Login Credentials:');
@@ -650,8 +718,8 @@ const createDemoData = async () => {
     console.log(`- ${employees.length} Employees created`);
     console.log(`- ${customers.length} Customers created`);
     console.log(`- ${corporateCustomers.length} Corporate customers created`);
-    console.log(`- ${bookings.length} Bookings created`);
-    console.log(`- ${payments.length} Payments created`);
+    // console.log(`- ${bookings.length} Bookings created`);
+    // console.log(`- ${payments.length} Payments created`);
     
     console.log('\n🎯 PORTAL ACCESS:');
     console.log('Employee Portal: /auth/employee-login');

@@ -1,19 +1,24 @@
-import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useKeyboardNavigation } from '../../contexts/KeyboardNavigationContext';
-import useKeyboardNav from '../../hooks/useKeyboardNavigation';
 import { usePagination } from '../../hooks/usePagination';
 import PaginationControls from '../common/PaginationControls';
 import SaveConfirmationModal from '../common/SaveConfirmationModal';
+import { paymentAPI } from '../../services/api'; // Or journalAPI if available
 import '../../styles/vintage-erp-theme.css';
 
 const JournalForm = ({ onBack }) => {
   const { user } = useAuth();
+  const {
+    registerForm,
+    unregisterForm,
+    setActiveForm,
+    handleManualFocus
+  } = useKeyboardNavigation();
   
   const [formData, setFormData] = useState({
     journal_no: '',
     date: new Date().toISOString().split('T')[0],
-    account_debit: '',
     debit_account: '',
     credit_account: '',
     amount: '',
@@ -21,11 +26,12 @@ const JournalForm = ({ onBack }) => {
     narration: ''
   });
 
-  const [journalRecords, setJournalRecords] = useState([]); // For history
+  const [journalRecords, setJournalRecords] = useState([]); 
   const [loading, setLoading] = useState(false);
   const [mode, setMode] = useState('form'); 
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [showSaveModal, setShowSaveModal] = useState(false);
   
   const {
     page,
@@ -37,24 +43,27 @@ const JournalForm = ({ onBack }) => {
   } = usePagination(1, 50);
 
   const fieldOrder = useMemo(() => [
-    'entry_no', 'date', 'debit_account', 'credit_account', 'amount', 'ref_number', 'save_button'
+    'date', 
+    'debit_account', 
+    'credit_account', 
+    'amount', 
+    'ref_number', 
+    'narration'
   ], []);
 
-  const {
-    formRef,
-    saveConfirmationOpen,
-    handleKeyDown
-  } = useKeyboardNav({
-    fieldOrder,
-    autoFocus: true,
-    onSave: () => handleSave(),
-    onCancel: onBack
-  });
+  useEffect(() => {
+    if (mode === 'form') {
+      registerForm('journal', fieldOrder);
+      setActiveForm('journal');
+      return () => unregisterForm('journal');
+    }
+  }, [mode, fieldOrder, registerForm, unregisterForm, setActiveForm]);
 
   const fetchJournals = useCallback(async () => {
     try {
       setLoading(true);
-      const response = await journalAPI.getAllJournals({ page, limit });
+      // Assuming paymentAPI can handle journal or use specific API
+      const response = await paymentAPI.getAllPayments({ page, limit, type: 'Journal' });
       setJournalRecords(response.data || []);
       updatePagination(response.pagination);
     } catch (err) {
@@ -72,14 +81,20 @@ const JournalForm = ({ onBack }) => {
   }, [mode, fetchJournals]);
 
   useEffect(() => {
-    if (!formData.entry_no && mode === 'form') {
+    if (!formData.journal_no && mode === 'form') {
       const date = new Date();
       setFormData(prev => ({
         ...prev,
-        entry_no: `JN${date.getTime().toString().slice(-8)}`
+        journal_no: `JN${date.getTime().toString().slice(-8)}`
       }));
     }
   }, [mode]);
+
+  const handleInputChange = (e) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({ ...prev, [name]: value }));
+    setError('');
+  };
 
   const handleSave = async () => {
     if (!formData.debit_account || !formData.credit_account || !formData.amount) {
@@ -92,16 +107,18 @@ const JournalForm = ({ onBack }) => {
         setError('');
         
         const payload = {
-            jr_debit_account: formData.debit_account,
-            jr_credit_account: formData.credit_account,
-            jr_amount: formData.amount,
-            jr_ref_number: formData.ref_number,
-            jr_narration: formData.narration || `Journal: ${formData.debit_account} / ${formData.credit_account}`
+            py_entry_type: 'Journal',
+            py_bank_account: formData.debit_account, // Receiving account (Debit)
+            py_from_account: formData.credit_account, // Giving account (Credit)
+            py_amount: formData.amount,
+            py_ref_number: formData.ref_number,
+            py_narration: formData.narration || `Journal: ${formData.debit_account} / ${formData.credit_account}`
         };
 
-        await journalAPI.createJournal(payload);
+        await paymentAPI.createPayment(payload);
         
         setSuccess('Journal entry saved successfully');
+        setShowSaveModal(false);
         setTimeout(() => {
             setSuccess('');
             onBack();
@@ -118,7 +135,9 @@ const JournalForm = ({ onBack }) => {
     <div className="erp-page-container journal-form-view">
       <div className="layout-action-bar">
         <div style={{ display: 'flex', gap: '8px' }}>
-          <button className="erp-button primary" onClick={handleSave}>Save (F10)</button>
+          <button className="erp-button primary" onClick={() => setShowSaveModal(true)} disabled={loading}>
+            {loading ? 'Saving...' : 'Save (F10)'}
+          </button>
           <button className="erp-button" onClick={() => setMode(mode === 'form' ? 'records' : 'form')}>
             {mode === 'form' ? 'View Records' : 'Back to Form'}
           </button>
@@ -128,83 +147,135 @@ const JournalForm = ({ onBack }) => {
         <div className="erp-status-badge">JOURNAL | {mode.toUpperCase()}</div>
       </div>
 
-      <div className="layout-content-wrapper" style={{ padding: '20px' }}>
+      <div className="layout-content-wrapper" style={{ padding: '20px', overflowY: 'auto' }}>
         {mode === 'form' ? (
-          <div className="erp-container" style={{ maxWidth: '800px', margin: '0 auto' }} ref={formRef} onKeyDown={handleKeyDown}>
-            <div className="erp-panel-header">JOURNAL VOUCHER DETAILS</div>
-            <div className="erp-form-content" style={{ padding: '20px' }}>
-              {error && <div className="erp-error-banner">{error}</div>}
-              {success && <div className="erp-success-banner">{success}</div>}
+          <div className="erp-container" style={{ maxWidth: '900px', margin: '0 auto' }}>
+            <div className="erp-panel-header">JOURNAL VOUCHER ENTRY (ADJUSTMENT)</div>
+            <div className="erp-form-content" style={{ padding: '24px', background: '#f5f5f5' }}>
+              {error && <div className="erp-error-banner" style={{ marginBottom: '15px' }}>{error}</div>}
+              {success && <div className="erp-success-banner" style={{ marginBottom: '15px' }}>{success}</div>}
               
               <div className="erp-form-row-compact-2">
                 <div className="erp-form-group">
-                  <label className="erp-form-label">Journal No</label>
-                  <input type="text" className="erp-input" value={formData.journal_no} readOnly />
+                  <label className="erp-form-label">Journal No.</label>
+                  <input type="text" className="erp-input" value={formData.journal_no} readOnly tabIndex="-1" />
                 </div>
                 <div className="erp-form-group">
-                  <label className="erp-form-label">Date</label>
-                  <input type="date" className="erp-input" value={formData.date} onChange={(e) => setFormData({...formData, date: e.target.value})} />
+                  <label className="erp-form-label">Voucher Date</label>
+                  <input 
+                    type="date" 
+                    name="date"
+                    className="erp-input" 
+                    value={formData.date} 
+                    onChange={handleInputChange} 
+                    onFocus={() => handleManualFocus('journal', 'date')}
+                  />
                 </div>
               </div>
 
-              <div className="erp-form-row-compact-2" style={{ marginTop: '15px' }}>
+              <div className="erp-form-row-compact-2" style={{ marginTop: '10px' }}>
                 <div className="erp-form-group">
-                  <label className="erp-form-label required">Account (Debit)</label>
-                  <input type="text" className="erp-input" value={formData.account_debit} onChange={(e) => setFormData({...formData, account_debit: e.target.value})} placeholder="Expense/Asset Account" />
+                  <label className="erp-form-label required">Debit Account (By)</label>
+                  <input 
+                    type="text" 
+                    name="debit_account"
+                    className="erp-input" 
+                    value={formData.debit_account} 
+                    onChange={handleInputChange} 
+                    placeholder="Account to be Debited" 
+                    onFocus={() => handleManualFocus('journal', 'debit_account')}
+                  />
                 </div>
                 <div className="erp-form-group">
-                  <label className="erp-form-label required">Account (Credit)</label>
-                  <input type="text" className="erp-input" value={formData.account_credit} onChange={(e) => setFormData({...formData, account_credit: e.target.value})} placeholder="Income/Liability Account" />
+                  <label className="erp-form-label required">Credit Account (To)</label>
+                  <input 
+                    type="text" 
+                    name="credit_account"
+                    className="erp-input" 
+                    value={formData.credit_account} 
+                    onChange={handleInputChange} 
+                    placeholder="Account to be Credited" 
+                    onFocus={() => handleManualFocus('journal', 'credit_account')}
+                  />
                 </div>
               </div>
 
-              <div className="erp-form-row-compact-2" style={{ marginTop: '15px' }}>
+              <div className="erp-form-row-compact-2" style={{ marginTop: '10px' }}>
                 <div className="erp-form-group">
                   <label className="erp-form-label required">Amount (₹)</label>
-                  <input type="number" className="erp-input" value={formData.amount} onChange={(e) => setFormData({...formData, amount: e.target.value})} />
+                  <input 
+                    type="number" 
+                    name="amount"
+                    className="erp-input" 
+                    value={formData.amount} 
+                    onChange={handleInputChange} 
+                    style={{ fontWeight: 'bold' }}
+                    onFocus={() => handleManualFocus('journal', 'amount')}
+                  />
                 </div>
                 <div className="erp-form-group">
                   <label className="erp-form-label">Ref Number</label>
-                  <input type="text" className="erp-input" value={formData.ref_number} onChange={(e) => setFormData({...formData, ref_number: e.target.value})} />
+                  <input 
+                    type="text" 
+                    name="ref_number"
+                    className="erp-input" 
+                    value={formData.ref_number} 
+                    onChange={handleInputChange}
+                    onFocus={() => handleManualFocus('journal', 'ref_number')}
+                  />
                 </div>
               </div>
 
               <div className="erp-form-group" style={{ marginTop: '15px' }}>
-                <label className="erp-form-label">Narration</label>
-                <textarea className="erp-input" value={formData.narration} onChange={(e) => setFormData({...formData, narration: e.target.value})} rows="2" />
+                <label className="erp-form-label" style={{ display: 'block', textAlign: 'left', marginBottom: '4px' }}>Journal Narration</label>
+                <textarea 
+                  name="narration"
+                  className="erp-input" 
+                  value={formData.narration} 
+                  onChange={handleInputChange} 
+                  rows="2" 
+                  style={{ width: '100%', resize: 'none' }}
+                  onFocus={() => handleManualFocus('journal', 'narration')}
+                />
+              </div>
+
+              <div className="erp-panel-footer" style={{ marginTop: '20px', padding: '10px', background: '#eee', fontSize: '11px', color: '#666' }}>
+                VOUCHER AUDIT: ENTERED BY {user?.us_name || 'ADMIN'} | {new Date().toLocaleString()}
               </div>
             </div>
           </div>
         ) : (
           <div className="erp-grid-section">
-            <div className="erp-panel-header">JOURNAL HISTORY</div>
-            <div className="erp-grid-container" style={{ minHeight: '300px' }}>
+            <div className="erp-panel-header">JOURNAL VOUCHER HISTORY</div>
+            <div className="erp-grid-container" style={{ minHeight: '400px' }}>
               {loading ? (
                 <div style={{ textAlign: 'center', padding: '40px' }}>Loading history...</div>
               ) : (
                 <table className="erp-table">
                   <thead>
                     <tr>
-                      <th>Date</th>
-                      <th>Entry No</th>
+                      <th style={{ width: '100px' }}>Date</th>
+                      <th style={{ width: '120px' }}>Entry No</th>
                       <th>Debit Account</th>
                       <th>Credit Account</th>
-                      <th className="text-right">Amount</th>
+                      <th className="text-right" style={{ width: '150px' }}>Amount (₹)</th>
                       <th>Reference</th>
                     </tr>
                   </thead>
                   <tbody>
                     {journalRecords.length > 0 ? journalRecords.map((r, i) => (
                       <tr key={i}>
-                        <td>{new Date(r.jr_date || r.date).toLocaleDateString()}</td>
-                        <td className="font-bold">{r.jr_entry_no || r.entry_no}</td>
-                        <td>{r.jr_debit_account || r.debit_account}</td>
-                        <td>{r.jr_credit_account || r.credit_account}</td>
-                        <td className="text-right font-bold">₹{parseFloat(r.jr_amount || r.amount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                        <td>{r.jr_ref_number || r.ref_number}</td>
+                        <td>{new Date(r.py_date || r.date || r.jr_date).toLocaleDateString()}</td>
+                        <td className="font-bold">{r.py_entry_no || r.journal_no || r.jr_entry_no || r.entry_no}</td>
+                        <td>{r.py_bank_account || r.debit_account || r.jr_debit_account}</td>
+                        <td>{r.py_from_account || r.credit_account || r.jr_credit_account}</td>
+                        <td className="text-right font-bold" style={{ color: '#555' }}>
+                          ₹{parseFloat(r.py_amount || r.amount || r.jr_amount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                        </td>
+                        <td>{r.py_ref_number || r.ref_number || r.jr_ref_number}</td>
                       </tr>
                     )) : (
-                      <tr><td colSpan="6" style={{ textAlign: 'center' }}>No historical records found</td></tr>
+                      <tr><td colSpan="6" style={{ textAlign: 'center', padding: '20px' }}>No historical records found</td></tr>
                     )}
                   </tbody>
                 </table>
@@ -215,8 +286,12 @@ const JournalForm = ({ onBack }) => {
         )}
       </div>
       
-      {saveConfirmationOpen && (
-        <SaveConfirmationModal isOpen={true} onConfirm={handleSave} onCancel={() => {}} />
+      {showSaveModal && (
+        <SaveConfirmationModal 
+          isOpen={true} 
+          onConfirm={handleSave} 
+          onCancel={() => setShowSaveModal(false)} 
+        />
       )}
     </div>
   );

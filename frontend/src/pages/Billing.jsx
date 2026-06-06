@@ -683,6 +683,57 @@ const Billing = () => {
     fetchBills();
   }, []); // Remove user dependency to ensure initial load
   
+  // MANDATORY: Automatic Service Charge Calculation
+  // Synchronizes service charges when customer, class, or passenger count changes
+  useEffect(() => {
+    const fetchCalculatedCharge = async () => {
+      // Required parameters check
+      const currentCustId = formData.id || formData.customerId || formData.bookingId;
+      if (!currentCustId || !formData.reservationClass || isFetching) return;
+      
+      const paxCount = formData.passengerList ? formData.passengerList.length : 1;
+      
+      try {
+        if (process.env.NODE_ENV === 'development') {
+           console.log(`🔄 Automated Service Charge Fetch: Customer=${currentCustId}, Class=${formData.reservationClass}, Pax=${paxCount}`);
+        }
+        
+        const response = await fetch(
+          `/api/service-charge/calculate?customerId=${currentCustId}&serviceType=RESERVATION&travelClass=${formData.reservationClass}&passengerCount=${paxCount}`,
+          {
+            headers: { 
+              'Authorization': `Bearer ${localStorage.getItem('token')}`,
+              'Content-Type': 'application/json'
+            }
+          }
+        );
+        
+        if (response.ok) {
+          const data = await response.json();
+          if (data.success && data.amount !== undefined) {
+            // Only update if value actually changed to prevent calculation loop
+            if (parseFloat(formData.serviceCharges) !== parseFloat(data.amount)) {
+              setFormData(prev => ({ 
+                ...prev, 
+                serviceCharges: data.amount.toString() 
+              }));
+              
+              if (process.env.NODE_ENV === 'development') {
+                console.log(`✅ Service charge auto-populated: ${data.amount}`);
+              }
+            }
+          }
+        }
+      } catch (err) {
+        console.error('❌ Failed to calculate service charge:', err);
+      }
+    };
+
+    // Debounce to avoid excessive API calls during typing/modifying
+    const timer = setTimeout(fetchCalculatedCharge, 600); 
+    return () => clearTimeout(timer);
+  }, [formData.id, formData.customerId, formData.bookingId, formData.reservationClass, formData.passengerList?.length, isEditing]);
+
   // Calculate totals when form data changes
   useEffect(() => {
     if (isEditing) {
