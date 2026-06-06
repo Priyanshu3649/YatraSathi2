@@ -11,15 +11,14 @@ const auth = async (req, res, next) => {
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET || 'default_secret');
     
-    // Check if this is a TVL user by ID prefix
-    const isTVLUser = decoded.id.startsWith('ADM') || decoded.id.startsWith('EMP') || 
-                      decoded.id.startsWith('ACC') || decoded.id.startsWith('CUS');
+    // First check in regular User table, then in UserTVL
+    let user = await User.findByPk(decoded.id);
+    let isTVLUser = false;
     
-    let user = null;
-    if (isTVLUser) {
+    if (!user) {
+      // Check in UserTVL if not found in regular User
       user = await UserTVL.findByPk(decoded.id);
-    } else {
-      user = await User.findByPk(decoded.id);
+      isTVLUser = true;
     }
     
     if (!user) {

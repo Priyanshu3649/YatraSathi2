@@ -149,10 +149,9 @@ connectDB().then(async () => {
   console.log('Database connection established');
   
   const PORT = process.env.PORT || 5004;
-  const HOST = '127.0.0.1'; // Explicitly set host
 
-  const server = app.listen(PORT, HOST, () => {
-    console.log(`Server running on http://${HOST}:${PORT}`);
+  const server = app.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
   });
 
   // Initialize Socket.IO
@@ -176,7 +175,8 @@ connectDB().then(async () => {
   server.on('error', (error) => {
     console.error('Server error:', error);
   });
-}).catch((error) => {
+})
+.catch((error) => {
   console.error('Failed to connect to database:', error);
   process.exit(1);
 });

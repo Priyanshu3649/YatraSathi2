@@ -3,24 +3,26 @@ const mysql = require('mysql2/promise');
 const path = require('path');
 const dotenv = require('dotenv');
 
-// Load environment variables from .env file
-const result = dotenv.config({ path: path.join(__dirname, '../.env') });
-
-if (result.error) {
-  console.error('Error loading .env file:', result.error);
-} else {
-  console.log('Environment variables loaded successfully');
+// Load environment variables from .env file (only in development)
+if (process.env.NODE_ENV !== 'production') {
+  const result = dotenv.config();
+  
+  if (result.error) {
+    console.log('No .env file found (running in production or missing file)');
+  } else {
+    console.log('Environment variables loaded successfully');
+  }
 }
 
 // Validate required MySQL environment variables
-if (!process.env.DB_NAME || !process.env.DB_HOST || !process.env.DB_USER) {
+if (!process.env.DB_NAME_TVL || !process.env.DB_HOST || !process.env.DB_USER) {
   console.error('❌ ERROR: MySQL configuration is incomplete!');
   console.error('Required environment variables:');
-  console.error('  - DB_NAME:', process.env.DB_NAME || '❌ MISSING');
+  console.error('  - DB_NAME_TVL:', process.env.DB_NAME_TVL || '❌ MISSING');
   console.error('  - DB_HOST:', process.env.DB_HOST || '❌ MISSING');
   console.error('  - DB_USER:', process.env.DB_USER || '❌ MISSING');
   console.error('  - DB_PASSWORD:', process.env.DB_PASSWORD ? '✅ SET' : '⚠️  NOT SET (optional)');
-  console.error('\nPlease configure these variables in your .env file');
+  console.error('\nPlease configure these variables in your environment');
   process.exit(1);
 }
 
@@ -81,7 +83,7 @@ const connectDB = async () => {
     console.log('🔌 Connecting to MySQL databases...');
     await sequelize.authenticate();
     console.log('✅ Main database connected successfully!');
-    console.log(`   Connected to: ${process.env.DB_NAME}@${process.env.DB_HOST}`);
+    console.log(`   Connected to: ${process.env.DB_NAME_TVL}@${process.env.DB_HOST}`);
     
     await sequelizeTVL.authenticate();
     console.log('✅ TVL database connected successfully!');
