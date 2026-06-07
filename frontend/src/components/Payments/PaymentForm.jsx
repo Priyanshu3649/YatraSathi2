@@ -4,6 +4,7 @@ import { useKeyboardNavigation } from '../../contexts/KeyboardNavigationContext'
 import { usePagination } from '../../hooks/usePagination';
 import PaginationControls from '../common/PaginationControls';
 import SaveConfirmationModal from '../common/SaveConfirmationModal';
+import AuditHistoryButton from '../common/AuditHistoryButton';
 import { paymentAPI } from '../../services/api';
 import '../../styles/vintage-erp-theme.css';
 
@@ -321,6 +322,7 @@ const PaymentForm = ({ onBack }) => {
                       <th className="text-right" style={{ width: '150px' }}>Amount (₹)</th>
                       <th style={{ width: '80px' }}>Type</th>
                       <th>Ref No</th>
+                      <th style={{ width: '90px' }}>History</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -340,9 +342,18 @@ const PaymentForm = ({ onBack }) => {
                           </span>
                         </td>
                         <td>{r.py_ref_number || r.ref_number}</td>
+                        <td>
+                          {r.py_pymtid && (
+                            <AuditHistoryButton
+                              module="Payment"
+                              recordId={r.py_pymtid}
+                              label="History"
+                            />
+                          )}
+                        </td>
                       </tr>
                     )) : (
-                      <tr><td colSpan="8" style={{ textAlign: 'center', padding: '20px' }}>No historical records found</td></tr>
+                      <tr><td colSpan="9" style={{ textAlign: 'center', padding: '20px' }}>No historical records found</td></tr>
                     )}
                   </tbody>
                 </table>

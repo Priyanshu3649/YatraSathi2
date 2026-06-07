@@ -17,7 +17,7 @@ router.get('/metrics', audit.getMetrics);
 router.get('/logs', audit.getAuditLogs);
 
 // ── Single log entry ──────────────────────────────────────────────────────────
-router.get('/logs/:id(\\d+)', audit.getAuditLogById);
+router.get('/logs/:id', audit.getAuditLogById);
 
 // ── Record drilldown — ERP investigation view ─────────────────────────────────
 // GET /api/audit/record/Billing/604  → full history of Bill #604

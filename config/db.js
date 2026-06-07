@@ -30,6 +30,7 @@ if (!process.env.DB_NAME_TVL || !process.env.DB_HOST || !process.env.DB_USER) {
 console.log('🔧 Configuring MySQL database connections...');
 console.log('  TVL Database:', process.env.DB_NAME_TVL || 'TVL_001');
 console.log('  Host:', process.env.DB_HOST);
+console.log('  Port:', process.env.DB_PORT || '3306');
 console.log('  User:', process.env.DB_USER);
 console.log('  Password:', process.env.DB_PASSWORD ? '✅ Configured' : '⚠️  Not set');
 
@@ -40,6 +41,7 @@ const sequelize = new Sequelize(
   process.env.DB_PASSWORD || '',
   {
     host: process.env.DB_HOST,
+    port: parseInt(process.env.DB_PORT || '3306'),
     dialect: 'mysql',
     logging: false,
     pool: {
@@ -62,6 +64,7 @@ const sequelizeTVL = new Sequelize(
   process.env.DB_PASSWORD || '',
   {
     host: process.env.DB_HOST,
+    port: parseInt(process.env.DB_PORT || '3306'),
     dialect: 'mysql',
     logging: false,
     pool: {
@@ -143,6 +146,7 @@ const connectDB = async () => {
 // Create MySQL connection pool for raw queries
 const mysqlPool = mysql.createPool({
   host: process.env.DB_HOST,
+  port: parseInt(process.env.DB_PORT || '3306'),
   user: process.env.DB_USER,
   password: process.env.DB_PASSWORD || '',
   database: process.env.DB_NAME_TVL || 'TVL_001',

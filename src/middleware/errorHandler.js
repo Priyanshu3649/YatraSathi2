@@ -1,7 +1,48 @@
 // Error handling middleware
+const fs = require('fs');
+const path = require('path');
+
+// ── File error logger ─────────────────────────────────────
+const LOG_DIR = process.env.LOG_DIR || path.resolve(__dirname, '../../logs');
+if (!fs.existsSync(LOG_DIR)) {
+  try { fs.mkdirSync(LOG_DIR, { recursive: true }); } catch (_) { /* ignore */ }
+}
+const LOG_FILE = path.join(LOG_DIR, 'error.log');
+const MAX_LOG_SIZE = 10 * 1024 * 1024; // 10 MB rotation threshold
+
+function rotateLogIfNeeded() {
+  try {
+    if (fs.existsSync(LOG_FILE) && fs.statSync(LOG_FILE).size > MAX_LOG_SIZE) {
+      const rotated = `${LOG_FILE}.${Date.now()}.bak`;
+      fs.renameSync(LOG_FILE, rotated);
+    }
+  } catch (_) { /* ignore */ }
+}
+
+function logToFile(entry) {
+  try {
+    rotateLogIfNeeded();
+    fs.appendFileSync(LOG_FILE, entry + '\n');
+  } catch (_) { /* non-fatal */ }
+}
+// ──────────────────────────────────────────────────────────
+
 const errorHandler = (err, req, res, next) => {
   // Log error
   console.error('Error:', err);
+  
+  // Write to error log file
+  const logEntry = JSON.stringify({
+    timestamp: new Date().toISOString(),
+    method: req.method,
+    url: req.originalUrl,
+    user: req.user?.us_usid || 'unauthenticated',
+    ip: req.ip || req.connection?.remoteAddress,
+    status: err.statusCode || 500,
+    message: err.message,
+    stack: process.env.NODE_ENV !== 'production' ? err.stack : undefined
+  });
+  logToFile(logEntry);
   
   // Mongoose validation error
   if (err.name === 'ValidationError') {

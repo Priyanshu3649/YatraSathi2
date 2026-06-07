@@ -3,7 +3,6 @@ const { validationResult } = require('express-validator');
 const { Op } = require('sequelize');
 const queryHelper = require('../utils/queryHelper');
 const Audit = require('../services/forensicAuditService');
-const Audit = require('../services/forensicAuditService');
 
 
 /**

@@ -47,6 +47,7 @@ import PaginationControls from '../components/common/PaginationControls';
 import SaveConfirmationModal from '../components/common/SaveConfirmationModal';
 import RecordActionMenu from '../components/common/RecordActionMenu';
 import AuditPanel from '../components/common/AuditPanel';
+import AuditHistoryButton from '../components/common/AuditHistoryButton';
 import { useKeyboardForm } from '../hooks/useKeyboardForm';
 import { usePassengerEntry } from '../hooks/usePassengerEntry';
 import { usePhoneLookup } from '../hooks/usePhoneLookup';
@@ -1993,6 +1994,16 @@ setSelectedBooking(null); // Clear selection after deletion
               closedBy={formData.closedBy || selectedBooking?.closed_by}
               closedOn={formData.closedOn || selectedBooking?.closed_on}
             />
+            {/* History Button — opens forensic timeline modal */}
+            {(selectedBooking?.bk_bkid) && (
+              <div style={{ marginTop: '8px' }}>
+                <AuditHistoryButton
+                  module="Booking"
+                  recordId={selectedBooking.bk_bkid}
+                  label="View Audit History"
+                />
+              </div>
+            )}
           </div>
           </div>
           
