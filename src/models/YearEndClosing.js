@@ -1,5 +1,5 @@
 const { DataTypes } = require('sequelize');
-const { sequelize, BaseModel } = require('./baseModel');
+const { sequelize, BaseModel, auditHooks } = require('./baseModel');
 
 /**
  * Year-End Closing Snapshot Model
@@ -68,6 +68,7 @@ const YearEndClosing = sequelize.define('yeYearEndClosing', {
 }, {
   tableName: 'yeYearEndClosing',
   timestamps: false,
+  ...auditHooks,
   indexes: [
     { unique: true, fields: ['ye_fyear'] },
     { fields: ['ye_closing_date'] },

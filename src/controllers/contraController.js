@@ -2,6 +2,8 @@ const { Contra, User } = require('../models');
 const { validationResult } = require('express-validator');
 const { Op } = require('sequelize');
 const queryHelper = require('../utils/queryHelper');
+const Audit = require('../services/forensicAuditService');
+
 
 /**
  * Contra Controller
@@ -91,6 +93,11 @@ class ContraController {
         ct_status: 'Active'
       });
       
+      // ── Forensic Audit: INSERT (async) ─────────────────────────────────────────────
+      Audit.logAction({ module: Audit.MODULES.CONTRA, recordId: contra.ct_ctid,
+        action: Audit.ACTIONS.INSERT, req, fieldName: 'ct_amount',
+        oldValue: null, newValue: String(contra.ct_amount) });
+      // ───────────────────────────────────────────────────────────────
       res.status(201).json({
         success: true,
         data: contra,
@@ -119,12 +126,18 @@ class ContraController {
         return res.status(404).json({ success: false, message: 'Contra entry not found' });
       }
       
+      const contraBefore = contra.toJSON();
       const updatedContra = await contra.update({
         ...req.body,
         ct_modified_by: req.user.us_usid,
-        ct_modified_dt: new Date()
+        ct_modified_dt: new Date(),
+        modified_by: req.user.us_usid,
+        modified_on: new Date()
       });
-      
+      // ── Forensic Audit: UPDATE (async) ─────────────────────────────────────────
+      Audit.logFieldChanges(contraBefore, updatedContra.toJSON(), {
+        module: Audit.MODULES.CONTRA, recordId: contra.ct_ctid, req });
+      // ───────────────────────────────────────────────────────────────────────
       res.json({
         success: true,
         data: updatedContra,
@@ -153,6 +166,10 @@ class ContraController {
         ct_modified_by: req.user.us_usid,
         ct_modified_dt: new Date()
       });
+      
+      // Forensic Audit: DELETE
+      Audit.logAction({ module: Audit.MODULES.CONTRA, recordId: contra.ct_ctid,
+        action: Audit.ACTIONS.DELETE, req });
       
       res.json({ success: true, message: 'Contra entry deleted successfully' });
     } catch (error) {

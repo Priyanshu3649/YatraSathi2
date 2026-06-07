@@ -4,6 +4,8 @@ const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 const SessionService = require('../services/sessionService');
+const Audit = require('../services/forensicAuditService');
+
 
 // Generate JWT token
 const generateToken = (id) => {
@@ -177,6 +179,15 @@ const employeeLogin = async (req, res) => {
     const isPasswordValid = await bcrypt.compare(sanitizedPassword, login.lg_passwd);
     if (!isPasswordValid) {
       console.log(`Login failed for email: ${sanitizedEmail} - Invalid password`);
+      // ── Forensic Audit: Failed Login ────────────────────────────────────
+      const failedUserId = user?.us_usid || sanitizedEmail;
+      const failedUserName = user?.us_fname || sanitizedEmail;
+      Audit.logAuthEvent(Audit.ACTIONS.FAILED_LOGIN, failedUserId, failedUserName,
+        req?.ip || req?.connection?.remoteAddress || null,
+        req?.get?.('User-Agent') || null,
+        { fieldName: 'reason', newValue: 'Invalid password' }
+      );
+      // ──────────────────────────────────────────────────────────────────────
       return res.status(401).json({ 
         success: false, 
         error: { code: 'UNAUTHORIZED', message: 'Invalid email or password' } 
@@ -219,6 +230,13 @@ const employeeLogin = async (req, res) => {
         sessionId: session ? session.ss_ssid : null
       }
     });
+    // ── Forensic Audit: Login ─────────────────────────────────────────
+    const loginName = [user.us_fname, user.us_lname].filter(Boolean).join(' ') || user.us_usid;
+    Audit.logAuthEvent(Audit.ACTIONS.LOGIN, user.us_usid, loginName,
+      req?.ip || req?.connection?.remoteAddress || null,
+      req?.get?.('User-Agent') || null
+    );
+    // ──────────────────────────────────────────────────────────────────
   } catch (error) {
     console.error('Employee login error:', error);
     res.status(500).json({ 
@@ -227,6 +245,7 @@ const employeeLogin = async (req, res) => {
     });
   }
 };
+
 
 // Login user
 const loginUser = async (req, res) => {
@@ -273,9 +292,16 @@ const loginUser = async (req, res) => {
         sessionId = session.ss_ssid;
       } catch (sessionError) {
         console.error('Session creation failed:', sessionError.message);
-        // Continue login process even if session creation fails
         sessionId = null;
       }
+      
+      // ── Forensic Audit: Login ──────────────────────────────────────────────
+      Audit.logAuthEvent(Audit.ACTIONS.LOGIN, user.us_usid,
+        [user.us_fname, user.us_lname].filter(Boolean).join(' ') || user.us_usid,
+        req?.ip || req?.connection?.remoteAddress || null,
+        req?.get?.('User-Agent') || null
+      );
+      // ───────────────────────────────────────────────────────────────────
       
       res.json({
         id: login.lg_usid,
@@ -287,6 +313,14 @@ const loginUser = async (req, res) => {
         message: 'Login successful'
       });
     } else {
+      // ── Forensic Audit: Failed Login ────────────────────────────────────
+      Audit.logAuthEvent(Audit.ACTIONS.FAILED_LOGIN,
+        user?.us_usid || loginIdentifier, user?.us_fname || loginIdentifier,
+        req?.ip || req?.connection?.remoteAddress || null,
+        req?.get?.('User-Agent') || null,
+        { fieldName: 'reason', newValue: 'Invalid credentials' }
+      );
+      // ───────────────────────────────────────────────────────────────────
       res.status(401).json({ message: 'Invalid email or password' });
     }
   } catch (error) {
@@ -553,10 +587,18 @@ const logoutUser = async (req, res) => {
     }
     
     if (success) {
+      // ── Forensic Audit: Logout ──────────────────────────────────────────
+      Audit.logAuthEvent(Audit.ACTIONS.LOGOUT, userId,
+        req?.user ? [req.user.us_fname, req.user.us_lname].filter(Boolean).join(' ') : userId,
+        req?.ip || req?.connection?.remoteAddress || null,
+        req?.get?.('User-Agent') || null
+      );
+      // ─────────────────────────────────────────────────────────────────
       // Clear session cookie
       res.clearCookie('sessionId');
       console.log('Logout successful');
       res.json({ message: 'Logout successful' });
+
     } else {
       console.log('Session not found');
       res.status(404).json({ message: 'Session not found' });

@@ -4,18 +4,35 @@ if (process.env.NODE_ENV === 'development') {
 const express = require('express');
 const cors = require('cors');
 const dotenv = require('dotenv');
+const fs = require('fs');
 const { errorHandler, notFound } = require('./middleware/errorHandler');
 
 // Load environment variables
-dotenv.config();
+if (process.env.NODE_ENV === 'production') {
+  dotenv.config({ path: '.env.production' });
+} else {
+  dotenv.config();
+}
 
 // Initialize express app
 const app = express();
 
 // Middleware
-app.use(cors());
+const allowedOrigins = process.env.CORS_ALLOWED_ORIGINS
+  ? process.env.CORS_ALLOWED_ORIGINS.split(',').map(s => s.trim())
+  : '*';
+app.use(cors({
+  origin: allowedOrigins,
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
+}));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+// Universal audit middleware — attaches req.audit helpers for forensic logging
+const auditMiddleware = require('./middleware/auditMiddleware');
+app.use(auditMiddleware.attach);
 
 // Log all requests (development only)
 app.use((req, res, next) => {
@@ -150,15 +167,30 @@ connectDB().then(async () => {
   
   const PORT = process.env.PORT || 5004;
 
-  const server = app.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
-  });
+  let server;
+  if (process.env.HTTPS === 'true' && process.env.SSL_KEY && process.env.SSL_CERT) {
+    const https = require('https');
+    const sslOptions = {
+      key: fs.readFileSync(process.env.SSL_KEY),
+      cert: fs.readFileSync(process.env.SSL_CERT)
+    };
+    server = https.createServer(sslOptions, app);
+    server.listen(PORT, () => {
+      console.log(`HTTPS server running on port ${PORT}`);
+    });
+  } else {
+    server = app.listen(PORT, () => {
+      console.log(`Server running on port ${PORT}`);
+    });
+  }
 
   // Initialize Socket.IO
   const { Server } = require('socket.io');
   const io = new Server(server, {
     cors: {
-      origin: "*", // Adjust in production
+      origin: process.env.CORS_ALLOWED_ORIGINS
+        ? process.env.CORS_ALLOWED_ORIGINS.split(',').map(s => s.trim())
+        : '*',
       methods: ["GET", "POST"]
     }
   });

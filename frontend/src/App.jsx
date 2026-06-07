@@ -41,6 +41,7 @@ import Bookings from './pages/Bookings';
 import Payments from './pages/Payments';
 import Profile from './pages/Profile';
 import Reports from './pages/Reports';
+import ReportCatalog from './pages/ReportCatalog';
 import TravelPlans from './pages/TravelPlans';
 import TravelPlanDetail from './pages/TravelPlanDetail';
 import EditTravelPlan from './pages/EditTravelPlan';
@@ -48,6 +49,8 @@ import Billing from './pages/Billing';
 import CancellationHistory from './pages/CancellationHistory';
 import PrintBill from './pages/PrintBill';
 import ServiceChargeManager from './pages/ServiceChargeManager';
+import AuditTrail from './pages/AuditTrail';
+import AuditRetentionConfig from './pages/AuditRetentionConfig';
 
 // Import customer pages
 import MyBookings from './pages/MyBookings';
@@ -192,6 +195,7 @@ function App() {
                       <Route path="/bookings" element={<ProtectedRoute><Bookings /></ProtectedRoute>} />
                       <Route path="/payments" element={<ProtectedRoute><Payments /></ProtectedRoute>} />
                       <Route path="/reports" element={<ProtectedRoute><Reports /></ProtectedRoute>} />
+                                            <Route path="/reports/catalog" element={<ProtectedRoute><ReportCatalog /></ProtectedRoute>} />
                       <Route path="/travel-plans" element={<ProtectedRoute><TravelPlans /></ProtectedRoute>} />
                       <Route path="/travel-plans/:id" element={<ProtectedRoute><TravelPlanDetail /></ProtectedRoute>} />
                       <Route path="/travel-plans/edit/:id" element={<ProtectedRoute><EditTravelPlan /></ProtectedRoute>} />
@@ -209,7 +213,11 @@ function App() {
                       <Route path="/admin-panel" element={<Navigate to="/admin-dashboard" replace />} />
                       <Route path="/admin/service-charges" element={<RoleBasedRoute requiredRole="ADM"><ServiceChargeManager /></RoleBasedRoute>} />
                       <Route path="/admin/*" element={<RoleBasedRoute requiredRole="ADM"><DynamicAdminPanel /></RoleBasedRoute>} />
-                      
+
+                      {/* Forensic Audit Module — ADM only */}
+                      <Route path="/audit" element={<RoleBasedRoute requiredRole="ADM"><AuditTrail /></RoleBasedRoute>} />
+                      <Route path="/audit/retention" element={<RoleBasedRoute requiredRole="ADM"><AuditRetentionConfig /></RoleBasedRoute>} />
+
                       {/* Employee Routes with Role-Based Access Control */}
                       <Route path="/employee/dashboard" element={<RoleBasedRoute requiredModule="employee"><EmployeeDashboard /></RoleBasedRoute>} />
                       <Route path="/employee/*" element={<RoleBasedRoute requiredModule="employee"><EmployeeDashboard /></RoleBasedRoute>} />

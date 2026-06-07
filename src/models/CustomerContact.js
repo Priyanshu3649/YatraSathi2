@@ -1,5 +1,5 @@
 const { DataTypes } = require('sequelize');
-const { sequelize, BaseModel } = require('./baseModel');
+const { sequelize, BaseModel, auditHooks } = require('./baseModel');
 const Customer = require('./Customer');
 
 const CustomerContact = sequelize.define('ccCustContact', {
@@ -54,7 +54,8 @@ const CustomerContact = sequelize.define('ccCustContact', {
   ...BaseModel
 }, {
   tableName: 'ccCustContact',
-  timestamps: false
+  timestamps: false,
+  ...auditHooks,
 });
 
 // Define associations

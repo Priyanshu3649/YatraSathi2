@@ -1,0 +1,36 @@
+/* AuditHistoryButton — inline "History" button */
+
+.audit-history-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #94a3b8;
+  background: rgba(148,163,184,0.07);
+  border: 1px solid rgba(148,163,184,0.2);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.18s ease;
+  white-space: nowrap;
+  font-family: inherit;
+  line-height: 1.4;
+}
+.audit-history-btn:hover:not(:disabled) {
+  background: rgba(99,102,241,0.15);
+  border-color: rgba(99,102,241,0.4);
+  color: #a5b4fc;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(99,102,241,0.2);
+}
+.audit-history-btn:active:not(:disabled) {
+  transform: translateY(0);
+}
+.audit-history-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.audit-history-btn__icon {
+  font-size: 13px;
+}

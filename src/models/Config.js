@@ -1,5 +1,5 @@
 const { DataTypes } = require('sequelize');
-const { sequelize, BaseModel } = require('./baseModel');
+const { sequelize, BaseModel, auditHooks } = require('./baseModel');
 
 const Config = sequelize.define('cfConfig', {
   cf_cfid: {
@@ -27,7 +27,8 @@ const Config = sequelize.define('cfConfig', {
   ...BaseModel
 }, {
   tableName: 'cfConfig',
-  timestamps: false
+  timestamps: false,
+  ...auditHooks,
 });
 
 module.exports = Config;

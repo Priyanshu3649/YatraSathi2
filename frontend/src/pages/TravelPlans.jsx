@@ -58,7 +58,7 @@ const TravelPlans = () => {
   const [destinations, setDestinations] = useState(['']);
   const [isEditing, setIsEditing] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
-  const recordsPerPage = 100;
+  const recordsPerPage = 50;
 
   // Filter state for inline grid filtering
   const [inlineFilters, setInlineFilters] = useState({});

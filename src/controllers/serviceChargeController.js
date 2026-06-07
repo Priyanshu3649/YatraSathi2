@@ -1,5 +1,7 @@
 const serviceChargeService = require('../services/serviceChargeService');
 const { ServiceCharge, ServiceChargeDefault, UserTVL } = require('../models');
+const Audit = require('../services/forensicAuditService');
+const queryHelper = require('../utils/queryHelper');
 
 // Helper function to convert string user ID to integer for database compatibility
 function convertUserIdToInt(userId) {
@@ -58,11 +60,14 @@ class ServiceChargeController {
    */
   async getAllCustomerRules(req, res) {
     try {
-      const rules = await ServiceCharge.findAll({
+      const { limit, offset, page } = queryHelper.getPaginationOptions(req.query);
+      const { count, rows: rules } = await ServiceCharge.findAndCountAll({
         include: [{ model: UserTVL, attributes: ['us_fname', 'us_lname', 'us_usname'] }],
-        order: [['entered_on', 'DESC']]
+        order: [['entered_on', 'DESC']],
+        limit,
+        offset
       });
-      res.json({ success: true, data: rules });
+      res.json(queryHelper.formatPaginatedResponse(count, rules, page, limit));
     } catch (error) {
       res.status(500).json({ success: false, message: error.message });
     }
@@ -73,10 +78,13 @@ class ServiceChargeController {
    */
   async getAllDefaultRules(req, res) {
     try {
-      const rules = await ServiceChargeDefault.findAll({
-        order: [['entered_on', 'DESC']]
+      const { limit, offset, page } = queryHelper.getPaginationOptions(req.query);
+      const { count, rows: rules } = await ServiceChargeDefault.findAndCountAll({
+        order: [['entered_on', 'DESC']],
+        limit,
+        offset
       });
-      res.json({ success: true, data: rules });
+      res.json(queryHelper.formatPaginatedResponse(count, rules, page, limit));
     } catch (error) {
       res.status(500).json({ success: false, message: error.message });
     }
@@ -91,6 +99,13 @@ class ServiceChargeController {
       const Model = isDefault ? ServiceChargeDefault : ServiceCharge;
       
       const rule = await Model.create(data, { userId: req.user.us_usid });
+
+      // ── Forensic Audit: INSERT (async) ────────────────────────────────────────────
+      Audit.logAction({ module: Audit.MODULES.SERVICE_CHARGE, recordId: rule.id || rule.sc_scid,
+        action: Audit.ACTIONS.INSERT, req, fieldName: 'rule',
+        oldValue: null, newValue: JSON.stringify(data) });
+      // ───────────────────────────────────────────────────────────────
+
       res.status(201).json({ success: true, data: rule });
     } catch (error) {
       res.status(500).json({ success: false, message: error.message });
@@ -109,7 +124,14 @@ class ServiceChargeController {
       const rule = await Model.findByPk(id);
       if (!rule) return res.status(404).json({ success: false, message: 'Rule not found' });
 
+      const oldValues = rule.toJSON();
       await rule.update(data, { userId: req.user.us_usid });
+
+      // ── Forensic Audit: UPDATE (async) ─────────────────────────────────────────
+      Audit.logFieldChanges(oldValues, rule.toJSON(), {
+        module: Audit.MODULES.SERVICE_CHARGE, recordId: rule.id || rule.sc_scid, req });
+      // ───────────────────────────────────────────────────────────────────────
+
       res.json({ success: true, data: rule });
     } catch (error) {
       res.status(500).json({ success: false, message: error.message });
@@ -129,7 +151,15 @@ class ServiceChargeController {
       if (!rule) return res.status(404).json({ success: false, message: 'Rule not found' });
 
       // Usually we deactivate rather than delete in ERPs
+      const oldValues = rule.toJSON();
       await rule.update({ is_active: false }, { userId: req.user.us_usid });
+
+      // ── Forensic Audit: CLOSE (async) ─────────────────────────────────────────
+      Audit.logAction({ module: Audit.MODULES.SERVICE_CHARGE, recordId: rule.id || rule.sc_scid,
+        action: Audit.ACTIONS.CLOSE, req, fieldName: 'is_active',
+        oldValue: 'true', newValue: 'false' });
+      // ───────────────────────────────────────────────────────────────────────
+
       res.json({ success: true, message: 'Rule deactivated successfully' });
     } catch (error) {
       res.status(500).json({ success: false, message: error.message });

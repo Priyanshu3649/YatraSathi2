@@ -1,5 +1,5 @@
 const { DataTypes } = require('sequelize');
-const { sequelize, BaseModel } = require('./baseModel');
+const { sequelize, BaseModel, auditHooks } = require('./baseModel');
 const Customer = require('./Customer');
 
 /**
@@ -47,6 +47,7 @@ const CustomerAdvance = sequelize.define('caCustomerAdvance', {
 }, {
   tableName: 'caCustomerAdvance',
   timestamps: false,
+  ...auditHooks,
   indexes: [
     { unique: true, fields: ['ca_usid', 'ca_fyear'] },
     { fields: ['ca_usid'] },

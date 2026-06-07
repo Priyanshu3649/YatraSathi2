@@ -1,5 +1,5 @@
 const { DataTypes } = require('sequelize');
-const { sequelize, BaseModel } = require('./baseModel');
+const { sequelize, BaseModel, auditHooks } = require('./baseModel');
 const User = require('./User');
 
 const CorporateCustomer = sequelize.define('cuCorporateCustomer', {
@@ -55,6 +55,7 @@ const CorporateCustomer = sequelize.define('cuCorporateCustomer', {
 }, {
   tableName: 'cuCorporateCustomer',
   timestamps: false,
+  ...auditHooks,
   indexes: [
     {
       unique: true,

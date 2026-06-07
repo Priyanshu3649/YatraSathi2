@@ -1,4 +1,4 @@
-const { BillTVL, UserTVL, CustomerTVL: Customer, BookingTVL, Journal, PassengerTVL: Passenger, ForensicAuditLog, Company, Receipt, PassengerTVL } = require('../models');
+const { BillTVL, UserTVL, CustomerTVL: Customer, BookingTVL, Journal, PassengerTVL: Passenger, ForensicAuditLog, Company, Receipt, PassengerTVL, Ledger } = require('../models');
 const serviceChargeService = require('../services/serviceChargeService');
 const { Sequelize, Op } = require('sequelize');
 const { sequelizeTVL } = require('../../config/db');
@@ -9,6 +9,8 @@ const RealTimeService = require('../services/realTimeService');
 const { generateBillPDF } = require('../utils/billPdfGenerator');
 const crypto = require('crypto');
 const numberToWords = require('../utils/numberToWords');
+const Audit = require('../services/forensicAuditService');
+
 
 // Helper function to generate journal entry number
 function generateJournalEntryNo(prefix) {
@@ -609,6 +611,34 @@ const createBill = async (req, res) => {
       console.log(`✅ Bill ${finalBillNumber} created successfully for booking ${bookingId}`);
       console.log(`✅ Booking ${bookingId} status updated to CONFIRMED`);
       
+      // ── Forensic Audit: Log INSERT (async, non-blocking) ──────────────────
+      Audit.logAction({
+        module:   Audit.MODULES.BILLING,
+        recordId: bill.bl_id,
+        action:   Audit.ACTIONS.INSERT,
+        req,
+        fieldName: 'bill_number',
+        oldValue:  null,
+        newValue:  finalBillNumber,
+      });
+      // Log key financial fields
+      const billSnapshot = bill.toJSON();
+      const financialFields = ['bl_railway_fare','bl_service_charge','bl_sb_incentive',
+        'bl_platform_fee','bl_misc_charges','bl_delivery_charge','bl_gst',
+        'bl_surcharge','bl_discount','bl_total_amount','bl_status','bl_customer_name'];
+      setImmediate(() => {
+        financialFields.forEach(f => {
+          if (billSnapshot[f] != null) {
+            Audit.logAction({
+              module: Audit.MODULES.BILLING, recordId: bill.bl_id,
+              action: Audit.ACTIONS.INSERT, req,
+              fieldName: f, oldValue: null, newValue: String(billSnapshot[f]),
+            });
+          }
+        });
+      });
+      // ─────────────────────────────────────────────────────────────────────
+      
       // Emit real-time update
       RealTimeService.emitBillingUpdate(bill.toJSON());
 
@@ -1082,18 +1112,30 @@ const updateBill = async (req, res) => {
     // Ensure total amount is not negative
     totalAmount = Math.max(0, totalAmount);
 
+    // Snapshot BEFORE update for forensic diff
+    const billBeforeUpdate = bill.toJSON();
+
     // Update the bill
     await bill.update({
       ...req.body,
       bl_total_amount: totalAmount,
       bl_modified_by: convertUserIdToInt(req.user.us_usid),
       bl_modified_at: new Date(),
-      // Standard audit fields
-      modified_by: convertUserIdToInt(req.user.us_usid),
+      // Standard audit fields — always server-side, never from frontend
+      modified_by: req.user.us_usid,
       modified_on: new Date()
     }, {
       userId: convertUserIdToInt(req.user.us_usid) // Pass userId for hooks
     });
+
+    // ── Forensic Audit: Log per-field changes (async, non-blocking) ──────────
+    Audit.logFieldChanges(billBeforeUpdate, bill.toJSON(), {
+      module:   Audit.MODULES.BILLING,
+      recordId: bill.bl_id,
+      req,
+    });
+    // ─────────────────────────────────────────────────────────────────────────
+
     
     // Transform data to match frontend expectations
     const { Passenger } = require('../models');
@@ -1492,10 +1534,16 @@ const cancelBill = async (req, res) => {
         cancelled_by: req.user.us_usid,
         payment_status: 'REFUND_DUE',
         mby: req.user.us_usid,
-        mdtm: new Date()
+        mdtm: new Date(),
+        // Standard audit fields — server-side only
+        closed_by: req.user.us_usid,
+        closed_on: new Date(),
+        modified_by: req.user.us_usid,
+        modified_on: new Date()
       },
       { transaction }
     );
+
 
     const bookingId = bill.bl_booking_id;
     if (bookingId) {
@@ -1532,34 +1580,59 @@ const cancelBill = async (req, res) => {
       }
     }
 
-    await ForensicAuditLog.create(
-      {
-        entityName: 'BILL',
-        entityId: bill.bl_id,
-        actionType: 'CANCEL',
-        changedFields: {
-          cancellationRef,
-          cancellationDate: cancelDate.toISOString(),
-          approverUserId: String(approverUserId).trim(),
-          approverName: String(approverName).trim(),
-          reason: String(reason).trim(),
-          railwayCharges: railway,
-          agentCharges: agent,
-          refundAmount,
-          receiptTotalSnapshot: receiptTotal,
-          performedByUser: req.user.us_usid
-        },
-        oldValues,
-        newValues: bill.toJSON(),
-        performedBy: convertUserIdToInt(req.user.us_usid),
-        performedOn: new Date(),
-        ipAddress: req.ip || req.connection?.remoteAddress || null,
-        userAgent: req.get('User-Agent') || null
-      },
-      { transaction }
-    );
+    // ── Customer Ledger: CREDIT entry for refund ──
+    try {
+      const customerUsid = bill.bl_usid || bill.bl_customer_id;
+      if (customerUsid && refundAmount > 0) {
+        const lastLedger = await Ledger.findOne({
+          where: { lg_usid: customerUsid },
+          order: [['lg_lgid', 'DESC']],
+          transaction
+        });
+        const openingBal = lastLedger ? parseFloat(lastLedger.lg_closing_bal) || 0 : 0;
+        const closingBal = openingBal + refundAmount;
+        const fyMonth = cancelDate.getMonth() + 1;
+        const fyYear = cancelDate.getFullYear();
+        const fyear = fyMonth >= 4 ? `${fyYear}-${String(fyYear + 1).slice(-2)}` : `${fyYear - 1}-${String(fyYear).slice(-2)}`;
+
+        await Ledger.create(
+          {
+            lg_usid: customerUsid,
+            lg_entry_type: 'CREDIT',
+            lg_entry_ref: cancellationRef,
+            lg_amount: refundAmount,
+            lg_opening_bal: openingBal,
+            lg_closing_bal: closingBal,
+            lg_fyear: fyear,
+            lg_remarks: `Refund for cancelled bill ${bill.bl_bill_no}. Ref: ${cancellationRef}`,
+            eby: req.user.us_usid,
+            edtm: new Date(),
+            mby: req.user.us_usid,
+            mdtm: new Date()
+          },
+          { transaction, userId: req.user.us_usid }
+        );
+      }
+    } catch (ledgerErr) {
+      console.error('Ledger entry on cancel failed (non-fatal):', ledgerErr);
+    }
+
+    // Forensic audit logging moved to post-commit ForensicAuditService calls below
 
     await transaction.commit();
+
+    // ── Forensic Audit: Log CANCEL with per-field detail (async, non-blocking) ──
+    Audit.logAction({ module: Audit.MODULES.BILLING, recordId: bill.bl_id, action: Audit.ACTIONS.CANCEL, req, fieldName: 'bl_status', oldValue: oldValues.bl_status, newValue: 'CAN' });
+    Audit.logAction({ module: Audit.MODULES.BILLING, recordId: bill.bl_id, action: Audit.ACTIONS.CANCEL, req, fieldName: 'total_cancel_charges', oldValue: '0', newValue: String(totalCancelCharges) });
+    Audit.logAction({ module: Audit.MODULES.BILLING, recordId: bill.bl_id, action: Audit.ACTIONS.CANCEL, req, fieldName: 'railway_cancellation_charge', oldValue: '0', newValue: String(railway) });
+    Audit.logAction({ module: Audit.MODULES.BILLING, recordId: bill.bl_id, action: Audit.ACTIONS.CANCEL, req, fieldName: 'agent_cancellation_charge', oldValue: '0', newValue: String(agent) });
+    Audit.logAction({ module: Audit.MODULES.BILLING, recordId: bill.bl_id, action: Audit.ACTIONS.CANCEL, req, fieldName: 'refund_amount', oldValue: null, newValue: String(refundAmount) });
+    Audit.logAction({ module: Audit.MODULES.BILLING, recordId: bill.bl_id, action: Audit.ACTIONS.CANCEL, req, fieldName: 'cancellation_reason', oldValue: null, newValue: String(reason || '') });
+    Audit.logAction({ module: Audit.MODULES.BILLING, recordId: bill.bl_id, action: Audit.ACTIONS.CANCEL, req, fieldName: 'cancellation_ref', oldValue: null, newValue: cancellationRef });
+    Audit.logAction({ module: Audit.MODULES.BILLING, recordId: bill.bl_id, action: Audit.ACTIONS.CANCEL, req, fieldName: 'cancellation_approver', oldValue: null, newValue: String(approverUserId).trim() });
+    Audit.logAction({ module: Audit.MODULES.BILLING, recordId: bill.bl_id, action: Audit.ACTIONS.CANCEL, req, fieldName: 'payment_status', oldValue: oldValues.payment_status || 'UNPAID', newValue: 'REFUND_DUE' });
+    // ───────────────────────────────────────────────────────────────────
+
 
     // Journal model uses TVL pool (see models/baseModel.js)
     try {

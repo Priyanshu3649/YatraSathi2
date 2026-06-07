@@ -1,0 +1,139 @@
+/* =============================================================
+   audit-panel.css — YatraSathi ERP Audit Information Panel
+   Read-only field set displayed on all module screens.
+   ============================================================= */
+
+.audit-panel {
+  border: 1px solid #8b7355;
+  border-radius: 4px;
+  padding: 12px 16px 14px;
+  margin-top: 20px;
+  background: linear-gradient(135deg, #1e1a15 0%, #26201a 100%);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(212, 175, 100, 0.08);
+  font-family: 'Courier New', 'Consolas', monospace;
+  position: relative;
+}
+
+/* Legend */
+.audit-panel__legend {
+  color: #c8a84b;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  padding: 0 8px;
+  background: transparent;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.audit-panel__icon {
+  font-size: 12px;
+  opacity: 0.85;
+}
+
+/* Grid layout */
+.audit-panel__grid {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.audit-panel__row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0;
+  border-bottom: 1px dashed rgba(139, 115, 85, 0.25);
+  padding: 7px 0;
+}
+
+.audit-panel__row:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.audit-panel__cell {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 0 8px;
+}
+
+.audit-panel__cell:first-child {
+  padding-left: 0;
+  border-right: 1px dashed rgba(139, 115, 85, 0.2);
+}
+
+/* Label */
+.audit-panel__label {
+  font-size: 9.5px;
+  color: #8b7355;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-weight: 700;
+  line-height: 1;
+}
+
+/* Value */
+.audit-panel__value {
+  font-size: 12px;
+  color: #d4c4a0;
+  font-weight: 500;
+  line-height: 1.4;
+  letter-spacing: 0.02em;
+}
+
+.audit-panel__value--user {
+  color: #c8a84b;
+  font-weight: 700;
+}
+
+.audit-panel__value--closed {
+  color: #e07070;
+  font-weight: 700;
+}
+
+.audit-panel__value--empty {
+  color: #5a4e3a;
+  font-style: italic;
+}
+
+/* Responsive: stack on small screens */
+@media (max-width: 600px) {
+  .audit-panel__row {
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+
+  .audit-panel__cell:first-child {
+    border-right: none;
+    border-bottom: 1px dashed rgba(139, 115, 85, 0.2);
+    padding-bottom: 6px;
+  }
+}
+
+/* Light theme override (if app uses light mode) */
+@media (prefers-color-scheme: light) {
+  .audit-panel {
+    background: linear-gradient(135deg, #faf7f2 0%, #f5f0e8 100%);
+    border-color: #8b7355;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+  }
+
+  .audit-panel__value {
+    color: #3a2e1e;
+  }
+
+  .audit-panel__value--user {
+    color: #7a5c1e;
+  }
+
+  .audit-panel__value--closed {
+    color: #c0392b;
+  }
+
+  .audit-panel__value--empty {
+    color: #b0a090;
+  }
+}

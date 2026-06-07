@@ -1,5 +1,5 @@
 const { DataTypes } = require('sequelize');
-const { sequelize, BaseModel } = require('./baseModel');
+const { sequelize, BaseModel, auditHooks } = require('./baseModel');
 const Booking = require('./Booking');
 const Train = require('./Train');
 
@@ -111,6 +111,7 @@ const Pnr = sequelize.define('pnXpnr', {
 }, {
   tableName: 'pnXpnr',
   timestamps: false,
+  ...auditHooks,
   indexes: [
     {
       unique: true,

@@ -1,6 +1,8 @@
 const { UserTVL: User, CustomerTVL: Customer, Booking, PaymentTVL: Payment, AccountTVL: Account, EmployeeTVL: Employee } = require('../models');
 const { Op } = require('sequelize');
 const { sequelize } = require('../models/baseModel');
+const Audit = require('../services/forensicAuditService');
+
 
 /**
  * Get Customer Dashboard Data
@@ -212,7 +214,16 @@ const createBooking = async (req, res) => {
       
       // Commit the transaction
       await transaction.commit();
-      
+
+      // ── Forensic Audit: INSERT Booking (Customer portal) ──────────────────
+      Audit.logAction({ module: Audit.MODULES.BOOKING, recordId: booking.bk_bkid,
+        action: Audit.ACTIONS.INSERT, req, fieldName: 'bk_bkno',
+        oldValue: null, newValue: booking.bk_bkno });
+      Audit.logAction({ module: Audit.MODULES.BOOKING, recordId: booking.bk_bkid,
+        action: Audit.ACTIONS.INSERT, req, fieldName: 'bk_totalpass',
+        oldValue: null, newValue: String(passengers.length) });
+      // ───────────────────────────────────────────────────────────────────────
+
       let confirmationMessage = 'Booking created successfully. You will be contacted by our agent soon.';
       if (trainPreferences.length > 0) {
         confirmationMessage += ` Train preferences noted: ${trainPreferences.join(', ')}.`;
@@ -414,11 +425,23 @@ const cancelBooking = async (req, res) => {
       });
     }
 
+    const oldStatus = booking.bk_status;
+
     // Update booking status
     await booking.update({
       bk_status: 'CANCELLED',
-      mby: userId
+      mby: userId,
+      modified_by: userId,
+      modified_on: new Date(),
+      closed_by: userId,
+      closed_on: new Date()
     });
+
+    // ── Forensic Audit: CANCEL Booking (Customer portal) ──────────────────
+    Audit.logAction({ module: Audit.MODULES.BOOKING, recordId: booking.bk_bkid,
+      action: Audit.ACTIONS.CANCEL, req, fieldName: 'bk_status',
+      oldValue: oldStatus, newValue: 'CANCELLED' });
+    // ───────────────────────────────────────────────────────────────────────
 
     res.json({
       success: true,

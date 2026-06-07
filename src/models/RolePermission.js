@@ -1,5 +1,5 @@
 const { DataTypes } = require('sequelize');
-const { sequelize, BaseModel } = require('./baseModel');
+const { sequelize, BaseModel, auditHooks } = require('./baseModel');
 const Role = require('./Role');
 const Permission = require('./Permission');
 
@@ -49,6 +49,7 @@ const RolePermission = sequelize.define('rpRolePermission', {
 }, {
   tableName: 'rpRolePermission',
   timestamps: false,
+  ...auditHooks,
   indexes: [
     {
       unique: true,

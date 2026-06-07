@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { employeeAPI, authAPI } from '../services/api';
+import { usePagination } from '../hooks/usePagination';
+import PaginationControls from '../components/common/PaginationControls';
 import '../styles/layout.css';
 import '../styles/vintage-erp-theme.css';
 import '../styles/classic-enterprise-global.css';
@@ -15,6 +17,10 @@ const EmployeeManagement = () => {
   const [employees, setEmployees] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const {
+    page, limit, pagination,
+    updatePagination, setPage, setLimit
+  } = usePagination(1, 50);
   const [showForm, setShowForm] = useState(false);
   const [editingEmployee, setEditingEmployee] = useState(null);
   const [photoPreview, setPhotoPreview] = useState(null);
@@ -38,13 +44,18 @@ const EmployeeManagement = () => {
   // Load employees
   useEffect(() => {
     loadEmployees();
-  }, []);
+  }, [page, limit]);
 
   const loadEmployees = async () => {
     try {
       setLoading(true);
-      const data = await employeeAPI.getAllEmployees();
-      setEmployees(data);
+      const data = await employeeAPI.getAllEmployees({ page, limit });
+      if (data?.pagination) {
+        updatePagination(data.pagination);
+        setEmployees(data.data || []);
+      } else {
+        setEmployees(Array.isArray(data) ? data : (data.data || []));
+      }
     } catch (err) {
       setError('Failed to load employees');
       console.error(err);
@@ -521,6 +532,12 @@ const EmployeeManagement = () => {
               </tbody>
             </table>
           </div>
+          <PaginationControls
+            pagination={pagination}
+            onPageChange={setPage}
+            limit={limit}
+            onLimitChange={(n) => { setLimit(n); setPage(1); }}
+          />
         </div>
       </div>
     </div>

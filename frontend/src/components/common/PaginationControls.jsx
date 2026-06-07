@@ -21,6 +21,16 @@ const PaginationControls = ({
   recordCount,
 }) => {
   const [hovered, setHovered] = useState(null);
+  const [jumpPage, setJumpPage] = useState('');
+
+  const handleJumpSubmit = (e) => {
+    e.preventDefault();
+    const target = parseInt(jumpPage, 10);
+    if (!isNaN(target) && target >= 1 && target <= totalPages) {
+      go(target);
+    }
+    setJumpPage('');
+  };
 
   // ── normalise props ──────────────────────────────────────────────────────────
   const currentPage  = pagination?.currentPage  ?? propCurrentPage  ?? 1;
@@ -226,6 +236,32 @@ const PaginationControls = ({
           aria-label="Last page" title="Last page (End)">
           ▶▶
         </button>
+
+        {/* Jump to page */}
+        {totalPages > 5 && (
+          <form onSubmit={handleJumpSubmit} style={{ display: 'flex', alignItems: 'center', gap: '3px', marginLeft: '6px' }}>
+            <span style={{ color: '#ced4da', fontSize: '10px' }}>Go to:</span>
+            <input
+              type="number"
+              min={1}
+              max={totalPages}
+              value={jumpPage}
+              onChange={(e) => setJumpPage(e.target.value)}
+              placeholder="#"
+              aria-label="Jump to page"
+              style={{
+                width: '42px',
+                padding: '1px 4px',
+                fontSize: '11px',
+                background: '#495057',
+                color: '#fff',
+                border: '1px solid #343a40',
+                borderRadius: '2px',
+                textAlign: 'center',
+              }}
+            />
+          </form>
+        )}
 
         {/* Rows-per-page */}
         {onLimitChange && (

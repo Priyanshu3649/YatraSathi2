@@ -1,5 +1,5 @@
 const { DataTypes } = require('sequelize');
-const { sequelize, BaseModel } = require('./baseModel');
+const { sequelize, BaseModel, auditHooks } = require('./baseModel');
 
 /**
  * Ledger / Audit Table
@@ -87,6 +87,7 @@ const Ledger = sequelize.define('lgLedger', {
 }, {
   tableName: 'lgLedger',
   timestamps: false,
+  ...auditHooks,
   indexes: [
     { fields: ['lg_usid'] },
     { fields: ['lg_entry_type'] },

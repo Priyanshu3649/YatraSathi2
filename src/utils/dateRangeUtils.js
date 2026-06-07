@@ -54,4 +54,18 @@ const getDateRange = (periodType, customStartDate, customEndDate) => {
   };
 };
 
-module.exports = { getDateRange };
+const getFinancialYear = (date = new Date()) => {
+  const year = date.getFullYear();
+  const month = date.getMonth() + 1;
+  return month >= 4 ? `${year}-${String(year + 1).slice(-2)}` : `${year - 1}-${String(year).slice(-2)}`;
+};
+
+const getQuarter = (date = new Date()) => {
+  const month = date.getMonth();
+  if (month >= 3 && month <= 5) return 'Q1';
+  if (month >= 6 && month <= 8) return 'Q2';
+  if (month >= 9 && month <= 11) return 'Q3';
+  return 'Q4';
+};
+
+module.exports = { getDateRange, getFinancialYear, getQuarter };

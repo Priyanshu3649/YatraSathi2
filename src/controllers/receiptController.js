@@ -2,6 +2,8 @@ const { Receipt, User } = require('../models');
 const { validationResult } = require('express-validator');
 const { Op } = require('sequelize');
 const queryHelper = require('../utils/queryHelper');
+const Audit = require('../services/forensicAuditService');
+
 
 /**
  * Receipt Controller
@@ -102,6 +104,11 @@ class ReceiptController {
         rc_status: 'Active'
       });
       
+      // ── Forensic Audit: INSERT (async) ─────────────────────────────────────────────
+      Audit.logAction({ module: Audit.MODULES.RECEIPT, recordId: receipt.rc_rcid,
+        action: Audit.ACTIONS.INSERT, req, fieldName: 'rc_amount',
+        oldValue: null, newValue: String(receipt.rc_amount) });
+      // ───────────────────────────────────────────────────────────────
       res.status(201).json({
         success: true,
         data: receipt,
@@ -130,12 +137,18 @@ class ReceiptController {
         return res.status(404).json({ success: false, message: 'Receipt not found' });
       }
       
+      const receiptBefore = receipt.toJSON();
       const updatedReceipt = await receipt.update({
         ...req.body,
         rc_modified_by: req.user.us_usid,
-        rc_modified_dt: new Date()
+        rc_modified_dt: new Date(),
+        modified_by: req.user.us_usid,
+        modified_on: new Date()
       });
-      
+      // ── Forensic Audit: UPDATE (async) ─────────────────────────────────────────
+      Audit.logFieldChanges(receiptBefore, updatedReceipt.toJSON(), {
+        module: Audit.MODULES.RECEIPT, recordId: receipt.rc_rcid, req });
+      // ───────────────────────────────────────────────────────────────────────
       res.json({
         success: true,
         data: updatedReceipt,
@@ -164,6 +177,10 @@ class ReceiptController {
         rc_modified_by: req.user.us_usid,
         rc_modified_dt: new Date()
       });
+      
+      // Forensic Audit: DELETE
+      Audit.logAction({ module: Audit.MODULES.RECEIPT, recordId: receipt.rc_rcid,
+        action: Audit.ACTIONS.DELETE, req });
       
       res.json({ success: true, message: 'Receipt deleted successfully' });
     } catch (error) {

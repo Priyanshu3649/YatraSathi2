@@ -1,5 +1,7 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
+import AuditPanel from '../common/AuditPanel';
+import AuditHistoryButton from '../common/AuditHistoryButton';
 
 const BillDetails = ({ bill, onClose }) => {
   const navigate = useNavigate();
@@ -22,7 +24,7 @@ const BillDetails = ({ bill, onClose }) => {
         </div>
         
         <div className="detail-section">
-          <h3>Journey & Ticket Details</h3>
+          <h3>Journey &amp; Ticket Details</h3>
           <p><strong>Train Number:</strong> {bill.trainNumber}</p>
           <p><strong>Reservation Class:</strong> {bill.reservationClass}</p>
           <p><strong>Ticket Type:</strong> {bill.ticketType}</p>
@@ -30,7 +32,7 @@ const BillDetails = ({ bill, onClose }) => {
         </div>
         
         <div className="detail-section">
-          <h3>Fare & Charges</h3>
+          <h3>Fare &amp; Charges</h3>
           <p><strong>Net Journey Fare:</strong> ₹{parseFloat(bill.netFare)?.toFixed(2) || '0.00'}</p>
           <p><strong>Service Charges:</strong> ₹{parseFloat(bill.serviceCharges)?.toFixed(2) || '0.00'}</p>
           <p><strong>Platform Fees:</strong> ₹{parseFloat(bill.platformFees)?.toFixed(2) || '0.00'}</p>
@@ -51,9 +53,9 @@ const BillDetails = ({ bill, onClose }) => {
           {bill.discounts && bill.discounts.length > 0 ? (
             bill.discounts.map((discount, index) => (
               <p key={index}>
-                <strong>{discount.label}:</strong> 
-                {discount.type === 'PERCENTAGE' 
-                  ? `${discount.amount}%` 
+                <strong>{discount.label}:</strong>{' '}
+                {discount.type === 'PERCENTAGE'
+                  ? `${discount.amount}%`
                   : `₹${parseFloat(discount.amount)?.toFixed(2) || '0.00'}`}
               </p>
             ))
@@ -71,6 +73,17 @@ const BillDetails = ({ bill, onClose }) => {
           <p><strong>Remarks:</strong> {bill.remarks || 'N/A'}</p>
         </div>
       </div>
+
+      {/* ── Audit Panel — read-only, always visible ──────────────────────── */}
+      <AuditPanel
+        enteredBy={bill.entered_by || bill.createdBy || bill.bl_created_by}
+        enteredOn={bill.entered_on || bill.createdOn || bill.bl_created_at}
+        modifiedBy={bill.modified_by || bill.bl_modified_by}
+        modifiedOn={bill.modified_on || bill.bl_modified_at}
+        closedBy={bill.closed_by || bill.cancelled_by}
+        closedOn={bill.closed_on || bill.cancelled_on}
+      />
+      {/* ────────────────────────────────────────────────────────────────── */}
       
       <div className="form-actions">
         <button
@@ -87,6 +100,11 @@ const BillDetails = ({ bill, onClose }) => {
           Print Bill
         </button>
         <button className="tool-button">Export PDF</button>
+        <AuditHistoryButton
+          module="Billing"
+          recordId={bill.bl_id ?? bill.id}
+          label="Audit History"
+        />
         <button className="tool-button" onClick={onClose}>Close</button>
       </div>
     </div>

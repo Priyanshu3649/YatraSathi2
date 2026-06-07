@@ -1,0 +1,124 @@
+/* AuditQueueWidget — Premium dark ERP card */
+
+.aqw-card {
+  background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-left: 3px solid var(--aqw-accent, #22c55e);
+  border-radius: 10px;
+  padding: 16px 20px;
+  margin-bottom: 16px;
+  font-family: 'Inter', 'Segoe UI', sans-serif;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.35);
+}
+
+/* Header */
+.aqw-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+.aqw-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: #cbd5e1;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+.aqw-header-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.aqw-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: 20px;
+  border: 1px solid currentColor;
+  position: relative;
+}
+.aqw-pulse {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  animation: aqw-pulse 2s ease-in-out infinite;
+}
+@keyframes aqw-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%       { opacity: 0.4; transform: scale(0.7); }
+}
+.aqw-refresh-btn {
+  background: rgba(255,255,255,0.07);
+  border: 1px solid rgba(255,255,255,0.12);
+  color: #94a3b8;
+  border-radius: 6px;
+  width: 28px;
+  height: 28px;
+  cursor: pointer;
+  font-size: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+.aqw-refresh-btn:hover:not(:disabled) {
+  background: rgba(255,255,255,0.14);
+  color: #e2e8f0;
+}
+.aqw-refresh-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* Stats grid */
+.aqw-stats {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 10px;
+}
+@media (max-width: 700px) {
+  .aqw-stats { grid-template-columns: repeat(3, 1fr); }
+}
+.aqw-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.07);
+  border-radius: 8px;
+  padding: 10px 6px;
+  gap: 4px;
+}
+.aqw-stat__value {
+  font-size: 22px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+.aqw-stat__label {
+  font-size: 10px;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  text-align: center;
+}
+
+/* Error */
+.aqw-error {
+  color: #fca5a5;
+  font-size: 12px;
+  padding: 8px;
+  background: rgba(239,68,68,0.1);
+  border-radius: 6px;
+  margin-bottom: 10px;
+}
+
+/* Footer */
+.aqw-footer {
+  margin-top: 12px;
+  font-size: 10px;
+  color: #475569;
+  text-align: right;
+  font-style: italic;
+}

@@ -5,6 +5,7 @@ const {
   generateGenericReport 
 } = require('../controllers/reportController');
 const { exportToExcel, exportToPDF } = require('../services/exportService');
+const catalog = require('../controllers/reportCatalogController');
 
 const ReportEngineService = require('../services/reportEngineService');
 
@@ -87,3 +88,38 @@ router.post('/export', async (req, res) => {
 });
 
 module.exports = router;
+
+/**
+ * ── Report Catalog Routes ─────────────────────────────────
+ * GET /api/reports/catalog             – returns the full catalog (for sidebar)
+ * GET /api/reports/catalog/<reportId>  – runs the specific report
+ */
+router.get('/catalog', catalog.getReportCatalog);
+router.get('/catalog/customer-master', catalog.customerMasterReport);
+router.get('/catalog/employee-master', catalog.employeeMasterReport);
+router.get('/catalog/user-master', catalog.userMasterReport);
+router.get('/catalog/service-charges', catalog.serviceChargeReport);
+router.get('/catalog/booking-register', catalog.bookingRegister);
+router.get('/catalog/customer-booking-history', catalog.customerBookingHistory);
+router.get('/catalog/booking-status', catalog.bookingStatusReport);
+router.get('/catalog/billing-register', catalog.billingRegister);
+router.get('/catalog/cancelled-bills', catalog.cancelledBillsReport);
+router.get('/catalog/gst-summary', catalog.gstSummaryReport);
+router.get('/catalog/customer-billing', catalog.customerBillingReport);
+router.get('/catalog/payment-register', catalog.paymentRegister);
+router.get('/catalog/receipt-register', catalog.receiptRegister);
+router.get('/catalog/contra-register', catalog.contraRegister);
+router.get('/catalog/journal-register', catalog.journalRegister);
+router.get('/catalog/ledger', catalog.ledgerReport);
+router.get('/catalog/trial-balance', catalog.trialBalance);
+router.get('/catalog/profit-loss', catalog.profitAndLoss);
+router.get('/catalog/balance-sheet', catalog.balanceSheet);
+router.get('/catalog/outstanding', catalog.outstandingReport);
+router.get('/catalog/activity-log', catalog.activityLogReport);
+router.get('/catalog/change-history', catalog.changeHistoryReport);
+router.get('/catalog/user-activity', catalog.userActivityReport);
+router.get('/catalog/cancellation-audit', catalog.cancellationAuditReport);
+router.get('/catalog/top-customers', catalog.topCustomersReport);
+router.get('/catalog/revenue-analysis', catalog.revenueAnalysis);
+router.get('/catalog/employee-performance', catalog.employeePerformance);
+router.get('/catalog/monthly-summary', catalog.monthlyBusinessSummary);

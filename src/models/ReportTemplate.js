@@ -1,5 +1,5 @@
 const { DataTypes } = require('sequelize');
-const { sequelize, BaseModel } = require('./baseModel');
+const { sequelize, BaseModel, auditHooks } = require('./baseModel');
 
 /**
  * Report Template Model
@@ -84,6 +84,7 @@ const ReportTemplate = sequelize.define('rtReportTemplate', {
 }, {
   tableName: 'rtXreporttemplate',
   timestamps: true,
+  ...auditHooks,
   indexes: [
     {
       name: 'idx_rt_created_by',

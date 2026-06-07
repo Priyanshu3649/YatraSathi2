@@ -1,5 +1,5 @@
 const { DataTypes } = require('sequelize');
-const { sequelize, BaseModel } = require('./baseModel');
+const { sequelize, BaseModel, auditHooks } = require('./baseModel');
 const User = require('./User');
 
 const Login = sequelize.define('lgLogin', {
@@ -80,6 +80,7 @@ const Login = sequelize.define('lgLogin', {
 }, {
   tableName: 'lgLogin',
   timestamps: false,
+  ...auditHooks,
   indexes: [
     {
       unique: true,

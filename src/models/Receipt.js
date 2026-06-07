@@ -1,5 +1,5 @@
 const { DataTypes } = require('sequelize');
-const { sequelize, BaseModel } = require('./baseModel');
+const { sequelize, BaseModel, auditHooks } = require('./baseModel');
 
 /**
  * Receipt Model
@@ -91,6 +91,7 @@ const Receipt = sequelize.define('rcReceipt', {
 }, {
   tableName: 'rcXreceipt',
   timestamps: true,
+  ...auditHooks,
   indexes: [
     {
       name: 'idx_rc_entry_no',

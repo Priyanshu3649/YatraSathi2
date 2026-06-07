@@ -1,5 +1,5 @@
 const { DataTypes } = require('sequelize');
-const { sequelize, BaseModel } = require('./baseModel');
+const { sequelize, BaseModel, auditHooks } = require('./baseModel');
 
 const Train = sequelize.define('trTrain', {
   tr_trid: {
@@ -54,6 +54,7 @@ const Train = sequelize.define('trTrain', {
 }, {
   tableName: 'trTrain',
   timestamps: false,
+  ...auditHooks,
   indexes: [
     {
       unique: true,

@@ -1,5 +1,5 @@
 const { DataTypes } = require('sequelize');
-const { sequelize, BaseModel } = require('./baseModel');
+const { sequelize, BaseModel, auditHooks } = require('./baseModel');
 
 /**
  * Payment Model
@@ -105,6 +105,7 @@ const Payment = sequelize.define('pyPayment', {
 }, {
   tableName: 'pyXpayment',
   timestamps: true,
+  ...auditHooks,
   indexes: [
     {
       name: 'idx_py_entry_no',

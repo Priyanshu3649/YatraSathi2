@@ -3,6 +3,8 @@ const { validationResult } = require('express-validator');
 const { Op } = require('sequelize');
 const queryHelper = require('../utils/queryHelper');
 const RealTimeService = require('../services/realTimeService');
+const Audit = require('../services/forensicAuditService');
+
 
 /**
  * Payment Controller
@@ -180,6 +182,14 @@ class PaymentController {
       
       // Emit real-time update
       RealTimeService.emitPaymentUpdate(payment.toJSON());
+      // ── Forensic Audit: INSERT (async) ─────────────────────────────────────────────
+      Audit.logAction({ module: Audit.MODULES.PAYMENT, recordId: payment.py_pymtid,
+        action: Audit.ACTIONS.INSERT, req, fieldName: 'py_entry_no',
+        oldValue: null, newValue: payment.py_entry_no });
+      Audit.logAction({ module: Audit.MODULES.PAYMENT, recordId: payment.py_pymtid,
+        action: Audit.ACTIONS.INSERT, req, fieldName: 'py_amount',
+        oldValue: null, newValue: String(payment.py_amount) });
+      // ───────────────────────────────────────────────────────────────
 
       res.status(201).json({
         success: true,
@@ -229,12 +239,18 @@ class PaymentController {
       }
       
       // Update payment data
+      const paymentBefore = payment.toJSON();
       const updatedPayment = await payment.update({
         ...req.body,
         py_modified_by: req.user.us_usid,
-        py_modified_dt: new Date()
+        py_modified_dt: new Date(),
+        modified_by: req.user.us_usid,
+        modified_on: new Date()
       });
-      
+      // ── Forensic Audit: UPDATE (async) ─────────────────────────────────────────
+      Audit.logFieldChanges(paymentBefore, updatedPayment.toJSON(), {
+        module: Audit.MODULES.PAYMENT, recordId: payment.py_pymtid, req });
+      // ──────────────────────────────────────────────────────────────────────
       // Emit real-time update
       RealTimeService.broadcast('payment_update', {
         type: 'PAYMENT_UPDATED',
@@ -284,6 +300,10 @@ class PaymentController {
         py_modified_by: req.user.us_usid,
         py_modified_dt: new Date()
       });
+      
+      // Forensic Audit: DELETE
+      Audit.logAction({ module: Audit.MODULES.PAYMENT, recordId: payment.py_pymtid,
+        action: Audit.ACTIONS.DELETE, req });
       
       res.json({
         success: true,

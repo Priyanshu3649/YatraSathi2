@@ -1,5 +1,5 @@
 const { DataTypes } = require('sequelize');
-const { sequelize, BaseModel } = require('./baseModel');
+const { sequelize, BaseModel, auditHooks } = require('./baseModel');
 const User = require('./User');
 
 const TravelPlan = sequelize.define('tpTravelPlan', {
@@ -64,7 +64,8 @@ const TravelPlan = sequelize.define('tpTravelPlan', {
   ...BaseModel
 }, {
   tableName: 'tpTravelPlan',
-  timestamps: false
+  timestamps: false,
+  ...auditHooks,
 });
 
 // Define associations

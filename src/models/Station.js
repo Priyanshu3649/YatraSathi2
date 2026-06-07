@@ -1,5 +1,5 @@
 const { DataTypes } = require('sequelize');
-const { sequelize, BaseModel } = require('./baseModel');
+const { sequelize, BaseModel, auditHooks } = require('./baseModel');
 
 const Station = sequelize.define('stStation', {
   st_stid: {
@@ -44,6 +44,7 @@ const Station = sequelize.define('stStation', {
 }, {
   tableName: 'stStation',
   timestamps: false,
+  ...auditHooks,
   indexes: [
     {
       unique: true,

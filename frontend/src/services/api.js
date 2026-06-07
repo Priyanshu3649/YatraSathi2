@@ -1003,6 +1003,50 @@ export const reportAPI = {
     }
     
     return data;
+  },
+
+  // ── Report Catalog API ──────────────────────────────────
+  getCatalog: async () => {
+    const response = await fetch(`${API_BASE_URL}/reports/catalog`, {
+      method: 'GET', headers: getHeaders(true)
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.message || 'Failed to load report catalog');
+    return data;
+  },
+
+  runCatalogReport: async (reportId, params = {}) => {
+    const queryParams = new URLSearchParams(
+      Object.fromEntries(Object.entries(params).filter(([, v]) => v !== '' && v !== undefined && v !== null))
+    ).toString();
+    const url = `${API_BASE_URL}/reports/catalog/${reportId}${queryParams ? '?' + queryParams : ''}`;
+    const response = await fetch(url, { method: 'GET', headers: getHeaders(true) });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.message || 'Failed to run report');
+    return data;
+  },
+
+  exportCatalogReport: async (reportId, format, params = {}) => {
+    const queryParams = new URLSearchParams(
+      Object.fromEntries(Object.entries(params).filter(([, v]) => v !== '' && v !== undefined && v !== null))
+    ).toString();
+    const url = `${API_BASE_URL}/reports/catalog/${reportId}/export?format=${format}${queryParams ? '&' + queryParams : ''}`;
+    const response = await fetch(url, { method: 'GET', headers: getHeaders(true) });
+    if (!response.ok) {
+      const errData = await response.json().catch(() => ({ message: 'Export failed' }));
+      throw new Error(errData.message || 'Export failed');
+    }
+    const blob = await response.blob();
+    const contentDisposition = response.headers.get('Content-Disposition');
+    const fileName = contentDisposition?.split('filename=')[1] || `${reportId}.${format === 'EXCEL' ? 'xlsx' : 'pdf'}`;
+    const downloadUrl = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = downloadUrl;
+    a.download = fileName;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    window.URL.revokeObjectURL(downloadUrl);
   }
 };
 
@@ -1945,6 +1989,106 @@ export const masterPassengerAPI = {
   }
 };
 
+// Audit API calls
+export const auditAPI = {
+  // Get all audit logs (with filters) — paginated
+  getAuditLogs: async (params = {}) => {
+    const queryParams = new URLSearchParams(params).toString();
+    const url = queryParams ? `${API_BASE_URL}/audit/logs?${queryParams}` : `${API_BASE_URL}/audit/logs`;
+    const response = await fetch(url, { method: 'GET', headers: getHeaders(true) });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.message || 'Failed to get audit logs');
+    return data;
+  },
+  
+  // Get full chronological history for a specific record (drilldown)
+  getRecordHistory: async (module, recordId) => {
+    const url = `${API_BASE_URL}/audit/record/${encodeURIComponent(module)}/${encodeURIComponent(recordId)}`;
+    const response = await fetch(url, { method: 'GET', headers: getHeaders(true) });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.message || 'Failed to get record history');
+    return data;
+  },
+
+  // Get all logs for a module
+  getModuleLogs: async (module, params = {}) => {
+    const queryParams = new URLSearchParams(params).toString();
+    const url = queryParams
+      ? `${API_BASE_URL}/audit/module/${encodeURIComponent(module)}?${queryParams}`
+      : `${API_BASE_URL}/audit/module/${encodeURIComponent(module)}`;
+    const response = await fetch(url, { method: 'GET', headers: getHeaders(true) });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.message || 'Failed to get module audit logs');
+    return data;
+  },
+
+  // Get audit logs by entity (legacy alias)
+  getAuditLogsByEntity: async (entityName, entityId, params = {}) => {
+    const queryParams = new URLSearchParams(params).toString();
+    const baseUrl = `${API_BASE_URL}/audit/logs/${encodeURIComponent(entityName)}/${encodeURIComponent(entityId)}`;
+    const url = queryParams ? `${baseUrl}?${queryParams}` : baseUrl;
+    const response = await fetch(url, { method: 'GET', headers: getHeaders(true) });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.message || 'Failed to get entity audit logs');
+    return data;
+  },
+  
+  // Get single audit log
+  getAuditLogById: async (id) => {
+    const response = await fetch(`${API_BASE_URL}/audit/logs/${id}`, {
+      method: 'GET',
+      headers: getHeaders(true)
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.message || 'Failed to get audit log');
+    return data;
+  },
+
+  // Get live queue metrics (for dashboard widget)
+  getMetrics: async () => {
+    const response = await fetch(`${API_BASE_URL}/audit/metrics`, {
+      method: 'GET', headers: getHeaders(true)
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.message || 'Failed to get audit metrics');
+    return data;
+  },
+
+  // Retention policy
+  getRetentionPolicy: async () => {
+    const response = await fetch(`${API_BASE_URL}/audit/retention`, {
+      method: 'GET', headers: getHeaders(true)
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.message || 'Failed to get retention policy');
+    return data;
+  },
+
+  updateRetentionPolicy: async (policy) => {
+    const response = await fetch(`${API_BASE_URL}/audit/retention`, {
+      method: 'PUT', headers: getHeaders(true), body: JSON.stringify(policy)
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.message || 'Failed to update retention policy');
+    return data;
+  },
+
+  archiveOldLogs: async () => {
+    const response = await fetch(`${API_BASE_URL}/audit/retention/archive`, {
+      method: 'POST', headers: getHeaders(true)
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.message || 'Failed to archive logs');
+    return data;
+  },
+};
+
+
+// Named exports for individual API functions
+export const getAuditLogs = auditAPI.getAuditLogs;
+export const getAuditLogsByEntity = auditAPI.getAuditLogsByEntity;
+export const getAuditLogById = auditAPI.getAuditLogById;
+
 export default {
   authAPI,
   dashboardAPI,
@@ -1957,5 +2101,6 @@ export default {
   masterPassengerAPI,
   receiptAPI,
   contraAPI,
+  auditAPI,
   journalAPI
 };

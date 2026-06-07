@@ -1,38 +1,41 @@
+'use strict';
+
 const express = require('express');
-const {
-  getAuditLogs,
-  getAuditLogById,
-  getAuditSummary
-} = require('../controllers/auditController');
-const authMiddleware = require('../middleware/authMiddleware');
+const router  = express.Router();
+const audit   = require('../controllers/auditController');
+const auth    = require('../middleware/authMiddleware');
 
-const router = express.Router();
+// All audit routes require authentication
+router.use(auth);
 
-// Apply authentication middleware to all routes
-router.use(authMiddleware);
+// ── Live queue metrics ────────────────────────────────────────────────────────
+// GET /api/audit/metrics
+router.get('/metrics', audit.getMetrics);
 
-// Admin routes
-router.get('/', async (req, res, next) => {
-  if (req.user.userType !== 'admin') {
-    return res.status(403).json({ message: 'Access denied. Admin access required.' });
-  }
-  next();
-}, getAuditLogs);
+// ── Paginated log viewer with filters ────────────────────────────────────────
+// GET /api/audit/logs?module=Billing&action=CANCEL&fromDate=...&toDate=...&page=1&limit=50
+router.get('/logs', audit.getAuditLogs);
 
-// Get audit log by ID
-router.get('/:id', async (req, res, next) => {
-  if (req.user.userType !== 'admin') {
-    return res.status(403).json({ message: 'Access denied. Admin access required.' });
-  }
-  next();
-}, getAuditLogById);
+// ── Single log entry ──────────────────────────────────────────────────────────
+router.get('/logs/:id(\\d+)', audit.getAuditLogById);
 
-// Get audit summary statistics
-router.get('/summary/stats', async (req, res, next) => {
-  if (req.user.userType !== 'admin') {
-    return res.status(403).json({ message: 'Access denied. Admin access required.' });
-  }
-  next();
-}, getAuditSummary);
+// ── Record drilldown — ERP investigation view ─────────────────────────────────
+// GET /api/audit/record/Billing/604  → full history of Bill #604
+router.get('/record/:module/:recordId', audit.getRecordHistory);
+
+// ── Module-level log listing ──────────────────────────────────────────────────
+// GET /api/audit/module/Billing?action=CANCEL&fromDate=...
+router.get('/module/:module', audit.getModuleLogs);
+
+// ── Retention policy ──────────────────────────────────────────────────────────
+// GET  /api/audit/retention        → read current policy
+// PUT  /api/audit/retention        → update policy (ADM)
+// POST /api/audit/retention/archive → archive old logs (ADM)
+router.get('/retention',         audit.getRetentionPolicy);
+router.put('/retention',         audit.updateRetentionPolicy);
+router.post('/retention/archive', audit.archiveOldLogs);
+
+// ── Legacy alias (keeps backward compatibility with old AuditTrail.jsx) ───────
+router.get('/logs/:entityName/:entityId', audit.getAuditLogsByEntity);
 
 module.exports = router;

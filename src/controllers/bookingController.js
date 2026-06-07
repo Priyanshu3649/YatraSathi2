@@ -2,6 +2,8 @@ const { BookingTVL, UserTVL, CustomerTVL: Customer, EmployeeTVL: Employee, Stati
 const { Sequelize, Op } = require('sequelize');
 const { sequelizeTVL: sequelize } = require('../../config/db'); // Use sequelizeTVL for TVL database
 const queryHelper = require('../utils/queryHelper');
+const Audit = require('../services/forensicAuditService');
+
 
 // Helper function to convert string user ID to integer for database compatibility
 function convertUserIdToInt(userId) {
@@ -252,6 +254,23 @@ const createBooking = async (req, res) => {
       
       // Re-enable foreign key checks
       await sequelize.query('SET FOREIGN_KEY_CHECKS = 1');
+
+      // ── Forensic Audit: Log INSERT (async, non-blocking) ──────────────────
+      Audit.logAction({
+        module: Audit.MODULES.BOOKING, recordId: booking.bk_bkid,
+        action: Audit.ACTIONS.INSERT, req,
+        fieldName: 'booking_number', oldValue: null, newValue: booking.bk_bkno,
+      });
+      ['bk_customername','bk_phonenumber','bk_fromst','bk_tost','bk_trvldt',
+       'bk_class','bk_totalpass','bk_status'].forEach(f => {
+        const v = booking[f];
+        if (v != null) Audit.logAction({
+          module: Audit.MODULES.BOOKING, recordId: booking.bk_bkid,
+          action: Audit.ACTIONS.INSERT, req,
+          fieldName: f, oldValue: null, newValue: String(v),
+        });
+      });
+      // ─────────────────────────────────────────────────────────────────────────
       
       console.time("BOOKING_RESPONSE_PREP");
       res.status(201).json({
@@ -562,6 +581,9 @@ const updateBooking = async (req, res) => {
               bk_phonenumber, bk_customername, bk_pnr,
               mby, ...otherFields } = req.body;
       
+      // Snapshot BEFORE update for forensic diff
+      const bookingBeforeUpdate = booking.toJSON();
+
       // Prepare update data with only valid BookingTVL fields
       const updateData = {};
       
@@ -581,6 +603,9 @@ const updateBooking = async (req, res) => {
       
       // Always update modified by field
       updateData.mby = mby || req.user.us_usid;
+      // Standard audit fields — always server-side, never from frontend
+      updateData.modified_by = req.user.us_usid;
+      updateData.modified_on = new Date();
       
       console.log('Updating booking with data:', updateData);
       
@@ -634,6 +659,12 @@ const updateBooking = async (req, res) => {
       
       // Re-enable foreign key checks
       await sequelize.query('SET FOREIGN_KEY_CHECKS = 1');
+
+      // ── Forensic Audit: Log per-field UPDATE (async, non-blocking) ──────────
+      Audit.logFieldChanges(bookingBeforeUpdate, booking.toJSON(), {
+        module: Audit.MODULES.BOOKING, recordId: booking.bk_bkid, req,
+      });
+      // ─────────────────────────────────────────────────────────────────────────
       
       res.json({
         success: true,
@@ -642,6 +673,7 @@ const updateBooking = async (req, res) => {
           message: 'Booking updated successfully'
         }
       });
+
     } catch (error) {
       // Rollback the transaction on error
       await transaction.rollback();
@@ -684,6 +716,13 @@ const cancelBooking = async (req, res) => {
       mby: req.user.us_usid 
     }, {
       userId: req.user.us_usid  // Pass userId for audit hooks
+    });
+    
+    // Forensic Audit: CANCEL
+    Audit.logAction({
+      module: Audit.MODULES.BOOKING, recordId: booking.bk_bkid,
+      action: Audit.ACTIONS.CANCEL, req,
+      fieldName: 'bk_status', oldValue: 'CONFIRMED', newValue: 'CAN'
     });
     
     res.json({
@@ -733,7 +772,11 @@ const deleteBooking = async (req, res) => {
       });
       
       // Log the soft deletion for audit purposes
-      console.log(`[BOOKING SOFT DELETE AUDIT] Booking ${booking.bk_bkid} marked as INACTIVE by user ${req.user.us_usid}.`);
+      Audit.logAction({
+        module: Audit.MODULES.BOOKING, recordId: booking.bk_bkid,
+        action: Audit.ACTIONS.DELETE, req,
+        fieldName: 'bk_status', oldValue: booking.bk_status || 'ACTIVE', newValue: 'INA'
+      });
       
       // Commit the transaction
       await transaction.commit();

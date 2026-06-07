@@ -2,6 +2,8 @@ const { UserTVL: User, EmployeeTVL: Employee, BookingTVL: Booking, CorporateCust
 const { Op } = require('sequelize');
 const bcrypt = require('bcryptjs');
 const queryHelper = require('../utils/queryHelper');
+const Audit = require('../services/forensicAuditService');
+
 
 // Get all employees (admin only)
 const getAllEmployees = async (req, res) => {
@@ -183,6 +185,14 @@ const createEmployee = async (req, res) => {
       mby: req.user.us_usid
     });
     
+    // ── Forensic Audit: INSERT Employee (async) ────────────────────────────────
+    Audit.logAction({ module: Audit.MODULES.EMPLOYEE, recordId: user.us_usid,
+      action: Audit.ACTIONS.INSERT, req, fieldName: 'em_empno',
+      oldValue: null, newValue: employee.em_empno });
+    Audit.logAction({ module: Audit.MODULES.EMPLOYEE, recordId: user.us_usid,
+      action: Audit.ACTIONS.INSERT, req, fieldName: 'em_dept',
+      oldValue: null, newValue: employee.em_dept });
+    // ───────────────────────────────────────────────────────────────────────
     res.status(201).json({
       user,
       employee
@@ -229,6 +239,9 @@ const updateEmployee = async (req, res) => {
       isActive
     } = req.body;
     
+    // Snapshot before update for forensic diff
+    const employeeBeforeUpdate = employee.toJSON();
+
     // Update user fields if provided
     if (name) user.us_fname = name;
     if (email) user.us_email = email;
@@ -237,6 +250,8 @@ const updateEmployee = async (req, res) => {
     if (isActive !== undefined) user.us_active = isActive ? 1 : 0;
     
     user.mby = req.user.us_usid;
+    user.modified_by = req.user.us_usid;
+    user.modified_on = new Date();
     await user.save();
     
     // Update employee fields if provided
@@ -250,7 +265,14 @@ const updateEmployee = async (req, res) => {
     if (pincode) employee.em_pincode = pincode;
     
     employee.mby = req.user.us_usid;
+    employee.modified_by = req.user.us_usid;
+    employee.modified_on = new Date();
     await employee.save();
+    
+    // ── Forensic Audit: UPDATE Employee (async) ────────────────────────────────
+    Audit.logFieldChanges(employeeBeforeUpdate, employee.toJSON(), {
+      module: Audit.MODULES.EMPLOYEE, recordId: user.us_usid, req });
+    // ───────────────────────────────────────────────────────────────────────
     
     res.json({
       user,
@@ -277,6 +299,10 @@ const deleteEmployee = async (req, res) => {
     
     // Delete employee record first
     await Employee.destroy({ where: { em_usid: req.params.id } });
+    
+    // Forensic Audit: DELETE
+    Audit.logAction({ module: Audit.MODULES.EMPLOYEE, recordId: user.us_usid,
+      action: Audit.ACTIONS.DELETE, req });
     
     // Delete user
     await user.destroy();

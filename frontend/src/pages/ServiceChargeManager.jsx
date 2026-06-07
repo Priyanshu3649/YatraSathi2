@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
+import { usePagination } from '../hooks/usePagination';
+import PaginationControls from '../components/common/PaginationControls';
 import '../styles/vintage-erp-theme.css';
 import '../styles/classic-enterprise-global.css';
 
@@ -10,6 +12,10 @@ const ServiceChargeManager = () => {
   const [customers, setCustomers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('customer'); // 'customer' or 'default'
+  const {
+    page, limit, pagination,
+    updatePagination, setPage, setLimit
+  } = usePagination(1, 50);
   const [showModal, setShowModal] = useState(false);
   const [editingRule, setEditingRule] = useState(null);
   const [formData, setFormData] = useState({
@@ -26,16 +32,16 @@ const ServiceChargeManager = () => {
   useEffect(() => {
     fetchData();
     fetchCustomers();
-  }, []);
+  }, [page, limit]);
 
   const fetchData = async () => {
     setLoading(true);
     try {
       const [custRes, defRes] = await Promise.all([
-        fetch('/api/service-charge/customer-rules', {
+        fetch(`/api/service-charge/customer-rules?page=${page}&limit=${limit}`, {
           headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
         }),
-        fetch('/api/service-charge/default-rules', {
+        fetch(`/api/service-charge/default-rules?page=${page}&limit=${limit}`, {
           headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
         })
       ]);
@@ -43,8 +49,11 @@ const ServiceChargeManager = () => {
       const custData = await custRes.json();
       const defData = await defRes.json();
 
-      if (custData.success) setCustomerRules(custData.data);
-      if (defData.success) setDefaultRules(defData.data);
+      if (custData.success) {
+        setCustomerRules(custData.data || []);
+        if (custData.pagination) updatePagination(custData.pagination);
+      }
+      if (defData.success) setDefaultRules(defData.data || []);
     } catch (err) {
       console.error('Failed to fetch rules:', err);
     } finally {
@@ -293,6 +302,13 @@ const ServiceChargeManager = () => {
           </div>
         </div>
       )}
+
+      <PaginationControls
+        pagination={pagination}
+        onPageChange={setPage}
+        limit={limit}
+        onLimitChange={(n) => { setLimit(n); setPage(1); }}
+      />
 
       <style jsx>{`
         .active { background: #e2e8f0; border-bottom: 2px solid #3182ce; }

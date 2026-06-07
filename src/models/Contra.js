@@ -1,5 +1,5 @@
 const { DataTypes } = require('sequelize');
-const { sequelize, BaseModel } = require('./baseModel');
+const { sequelize, BaseModel, auditHooks } = require('./baseModel');
 
 /**
  * Contra Entry Model
@@ -78,6 +78,7 @@ const Contra = sequelize.define('ctContra', {
 }, {
   tableName: 'ctXcontra',
   timestamps: true,
+  ...auditHooks,
   indexes: [
     {
       name: 'idx_ct_entry_no',

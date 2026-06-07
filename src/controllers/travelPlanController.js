@@ -1,5 +1,7 @@
 const { TravelPlan, User } = require('../models');
 const { Sequelize } = require('sequelize');
+const Audit = require('../services/forensicAuditService');
+const queryHelper = require('../utils/queryHelper');
 
 // Create a new travel plan
 const createTravelPlan = async (req, res) => {
@@ -15,12 +17,23 @@ const createTravelPlan = async (req, res) => {
       tp_budget: budget,
       tp_activities: JSON.stringify(activities),
       tp_usid: req.user.us_usid,
-      tp_ispublic: 0, // Default to private
-      tp_sharedwith: JSON.stringify([]), // Default to empty array
+      tp_ispublic: 0,
+      tp_sharedwith: JSON.stringify([]),
       eby: req.user.us_usid,
-      mby: req.user.us_usid
+      mby: req.user.us_usid,
+      entered_by: req.user.us_usid,
+      entered_on: new Date()
     });
-    
+
+    // ── Forensic Audit: INSERT (async) ────────────────────────────────────────────
+    Audit.logAction({ module: Audit.MODULES.TRAVEL_PLAN, recordId: travelPlan.tp_tpid,
+      action: Audit.ACTIONS.INSERT, req, fieldName: 'tp_title',
+      oldValue: null, newValue: travelPlan.tp_title });
+    Audit.logAction({ module: Audit.MODULES.TRAVEL_PLAN, recordId: travelPlan.tp_tpid,
+      action: Audit.ACTIONS.INSERT, req, fieldName: 'tp_destination',
+      oldValue: null, newValue: travelPlan.tp_destination });
+    // ───────────────────────────────────────────────────────────────────────
+
     res.status(201).json(travelPlan);
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -60,7 +73,27 @@ const getUserTravelPlans = async (req, res) => {
       index === self.findIndex(p => p.tp_tpid === plan.tp_tpid)
     );
     
-    res.json(uniquePlans);
+    // Sort by edtm DESC
+    uniquePlans.sort((a, b) => new Date(b.edtm) - new Date(a.edtm));
+
+    // Manual pagination on merged result set
+    const { limit, offset, page } = queryHelper.getPaginationOptions(req.query);
+    const totalRecords = uniquePlans.length;
+    const paged = uniquePlans.slice(offset, offset + limit);
+    const totalPages = Math.ceil(totalRecords / limit);
+
+    res.json({
+      success: true,
+      data: paged,
+      pagination: {
+        currentPage: page,
+        totalPages,
+        totalRecords,
+        pageSize: limit,
+        hasNextPage: page < totalPages,
+        hasPrevPage: page > 1
+      }
+    });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -96,6 +129,7 @@ const updateTravelPlan = async (req, res) => {
     const travelPlan = await TravelPlan.findByPk(req.params.id);
     
     if (travelPlan && travelPlan.tp_usid === req.user.us_usid) {
+      const oldValues = travelPlan.toJSON();
       travelPlan.tp_title = title || travelPlan.tp_title;
       travelPlan.tp_description = description || travelPlan.tp_description;
       travelPlan.tp_startdate = startDate || travelPlan.tp_startdate;
@@ -104,8 +138,16 @@ const updateTravelPlan = async (req, res) => {
       travelPlan.tp_budget = budget || travelPlan.tp_budget;
       travelPlan.tp_activities = activities ? JSON.stringify(activities) : travelPlan.tp_activities;
       travelPlan.mby = req.user.us_usid;
-      
+      travelPlan.modified_by = req.user.us_usid;
+      travelPlan.modified_on = new Date();
+
       const updatedPlan = await travelPlan.save();
+
+      // ── Forensic Audit: UPDATE (async) ─────────────────────────────────────────
+      Audit.logFieldChanges(oldValues, updatedPlan.toJSON(), {
+        module: Audit.MODULES.TRAVEL_PLAN, recordId: travelPlan.tp_tpid, req });
+      // ───────────────────────────────────────────────────────────────────────
+
       res.json(updatedPlan);
     } else {
       res.status(404).json({ message: 'Travel plan not found' });
@@ -121,6 +163,11 @@ const deleteTravelPlan = async (req, res) => {
     const travelPlan = await TravelPlan.findByPk(req.params.id);
     
     if (travelPlan && travelPlan.tp_usid === req.user.us_usid) {
+      // ── Forensic Audit: DELETE (async) ─────────────────────────────────────────
+      Audit.logAction({ module: Audit.MODULES.TRAVEL_PLAN, recordId: travelPlan.tp_tpid,
+        action: Audit.ACTIONS.DELETE, req, fieldName: 'tp_title',
+        oldValue: travelPlan.tp_title, newValue: null });
+      // ───────────────────────────────────────────────────────────────────────
       await travelPlan.destroy();
       res.json({ message: 'Travel plan removed' });
     } else {

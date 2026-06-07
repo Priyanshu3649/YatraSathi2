@@ -1,5 +1,7 @@
 // Ledger Master Controller - Handles chart of accounts
 const LedgerMaster = require('../models/LedgerMaster');
+const Audit = require('../services/forensicAuditService');
+const queryHelper = require('../utils/queryHelper');
 
 class LedgerController {
   // Get all ledgers
@@ -10,12 +12,23 @@ class LedgerController {
         search: req.query.search
       };
 
+      const { limit, offset, page } = queryHelper.getPaginationOptions(req.query);
       const ledgers = await LedgerMaster.findAll(filters);
-      
+      const totalRecords = ledgers.length;
+      const paged = ledgers.slice(offset, offset + limit);
+      const totalPages = Math.ceil(totalRecords / limit);
+
       res.json({
         success: true,
-        data: ledgers,
-        count: ledgers.length
+        data: paged,
+        pagination: {
+          currentPage: page,
+          totalPages,
+          totalRecords,
+          pageSize: limit,
+          hasNextPage: page < totalPages,
+          hasPrevPage: page > 1
+        }
       });
     } catch (error) {
       res.status(500).json({
@@ -100,6 +113,9 @@ class LedgerController {
       }
 
       const ledger = await LedgerMaster.create(ledgerData);
+      
+      // Forensic Audit: INSERT (ledgers are immutable - create only)
+      if (req.audit) req.audit.logInsert(ledgerData, { module: 'Ledger', recordId: ledger.id || ledger.lg_lgid || 'new' });
       
       res.status(201).json({
         success: true,

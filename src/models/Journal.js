@@ -1,5 +1,5 @@
 const { DataTypes } = require('sequelize');
-const { sequelize, BaseModel } = require('./baseModel');
+const { sequelize, BaseModel, auditHooks } = require('./baseModel');
 
 /**
  * Journal Entry Model
@@ -85,6 +85,7 @@ const Journal = sequelize.define('jeJournal', {
 }, {
   tableName: 'jeXjournal',
   timestamps: true,
+  ...auditHooks,
   indexes: [
     {
       name: 'idx_je_entry_no',

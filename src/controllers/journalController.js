@@ -2,6 +2,9 @@ const { Journal, User } = require('../models');
 const { validationResult } = require('express-validator');
 const { Op } = require('sequelize');
 const queryHelper = require('../utils/queryHelper');
+const Audit = require('../services/forensicAuditService');
+const Audit = require('../services/forensicAuditService');
+
 
 /**
  * Journal Controller
@@ -98,8 +101,19 @@ class JournalController {
         je_voucher_type,
         je_created_by: req.user.us_usid,
         je_status: 'Active'
-      });
+      }, req.audit ? req.audit.sequelizeOptions() : {});
       
+      // Forensic Audit: INSERT
+      if (req.audit) req.audit.logInsert(journal.toJSON(), { module: 'Journal', recordId: journal.je_jeid });
+      
+      // ── Forensic Audit: INSERT (async) ─────────────────────────────────────────────
+      Audit.logAction({ module: Audit.MODULES.JOURNAL, recordId: journal.je_jeid,
+        action: Audit.ACTIONS.INSERT, req, fieldName: 'je_entry_no',
+        oldValue: null, newValue: journal.je_entry_no });
+      Audit.logAction({ module: Audit.MODULES.JOURNAL, recordId: journal.je_jeid,
+        action: Audit.ACTIONS.INSERT, req, fieldName: 'je_amount',
+        oldValue: null, newValue: String(journal.je_amount) });
+      // ───────────────────────────────────────────────────────────────
       res.status(201).json({
         success: true,
         data: journal,
@@ -128,12 +142,18 @@ class JournalController {
         return res.status(404).json({ success: false, message: 'Journal entry not found' });
       }
       
+      const journalBefore = journal.toJSON();
       const updatedJournal = await journal.update({
         ...req.body,
         je_modified_by: req.user.us_usid,
-        je_modified_dt: new Date()
+        je_modified_dt: new Date(),
+        modified_by: req.user.us_usid,
+        modified_on: new Date()
       });
-      
+      // ── Forensic Audit: UPDATE (async) ─────────────────────────────────────────
+      Audit.logFieldChanges(journalBefore, updatedJournal.toJSON(), {
+        module: Audit.MODULES.JOURNAL, recordId: journal.je_jeid, req });
+      // ───────────────────────────────────────────────────────────────────────
       res.json({
         success: true,
         data: updatedJournal,
@@ -161,7 +181,10 @@ class JournalController {
         je_status: 'Deleted',
         je_modified_by: req.user.us_usid,
         je_modified_dt: new Date()
-      });
+      }, req.audit ? req.audit.sequelizeOptions() : {});
+      
+      // Forensic Audit: DELETE
+      if (req.audit) req.audit.logAction({ module: 'Journal', recordId: journal.je_jeid, action: 'DELETE' });
       
       res.json({ success: true, message: 'Journal entry deleted successfully' });
     } catch (error) {

@@ -1,97 +1,110 @@
-// Forensic Audit Log Model
-// Immutable audit trail for all business transactions
+/**
+ * ForensicAuditLog — Sequelize Model (v2)
+ * Maps to audit_forensic_log (new per-field normalized schema)
+ *
+ * IMMUTABLE: no updates or deletes allowed at model level.
+ * Raw inserts are handled by ForensicAuditService via sequelizeTVL.query()
+ * for maximum performance. This model is used for reads and associations.
+ */
+
+'use strict';
 
 const { DataTypes } = require('sequelize');
 const { sequelizeTVL } = require('../../config/db');
 
-const ForensicAuditLog = sequelizeTVL.define('forensicAuditLog', {
-  id: {
-    type: DataTypes.INTEGER,
+const ForensicAuditLog = sequelizeTVL.define('ForensicAuditLog', {
+  audit_id: {
+    type: DataTypes.BIGINT,
     primaryKey: true,
     autoIncrement: true,
-    allowNull: false
+    field: 'audit_id',
   },
-  entityName: {
-    type: DataTypes.STRING(50),
+  module_name: {
+    type: DataTypes.STRING(100),
     allowNull: false,
-    field: 'entity_name'
+    field: 'module_name',
   },
-  entityId: {
-    type: DataTypes.INTEGER,
+  record_id: {
+    type: DataTypes.STRING(100),
     allowNull: false,
-    field: 'entity_id'
+    field: 'record_id',
   },
-  actionType: {
-    type: DataTypes.ENUM('CREATE', 'UPDATE', 'CLOSE', 'CANCEL', 'DELETE'),
+  action_type: {
+    type: DataTypes.ENUM(
+      'INSERT', 'UPDATE', 'DELETE', 'CANCEL', 'CLOSE',
+      'LOGIN', 'LOGOUT', 'FAILED_LOGIN',
+      'PASSWORD_RESET', 'USER_LOCK', 'USER_UNLOCK',
+      'ROLE_CHANGE', 'PERMISSION_CHANGE'
+    ),
     allowNull: false,
-    field: 'action_type'
+    field: 'action_type',
   },
-  changedFields: {
-    type: DataTypes.JSON,
+  field_name: {
+    type: DataTypes.STRING(100),
     allowNull: true,
-    field: 'changed_fields'
+    field: 'field_name',
   },
-  oldValues: {
-    type: DataTypes.JSON,
+  old_value: {
+    type: DataTypes.TEXT('long'),
     allowNull: true,
-    field: 'old_values'
+    field: 'old_value',
   },
-  newValues: {
-    type: DataTypes.JSON,
+  new_value: {
+    type: DataTypes.TEXT('long'),
     allowNull: true,
-    field: 'new_values'
+    field: 'new_value',
   },
-  performedBy: {
-    type: DataTypes.INTEGER,
+  changed_by: {
+    type: DataTypes.STRING(100),
     allowNull: false,
-    field: 'performed_by'
+    field: 'changed_by',
   },
-  performedOn: {
+  changed_by_name: {
+    type: DataTypes.STRING(200),
+    allowNull: true,
+    field: 'changed_by_name',
+  },
+  ip_address: {
+    type: DataTypes.STRING(100),
+    allowNull: true,
+    field: 'ip_address',
+  },
+  machine_name: {
+    type: DataTypes.STRING(255),
+    allowNull: true,
+    field: 'machine_name',
+  },
+  change_timestamp: {
     type: DataTypes.DATE,
     allowNull: false,
     defaultValue: DataTypes.NOW,
-    field: 'performed_on'
+    field: 'change_timestamp',
   },
-  ipAddress: {
-    type: DataTypes.STRING(45),
-    allowNull: true,
-    field: 'ip_address'
-  },
-  userAgent: {
-    type: DataTypes.TEXT,
-    allowNull: true,
-    field: 'user_agent'
-  },
-  branchId: {
-    type: DataTypes.INTEGER,
-    allowNull: true,
-    field: 'branch_id'
-  },
-  transactionId: {
-    type: DataTypes.STRING(50),
-    allowNull: true,
-    field: 'transaction_id'
-  }
 }, {
   tableName: 'audit_forensic_log',
   timestamps: false,
-  // Make table append-only - no updates or deletes allowed
-  paranoid: false,
   indexes: [
-    { fields: ['entity_name', 'entity_id'] },
-    { fields: ['performed_on'] },
-    { fields: ['performed_by'] },
-    { fields: ['action_type'] }
-  ]
+    { fields: ['module_name'] },
+    { fields: ['record_id'] },
+    { fields: ['module_name', 'record_id'] },
+    { fields: ['changed_by'] },
+    { fields: ['change_timestamp'] },
+    { fields: ['action_type'] },
+  ],
 });
 
-// Prevent any updates or deletes at model level
+// ── Immutability hooks ────────────────────────────────────────────────────────
 ForensicAuditLog.addHook('beforeUpdate', () => {
-  throw new Error('Forensic audit logs cannot be modified');
+  throw new Error('YatraSathi ERP: Forensic audit logs are immutable and cannot be modified.');
 });
-
 ForensicAuditLog.addHook('beforeDestroy', () => {
-  throw new Error('Forensic audit logs cannot be deleted');
+  throw new Error('YatraSathi ERP: Forensic audit logs are immutable and cannot be deleted.');
+});
+ForensicAuditLog.addHook('beforeBulkUpdate', () => {
+  throw new Error('YatraSathi ERP: Forensic audit logs are immutable and cannot be modified.');
+});
+ForensicAuditLog.addHook('beforeBulkDestroy', () => {
+  throw new Error('YatraSathi ERP: Forensic audit logs are immutable and cannot be deleted.');
 });
 
 module.exports = ForensicAuditLog;

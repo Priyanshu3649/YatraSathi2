@@ -1,5 +1,5 @@
 const { DataTypes } = require('sequelize');
-const { sequelize, BaseModel } = require('./baseModel');
+const { sequelize, BaseModel, auditHooks } = require('./baseModel');
 const User = require('./User');
 const Company = require('./Company');
 
@@ -61,7 +61,8 @@ const Session = sequelize.define('ssSession', {
   ...BaseModel
 }, {
   tableName: 'ssSession',
-  timestamps: false
+  timestamps: false,
+  ...auditHooks,
 });
 
 // Define associations

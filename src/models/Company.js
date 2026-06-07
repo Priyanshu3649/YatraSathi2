@@ -1,5 +1,5 @@
 const { DataTypes } = require('sequelize');
-const { sequelize, BaseModel } = require('./baseModel');
+const { sequelize, BaseModel, auditHooks } = require('./baseModel');
 
 const Company = sequelize.define('coCompany', {
   co_coid: {
@@ -94,6 +94,7 @@ const Company = sequelize.define('coCompany', {
 }, {
   tableName: 'coCompany',
   timestamps: false,
+  ...auditHooks,
   indexes: [
     {
       unique: true,

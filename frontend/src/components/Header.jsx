@@ -59,8 +59,19 @@ const Header = () => {
                 {(user.us_usertype === 'admin' || user.us_roid === 'ADM') && (
                   <>
                     <li><Link to="/admin-dashboard" className={isActive('/admin-dashboard') ? 'active' : ''}>Admin Panel</Link></li>
+                    <li>
+                      <Link
+                        to="/audit"
+                        className={location.pathname.startsWith('/audit') ? 'active' : ''}
+                        title="Forensic Audit Viewer — ERP Investigation Tool"
+                        style={{ position: 'relative' }}
+                      >
+                        🔍 Audit
+                      </Link>
+                    </li>
                   </>
                 )}
+
                 
                 {/* Common for all logged in users */}
                 {user.us_roid !== 'CUS' && (

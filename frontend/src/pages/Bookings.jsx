@@ -46,6 +46,7 @@ import useERPFilters from '../hooks/useERPFilters';
 import PaginationControls from '../components/common/PaginationControls';
 import SaveConfirmationModal from '../components/common/SaveConfirmationModal';
 import RecordActionMenu from '../components/common/RecordActionMenu';
+import AuditPanel from '../components/common/AuditPanel';
 import { useKeyboardForm } from '../hooks/useKeyboardForm';
 import { usePassengerEntry } from '../hooks/usePassengerEntry';
 import { usePhoneLookup } from '../hooks/usePhoneLookup';
@@ -1983,27 +1984,15 @@ setSelectedBooking(null); // Clear selection after deletion
                </div>
             </div>
             
-            {/* Audit Section - Within the form scrollable area, outside focus flow */}
-            <div className="erp-audit-section" tabIndex={-1} style={{ marginTop: '12px', paddingTop: '8px', borderTop: '1px solid #ccc' }}>
-              <div className="erp-audit-row">
-                <label className="erp-audit-label">Entered On</label>
-                <input type="text" className="erp-audit-input" value={formData.createdOn ? new Date(formData.createdOn).toLocaleString() : '-'} readOnly />
-                <label className="erp-audit-label">Entered By</label>
-                <input type="text" className="erp-audit-input" value={formData.createdBy || '-'} readOnly />
-              </div>
-              <div className="erp-audit-row">
-                <label className="erp-audit-label">Modified On</label>
-                <input type="text" className="erp-audit-input" value={formData.modifiedOn ? new Date(formData.modifiedOn).toLocaleString() : '-'} readOnly />
-                <label className="erp-audit-label">Modified By</label>
-                <input type="text" className="erp-audit-input" value={formData.modifiedBy || '-'} readOnly />
-              </div>
-              <div className="erp-audit-row">
-                <label className="erp-audit-label">Closed On</label>
-                <input type="text" className="erp-audit-input" value={formData.closedOn ? new Date(formData.closedOn).toLocaleString() : '-'} readOnly />
-                <label className="erp-audit-label">Closed By</label>
-                <input type="text" className="erp-audit-input" value={formData.closedBy || '-'} readOnly />
-              </div>
-            </div>
+            {/* Audit Panel — read-only, always visible in view and edit mode */}
+            <AuditPanel
+              enteredBy={formData.createdBy || selectedBooking?.eby}
+              enteredOn={formData.createdOn || selectedBooking?.edtm}
+              modifiedBy={formData.modifiedBy || selectedBooking?.mby}
+              modifiedOn={formData.modifiedOn || selectedBooking?.mdtm}
+              closedBy={formData.closedBy || selectedBooking?.closed_by}
+              closedOn={formData.closedOn || selectedBooking?.closed_on}
+            />
           </div>
           </div>
           
