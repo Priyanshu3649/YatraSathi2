@@ -1,19 +1,20 @@
 // API service for making HTTP requests to the backend
-const API_BASE_URL = '/api';
-
+const API_BASE_URL =
+  import.meta.env.VITE_API_URL || 'http://localhost:5004';
+console.log('API URL:', API_BASE_URL);
 // Create headers for requests
 const getHeaders = (includeAuth = false) => {
   const headers = {
     'Content-Type': 'application/json',
   };
-  
+
   if (includeAuth) {
     const token = localStorage.getItem('token');
     if (token) {
       headers['Authorization'] = `Bearer ${token}`;
     }
   }
-  
+
   return headers;
 };
 
@@ -26,13 +27,13 @@ export const authAPI = {
       headers: getHeaders(),
       body: JSON.stringify({ email, password })
     });
-    
+
     const data = await response.json();
-    
+
     if (!response.ok) {
       throw new Error(data.message || 'Login failed');
     }
-    
+
     return data;
   },
 
@@ -43,16 +44,16 @@ export const authAPI = {
       headers: getHeaders(),
       body: JSON.stringify({ email, password })
     });
-    
+
     const data = await response.json();
-    
+
     if (!response.ok) {
       throw new Error(data.error?.message || 'Login failed');
     }
-    
+
     return data;
   },
-  
+
   // Register user
   register: async (userData) => {
     const response = await fetch(`${API_BASE_URL}/auth/register`, {
@@ -60,53 +61,53 @@ export const authAPI = {
       headers: getHeaders(),
       body: JSON.stringify(userData)
     });
-    
+
     const data = await response.json();
-    
+
     if (!response.ok) {
       throw new Error(data.message || 'Registration failed');
     }
-    
+
     return data;
   },
-  
+
   // Get user profile
   getProfile: async () => {
     const response = await fetch(`${API_BASE_URL}/profile`, {
       method: 'GET',
       headers: getHeaders(true)
     });
-    
+
     const data = await response.json();
-    
+
     if (!response.ok) {
       throw new Error(data.message || 'Failed to get profile');
     }
-    
+
     return data;
   },
-  
+
   // Logout user
   logout: async () => {
     const sessionId = localStorage.getItem('sessionId');
     // Only send sessionId if it exists, backend will handle TVL users appropriately
     const requestBody = sessionId ? { sessionId } : {};
-    
+
     const response = await fetch(`${API_BASE_URL}/auth/logout`, {
       method: 'POST',
       headers: getHeaders(true),
       body: JSON.stringify(requestBody)
     });
-    
+
     const data = await response.json();
-    
+
     if (!response.ok) {
       throw new Error(data.message || 'Logout failed');
     }
-    
+
     return data;
   },
-  
+
   // Update user profile
   updateProfile: async (profileData) => {
     const response = await fetch(`${API_BASE_URL}/profile`, {
@@ -114,23 +115,23 @@ export const authAPI = {
       headers: getHeaders(true),
       body: JSON.stringify(profileData)
     });
-    
+
     const data = await response.json();
-    
+
     if (!response.ok) {
       throw new Error(data.message || 'Failed to update profile');
     }
-    
+
     return data;
   },
-  
+
   // Upload profile image
   uploadProfileImage: async (imageFile) => {
     const formData = new FormData();
     formData.append('image', imageFile);
-    
+
     const token = localStorage.getItem('token');
-    
+
     const response = await fetch(`${API_BASE_URL}/profile/upload-image`, {
       method: 'POST',
       headers: {
@@ -138,13 +139,13 @@ export const authAPI = {
       },
       body: formData
     });
-    
+
     const data = await response.json();
-    
+
     if (!response.ok) {
       throw new Error(data.message || 'Failed to upload image');
     }
-    
+
     return data;
   },
 
@@ -155,13 +156,13 @@ export const authAPI = {
       headers: getHeaders(),
       body: JSON.stringify({ email, password })
     });
-    
+
     const data = await response.json();
-    
+
     if (!response.ok) {
       throw new Error(data.message || 'Login failed');
     }
-    
+
     return data;
   },
 
@@ -172,13 +173,13 @@ export const authAPI = {
       headers: getHeaders(),
       body: JSON.stringify({ email })
     });
-    
+
     const data = await response.json();
-    
+
     if (!response.ok) {
       throw new Error(data.message || 'Failed to request password reset');
     }
-    
+
     return data;
   },
 
@@ -189,13 +190,13 @@ export const authAPI = {
       headers: getHeaders(),
       body: JSON.stringify({ token, newPassword })
     });
-    
+
     const data = await response.json();
-    
+
     if (!response.ok) {
       throw new Error(data.message || 'Failed to reset password');
     }
-    
+
     return data;
   },
 
@@ -205,13 +206,13 @@ export const authAPI = {
       method: 'GET',
       headers: getHeaders()
     });
-    
+
     const data = await response.json();
-    
+
     if (!response.ok) {
       throw new Error(data.message || 'Failed to verify email');
     }
-    
+
     return data;
   }
 };
@@ -224,13 +225,13 @@ export const dashboardAPI = {
       method: 'GET',
       headers: getHeaders(true)
     });
-    
+
     const data = await response.json();
-    
+
     if (!response.ok) {
       throw new Error(data.message || 'Failed to get admin stats');
     }
-    
+
     return data;
   },
 
@@ -294,36 +295,36 @@ export const dashboardAPI = {
     if (!response.ok) throw new Error(data.message || 'Failed to get dashboard');
     return data;
   },
-  
+
   // Get employee dashboard stats
   getEmployeeStats: async () => {
     const response = await fetch(`${API_BASE_URL}/dashboard/employee`, {
       method: 'GET',
       headers: getHeaders(true)
     });
-    
+
     const data = await response.json();
-    
+
     if (!response.ok) {
       throw new Error(data.message || 'Failed to get employee stats');
     }
-    
+
     return data;
   },
-  
+
   // Get customer dashboard stats
   getCustomerStats: async () => {
     const response = await fetch(`${API_BASE_URL}/dashboard/customer`, {
       method: 'GET',
       headers: getHeaders(true)
     });
-    
+
     const data = await response.json();
-    
+
     if (!response.ok) {
       throw new Error(data.message || 'Failed to get customer stats');
     }
-    
+
     return data;
   }
 };
@@ -337,17 +338,17 @@ export const bookingAPI = {
       headers: getHeaders(true),
       body: JSON.stringify(bookingData)
     });
-    
+
     const data = await response.json();
-    
+
     if (!response.ok) {
       const errorMessage = data.message || (data.error && data.error.message) || 'Failed to create booking';
       throw new Error(errorMessage);
     }
-    
+
     return data;
   },
-  
+
   // Get all bookings for current user
   getMyBookings: async (params = {}) => {
     const queryParams = new URLSearchParams(params).toString();
@@ -356,63 +357,63 @@ export const bookingAPI = {
       method: 'GET',
       headers: getHeaders(true)
     });
-      
+
     const data = await response.json();
-      
+
     if (!response.ok) {
       throw new Error(data.message || 'Failed to get bookings');
     }
-      
+
     return data;
   },
-  
+
   // Alias for backward compatibility
   getBookings: async (params = {}) => {
     return bookingAPI.getAllBookings(params);
   },
-  
+
   // Get all bookings (admin and employees) - accepts user role to avoid localStorage inconsistencies
   getAllBookings: async (params = {}) => {
     const userRole = getUserRole();
-      
+
     // Use employee-specific endpoint for employee roles
     const isEmployee = ['AGT', 'ACC', 'HR', 'CC', 'MKT', 'MGT', 'ADM'].includes(userRole);
     const queryParams = new URLSearchParams(params).toString();
-    const baseUrl = isEmployee 
+    const baseUrl = isEmployee
       ? `${API_BASE_URL}/employee/bookings`
       : `${API_BASE_URL}/bookings`;
     const url = queryParams ? `${baseUrl}?${queryParams}` : baseUrl;
-      
+
     const response = await fetch(url, {
       method: 'GET',
       headers: getHeaders(true)
     });
-      
+
     const data = await response.json();
-      
+
     if (!response.ok) {
       throw new Error(data.message || 'Failed to get all bookings');
     }
-      
+
     return data;
   },
-  
+
   // Get booking by ID
   getBookingById: async (id) => {
     const response = await fetch(`${API_BASE_URL}/bookings/${id}`, {
       method: 'GET',
       headers: getHeaders(true)
     });
-    
+
     const data = await response.json();
-    
+
     if (!response.ok) {
       throw new Error(data.message || 'Failed to get booking');
     }
-    
+
     return data;
   },
-  
+
   // Update booking
   updateBooking: async (id, bookingData) => {
     const response = await fetch(`${API_BASE_URL}/bookings/${id}`, {
@@ -420,16 +421,16 @@ export const bookingAPI = {
       headers: getHeaders(true),
       body: JSON.stringify(bookingData)
     });
-    
+
     const data = await response.json();
-    
+
     if (!response.ok) {
       throw new Error(data.message || 'Failed to update booking');
     }
-    
+
     return data;
   },
-  
+
   // Update booking status
   updateBookingStatus: async (id, status) => {
     const response = await fetch(`${API_BASE_URL}/bookings/${id}/status`, {
@@ -437,48 +438,48 @@ export const bookingAPI = {
       headers: getHeaders(true),
       body: JSON.stringify({ status })
     });
-    
+
     const data = await response.json();
-    
+
     if (!response.ok) {
       throw new Error(data.message || 'Failed to update booking status');
     }
-    
+
     return data;
   },
-  
+
   // Cancel booking
   cancelBooking: async (id) => {
     const response = await fetch(`${API_BASE_URL}/bookings/${id}/cancel`, {
       method: 'POST',
       headers: getHeaders(true)
     });
-    
+
     const data = await response.json();
-    
+
     if (!response.ok) {
       throw new Error(data.message || 'Failed to cancel booking');
     }
-    
+
     return data;
   },
-  
+
   // Delete booking
   deleteBooking: async (id) => {
     const response = await fetch(`${API_BASE_URL}/bookings/${id}`, {
       method: 'DELETE',
       headers: getHeaders(true)
     });
-    
+
     const data = await response.json();
-    
+
     if (!response.ok) {
       throw new Error(data.message || 'Failed to delete booking');
     }
-    
+
     return data;
   },
-  
+
   // Assign booking to employee
   assignBooking: async (bookingId, employeeId) => {
     const response = await fetch(`${API_BASE_URL}/bookings/assign`, {
@@ -486,32 +487,32 @@ export const bookingAPI = {
       headers: getHeaders(true),
       body: JSON.stringify({ bookingId, employeeId })
     });
-    
+
     const data = await response.json();
-    
+
     if (!response.ok) {
       throw new Error(data.message || 'Failed to assign booking');
     }
-    
+
     return data;
   },
-  
+
   // Get bookings by status
   getBookingsByStatus: async (status) => {
     const response = await fetch(`${API_BASE_URL}/bookings/status/${status}`, {
       method: 'GET',
       headers: getHeaders(true)
     });
-    
+
     const data = await response.json();
-    
+
     if (!response.ok) {
       throw new Error(data.message || 'Failed to get bookings by status');
     }
-    
+
     return data;
   },
-  
+
   // Search bookings
   searchBookings: async (searchParams) => {
     const queryParams = new URLSearchParams(searchParams).toString();
@@ -519,16 +520,16 @@ export const bookingAPI = {
       method: 'GET',
       headers: getHeaders(true)
     });
-    
+
     const data = await response.json();
-    
+
     if (!response.ok) {
       throw new Error(data.message || 'Failed to search bookings');
     }
-    
+
     return data;
   },
-  
+
   // Get passengers for a specific booking
   getBookingPassengers: async (bookingId) => {
     // Determine user role to use correct endpoint
@@ -542,26 +543,26 @@ export const bookingAPI = {
     } catch (e) {
       console.warn('Could not determine user role for passenger endpoint');
     }
-    
+
     // Use appropriate endpoint based on user role
     const isEmployee = ['AGT', 'ACC', 'HR', 'CC', 'MKT', 'MGT', 'ADM'].includes(userRole);
-    const url = isEmployee 
+    const url = isEmployee
       ? `${API_BASE_URL}/employee/bookings/${bookingId}/passengers`  // Employee/Admin route
       : `${API_BASE_URL}/customer/bookings/${bookingId}/passengers`; // Customer route
-    
+
     console.log(`Fetching passengers for booking ${bookingId} using ${isEmployee ? 'employee' : 'customer'} endpoint: ${url}`);
-    
+
     const response = await fetch(url, {
       method: 'GET',
       headers: getHeaders(true)
     });
-    
+
     const data = await response.json();
-    
+
     if (!response.ok) {
       throw new Error(data.message || 'Failed to get booking passengers');
     }
-    
+
     console.log('Passenger data received:', data);
     return data;
   }
@@ -584,12 +585,12 @@ export const paymentAPI = {
         py_narration: paymentData.py_narration
       })
     });
-    
+
     const data = await response.json();
     if (!response.ok) throw new Error(data.message || 'Failed to create payment');
     return data;
   },
-  
+
   // Get all payments
   getAllPayments: async (params = {}) => {
     const queryParams = new URLSearchParams(params).toString();
@@ -599,7 +600,7 @@ export const paymentAPI = {
     if (!response.ok) throw new Error(data.message || 'Failed to get payments');
     return data;
   },
-  
+
   // Get all payments for current user (kept for backward compatibility if used elsewhere)
   getMyPayments: async () => {
     const response = await fetch(`${API_BASE_URL}/payments/my-payments`, {
@@ -610,23 +611,23 @@ export const paymentAPI = {
     if (!response.ok) throw new Error(data.message || 'Failed to get payments');
     return data;
   },
-  
+
   // Get payments by booking ID
   getPaymentsByBookingId: async (bookingId) => {
     const response = await fetch(`${API_BASE_URL}/payments/booking/${bookingId}`, {
       method: 'GET',
       headers: getHeaders(true)
     });
-      
+
     const data = await response.json();
-      
+
     if (!response.ok) {
       throw new Error(data.message || 'Failed to get payments for booking');
     }
-      
+
     return data;
   },
-  
+
   // Get all payments (admin and employees)
   getAllPayments: async (params = {}) => {
     const token = localStorage.getItem('token');
@@ -640,79 +641,79 @@ export const paymentAPI = {
         console.warn('Could not decode token to determine role');
       }
     }
-      
+
     // Use employee-specific endpoint for employee roles
     const isEmployee = ['AGT', 'ACC', 'HR', 'CC', 'MKT', 'MGT', 'ADM'].includes(userRole);
     const queryParams = new URLSearchParams(params).toString();
-    const baseUrl = isEmployee 
+    const baseUrl = isEmployee
       ? `${API_BASE_URL}/employee/payments`
       : `${API_BASE_URL}/payments`;
-    const url = queryParams 
+    const url = queryParams
       ? `${baseUrl}?${queryParams}`
       : baseUrl;
-      
+
     const response = await fetch(url, {
       method: 'GET',
       headers: getHeaders(true)
     });
-      
+
     const data = await response.json();
-      
+
     if (!response.ok) {
       throw new Error(data.message || 'Failed to get all payments');
     }
-      
+
     return data;
   },
-  
+
   // Get payment by ID
   getPaymentById: async (id) => {
     const response = await fetch(`${API_BASE_URL}/payments/${id}`, {
       method: 'GET',
       headers: getHeaders(true)
     });
-    
+
     const data = await response.json();
-    
+
     if (!response.ok) {
       throw new Error(data.message || 'Failed to get payment');
     }
-    
+
     return data;
   },
-  
+
   // Get customer payments
   getCustomerPayments: async (customerId) => {
     const response = await fetch(`${API_BASE_URL}/payments/customer/${customerId}`, {
       method: 'GET',
       headers: getHeaders(true)
     });
-    
+
     const data = await response.json();
-    
+
     if (!response.ok) {
       throw new Error(data.message || 'Failed to get customer payments');
     }
-    
+
     return data;
   },
-  
+
   // Get payment allocations
   getPaymentAllocations: async (paymentId) => {
     const response = await fetch(`${API_BASE_URL}/payments/${paymentId}/allocations`, {
       method: 'GET',
       headers: getHeaders(true)
     });
-    
+
     const data = await response.json();
-    
+
     if (!response.ok) {
       throw new Error(data.message || 'Failed to get payment allocations');
     }
-    
+
     return data;
   },
-  
+
   // Allocate payment to PNRs
   allocatePayment: async (paymentId, allocationData) => {
     const response = await fetch(`${API_BASE_URL}/payments/${paymentId}/allocate`, {
@@ -720,48 +721,48 @@ export const paymentAPI = {
       headers: getHeaders(true),
       body: JSON.stringify(allocationData)
     });
-    
+
     const data = await response.json();
-    
+
     if (!response.ok) {
       throw new Error(data.message || 'Failed to allocate payment');
     }
-    
+
     return data;
   },
-  
+
   // Get PNR payment history
   getPNRPayments: async (pnrNumber) => {
     const response = await fetch(`${API_BASE_URL}/payments/pnr/${pnrNumber}`, {
       method: 'GET',
       headers: getHeaders(true)
     });
-    
+
     const data = await response.json();
-    
+
     if (!response.ok) {
       throw new Error(data.message || 'Failed to get PNR payment history');
     }
-    
+
     return data;
   },
-  
+
   // Get customer pending PNRs
   getCustomerPendingPNRs: async (customerId) => {
     const response = await fetch(`${API_BASE_URL}/payments/customer/${customerId}/pending-pnrs`, {
       method: 'GET',
       headers: getHeaders(true)
     });
-    
+
     const data = await response.json();
-    
+
     if (!response.ok) {
       throw new Error(data.message || 'Failed to get customer pending PNRs');
     }
-    
+
     return data;
   },
-  
+
   // Get customer advance balance
   getCustomerAdvance: async (customerId, fyear = null) => {
     const params = fyear ? `?fyear=${fyear}` : '';
@@ -769,16 +770,16 @@ export const paymentAPI = {
       method: 'GET',
       headers: getHeaders(true)
     });
-    
+
     const data = await response.json();
-    
+
     if (!response.ok) {
       throw new Error(data.message || 'Failed to get customer advance');
     }
-    
+
     return data;
   },
-  
+
   // Update payment
   updatePayment: async (id, paymentData) => {
     const response = await fetch(`${API_BASE_URL}/payments/${id}`, {
@@ -786,16 +787,16 @@ export const paymentAPI = {
       headers: getHeaders(true),
       body: JSON.stringify(paymentData)
     });
-    
+
     const data = await response.json();
-    
+
     if (!response.ok) {
       throw new Error(data.message || 'Failed to update payment');
     }
-    
+
     return data;
   },
-  
+
   // Process refund (updated to match new backend API)
   refundPayment: async (paymentId, refundData) => {
     const response = await fetch(`${API_BASE_URL}/payments/${paymentId}/refund`, {
@@ -807,29 +808,29 @@ export const paymentAPI = {
         remarks: refundData.remarks || null
       })
     });
-    
+
     const data = await response.json();
-    
+
     if (!response.ok) {
       throw new Error(data.message || 'Failed to process refund');
     }
-    
+
     return data;
   },
-  
+
   // Delete payment
   deletePayment: async (id) => {
     const response = await fetch(`${API_BASE_URL}/payments/${id}`, {
       method: 'DELETE',
       headers: getHeaders(true)
     });
-    
+
     const data = await response.json();
-    
+
     if (!response.ok) {
       throw new Error(data.message || 'Failed to delete payment');
     }
-    
+
     return data;
   },
 
@@ -852,24 +853,24 @@ export const paymentAPI = {
         console.warn('Could not decode token to determine role');
       }
     }
-    
+
     // Use employee-specific endpoint for non-customer roles
     const isEmployee = ['AGT', 'ACC', 'HR', 'CC', 'MKT', 'MGT', 'ADM'].includes(userRole);
-    const url = isEmployee 
+    const url = isEmployee
       ? `${API_BASE_URL}/employee/customers/search?q=${encodeURIComponent(searchTerm)}`
       : `${API_BASE_URL}/customer/search?q=${encodeURIComponent(searchTerm)}`;
-    
+
     const response = await fetch(url, {
       method: 'GET',
       headers: getHeaders(true)
     });
-    
+
     const data = await response.json();
-    
+
     if (!response.ok) {
       throw new Error(data.message || 'Failed to search customers');
     }
-    
+
     return data;
   },
 
@@ -886,24 +887,24 @@ export const paymentAPI = {
         console.warn('Could not decode token to determine role');
       }
     }
-    
+
     // Use employee-specific endpoint for non-customer roles
     const isEmployee = ['AGT', 'ACC', 'HR', 'CC', 'MKT', 'MGT', 'ADM'].includes(userRole);
-    const url = isEmployee 
+    const url = isEmployee
       ? `${API_BASE_URL}/employee/customers/${customerId}`
       : `${API_BASE_URL}/customer/${customerId}`;
-    
+
     const response = await fetch(url, {
       method: 'GET',
       headers: getHeaders(true)
     });
-    
+
     const data = await response.json();
-    
+
     if (!response.ok) {
       throw new Error(data.message || 'Failed to get customer by ID');
     }
-    
+
     return data;
   }
 };
@@ -913,95 +914,95 @@ export const reportAPI = {
   // Get booking report
   getBookingReport: async (filters = {}) => {
     const queryParams = new URLSearchParams(filters).toString();
-    const url = queryParams 
+    const url = queryParams
       ? `${API_BASE_URL}/reports/bookings?${queryParams}`
       : `${API_BASE_URL}/reports/bookings`;
-      
+
     const response = await fetch(url, {
       method: 'GET',
       headers: getHeaders(true)
     });
-    
+
     const data = await response.json();
-    
+
     if (!response.ok) {
       throw new Error(data.message || 'Failed to get booking report');
     }
-    
+
     return data;
   },
-  
+
   // Get employee performance report
   getEmployeePerformanceReport: async () => {
     const response = await fetch(`${API_BASE_URL}/reports/employee-performance`, {
       method: 'GET',
       headers: getHeaders(true)
     });
-    
+
     const data = await response.json();
-    
+
     if (!response.ok) {
       throw new Error(data.message || 'Failed to get employee performance report');
     }
-    
+
     return data;
   },
-  
+
   // Get financial report
   getFinancialReport: async (filters = {}) => {
     const queryParams = new URLSearchParams(filters).toString();
-    const url = queryParams 
+    const url = queryParams
       ? `${API_BASE_URL}/reports/financial?${queryParams}`
       : `${API_BASE_URL}/reports/financial`;
-      
+
     const response = await fetch(url, {
       method: 'GET',
       headers: getHeaders(true)
     });
-    
+
     const data = await response.json();
-    
+
     if (!response.ok) {
       throw new Error(data.message || 'Failed to get financial report');
     }
-    
+
     return data;
   },
-  
+
   // Get corporate customer report
   getCorporateCustomerReport: async () => {
     const response = await fetch(`${API_BASE_URL}/reports/corporate-customers`, {
       method: 'GET',
       headers: getHeaders(true)
     });
-    
+
     const data = await response.json();
-    
+
     if (!response.ok) {
       throw new Error(data.message || 'Failed to get corporate customer report');
     }
-    
+
     return data;
   },
-  
+
   // Get customer analytics report
   getCustomerAnalyticsReport: async (filters = {}) => {
     const queryParams = new URLSearchParams(filters).toString();
-    const url = queryParams 
+    const url = queryParams
       ? `${API_BASE_URL}/reports/customer-analytics?${queryParams}`
       : `${API_BASE_URL}/reports/customer-analytics`;
-      
+
     const response = await fetch(url, {
       method: 'GET',
       headers: getHeaders(true)
     });
-    
+
     const data = await response.json();
-    
+
     if (!response.ok) {
       throw new Error(data.message || 'Failed to get customer analytics report');
     }
-    
+
     return data;
   },
 
@@ -1056,48 +1057,48 @@ export const employeeAPI = {
   getAllEmployees: async (params = {}) => {
     const queryParams = new URLSearchParams(params).toString();
     const url = queryParams ? `${API_BASE_URL}/employees?${queryParams}` : `${API_BASE_URL}/employees`;
-    
+
     const response = await fetch(url, {
       method: 'GET',
       headers: getHeaders(true)
     });
-    
+
     const data = await response.json();
-    
+
     if (!response.ok) {
       throw new Error(data.message || 'Failed to get employees');
     }
-    
+
     return data;
   },
-  
+
   // Get employee by ID (admin only)
   getEmployeeById: async (id) => {
     const response = await fetch(`${API_BASE_URL}/employees/${id}`, {
       method: 'GET',
       headers: getHeaders(true)
     });
-    
+
     const data = await response.json();
-    
+
     if (!response.ok) {
       throw new Error(data.message || 'Failed to get employee');
     }
-    
+
     return data;
   },
-  
+
   // Create employee (admin only) - handles both regular data and file uploads
   createEmployee: async (employeeData) => {
     const formData = new FormData();
-    
+
     // Append all fields to FormData for multipart upload
     Object.keys(employeeData).forEach(key => {
       if (employeeData[key] !== null && employeeData[key] !== undefined) {
         formData.append(key, employeeData[key]);
       }
     });
-    
+
     const response = await fetch(`${API_BASE_URL}/employees`, {
       method: 'POST',
       headers: {
@@ -1106,27 +1107,27 @@ export const employeeAPI = {
       },
       body: formData
     });
-    
+
     const data = await response.json();
-    
+
     if (!response.ok) {
       throw new Error(data.message || 'Failed to create employee');
     }
-    
+
     return data;
   },
-  
+
   // Update employee (admin only) - handles both regular data and file uploads
   updateEmployee: async (id, employeeData) => {
     const formData = new FormData();
-    
+
     // Append all fields to FormData for multipart upload
     Object.keys(employeeData).forEach(key => {
       if (employeeData[key] !== null && employeeData[key] !== undefined) {
         formData.append(key, employeeData[key]);
       }
     });
-    
+
     const response = await fetch(`${API_BASE_URL}/employees/${id}`, {
       method: 'PUT',
       headers: {
@@ -1135,29 +1136,29 @@ export const employeeAPI = {
       },
       body: formData
     });
-    
+
     const data = await response.json();
-    
+
     if (!response.ok) {
       throw new Error(data.message || 'Failed to update employee');
     }
-    
+
     return data;
   },
-  
+
   // Delete employee (admin only)
   deleteEmployee: async (id) => {
     const response = await fetch(`${API_BASE_URL}/employees/${id}`, {
       method: 'DELETE',
       headers: getHeaders(true)
     });
-    
+
     const data = await response.json();
-    
+
     if (!response.ok) {
       throw new Error(data.message || 'Failed to delete employee');
     }
-    
+
     return data;
   }
 };
@@ -1171,16 +1172,16 @@ export const billingAPI = {
       headers: getHeaders(true),
       body: JSON.stringify(billData)
     });
-    
+
     const data = await response.json();
-    
+
     if (!response.ok) {
       throw new Error(data.message || 'Failed to create bill');
     }
-    
+
     return data;
   },
-  
+
   // Get all bills for current user
   getMyBills: async (params = {}) => {
     const token = localStorage.getItem('token');
@@ -1194,65 +1195,65 @@ export const billingAPI = {
         console.warn('Could not decode token to determine role');
       }
     }
-      
+
     // Use employee-specific endpoint for employee roles
     const isEmployee = ['AGT', 'ACC', 'HR', 'CC', 'MKT', 'MGT', 'ADM'].includes(userRole);
-    const baseUrl = isEmployee 
+    const baseUrl = isEmployee
       ? `${API_BASE_URL}/employee/billing`
       : `${API_BASE_URL}/billing/my-bills`;
-    
+
     const queryParams = new URLSearchParams(params).toString();
     const url = queryParams ? `${baseUrl}?${queryParams}` : baseUrl;
-      
+
     const response = await fetch(url, {
       method: 'GET',
       headers: getHeaders(true)
     });
-    
+
     const data = await response.json();
-    
+
     if (!response.ok) {
       throw new Error(data.message || 'Failed to get bills');
     }
-    
+
     return data;
   },
-  
+
   // Get all bills (admin and employees)
   getAllBills: async (params = {}) => {
     const userRole = getUserRole();
-    
+
     // Use employee-specific endpoint for employee roles
     const isEmployee = ['AGT', 'ACC', 'HR', 'CC', 'MKT', 'MGT', 'ADM'].includes(userRole);
     const queryParams = new URLSearchParams(params).toString();
-    const baseUrl = isEmployee 
+    const baseUrl = isEmployee
       ? `${API_BASE_URL}/employee/billing`
       : `${API_BASE_URL}/billing`;
     const url = queryParams ? `${baseUrl}?${queryParams}` : baseUrl;
-      
+
     const response = await fetch(url, {
       method: 'GET',
       headers: getHeaders(true)
     });
-    
+
     const data = await response.json();
-    
+
     if (!response.ok) {
       throw new Error(data.message || 'Failed to get all bills');
     }
-    
+
     return data;
   },
-  
+
   // Get bill by ID
   getBillById: async (id) => {
     const response = await fetch(`${API_BASE_URL}/billing/${id}`, {
       method: 'GET',
       headers: getHeaders(true)
     });
-    
+
     const data = await response.json();
-    
+
     if (!response.ok) {
       throw new Error(data.message || 'Failed to get bill');
     }
@@ -1284,7 +1285,7 @@ export const billingAPI = {
     const userRole = getUserRole();
     const isEmployee = ['AGT', 'ACC', 'HR', 'CC', 'MKT', 'MGT', 'ADM'].includes(userRole);
     const basePath = isEmployee ? `${API_BASE_URL}/employee/billing` : `${API_BASE_URL}/billing`;
-    
+
     const response = await fetch(`${basePath}/download/${encodeURIComponent(billId)}`, {
       method: 'GET',
       headers: getHeaders(true)
@@ -1296,15 +1297,15 @@ export const billingAPI = {
     }
 
     const blob = await response.blob();
-    const url  = URL.createObjectURL(blob);
-    const a    = document.createElement('a');
-    a.href     = url;
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
     a.download = `${billNumber || `BILL-${billId}`}.pdf`;
     document.body.appendChild(a);
     a.click();
     setTimeout(() => { URL.revokeObjectURL(url); document.body.removeChild(a); }, 300);
   },
-  
+
   // Update bill
   updateBill: async (id, billData) => {
     const response = await fetch(`${API_BASE_URL}/billing/${id}`, {
@@ -1312,48 +1313,48 @@ export const billingAPI = {
       headers: getHeaders(true),
       body: JSON.stringify(billData)
     });
-    
+
     const data = await response.json();
-    
+
     if (!response.ok) {
       throw new Error(data.message || 'Failed to update bill');
     }
-    
+
     return data;
   },
-  
+
   // Finalize bill
   finalizeBill: async (id) => {
     const response = await fetch(`${API_BASE_URL}/billing/${id}/finalize`, {
       method: 'PUT',
       headers: getHeaders(true)
     });
-    
+
     const data = await response.json();
-    
+
     if (!response.ok) {
       throw new Error(data.message || 'Failed to finalize bill');
     }
-    
+
     return data;
   },
-  
+
   // Delete bill
   deleteBill: async (id) => {
     const response = await fetch(`${API_BASE_URL}/billing/${id}`, {
       method: 'DELETE',
       headers: getHeaders(true)
     });
-    
+
     const data = await response.json();
-    
+
     if (!response.ok) {
       throw new Error(data.message || 'Failed to delete bill');
     }
-    
+
     return data;
   },
-  
+
   // Cancel bill
   cancelBill: async (id, cancellationData) => {
     const userRole = getUserRole();
@@ -1364,13 +1365,13 @@ export const billingAPI = {
       headers: getHeaders(true),
       body: JSON.stringify(cancellationData)
     });
-    
+
     const data = await response.json();
-    
+
     if (!response.ok) {
       throw new Error(data.message || 'Failed to cancel bill');
     }
-    
+
     return data;
   },
 
@@ -1387,54 +1388,54 @@ export const billingAPI = {
     }
     return data;
   },
-  
+
   // Export bill as PDF
   exportBill: async (id) => {
     const response = await fetch(`${API_BASE_URL}/billing/${id}/export`, {
       method: 'GET',
       headers: getHeaders(true)
     });
-    
+
     if (!response.ok) {
       const errorData = await response.json();
       throw new Error(errorData.message || 'Failed to export bill');
     }
-    
+
     return response.blob();
   },
-  
+
   // Get customer ledger
   getCustomerLedger: async (customerId) => {
     const response = await fetch(`${API_BASE_URL}/billing/customer/${customerId}/ledger`, {
       method: 'GET',
       headers: getHeaders(true)
     });
-    
+
     const data = await response.json();
-    
+
     if (!response.ok) {
       throw new Error(data.message || 'Failed to get customer ledger');
     }
-    
+
     return data;
   },
-  
+
   // Get customer balance
   getCustomerBalance: async (customerId) => {
     const response = await fetch(`${API_BASE_URL}/billing/customer/${customerId}/balance`, {
       method: 'GET',
       headers: getHeaders(true)
     });
-    
+
     const data = await response.json();
-    
+
     if (!response.ok) {
       throw new Error(data.message || 'Failed to get customer balance');
     }
-    
+
     return data;
   },
-  
+
   // Search bills
   searchBills: async (searchParams) => {
     const queryParams = new URLSearchParams(searchParams).toString();
@@ -1442,37 +1443,37 @@ export const billingAPI = {
       method: 'GET',
       headers: getHeaders(true)
     });
-    
+
     const data = await response.json();
-    
+
     if (!response.ok) {
       throw new Error(data.message || 'Failed to search bills');
     }
-    
+
     return data;
   },
-  
+
   // Get bill by booking ID
   getBillByBookingId: async (bookingId) => {
     const userRole = getUserRole();
-    
+
     // Use employee-specific endpoint for employee roles
     const isEmployee = ['AGT', 'ACC', 'HR', 'CC', 'MKT', 'MGT', 'ADM'].includes(userRole);
-    const url = isEmployee 
+    const url = isEmployee
       ? `${API_BASE_URL}/employee/billing/booking/${bookingId}`
       : `${API_BASE_URL}/billing/booking/${bookingId}`;
-    
+
     const response = await fetch(url, {
       method: 'GET',
       headers: getHeaders(true)
     });
-    
+
     const data = await response.json();
-    
+
     if (!response.ok) {
       throw new Error(data.message || 'Failed to get bill by booking ID');
     }
-    
+
     return data;
   }
 };
@@ -1487,7 +1488,7 @@ const getUserRole = () => {
       if (user.us_usertype === 'admin' || user.usertype === 'admin') return 'ADM';
       return user.us_roid || user.role || 'CUS';
     }
-    
+
     // Fallback: try to decode token (though it may not have role info)
     const token = localStorage.getItem('token');
     if (token) {
@@ -1505,44 +1506,44 @@ export const customerAPI = {
   // Search customers (accessible to admin and employees)
   searchCustomers: async (searchTerm) => {
     const userRole = getUserRole();
-    
+
     // Use employee-specific endpoint for non-customer roles
     const isEmployee = ['AGT', 'ACC', 'HR', 'CC', 'MKT', 'MGT', 'ADM'].includes(userRole);
-    const url = isEmployee 
+    const url = isEmployee
       ? `${API_BASE_URL}/employee/customers/search?q=${encodeURIComponent(searchTerm)}`
       : `${API_BASE_URL}/customer/search?q=${encodeURIComponent(searchTerm)}`;
-    
+
     const response = await fetch(url, {
       method: 'GET',
       headers: getHeaders(true)
     });
-    
+
     const data = await response.json();
-    
+
     if (!response.ok) {
       throw new Error(data.message || 'Failed to search customers');
     }
-    
+
     return data;
   },
 
   // MANDATORY: Find customer by phone number (for booking auto-fetch)
   findByPhone: async (phoneNumber) => {
     const userRole = getUserRole();
-    
+
     // Use employee-specific endpoint for non-customer roles
     const isEmployee = ['AGT', 'ACC', 'HR', 'CC', 'MKT', 'MGT', 'ADM'].includes(userRole);
-    const url = isEmployee 
+    const url = isEmployee
       ? `${API_BASE_URL}/employee/customers/phone/${encodeURIComponent(phoneNumber)}`
       : `${API_BASE_URL}/customer/phone/${encodeURIComponent(phoneNumber)}`;
-    
+
     const response = await fetch(url, {
       method: 'GET',
       headers: getHeaders(true)
     });
-    
+
     const data = await response.json();
-    
+
     if (!response.ok) {
       // Return not found instead of throwing error for graceful handling
       if (response.status === 404) {
@@ -1550,31 +1551,31 @@ export const customerAPI = {
       }
       throw new Error(data.message || 'Failed to lookup customer by phone');
     }
-    
+
     return data;
   },
 
   // Get customer by ID
   getCustomerById: async (customerId) => {
     const userRole = getUserRole();
-    
+
     // Use employee-specific endpoint for non-customer roles
     const isEmployee = ['AGT', 'ACC', 'HR', 'CC', 'MKT', 'MGT', 'ADM'].includes(userRole);
-    const url = isEmployee 
+    const url = isEmployee
       ? `${API_BASE_URL}/employee/customers/${customerId}`
       : `${API_BASE_URL}/customer/${customerId}`;
-    
+
     const response = await fetch(url, {
       method: 'GET',
       headers: getHeaders(true)
     });
-    
+
     const data = await response.json();
-    
+
     if (!response.ok) {
       throw new Error(data.message || 'Failed to get customer by ID');
     }
-    
+
     return data;
   },
 
@@ -1582,18 +1583,18 @@ export const customerAPI = {
   getAllCustomers: async (params = {}) => {
     const queryParams = new URLSearchParams(params).toString();
     const url = queryParams ? `${API_BASE_URL}/customers?${queryParams}` : `${API_BASE_URL}/customers`;
-    
+
     const response = await fetch(url, {
       method: 'GET',
       headers: getHeaders(true)
     });
-    
+
     const data = await response.json();
-    
+
     if (!response.ok) {
       throw new Error(data.message || 'Failed to get customers');
     }
-    
+
     return data;
   }
 };
@@ -1675,9 +1676,9 @@ export const masterPassengerAPI = {
         method: 'GET',
         headers: getHeaders(true)
       });
-      
+
       const data = await response.json();
-      
+
       if (!response.ok) {
         // Handle different error statuses
         if (response.status === 401) {
@@ -1694,7 +1695,7 @@ export const masterPassengerAPI = {
           throw new Error(data.message || `Failed to get master passengers (${response.status}). Please try again.`);
         }
       }
-      
+
       return data;
     } catch (error) {
       // Handle network errors or other exceptions
@@ -1704,7 +1705,7 @@ export const masterPassengerAPI = {
       throw error;
     }
   },
-  
+
   // Create a new master passenger
   createMasterPassenger: async (passengerData) => {
     try {
@@ -1713,9 +1714,9 @@ export const masterPassengerAPI = {
         headers: getHeaders(true),
         body: JSON.stringify(passengerData)
       });
-      
+
       const data = await response.json();
-      
+
       if (!response.ok) {
         if (response.status === 401) {
           throw new Error(data.message || 'Authentication required. Please log in again.');
@@ -1727,7 +1728,7 @@ export const masterPassengerAPI = {
           throw new Error(data.message || `Failed to create master passenger (${response.status}). Please try again.`);
         }
       }
-      
+
       return data;
     } catch (error) {
       if (error.name === 'TypeError' && error.message.includes('fetch')) {
@@ -1736,7 +1737,7 @@ export const masterPassengerAPI = {
       throw error;
     }
   },
-  
+
   // Get master passenger by ID
   getMasterPassengerById: async (passengerId) => {
     try {
@@ -1744,9 +1745,9 @@ export const masterPassengerAPI = {
         method: 'GET',
         headers: getHeaders(true)
       });
-      
+
       const data = await response.json();
-      
+
       if (!response.ok) {
         if (response.status === 401) {
           throw new Error(data.message || 'Authentication required. Please log in again.');
@@ -1758,7 +1759,7 @@ export const masterPassengerAPI = {
           throw new Error(data.message || `Failed to get master passenger (${response.status}). Please try again.`);
         }
       }
-      
+
       return data;
     } catch (error) {
       if (error.name === 'TypeError' && error.message.includes('fetch')) {
@@ -1767,7 +1768,7 @@ export const masterPassengerAPI = {
       throw error;
     }
   },
-  
+
   // Update master passenger
   updateMasterPassenger: async (passengerId, passengerData) => {
     try {
@@ -1776,9 +1777,9 @@ export const masterPassengerAPI = {
         headers: getHeaders(true),
         body: JSON.stringify(passengerData)
       });
-      
+
       const data = await response.json();
-      
+
       if (!response.ok) {
         if (response.status === 401) {
           throw new Error(data.message || 'Authentication required. Please log in again.');
@@ -1792,7 +1793,7 @@ export const masterPassengerAPI = {
           throw new Error(data.message || `Failed to update master passenger (${response.status}). Please try again.`);
         }
       }
-      
+
       return data;
     } catch (error) {
       if (error.name === 'TypeError' && error.message.includes('fetch')) {
@@ -1801,7 +1802,7 @@ export const masterPassengerAPI = {
       throw error;
     }
   },
-  
+
   // Delete (deactivate) master passenger
   deleteMasterPassenger: async (passengerId) => {
     try {
@@ -1809,9 +1810,9 @@ export const masterPassengerAPI = {
         method: 'DELETE',
         headers: getHeaders(true)
       });
-      
+
       const data = await response.json();
-      
+
       if (!response.ok) {
         if (response.status === 401) {
           throw new Error(data.message || 'Authentication required. Please log in again.');
@@ -1823,7 +1824,7 @@ export const masterPassengerAPI = {
           throw new Error(data.message || `Failed to delete master passenger (${response.status}). Please try again.`);
         }
       }
-      
+
       return data;
     } catch (error) {
       if (error.name === 'TypeError' && error.message.includes('fetch')) {
@@ -1832,7 +1833,7 @@ export const masterPassengerAPI = {
       throw error;
     }
   },
-  
+
   // Functions for mlXmasterlist table
   getMasterPassengersML: async () => {
     try {
@@ -1840,9 +1841,9 @@ export const masterPassengerAPI = {
         method: 'GET',
         headers: getHeaders(true)
       });
-      
+
       const data = await response.json();
-      
+
       if (!response.ok) {
         if (response.status === 401) {
           throw new Error(data.message || 'Authentication required. Please log in again.');
@@ -1854,7 +1855,7 @@ export const masterPassengerAPI = {
           throw new Error(data.message || `Failed to get master passengers (${response.status}). Please try again.`);
         }
       }
-      
+
       return data;
     } catch (error) {
       if (error.name === 'TypeError' && error.message.includes('fetch')) {
@@ -1863,7 +1864,7 @@ export const masterPassengerAPI = {
       throw error;
     }
   },
-  
+
   createMasterPassengerML: async (passengerData) => {
     try {
       const response = await fetch(`${API_BASE_URL}/customer/master-list`, {
@@ -1871,9 +1872,9 @@ export const masterPassengerAPI = {
         headers: getHeaders(true),
         body: JSON.stringify(passengerData)
       });
-      
+
       const data = await response.json();
-      
+
       if (!response.ok) {
         if (response.status === 401) {
           throw new Error(data.message || 'Authentication required. Please log in again.');
@@ -1885,7 +1886,7 @@ export const masterPassengerAPI = {
           throw new Error(data.message || `Failed to create master passenger (${response.status}). Please try again.`);
         }
       }
-      
+
       return data;
     } catch (error) {
       if (error.name === 'TypeError' && error.message.includes('fetch')) {
@@ -1894,16 +1895,16 @@ export const masterPassengerAPI = {
       throw error;
     }
   },
-  
+
   getMasterPassengerByIdML: async (passengerId) => {
     try {
       const response = await fetch(`${API_BASE_URL}/customer/master-list/${passengerId}`, {
         method: 'GET',
         headers: getHeaders(true)
       });
-      
+
       const data = await response.json();
-      
+
       if (!response.ok) {
         if (response.status === 401) {
           throw new Error(data.message || 'Authentication required. Please log in again.');
@@ -1915,7 +1916,7 @@ export const masterPassengerAPI = {
           throw new Error(data.message || `Failed to get master passenger (${response.status}). Please try again.`);
         }
       }
-      
+
       return data;
     } catch (error) {
       if (error.name === 'TypeError' && error.message.includes('fetch')) {
@@ -1924,7 +1925,7 @@ export const masterPassengerAPI = {
       throw error;
     }
   },
-  
+
   updateMasterPassengerML: async (passengerId, passengerData) => {
     try {
       const response = await fetch(`${API_BASE_URL}/customer/master-list/${passengerId}`, {
@@ -1932,9 +1933,9 @@ export const masterPassengerAPI = {
         headers: getHeaders(true),
         body: JSON.stringify(passengerData)
       });
-      
+
       const data = await response.json();
-      
+
       if (!response.ok) {
         if (response.status === 401) {
           throw new Error(data.message || 'Authentication required. Please log in again.');
@@ -1948,7 +1949,7 @@ export const masterPassengerAPI = {
           throw new Error(data.message || `Failed to update master passenger (${response.status}). Please try again.`);
         }
       }
-      
+
       return data;
     } catch (error) {
       if (error.name === 'TypeError' && error.message.includes('fetch')) {
@@ -1957,16 +1958,16 @@ export const masterPassengerAPI = {
       throw error;
     }
   },
-  
+
   deleteMasterPassengerML: async (passengerId) => {
     try {
       const response = await fetch(`${API_BASE_URL}/customer/master-list/${passengerId}`, {
         method: 'DELETE',
         headers: getHeaders(true)
       });
-      
+
       const data = await response.json();
-      
+
       if (!response.ok) {
         if (response.status === 401) {
           throw new Error(data.message || 'Authentication required. Please log in again.');
@@ -1978,7 +1979,7 @@ export const masterPassengerAPI = {
           throw new Error(data.message || `Failed to delete master passenger (${response.status}). Please try again.`);
         }
       }
-      
+
       return data;
     } catch (error) {
       if (error.name === 'TypeError' && error.message.includes('fetch')) {
@@ -2000,7 +2001,7 @@ export const auditAPI = {
     if (!response.ok) throw new Error(data.message || 'Failed to get audit logs');
     return data;
   },
-  
+
   // Get full chronological history for a specific record (drilldown)
   getRecordHistory: async (module, recordId) => {
     const url = `${API_BASE_URL}/audit/record/${encodeURIComponent(module)}/${encodeURIComponent(recordId)}`;
@@ -2032,7 +2033,7 @@ export const auditAPI = {
     if (!response.ok) throw new Error(data.message || 'Failed to get entity audit logs');
     return data;
   },
-  
+
   // Get single audit log
   getAuditLogById: async (id) => {
     const response = await fetch(`${API_BASE_URL}/audit/logs/${id}`, {
