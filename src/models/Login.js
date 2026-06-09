@@ -1,6 +1,7 @@
 const { DataTypes } = require('sequelize');
-const { sequelize, BaseModel, auditHooks } = require('./baseModel');
+const { sequelize } = require('../../config/db');
 const User = require('./User');
+
 
 const Login = sequelize.define('lgLogin', {
   lg_usid: {
@@ -75,18 +76,39 @@ const Login = sequelize.define('lgLogin', {
     allowNull: true,
     comment: 'Email Verification Token Expiry'
   },
-  // Audit fields
-  ...BaseModel
+  // Audit fields (only the columns that exist in lgLogin table)
+  edtm: {
+    type: DataTypes.DATE,
+    defaultValue: DataTypes.NOW,
+    allowNull: true,
+    comment: 'Entered Date Time'
+  },
+  eby: {
+    type: DataTypes.STRING(15),
+    allowNull: true,
+    comment: 'Entered By'
+  },
+  mdtm: {
+    type: DataTypes.DATE,
+    defaultValue: DataTypes.NOW,
+    allowNull: true,
+    comment: 'Modified Date Time'
+  },
+  mby: {
+    type: DataTypes.STRING(15),
+    allowNull: true,
+    comment: 'Modified By'
+  }
 }, {
   tableName: 'lgLogin',
   timestamps: false,
-  ...auditHooks,
   indexes: [
     {
       unique: true,
       fields: ['lg_email']
     }
   ]
+
 });
 
 // Define associations

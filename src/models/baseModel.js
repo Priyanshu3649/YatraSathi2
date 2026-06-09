@@ -1,41 +1,31 @@
 const { DataTypes } = require('sequelize');
 const { sequelizeTVL: sequelize } = require('../../config/db');
 
-// Base model with audit fields
+// Base model with audit fields — present in ALL tables (eby, edtm, mby, mdtm only)
+// NOTE: cby/cdtm are NOT included here because only emXemployee has those columns.
+//       Models that need cby/cdtm must declare them explicitly (e.g. EmployeeTVL.js).
 const BaseModel = {
-  // Audit fields that should be included in all models
   edtm: {
     type: DataTypes.DATE,
     defaultValue: DataTypes.NOW,
-    allowNull: false,
+    allowNull: true,
     comment: 'Entered Date Time'
   },
   eby: {
     type: DataTypes.STRING(15),
-    allowNull: false,
+    allowNull: true,
     comment: 'Entered By'
   },
   mdtm: {
     type: DataTypes.DATE,
     defaultValue: DataTypes.NOW,
-    allowNull: false,
-    onUpdate: DataTypes.NOW,
+    allowNull: true,
     comment: 'Modified Date Time'
   },
   mby: {
     type: DataTypes.STRING(15),
     allowNull: true,
     comment: 'Modified By'
-  },
-  cby: {
-    type: DataTypes.STRING(15),
-    allowNull: true,
-    comment: 'Closed By'
-  },
-  cdtm: {
-    type: DataTypes.DATE,
-    allowNull: true,
-    comment: 'Closed Date Time'
   }
 };
 
@@ -62,14 +52,6 @@ const auditHooks = {
       if (options && options.userId) {
         record.mby  = options.userId;
         record.mdtm = new Date();
-        // If status changed to a closed value, set closed-by/on
-        if (record.changed && record.changed('eby') === false) {
-          // check if any status-like field changed to a terminal state
-        }
-      }
-      // Detect close: if cby is being set, stamp cdtm
-      if (record.cby && !record.cdtm) {
-        record.cdtm = new Date();
       }
     }
   }
