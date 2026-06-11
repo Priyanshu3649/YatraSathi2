@@ -11,6 +11,14 @@ const Audit = require('../services/forensicAuditService');
  * Handles all payment-related CRUD operations
  */
 class PaymentController {
+  constructor() {
+    this.createPayment = this.createPayment.bind(this);
+    this.getAllPayments = this.getAllPayments.bind(this);
+    this.getPaymentById = this.getPaymentById.bind(this);
+    this.updatePayment = this.updatePayment.bind(this);
+    this.deletePayment = this.deletePayment.bind(this);
+  }
+
   /**
    * Get all payment records
    * GET /api/payments
@@ -178,6 +186,8 @@ class PaymentController {
         py_total_debit: totalDebit,
         py_created_by: req.user.us_usid,
         py_status: 'Active'
+      }, {
+        userId: req.user.us_usid
       });
       
       // Emit real-time update
@@ -246,6 +256,8 @@ class PaymentController {
         py_modified_dt: new Date(),
         modified_by: req.user.us_usid,
         modified_on: new Date()
+      }, {
+        userId: req.user.us_usid
       });
       // ── Forensic Audit: UPDATE (async) ─────────────────────────────────────────
       Audit.logFieldChanges(paymentBefore, updatedPayment.toJSON(), {

@@ -1,56 +1,26 @@
 const express = require('express');
-const {
-  getCustomerDashboard,
-  createBooking,
-  getCustomerBookings,
-  getBookingDetails,
-  cancelBooking,
-  getAllCustomers,
-  searchCustomers,
-  getCustomerById,
-  findCustomerByPhone,
-  getCustomerBills,
-  getCustomerPayments,
-  getBookingPassengers
-} = require('../controllers/customerController');
+const customerController = require('../controllers/customerController');
 const authMiddleware = require('../middleware/authMiddleware');
-const { canEditBooking, canViewBooking, canCancelBooking } = require('../middleware/bookingAuthorization');
 
 const router = express.Router();
 
-// Apply authentication middleware to all routes
-router.use(authMiddleware);
+// Create new customer (admin only)
+router.post(
+  '/',
+  authMiddleware,
+  customerController.createCustomer
+);
 
-// Check if user is a customer
-router.use((req, res, next) => {
-  // For TVL users, check us_roid field
-  if (req.user.us_roid !== 'CUS') {
-    return res.status(403).json({ 
-      success: false, 
-      error: { code: 'FORBIDDEN', message: 'Access denied. Customer role required.' } 
-    });
-  }
-  next();
-});
+router.get(
+  '/:id/details',
+  authMiddleware,
+  customerController.getCustomerDetails
+);
 
-// Customer dashboard
-router.get('/dashboard', getCustomerDashboard);
-
-// Bill and payment management (must be before parameterized routes)
-router.get('/bills', getCustomerBills);
-router.get('/payments', getCustomerPayments);
-
-// Customer management
-router.get('/', getAllCustomers);
-router.get('/search', searchCustomers);
-router.get('/phone/:phoneNumber', findCustomerByPhone); // MANDATORY: Phone lookup endpoint
-router.get('/:id', getCustomerById);
-
-// Booking management
-router.post('/bookings', createBooking);
-router.get('/bookings', getCustomerBookings);
-router.get('/bookings/:bookingId', canViewBooking, getBookingDetails);
-router.get('/bookings/:bookingId/passengers', getBookingPassengers);
-router.put('/bookings/:bookingId/cancel', canCancelBooking, cancelBooking);
+router.get(
+  '/:id/ledger',
+  authMiddleware,
+  customerController.getCustomerLedger
+);
 
 module.exports = router;

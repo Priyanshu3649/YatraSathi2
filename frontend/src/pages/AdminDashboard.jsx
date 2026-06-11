@@ -262,6 +262,35 @@ const AdminDashboard = () => {
                   </tbody>
                 </table>
               </div>
+              <div>
+                <h4 style={{ margin: '0 0 12px 0', fontSize: '14px', color: '#2d3748' }}>RECEIVABLES & ADVANCES</h4>
+                <table className="financial-table">
+                  <thead>
+                    <tr>
+                      <th>Metric</th>
+                      <th>Amount</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td>Total Customer Billed</td>
+                      <td>₹{parseFloat(overview?.receivableSummary?.totalBilled || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                    </tr>
+                    <tr>
+                      <td>Total Customer Received</td>
+                      <td>₹{parseFloat(overview?.receivableSummary?.totalReceived || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                    </tr>
+                    <tr>
+                      <td>Outstanding Receivables</td>
+                      <td><span style={{ color: '#e74c3c', fontWeight: 'bold' }}>₹{parseFloat(overview?.receivableSummary?.outstandingReceivables || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></td>
+                    </tr>
+                    <tr>
+                      <td>Customer Advances</td>
+                      <td><span style={{ color: '#2ecc71', fontWeight: 'bold' }}>₹{parseFloat(overview?.receivableSummary?.customerAdvances || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
 

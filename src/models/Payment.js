@@ -100,12 +100,82 @@ const Payment = sequelize.define('pyPayment', {
   },
   
   // Audit fields from BaseModel
-  ...BaseModel
+  ...BaseModel,
+  
+  entered_by: {
+    type: DataTypes.INTEGER,
+    allowNull: true,
+    comment: 'Entered By User ID'
+  },
+  entered_on: {
+    type: DataTypes.DATE,
+    defaultValue: DataTypes.NOW,
+    comment: 'Entered On'
+  },
+  modified_by: {
+    type: DataTypes.INTEGER,
+    allowNull: true,
+    comment: 'Modified By User ID'
+  },
+  modified_on: {
+    type: DataTypes.DATE,
+    allowNull: true,
+    comment: 'Modified On'
+  },
+  closed_by: {
+    type: DataTypes.INTEGER,
+    allowNull: true,
+    comment: 'Closed By User ID'
+  },
+  closed_on: {
+    type: DataTypes.DATE,
+    allowNull: true,
+    comment: 'Closed On'
+  },
+  status: {
+    type: DataTypes.ENUM('OPEN', 'CLOSED', 'CANCELLED'),
+    defaultValue: 'OPEN',
+    comment: 'Record Status'
+  }
   
 }, {
   tableName: 'pyXpayment',
   timestamps: true,
-  ...auditHooks,
+  hooks: {
+    beforeCreate: (payment, options) => {
+      // Legacy hooks
+      if (options && options.userId) {
+        if (!payment.eby)  payment.eby  = options.userId;
+        if (!payment.edtm) payment.edtm = new Date();
+        payment.mby  = options.userId;
+        payment.mdtm = new Date();
+      }
+      // Forensic hooks
+      const uid = (options && options.userId) ? options.userId : 1;
+      const numericId = typeof uid === 'string'
+        ? (uid.match(/\d+/) ? parseInt(uid.match(/\d+/)[0]) : 1)
+        : uid;
+      payment.entered_by = numericId;
+      payment.entered_on = new Date();
+      if (!payment.status) payment.status = 'OPEN';
+    },
+    beforeUpdate: (payment, options) => {
+      // Legacy hooks
+      if (options && options.userId) {
+        payment.mby  = options.userId;
+        payment.mdtm = new Date();
+      }
+      // Forensic hooks
+      if (options && options.userId) {
+        const uid = options.userId;
+        const numericId = typeof uid === 'string'
+          ? (uid.match(/\d+/) ? parseInt(uid.match(/\d+/)[0]) : 1)
+          : uid;
+        payment.modified_by = numericId;
+        payment.modified_on = new Date();
+      }
+    }
+  },
   indexes: [
     {
       name: 'idx_py_entry_no',

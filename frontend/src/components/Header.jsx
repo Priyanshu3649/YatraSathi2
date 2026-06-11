@@ -66,7 +66,7 @@ const Header = () => {
                         title="Forensic Audit Viewer — ERP Investigation Tool"
                         style={{ position: 'relative' }}
                       >
-                        🔍 Audit
+                        Audit
                       </Link>
                     </li>
                   </>

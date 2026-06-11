@@ -1,934 +1,409 @@
-const { UserTVL: User, CustomerTVL: Customer, Booking, PaymentTVL: Payment, AccountTVL: Account, EmployeeTVL: Employee } = require('../models');
 const { Op } = require('sequelize');
-const { sequelize } = require('../models/baseModel');
-const Audit = require('../services/forensicAuditService');
+const bcrypt = require('bcrypt');
+const { sequelize, sequelizeTVL } = require('../../config/db');
+const Customer = require('../models/Customer');
+const CustomerTVL = require('../models/CustomerTVL');
+const User = require('../models/User');
+const UserTVL = require('../models/UserTVL');
+const CustomerFinancialService = require('../services/CustomerFinancialService');
+const LedgerService = require('../services/LedgerService');
+const BillTVL = require('../models/BillTVL');
+const Payment = require('../models/Payment');
+const Booking = require('../models/Booking');
 
-
-/**
- * Get Customer Dashboard Data
- */
-const getCustomerDashboard = async (req, res) => {
-  try {
-    const userId = req.user.us_usid;
-
-    // Get customer bookings
-    const totalBookings = await Booking.count({
-      where: { bk_usid: userId }
-    });
-
-    const activeBookings = await Booking.count({
-      where: { 
-        bk_usid: userId,
-        bk_status: { [Op.in]: ['CONFIRMED', 'PENDING'] }
-      }
-    });
-
-    // This month's bookings
-    const thisMonth = new Date();
-    thisMonth.setDate(1);
-    thisMonth.setHours(0, 0, 0, 0);
-
-    const thisMonthBookings = await Booking.count({
-      where: { 
-        bk_usid: userId,
-        edtm: { [Op.gte]: thisMonth }
-      }
-    });
-
-    // Recent bookings
-    const recentBookings = await Booking.findAll({
-      where: { bk_usid: userId },
-      order: [['edtm', 'DESC']],
-      limit: 5
-    });
-
-    // Pending payments for this customer
-    const pendingPayments = await Payment.count({
-      where: { 
-        pt_custid: userId,
-        pt_status: 'PENDING' 
-      }
-    });
-
-    // Mock pending invoices (replace with actual invoice logic)
-    const pendingInvoices = [
-      {
-        id: 'INV001',
-        amount: 5000,
-        date: new Date(),
-        status: 'PENDING'
-      }
-    ];
-
-    const dashboardData = {
-      stats: {
-        totalBookings,
-        activeBookings,
-        pendingPayments,
-        thisMonthBookings
-      },
-      recentBookings,
-      pendingInvoices
-    };
-
-    res.json({ success: true, data: dashboardData });
-  } catch (error) {
-    console.error('Customer dashboard error:', error);
-    res.status(500).json({ 
-      success: false, 
-      error: { code: 'SERVER_ERROR', message: 'Failed to load dashboard' } 
-    });
-  }
-};
-
-/**
- * Create New Booking
- */
-const createBooking = async (req, res) => {
-  try {
-    console.log('Received booking request:', req.body);
-    console.log('User ID:', req.user.us_usid);
-    
-    const userId = req.user.us_usid;
-    const {
-      from,
-      to,
-      journeyDate,
-      trainClass,
-      berthPreference,
-      passengers,
-      trainPreferences = []
-    } = req.body;
-    
-    console.log('Parsed booking data:', {
-      from, to, journeyDate, trainClass, berthPreference, 
-      passengerCount: passengers.length,
-      trainPreferences
-    });
-
-    // Validate input
-    if (!from || !to || !journeyDate || !passengers || passengers.length === 0) {
-      return res.status(400).json({
-        success: false,
-        error: { code: 'VALIDATION_ERROR', message: 'Missing required booking details' }
-      });
-    }
-
-// Removed passenger limit validation - customers can add unlimited passengers
-
-    // Validate journey date
-    const jDate = new Date(journeyDate);
-    if (isNaN(jDate.getTime())) {
-      return res.status(400).json({
-        success: false,
-        error: { code: 'VALIDATION_ERROR', message: 'Invalid journey date format' }
-      });
-    }
-    
-    const today = new Date();
-    const tomorrow = new Date(today);
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    tomorrow.setHours(0, 0, 0, 0);
-    
-    if (jDate < tomorrow) {
-      return res.status(400).json({
-        success: false,
-        error: { code: 'VALIDATION_ERROR', message: 'Journey date cannot be in the past or today' }
-      });
-    }
-    
-    // Check if stations exist in the station table, create them if they don't
-    const { StationTVL: Station } = require('../models');
-    
-    let fromStation = await Station.findByPk(from);
-    let toStation = await Station.findByPk(to);
-    
-    // Create from station if it doesn't exist
-    if (!fromStation) {
-      fromStation = await Station.create({
-        st_stid: from,
-        st_stcode: from, // Use the station ID as the station code
-        st_stname: from.toUpperCase(), // Use uppercase as station name
-        st_city: from.toUpperCase(), // Use station code as city if not provided
-        st_state: 'UNKNOWN', // Default state
-        eby: userId,
-        mby: userId
-      });
-    }
-    
-    // Create to station if it doesn't exist
-    if (!toStation) {
-      toStation = await Station.create({
-        st_stid: to,
-        st_stcode: to, // Use the station ID as the station code
-        st_stname: to.toUpperCase(), // Use uppercase as station name
-        st_city: to.toUpperCase(), // Use station code as city if not provided
-        st_state: 'UNKNOWN', // Default state
-        eby: userId,
-        mby: userId
-      });
-    }
-    
-    // Generate unique booking number
-    const timestamp = Date.now().toString().slice(-8);
-    const bookingNumber = `BKN${timestamp}${Math.floor(Math.random() * 100)}`; // Add random suffix to ensure uniqueness
-
-    const { Passenger } = require('../models');
+const customerController = {
+  // Create a new customer (admin only)
+  createCustomer: async (req, res) => {
     const transaction = await sequelize.transaction();
     
     try {
-      // Create booking - let bk_bkid be auto-generated
-      const booking = await Booking.create({
-        bk_bkno: bookingNumber,
-        bk_usid: userId,
-        bk_fromst: from,
-        bk_tost: to,
-        bk_trvldt: jDate,
-        bk_class: trainClass || 'SL',
-        bk_berthpref: berthPreference || 'NO_PREF',
-        bk_totalpass: passengers.length,
-        bk_status: 'DRF',
-        bk_remarks: trainPreferences.length > 0 ? `Train Preferences: ${trainPreferences.join(', ')}` : null,
-        eby: userId,
-        mby: userId
+      // Verify admin role
+      if (!req.user || (req.user.us_usertype !== 'admin' && req.user.us_roid !== 'ADM')) {
+        await transaction.rollback();
+        return res.status(403).json({ success: false, message: 'Admin privileges required' });
+      }
+
+      const {
+        firstName,
+        lastName,
+        email,
+        phone,
+        password,
+        address,
+        city,
+        state,
+        pincode,
+        customerType,
+        companyName,
+        gstNumber,
+        creditLimit
+      } = req.body;
+
+      // Validate required fields
+      if (!firstName || !lastName || !email || !phone || !password) {
+        await transaction.rollback();
+        return res.status(400).json({
+          success: false,
+          message: 'First name, last name, email, phone, and password are required'
+        });
+      }
+
+      // Check if email or phone already exists
+      const existingUser = await User.findOne({
+        where: {
+          [Op.or]: [
+            { us_email: email },
+            { us_phone: phone }
+          ]
+        },
+        transaction
+      });
+
+      if (existingUser) {
+        await transaction.rollback();
+        return res.status(409).json({
+          success: false,
+          message: 'User with this email or phone already exists'
+        });
+      }
+
+      // Generate unique user ID
+      const userCount = await User.count({ transaction });
+      const userId = `CUS${String(userCount + 1).padStart(5, '0')}`;
+      
+      // Hash password
+      const hashedPassword = await bcrypt.hash(password, 10);
+
+      // Create user record
+      const newUser = await User.create({
+        us_usid: userId,
+        us_fname: firstName,
+        us_lname: lastName,
+        us_email: email,
+        us_phone: phone,
+        us_pwd: hashedPassword,
+        us_usertype: 'customer',
+        us_coid: 'TRV',
+        us_roid: 'CUS',
+        us_active: true,
+        us_eby: req.user.us_usid,
+        us_cdtm: new Date(),
+        us_mby: req.user.us_usid,
+        us_mdtm: new Date(),
+        us_addr1: address,
+        us_city: city,
+        us_state: state,
+        us_pin: pincode
       }, { transaction });
 
-      // Create passenger records in the passenger table - OPTIMIZED BATCH CREATION
-      if (passengers && passengers.length > 0) {
-        // Prepare batch data for all passengers
-        const passengerDataBatch = passengers.map(passenger => ({
-          ps_bkid: booking.bk_bkid, // Link to the newly created booking
-          ps_fname: passenger.name.split(' ')[0] || '', // First name
-          ps_lname: passenger.name.split(' ').slice(1).join(' ') || null, // Last name (if any)
-          ps_age: parseInt(passenger.age) || 0,
-          ps_gender: passenger.gender || 'M',
-          ps_berthpref: passenger.berthPreference || null,
-          ps_active: 1, // Active passenger
-          eby: userId,
-          mby: userId
-        }));
-        
-        // Batch insert all passengers at once
-        await Passenger.bulkCreate(passengerDataBatch, { transaction });
-      }
-      
-      // Commit the transaction
+      // Create customer record
+      await Customer.create({
+        cu_usid: userId,
+        cu_custtype: customerType || 'INDIVIDUAL',
+        cu_company: companyName,
+        cu_gst: gstNumber,
+        cu_creditlimit: creditLimit || 0,
+        cu_creditused: 0,
+        cu_status: 'ACTIVE',
+        edtm: new Date(),
+        eby: req.user.us_usid,
+        mdtm: new Date(),
+        mby: req.user.us_usid
+      }, { transaction });
+
       await transaction.commit();
 
-      // ── Forensic Audit: INSERT Booking (Customer portal) ──────────────────
-      Audit.logAction({ module: Audit.MODULES.BOOKING, recordId: booking.bk_bkid,
-        action: Audit.ACTIONS.INSERT, req, fieldName: 'bk_bkno',
-        oldValue: null, newValue: booking.bk_bkno });
-      Audit.logAction({ module: Audit.MODULES.BOOKING, recordId: booking.bk_bkid,
-        action: Audit.ACTIONS.INSERT, req, fieldName: 'bk_totalpass',
-        oldValue: null, newValue: String(passengers.length) });
-      // ───────────────────────────────────────────────────────────────────────
-
-      let confirmationMessage = 'Booking created successfully. You will be contacted by our agent soon.';
-      if (trainPreferences.length > 0) {
-        confirmationMessage += ` Train preferences noted: ${trainPreferences.join(', ')}.`;
-      }
-      
       res.status(201).json({
         success: true,
-        data: {
-          bookingId: booking.bk_bkid.toString(), // Convert to string to match frontend expectations
-          status: booking.bk_status,
-          message: confirmationMessage
+        message: 'Customer created successfully',
+        customer: {
+          userId,
+          firstName,
+          lastName,
+          email,
+          phone
         }
+      });
+
+    } catch (error) {
+      await transaction.rollback();
+      console.error('Error creating customer:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to create customer',
+        error: error.message
+      });
+    }
+  },
+  /**
+   * Search customers
+   * GET /api/employees/customers/search
+   */
+  searchCustomers: async (req, res) => {
+    try {
+      const { q } = req.query;
+      if (!q) {
+        return res.json({ success: true, customers: [] });
+      }
+
+      const customers = await Customer.findAll({
+        include: [
+          {
+            model: User,
+            as: 'user',
+            attributes: ['us_usid', 'us_fname', 'us_lname', 'us_email', 'us_mobile']
+          }
+        ],
+        where: {
+          [Op.or]: [
+            { cu_company: { [Op.like]: `%${q}%` } },
+            { '$user.us_fname$': { [Op.like]: `%${q}%` } },
+            { '$user.us_lname$': { [Op.like]: `%${q}%` } },
+            { '$user.us_mobile$': { [Op.like]: `%${q}%` } }
+          ]
+        },
+        limit: 20
+      });
+
+      res.json({ success: true, customers });
+    } catch (error) {
+      console.error('Search customers failed:', error);
+      res.status(500).json({ success: false, error: error.message });
+    }
+  },
+
+  /**
+   * Get customer by ID
+   * GET /api/employees/customers/:id
+   */
+  getCustomerById: async (req, res) => {
+    try {
+      const { id } = req.params;
+      const customer = await Customer.findOne({
+        where: { cu_usid: id },
+        include: [
+          {
+            model: User,
+            as: 'user',
+            attributes: ['us_usid', 'us_fname', 'us_lname', 'us_email', 'us_mobile']
+          }
+        ]
+      });
+
+      if (!customer) {
+        return res.status(404).json({ success: false, error: 'Customer not found' });
+      }
+
+      res.json({ success: true, customer });
+    } catch (error) {
+      console.error('Get customer failed:', error);
+      res.status(500).json({ success: false, error: error.message });
+    }
+  },
+
+  /**
+   * Find customer by phone
+   * GET /api/employees/customers/phone/:phone
+   */
+  findCustomerByPhone: async (req, res) => {
+    try {
+      const { phoneNumber } = req.params;
+      const customer = await Customer.findOne({
+        include: [
+          {
+            model: User,
+            as: 'user',
+            attributes: ['us_usid', 'us_fname', 'us_lname', 'us_email', 'us_mobile'],
+            where: { us_mobile: phoneNumber }
+          }
+        ]
+      });
+
+      if (!customer) {
+        return res.json({ success: true, customer: null });
+      }
+
+      res.json({ success: true, customer });
+    } catch (error) {
+      console.error('Find customer by phone failed:', error);
+      res.status(500).json({ success: false, error: error.message });
+    }
+  },
+  /**
+   * Get customer details (aggregate)
+   * GET /api/customers/:id/details
+   */
+  getCustomerDetails: async (req, res) => {
+    try {
+      const { id } = req.params;
+      const errors = [];
+
+      // 1. Fetch Customer
+      let customer = null;
+      try {
+        customer = await Customer.findOne({
+          where: { cu_usid: id },
+          include: [
+            {
+              model: User,
+              as: 'user',
+              attributes: ['us_usid', 'us_fname', 'us_lname', 'us_email', 'us_mobile']
+            }
+          ]
+        });
+        if (!customer) {
+          return res.status(404).json({ error: 'Customer not found' });
+        }
+      } catch (error) {
+        console.error('Failed to fetch customer:', error);
+        errors.push('Failed to fetch customer profile');
+      }
+
+      // 2. Financial Summary
+      let financialSummary = {};
+      try {
+        financialSummary = await CustomerFinancialService.getFinancialSummary(id);
+      } catch (error) {
+        console.error('Failed to fetch financial summary:', error);
+        errors.push('Failed to calculate financial summary');
+      }
+
+      // 3. Booking Stats
+      let bookingStats = {};
+      try {
+        const totalBookings = await Booking.count({ where: { bk_usid: id } });
+        const confirmedBookings = await Booking.count({
+          where: { bk_usid: id, bk_status: { [Op.like]: 'Confirmed' } }
+        });
+        const pendingBookings = await Booking.count({
+          where: { bk_usid: id, bk_status: { [Op.like]: 'Pending' } }
+        });
+        const cancelledBookings = await Booking.count({
+          where: { bk_usid: id, bk_status: { [Op.like]: 'Cancelled' } }
+        });
+        
+        bookingStats = { total: totalBookings, confirmed: confirmedBookings, pending: pendingBookings, cancelled: cancelledBookings };
+      } catch (error) {
+        console.error('Failed to fetch booking stats:', error);
+        errors.push('Failed to calculate booking statistics');
+      }
+
+      // 4. Billing Stats
+      let billingStats = {};
+      try {
+        const totalBills = await BillTVL.count({ where: { bl_customer_id: id } });
+        const cancelledBills = await BillTVL.count({ where: { bl_customer_id: id, is_cancelled: 1 } });
+        const activeBills = totalBills - cancelledBills;
+        
+        billingStats = { total: totalBills, paid: 0, partiallyPaid: 0, unpaid: activeBills, cancelled: cancelledBills };
+      } catch (error) {
+        console.error('Failed to fetch billing stats:', error);
+        errors.push('Failed to calculate billing statistics');
+      }
+
+      // 5. Payment Stats
+      let paymentStats = {};
+      try {
+        const totalReceived = (await Payment.findOne({
+          attributes: [
+            [
+              sequelize.fn(
+                'COALESCE',
+                sequelize.fn('SUM', sequelize.col('py_amount')),
+                0
+              ),
+              'total'
+            ]
+          ],
+          where: { py_customer_id: id }
+        }))?.dataValues?.total || 0;
+        
+        paymentStats = { totalReceived: parseFloat(totalReceived), cash: 0, upi: 0, bank: 0, cheque: 0 };
+      } catch (error) {
+        console.error('Failed to fetch payment stats:', error);
+        errors.push('Failed to calculate payment statistics');
+      }
+
+      // 6. Recent Bookings
+      let recentBookings = [];
+      try {
+        recentBookings = await Booking.findAll({
+          where: { bk_usid: id },
+          order: [['bk_id', 'DESC']],
+          limit: 5
+        });
+      } catch (error) {
+        console.error('Failed to fetch recent bookings:', error);
+      }
+
+      // 7. Recent Bills
+      let recentBills = [];
+      try {
+        recentBills = await BillTVL.findAll({
+          where: { bl_customer_id: id },
+          order: [['bl_id', 'DESC']],
+          limit: 5
+        });
+      } catch (error) {
+        console.error('Failed to fetch recent bills:', error);
+      }
+
+      // 8. Recent Payments
+      let recentPayments = [];
+      try {
+        recentPayments = await Payment.findAll({
+          where: { py_customer_id: id },
+          order: [['py_id', 'DESC']],
+          limit: 5
+        });
+      } catch (error) {
+        console.error('Failed to fetch recent payments:', error);
+      }
+
+      // 9. Ledger Preview
+      let ledgerPreview = [];
+      try {
+        const ledgerResult = await LedgerService.getCustomerLedger(id, 1, 10);
+        ledgerPreview = ledgerResult.data;
+      } catch (error) {
+        console.error('Failed to fetch ledger preview:', error);
+      }
+
+      res.json({
+        customer,
+        financialSummary,
+        bookingStats,
+        billingStats,
+        paymentStats,
+        recentBookings,
+        recentBills,
+        recentPayments,
+        ledgerPreview,
+        errors
       });
     } catch (error) {
-      // Rollback the transaction on error
-      await transaction.rollback();
-      throw error;
+      console.error('Customer details API failed:', error);
+      res.status(500).json({ error: 'Internal server error', errors: [error.message] });
     }
-  } catch (error) {
-    console.error('Create booking error:', error);
-    console.error('Error details:', {
-      message: error.message,
-      name: error.name,
-      stack: error.stack,
-      originalError: error.original ? error.original : 'No original error'
-    });
-    res.status(500).json({ 
-      success: false, 
-      error: { 
-        code: 'SERVER_ERROR', 
-        message: error.message || 'Failed to create booking',
-        details: process.env.NODE_ENV === 'development' ? error.message : undefined
-      } 
-    });
+  },
+
+  /**
+   * Get customer ledger
+   * GET /api/customers/:id/ledger
+   */
+  getCustomerLedger: async (req, res) => {
+    try {
+      const { id } = req.params;
+      const page = parseInt(req.query.page) || 1;
+      const limit = parseInt(req.query.limit) || 50;
+
+      const result = await LedgerService.getCustomerLedger(id, page, limit);
+      res.json(result);
+    } catch (error) {
+      console.error('Customer ledger API failed:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
   }
 };
 
-/**
- * Get Customer Bookings
- */
-const getCustomerBookings = async (req, res) => {
-  try {
-    const userId = req.user.us_usid;
-    const { page = 1, limit = 10, status } = req.query;
-
-    const whereClause = { bk_usid: userId };
-    if (status) {
-      whereClause.bk_status = status;
-    }
-
-    // Import models
-    const models = require('../models');
-    const { Passenger, StationTVL: Station } = models;
-    
-    const bookings = await Booking.findAndCountAll({
-      where: whereClause,
-      order: [['edtm', 'DESC']],
-      limit: parseInt(limit),
-      offset: (parseInt(page) - 1) * parseInt(limit)
-    });
-    
-    // Transform data to match frontend expectations and get actual passenger counts
-    const transformedBookings = await Promise.all(bookings.rows.map(async (booking) => {
-      // Get passenger count for this booking
-      const passengerCount = await Passenger.count({
-        where: { 
-          ps_bkid: booking.bk_bkid,
-          ps_active: 1  // Only count active passengers
-        }
-      });
-      
-      // Get station names
-      let fromStationName = booking.bk_fromst || 'Unknown';
-      let toStationName = booking.bk_tost || 'Unknown';
-      
-      try {
-        const fromStation = await Station.findByPk(booking.bk_fromst);
-        if (fromStation) {
-          fromStationName = fromStation.st_stname || fromStation.st_stcode || booking.bk_fromst;
-        }
-        
-        const toStation = await Station.findByPk(booking.bk_tost);
-        if (toStation) {
-          toStationName = toStation.st_stname || toStation.st_stcode || booking.bk_tost;
-        }
-      } catch (stationError) {
-        console.warn('Error fetching station names:', stationError.message);
-        // Fall back to station codes if station lookup fails
-      }
-      
-      return {
-        ...booking.toJSON(),
-        bk_pax: passengerCount,  // Override with actual passenger count from passenger table
-        bk_from: fromStationName,  // Add full from station name
-        bk_to: toStationName,      // Add full to station name
-        bk_fromst: booking.bk_fromst, // Keep original station code
-        bk_tost: booking.bk_tost      // Keep original station code
-      };
-    }));
-    
-    // Debug log to see what we're sending
-    console.log('Sending transformed bookings:', JSON.stringify(transformedBookings[0], null, 2));
-    
-    res.json({
-      success: true,
-      data: {
-        bookings: transformedBookings,
-        pagination: {
-          total: bookings.count,
-          page: parseInt(page),
-          pages: Math.ceil(bookings.count / parseInt(limit))
-        }
-      }
-    });
-  } catch (error) {
-    console.error('Get customer bookings error:', error);
-    res.status(500).json({ 
-      success: false, 
-      error: { code: 'SERVER_ERROR', message: 'Failed to fetch bookings' } 
-    });
-  }
-};
-
-/**
- * Get Booking Details
- */
-const getBookingDetails = async (req, res) => {
-  try {
-    const userId = req.user.us_usid;
-    const { bookingId } = req.params;
-
-    // Import Passenger model to get passenger count
-    const models = require('../models');
-    const Passenger = models.PassengerTVL;
-    
-    const booking = await Booking.findOne({
-      where: { 
-        bk_bkid: bookingId,
-        bk_usid: userId 
-      }
-    });
-
-    if (!booking) {
-      return res.status(404).json({
-        success: false,
-        error: { code: 'NOT_FOUND', message: 'Booking not found' }
-      });
-    }
-    
-    // Get passenger count for this booking
-    const passengerCount = await Passenger.count({
-      where: { 
-        ps_bkid: booking.bk_bkid,
-        ps_active: 1  // Only count active passengers
-      }
-    });
-    
-    const bookingData = {
-      ...booking.toJSON(),
-      bk_pax: passengerCount  // Override with actual passenger count from passenger table
-    };
-    
-    res.json({ success: true, data: bookingData });
-  } catch (error) {
-    console.error('Get booking details error:', error);
-    res.status(500).json({ 
-      success: false, 
-      error: { code: 'SERVER_ERROR', message: 'Failed to fetch booking details' } 
-    });
-  }
-};
-
-/**
- * Cancel Booking
- */
-const cancelBooking = async (req, res) => {
-  try {
-    const userId = req.user.us_usid;
-    const { bookingId } = req.params;
-
-    const booking = await Booking.findOne({
-      where: { 
-        bk_bkid: bookingId,
-        bk_usid: userId 
-      }
-    });
-
-    if (!booking) {
-      return res.status(404).json({
-        success: false,
-        error: { code: 'NOT_FOUND', message: 'Booking not found' }
-      });
-    }
-
-    if (booking.bk_status === 'CANCELLED') {
-      return res.status(400).json({
-        success: false,
-        error: { code: 'ALREADY_CANCELLED', message: 'Booking is already cancelled' }
-      });
-    }
-
-    const oldStatus = booking.bk_status;
-
-    // Update booking status
-    await booking.update({
-      bk_status: 'CANCELLED',
-      mby: userId,
-      modified_by: userId,
-      modified_on: new Date(),
-      closed_by: userId,
-      closed_on: new Date()
-    });
-
-    // ── Forensic Audit: CANCEL Booking (Customer portal) ──────────────────
-    Audit.logAction({ module: Audit.MODULES.BOOKING, recordId: booking.bk_bkid,
-      action: Audit.ACTIONS.CANCEL, req, fieldName: 'bk_status',
-      oldValue: oldStatus, newValue: 'CANCELLED' });
-    // ───────────────────────────────────────────────────────────────────────
-
-    res.json({
-      success: true,
-      data: { message: 'Booking cancelled successfully' }
-    });
-  } catch (error) {
-    console.error('Cancel booking error:', error);
-    res.status(500).json({ 
-      success: false, 
-      error: { code: 'SERVER_ERROR', message: 'Failed to cancel booking' } 
-    });
-  }
-};
-
-/**
- * Get all customers from cuXcustomer table
- */
-const getAllCustomers = async (req, res) => {
-  try {
-    const queryHelper = require('../utils/queryHelper');
-    
-    // Only admin can get all customers
-    if (req.user.us_roid !== 'ADM') {
-      return res.status(403).json({ message: 'Access denied' });
-    }
-    
-    const { limit, offset, page } = queryHelper.getPaginationOptions(req.query);
-    const sortBy = req.query.sortBy || 'edtm';
-    const sortOrder = (req.query.sortOrder || 'DESC').toUpperCase();
-    
-    // Build search filters
-    const whereClause = {};
-    if (req.query.search) {
-      whereClause[Op.or] = [
-        { cu_custno: { [Op.like]: `%${req.query.search}%` } },
-        { cu_panno: { [Op.like]: `%${req.query.search}%` } },
-        { cu_gstno: { [Op.like]: `%${req.query.search}%` } }
-      ];
-    }
-    
-    const { count, rows: customers } = await Customer.findAndCountAll({ 
-      where: whereClause,
-      attributes: [
-        'cu_cusid', 'cu_usid', 'cu_custno', 'cu_custtype', 'cu_creditlimit', 
-        'cu_creditdays', 'cu_discount', 'cu_active', 'cu_panno', 'cu_gstno'
-      ], 
-      include: [ 
-        { 
-          model: User, 
-          attributes: ['us_fname', 'us_lname', 'us_email', 'us_phone', 'us_aadhaar'], 
-          as: 'user',
-          required: true
-        }
-      ],
-      order: [[sortBy, sortOrder]],
-      limit,
-      offset
-    });
-    
-    res.json(queryHelper.formatPaginatedResponse(count, customers, page, limit));
-  } catch (error) {
-    console.error('Get all customers error:', error);
-    res.status(500).json({ success: false, error: { code: 'SERVER_ERROR', message: error.message } });
-  }
-};
-
-/**
- * Search customers from cuCustomer table
- */
-const searchCustomers = async (req, res) => {
-  try {
-    const { q: searchTerm } = req.query;
-    
-    if (!searchTerm) {
-      return res.status(400).json({ 
-        success: false, 
-        error: { 
-          code: 'VALIDATION_ERROR', 
-          message: 'Search term is required' 
-        } 
-      });
-    }
-    
-    const trimmedSearchTerm = searchTerm.trim();
-    
-    // Return empty results for very short search terms instead of error
-    if (trimmedSearchTerm.length < 1) {
-      return res.json({ success: true, data: [] });
-    }
-    
-    // Sanitize the search term to prevent SQL injection and special character issues
-    // Only allow alphanumeric characters, spaces, hyphens, and underscores
-    const sanitizedSearchTerm = trimmedSearchTerm.replace(/[^\w\s\-]/gi, '');
-    
-    // If sanitized term is empty, return empty results
-    if (sanitizedSearchTerm.length === 0) {
-      return res.json({ success: true, data: [] });
-    }
-    
-    // Search in both customer ID and customer name
-    const customers = await Customer.findAll({
-      attributes: [
-        'cu_usid', 'cu_custno'
-      ], 
-      include: [ 
-        { 
-          model: User, 
-          attributes: ['us_fname', 'us_lname', 'us_email', 'us_phone'], 
-          as: 'user',
-          required: true // We need the user data to get the name
-        }
-      ],
-      limit: 20 // Limit results to prevent too many records
-    });
-    
-    // Filter results on the application side to avoid complex SQL
-    const filteredCustomers = customers.filter(customer => {
-      const searchTermLower = sanitizedSearchTerm.toLowerCase();
-      
-      // Check customer ID fields
-      const customerIdMatch = (customer.cu_usid && customer.cu_usid.toLowerCase().includes(searchTermLower)) ||
-                            (customer.cu_custno && customer.cu_custno.toLowerCase().includes(searchTermLower));
-      
-      // Check user name fields
-      const userNameMatch = customer.user && (
-        (customer.user.us_fname && customer.user.us_fname.toLowerCase().includes(searchTermLower)) ||
-        (customer.user.us_lname && customer.user.us_lname.toLowerCase().includes(searchTermLower))
-      );
-      
-      return customerIdMatch || userNameMatch;
-    });
-    
-    // Format the results to match the expected structure
-    const formattedCustomers = filteredCustomers.map(customer => {
-      // Combine first and last name from user as customer name
-      const customerName = (customer.user ? `${customer.user.us_fname || ''} ${customer.user.us_lname || ''}`.trim() : '');
-      
-      return {
-        id: customer.cu_usid || customer.cu_custno,
-        name: customerName,
-        cu_custno: customer.cu_custno,
-        cu_usid: customer.cu_usid,
-        us_fname: customer.user?.us_fname,
-        us_lname: customer.user?.us_lname
-      };
-    });
-    
-    res.json({ success: true, data: formattedCustomers });
-  } catch (error) {
-    console.error('Search customers error:', error);
-    res.status(500).json({ 
-      success: false, 
-      error: { code: 'SERVER_ERROR', message: 'An error occurred while searching customers' } 
-    });
-  }
-};
-
-/**
- * Get customer by ID from cuCustomer table
- */
-const getCustomerById = async (req, res) => {
-  try {
-    const { id } = req.params;
-    
-    if (!id) {
-      return res.status(400).json({ 
-        success: false, 
-        error: { 
-          code: 'VALIDATION_ERROR', 
-          message: 'Customer ID is required' 
-        } 
-      });
-    }
-    
-    const customer = await Customer.findOne({ 
-      attributes: [
-        'cu_usid', 'cu_custno', 'cu_custtype', 'cu_creditlimit', 
-        'cu_creditdays', 'cu_discount', 'cu_active'
-      ], 
-      include: [ 
-        { 
-          model: User, 
-          attributes: ['us_fname', 'us_lname', 'us_email', 'us_phone', 'us_aadhaar'], 
-          as: 'user',
-          required: true
-        }
-      ],
-      where: {
-        [Op.or]: [
-          { cu_usid: id },
-          { cu_custno: id }
-        ]
-      }
-    });
-    
-    if (!customer) {
-      return res.status(404).json({ 
-        success: false, 
-        error: { code: 'NOT_FOUND', message: 'Customer not found' } 
-      });
-    }
-    
-    // Format the customer data for response
-    const formattedCustomer = {
-      id: customer.cu_usid,
-      customerId: customer.cu_custno,
-      customerType: customer.cu_custtype,
-      creditLimit: customer.cu_creditlimit,
-      creditDays: customer.cu_creditdays,
-      discount: customer.cu_discount,
-      active: customer.cu_active,
-      name: customer.user ? `${customer.user.us_fname || ''} ${customer.user.us_lname || ''}`.trim() : '',
-      email: customer.user?.us_email,
-      phone: customer.user?.us_phone,
-      aadhaar: customer.user?.us_aadhaar
-    };
-    
-    res.json({ success: true, data: formattedCustomer });
-  } catch (error) {
-    console.error('Get customer by ID error:', error);
-    res.status(500).json({ 
-      success: false, 
-      error: { code: 'SERVER_ERROR', message: error.message } 
-    });
-  }
-};
-
-/**
- * Get Customer Bills
- */
-const getCustomerBills = async (req, res) => {
-  try {
-    const userId = req.user.us_usid;
-    
-    // Import Bill model
-    const { BillTVL: Bill } = require('../models');
-    
-    // Get bills for this customer
-    // Bills are linked to customer via customer_id field
-    const bills = await Bill.findAll({
-      where: { 
-        customer_id: userId  // Bills are linked to customer ID
-      },
-      order: [['created_on', 'DESC']]
-    });
-    
-    res.json({ 
-      success: true, 
-      data: { 
-        bills: bills
-      } 
-    });
-  } catch (error) {
-    console.error('Get customer bills error:', error);
-    res.status(500).json({ 
-      success: false, 
-      error: { code: 'SERVER_ERROR', message: 'Failed to fetch bills' } 
-    });
-  }
-};
-
-/**
- * Get Customer Payments
- */
-const getCustomerPayments = async (req, res) => {
-  try {
-    const userId = req.user.us_usid;
-    
-    // Import Payment model
-    const { PaymentTVL: Payment } = require('../models');
-    
-    // Get payments for this customer
-    // Payments are linked to customer via pt_custid field
-    const payments = await Payment.findAll({
-      where: { 
-        pt_custid: userId  // Payments are linked to customer ID
-      },
-      order: [['edtm', 'DESC']]
-    });
-    
-    res.json({ 
-      success: true, 
-      data: { 
-        payments: payments
-      } 
-    });
-  } catch (error) {
-    console.error('Get customer payments error:', error);
-    res.status(500).json({ 
-      success: false, 
-      error: { code: 'SERVER_ERROR', message: 'Failed to fetch payments' } 
-    });
-  }
-};
-
-const getBookingPassengers = async (req, res) => {
-  try {
-    const bookingId = req.params.bookingId;
-    
-    // Check if user has permission to view this booking's passengers
-    const models = require('../models');
-    const Booking = models.Booking;
-    
-    const booking = await Booking.findByPk(bookingId);
-    
-    if (!booking) {
-      return res.status(404).json({ 
-        success: false,
-        error: { code: 'NOT_FOUND', message: 'Booking not found' } 
-      });
-    }
-    
-    // Check if this booking belongs to the current user
-    if (booking.bk_usid !== req.user.us_usid) {
-      return res.status(403).json({ 
-        success: false,
-        error: { code: 'FORBIDDEN', message: 'Access denied' } 
-      });
-    }
-    
-    // Get passenger details for this booking
-    const Passenger = models.PassengerTVL;
-    
-    const passengers = await Passenger.findAll({
-      where: { 
-        ps_bkid: bookingId,
-        ps_active: 1  // Only active passengers
-      },
-      order: [['ps_psid', 'ASC']]  // Order by passenger ID
-    });
-    
-    // Transform passenger data to match frontend expectations
-    const transformedPassengers = passengers.map(passenger => {
-      return {
-        ps_psid: passenger.ps_psid,
-        ps_fname: passenger.ps_fname,
-        ps_lname: passenger.ps_lname,
-        firstName: passenger.ps_fname,
-        lastName: passenger.ps_lname,
-        name: `${passenger.ps_fname} ${passenger.ps_lname || ''}`.trim(),
-        age: passenger.ps_age,
-        gender: passenger.ps_gender,
-        berthPreference: passenger.ps_berthpref,
-        berthAllocated: passenger.ps_berthalloc,
-        seatNo: passenger.ps_seatno,
-        coach: passenger.ps_coach,
-        ps_idtype: passenger.ps_idtype,
-        ps_idno: passenger.ps_idno,
-        idProofType: passenger.ps_idtype,
-        idProofNumber: passenger.ps_idno,
-        id: passenger.ps_psid
-      };
-    });
-    
-    console.log(`Found ${passengers.length} passengers for booking ${bookingId}`);
-    console.log('Raw passenger data:', passengers.map(p => ({
-      ps_psid: p.ps_psid,
-      ps_fname: p.ps_fname,
-      ps_lname: p.ps_lname,
-      ps_age: p.ps_age,
-      ps_gender: p.ps_gender
-    })));
-    console.log('Transformed passenger data:', transformedPassengers);
-    
-    res.json({ 
-      success: true,
-      bookingId: parseInt(bookingId),
-      passengers: transformedPassengers 
-    });
-    
-  } catch (error) {
-    console.error('Error fetching customer booking passengers:', error);
-    res.status(500).json({ 
-      success: false, 
-      error: { code: 'SERVER_ERROR', message: error.message } 
-    });
-  }
-};
-
-/**
- * Find customer by phone number (MANDATORY for phone-based booking)
- */
-const findCustomerByPhone = async (req, res) => {
-  try {
-    const { phoneNumber } = req.params;
-    
-    if (!phoneNumber) {
-      return res.status(400).json({ 
-        success: false, 
-        error: { 
-          code: 'VALIDATION_ERROR', 
-          message: 'Phone number is required' 
-        } 
-      });
-    }
-    
-    // Clean phone number (remove non-digits)
-    const cleanPhone = phoneNumber.replace(/\D/g, '');
-    
-    // Validate phone number length (10-15 digits)
-    if (cleanPhone.length < 10 || cleanPhone.length > 15) {
-      return res.status(400).json({ 
-        success: false, 
-        error: { 
-          code: 'VALIDATION_ERROR', 
-          message: 'Phone number must be 10-15 digits' 
-        } 
-      });
-    }
-    
-    // Search for customer by phone number in User table
-    const customer = await Customer.findOne({ 
-      attributes: [
-        'cu_usid', 'cu_custno', 'cu_custtype', 'cu_creditlimit', 
-        'cu_creditdays', 'cu_discount', 'cu_active'
-      ], 
-      include: [ 
-        { 
-          model: User, 
-          attributes: ['us_fname', 'us_lname', 'us_email', 'us_phone', 'us_aadhaar', 'us_addr1', 'us_city', 'us_state'], 
-          as: 'user',
-          required: true,
-          where: {
-            us_phone: {
-              [Op.or]: [
-                cleanPhone,
-                phoneNumber,
-                // Also try with common phone number formats
-                `+91${cleanPhone}`,
-                `91${cleanPhone}`
-              ]
-            }
-          }
-        }
-      ]
-    });
-    
-    if (!customer) {
-      return res.status(404).json({ 
-        success: false, 
-        data: null,
-        message: 'Customer not found' 
-      });
-    }
-    
-    // Format the customer data for response
-    const formattedCustomer = {
-      us_usid: customer.cu_usid,
-      id: customer.cu_usid,
-      us_fname: customer.user?.us_fname,
-      us_lname: customer.user?.us_lname,
-      us_email: customer.user?.us_email,
-      us_phone: customer.user?.us_phone,
-      us_addr1: customer.user?.us_addr1,
-      us_city: customer.user?.us_city,
-      us_state: customer.user?.us_state,
-      // Additional customer fields
-      cu_custno: customer.cu_custno,
-      cu_custtype: customer.cu_custtype,
-      cu_active: customer.cu_active
-    };
-    
-    res.json({ 
-      success: true, 
-      data: formattedCustomer,
-      message: 'Customer found' 
-    });
-  } catch (error) {
-    console.error('Find customer by phone error:', error);
-    res.status(500).json({ 
-      success: false, 
-      error: { code: 'SERVER_ERROR', message: error.message } 
-    });
-  }
-};
-
-module.exports = {
-  getCustomerDashboard,
-  createBooking,
-  getCustomerBookings,
-  getBookingDetails,
-  cancelBooking,
-  getAllCustomers,
-  searchCustomers,
-  getCustomerById,
-  findCustomerByPhone,
-  getCustomerBills,
-  getCustomerPayments,
-  getBookingPassengers
-};
+module.exports = customerController;

@@ -58,7 +58,7 @@ const Payments = () => {
   };
 
   return (
-    <div className="erp-page-container payments-layout" style={{ height: '100vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+    <div className="erp-page-container payments-layout" style={{ height: 'calc(100vh - 130px)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
       {/* Fixed ERP Header */}
       <div className="layout-header">
         <div className="erp-menu-bar">

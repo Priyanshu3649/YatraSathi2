@@ -19,8 +19,10 @@ const EmployeeProfile = () => {
     try {
       setLoading(true);
       const response = await profileAPI.getProfile();
-      setProfile(response.data);
-      setFormData(response.data);
+      // The backend returns { success: true, data: profile }
+      const profileData = response.success ? response.data : response;
+      setProfile(profileData);
+      setFormData(profileData);
       setError(null);
     } catch (err) {
       setError(err.message || 'Failed to load profile');
@@ -38,14 +40,33 @@ const EmployeeProfile = () => {
     e.preventDefault();
 
     try {
-      const response = await profileAPI.updateProfile(formData);
-      setProfile(response.data);
-      setFormData(response.data);
+      // Map formData to backend field names
+      const updateData = {
+        firstName: formData.firstName || formData.us_fname,
+        lastName: formData.lastName || formData.us_lname,
+        email: formData.email || formData.us_email,
+        phone: formData.phone || formData.us_phone,
+        address: formData.address || formData.us_addr1,
+        city: formData.city || formData.us_city,
+        state: formData.state || formData.us_state,
+        pincode: formData.pincode || formData.us_pin,
+        aadhaar: formData.aadhaar || formData.us_aadhaar,
+        pan: formData.pan || formData.us_pan
+      };
+      
+      const response = await profileAPI.updateProfile(updateData);
+      await fetchProfile(); // Refresh profile
       setIsEditing(false);
     } catch (error) {
       console.error('Profile update error:', error);
       setError(error.message || 'Failed to update profile');
     }
+  };
+
+  const displayName = (p) => {
+    const fname = p.firstName || p.us_fname || '';
+    const lname = p.lastName || p.us_lname || '';
+    return fname && lname ? `${fname} ${lname}` : fname || lname || 'N/A';
   };
 
   if (loading) {
@@ -95,45 +116,45 @@ const EmployeeProfile = () => {
               <div className="profile-info">
                 <div className="info-group">
                   <label>Name:</label>
-                  <span>{profile.name}</span>
+                  <span>{displayName(profile)}</span>
                 </div>
                 <div className="info-group">
                   <label>Email:</label>
-                  <span>{profile.email}</span>
+                  <span>{profile.email || profile.us_email || 'N/A'}</span>
                 </div>
                 <div className="info-group">
                   <label>Phone:</label>
-                  <span>{profile.phone}</span>
+                  <span>{profile.phone || profile.us_phone || 'N/A'}</span>
                 </div>
                 <div className="info-group">
                   <label>Role:</label>
-                  <span>{profile.role}</span>
+                  <span>{profile.roleId || profile.us_roid || 'N/A'}</span>
                 </div>
                 <div className="info-group">
                   <label>Department:</label>
-                  <span>{profile.department}</span>
+                  <span>{profile.employee?.em_dept || 'N/A'}</span>
                 </div>
-                {profile.employeeId && (
+                {profile.employee?.em_empno && (
                   <div className="info-group">
                     <label>Employee ID:</label>
-                    <span>{profile.employeeId}</span>
+                    <span>{profile.employee.em_empno}</span>
                   </div>
                 )}
-                {profile.joinDate && (
+                {profile.employee?.em_joindt && (
                   <div className="info-group">
                     <label>Join Date:</label>
-                    <span>{profile.joinDate}</span>
+                    <span>{new Date(profile.employee.em_joindt).toLocaleDateString()}</span>
                   </div>
                 )}
-                {profile.status && (
+                {profile.employee?.em_status && (
                   <div className="info-group">
                     <label>Status:</label>
-                    <span>{profile.status}</span>
+                    <span>{profile.employee.em_status}</span>
                   </div>
                 )}
                 <div className="info-group">
                   <label>User Type:</label>
-                  <span>{profile.userType}</span>
+                  <span>{profile.userType || profile.us_usertype || 'N/A'}</span>
                 </div>
               </div>
               
@@ -141,19 +162,19 @@ const EmployeeProfile = () => {
                 <h3>Audit Information</h3>
                 <div className="info-group">
                   <label>Created Timestamp:</label>
-                  <span>{profile.createdTimestamp || 'N/A'}</span>
+                  <span>{profile.createdAt || profile.us_cdtm ? new Date(profile.createdAt || profile.us_cdtm).toLocaleString() : 'N/A'}</span>
                 </div>
                 <div className="info-group">
                   <label>Created By:</label>
-                  <span>{profile.createdBy || 'N/A'}</span>
+                  <span>{profile.createdBy || profile.us_eby || 'N/A'}</span>
                 </div>
                 <div className="info-group">
                   <label>Updated Timestamp:</label>
-                  <span>{profile.updatedTimestamp || 'N/A'}</span>
+                  <span>{profile.updatedAt || profile.us_mdtm ? new Date(profile.updatedAt || profile.us_mdtm).toLocaleString() : 'N/A'}</span>
                 </div>
                 <div className="info-group">
                   <label>Updated By:</label>
-                  <span>{profile.updatedBy || 'N/A'}</span>
+                  <span>{profile.updatedBy || profile.us_mby || 'N/A'}</span>
                 </div>
               </div>
             </div>
@@ -164,12 +185,23 @@ const EmployeeProfile = () => {
               <div className="profile-card">
                 <div className="profile-info">
                   <div className="form-group">
-                    <label htmlFor="name">Name:</label>
+                    <label htmlFor="firstName">First Name:</label>
                     <input
                       type="text"
-                      id="name"
-                      name="name"
-                      value={formData.name || ''}
+                      id="firstName"
+                      name="firstName"
+                      value={formData.firstName || formData.us_fname || ''}
+                      onChange={onChange}
+                      required
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label htmlFor="lastName">Last Name:</label>
+                    <input
+                      type="text"
+                      id="lastName"
+                      name="lastName"
+                      value={formData.lastName || formData.us_lname || ''}
                       onChange={onChange}
                       required
                     />
@@ -181,7 +213,7 @@ const EmployeeProfile = () => {
                       type="email"
                       id="email"
                       name="email"
-                      value={formData.email || ''}
+                      value={formData.email || formData.us_email || ''}
                       onChange={onChange}
                       required
                     />
@@ -193,32 +225,63 @@ const EmployeeProfile = () => {
                       type="tel"
                       id="phone"
                       name="phone"
-                      value={formData.phone || ''}
+                      value={formData.phone || formData.us_phone || ''}
                       onChange={onChange}
                       required
                     />
                   </div>
-                  
+
                   <div className="form-group">
-                    <label htmlFor="role">Role:</label>
+                    <label htmlFor="address">Address:</label>
                     <input
                       type="text"
-                      id="role"
-                      name="role"
-                      value={formData.role || ''}
+                      id="address"
+                      name="address"
+                      value={formData.address || formData.us_addr1 || ''}
                       onChange={onChange}
-                      readOnly
+                    />
+                  </div>
+
+                  <div className="form-group">
+                    <label htmlFor="city">City:</label>
+                    <input
+                      type="text"
+                      id="city"
+                      name="city"
+                      value={formData.city || formData.us_city || ''}
+                      onChange={onChange}
+                    />
+                  </div>
+
+                  <div className="form-group">
+                    <label htmlFor="state">State:</label>
+                    <input
+                      type="text"
+                      id="state"
+                      name="state"
+                      value={formData.state || formData.us_state || ''}
+                      onChange={onChange}
+                    />
+                  </div>
+
+                  <div className="form-group">
+                    <label htmlFor="pincode">Pincode:</label>
+                    <input
+                      type="text"
+                      id="pincode"
+                      name="pincode"
+                      value={formData.pincode || formData.us_pin || ''}
+                      onChange={onChange}
                     />
                   </div>
                   
                   <div className="form-group">
-                    <label htmlFor="department">Department:</label>
+                    <label htmlFor="roleId">Role:</label>
                     <input
                       type="text"
-                      id="department"
-                      name="department"
-                      value={formData.department || ''}
-                      onChange={onChange}
+                      id="roleId"
+                      name="roleId"
+                      value={formData.roleId || formData.us_roid || ''}
                       readOnly
                     />
                   </div>
@@ -229,8 +292,7 @@ const EmployeeProfile = () => {
                       type="text"
                       id="userType"
                       name="userType"
-                      value={formData.userType || ''}
-                      onChange={onChange}
+                      value={formData.userType || formData.us_usertype || ''}
                       readOnly
                     />
                   </div>

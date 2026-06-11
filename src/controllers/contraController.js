@@ -10,6 +10,14 @@ const Audit = require('../services/forensicAuditService');
  * Handles all contra entry CRUD operations
  */
 class ContraController {
+  constructor() {
+    this.createContra = this.createContra.bind(this);
+    this.getAllContras = this.getAllContras.bind(this);
+    this.getContraById = this.getContraById.bind(this);
+    this.updateContra = this.updateContra.bind(this);
+    this.deleteContra = this.deleteContra.bind(this);
+  }
+
   async getAllContras(req, res) {
     try {
       const { limit, offset, page } = queryHelper.getPaginationOptions(req.query);
@@ -91,6 +99,8 @@ class ContraController {
         ct_ref_number,
         ct_created_by: req.user.us_usid,
         ct_status: 'Active'
+      }, {
+        userId: req.user.us_usid
       });
       
       // ── Forensic Audit: INSERT (async) ─────────────────────────────────────────────
@@ -133,6 +143,8 @@ class ContraController {
         ct_modified_dt: new Date(),
         modified_by: req.user.us_usid,
         modified_on: new Date()
+      }, {
+        userId: req.user.us_usid
       });
       // ── Forensic Audit: UPDATE (async) ─────────────────────────────────────────
       Audit.logFieldChanges(contraBefore, updatedContra.toJSON(), {

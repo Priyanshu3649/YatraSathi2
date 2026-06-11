@@ -134,6 +134,42 @@ const AdminDashboard = () => {
           </div>
         </div>
 
+        {/* Receivable Summary Widget */}
+        <div className="dashboard-section receivables-widget">
+          <div className="section-header">
+            <h2>Receivables & Advances Summary</h2>
+            <button onClick={() => navigate('/admin/payments')} className="btn-link">
+              Manage Payments
+            </button>
+          </div>
+          <div className="receivables-grid">
+            <div className="receivable-stat">
+              <div className="receivable-number billed">
+                ₹{parseFloat(overview?.receivableSummary?.totalBilled || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </div>
+              <div className="receivable-label">Total Customer Billed</div>
+            </div>
+            <div className="receivable-stat">
+              <div className="receivable-number received">
+                ₹{parseFloat(overview?.receivableSummary?.totalReceived || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </div>
+              <div className="receivable-label">Total Customer Received</div>
+            </div>
+            <div className="receivable-stat">
+              <div className="receivable-number outstanding">
+                ₹{parseFloat(overview?.receivableSummary?.outstandingReceivables || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </div>
+              <div className="receivable-label">Outstanding Receivables</div>
+            </div>
+            <div className="receivable-stat">
+              <div className="receivable-number advance">
+                ₹{parseFloat(overview?.receivableSummary?.customerAdvances || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </div>
+              <div className="receivable-label">Customer Advances</div>
+            </div>
+          </div>
+        </div>
+
         <div className="dashboard-grid">
           <div className="dashboard-section">
             <div className="section-header">

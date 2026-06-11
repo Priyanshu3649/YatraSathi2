@@ -165,6 +165,15 @@ connectDB().then(async () => {
   }
   console.log('Database connection established');
   
+  // Schedule nightly financial ledger integrity checks
+  try {
+    const { runValidation } = require('./scripts/nightly-validation');
+    setTimeout(runValidation, 10000); // Run check 10 seconds after server startup
+    setInterval(runValidation, 24 * 60 * 60 * 1000); // Run check every 24 hours
+  } catch (scheduleErr) {
+    console.error('Failed to schedule nightly integrity checks:', scheduleErr.message);
+  }
+  
   const PORT = process.env.PORT || 5004;
 
   let server;

@@ -10,6 +10,14 @@ const Audit = require('../services/forensicAuditService');
  * Handles all receipt CRUD operations
  */
 class ReceiptController {
+  constructor() {
+    this.createReceipt = this.createReceipt.bind(this);
+    this.getAllReceipts = this.getAllReceipts.bind(this);
+    this.getReceiptById = this.getReceiptById.bind(this);
+    this.updateReceipt = this.updateReceipt.bind(this);
+    this.deleteReceipt = this.deleteReceipt.bind(this);
+  }
+
   async getAllReceipts(req, res) {
     try {
       const { limit, offset, page } = queryHelper.getPaginationOptions(req.query);
@@ -102,6 +110,8 @@ class ReceiptController {
         rc_narration,
         rc_created_by: req.user.us_usid,
         rc_status: 'Active'
+      }, {
+        userId: req.user.us_usid
       });
       
       // ── Forensic Audit: INSERT (async) ─────────────────────────────────────────────
@@ -144,6 +154,8 @@ class ReceiptController {
         rc_modified_dt: new Date(),
         modified_by: req.user.us_usid,
         modified_on: new Date()
+      }, {
+        userId: req.user.us_usid
       });
       // ── Forensic Audit: UPDATE (async) ─────────────────────────────────────────
       Audit.logFieldChanges(receiptBefore, updatedReceipt.toJSON(), {

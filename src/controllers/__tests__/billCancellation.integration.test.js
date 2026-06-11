@@ -114,6 +114,14 @@ jest.mock('../../services/forensicAuditService', () => ({
   ACTIONS: { CANCEL: 'CANCEL' },
 }));
 
+jest.mock('../../services/CustomerLedgerService', () => ({
+  cancelBillAllocations: jest.fn().mockResolvedValue(),
+  allocatePaymentOnCreation: jest.fn().mockResolvedValue(),
+  adjustAdvanceOnBillCreation: jest.fn().mockResolvedValue(),
+  reversePaymentAllocations: jest.fn().mockResolvedValue(),
+  getCustomerFinancialSummary: jest.fn().mockResolvedValue({}),
+}));
+
 jest.mock('../../utils/billPdfGenerator', () => ({
   generateBillPDF: jest.fn(),
 }));

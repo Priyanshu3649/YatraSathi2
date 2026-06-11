@@ -4,6 +4,8 @@ const router = express.Router();
 
 // Import controllers
 const { contra, payment, receipt, journal, ledger } = require('../controllers/accountingController');
+const customerLedger = require('../controllers/customerLedgerController');
+
 
 // Middleware for authentication (if needed)
 const authenticateToken = require('../middleware/authMiddleware');
@@ -58,5 +60,10 @@ router.get('/ledgers/types', ledger.getLedgerTypes);
 router.get('/ledgers/balance/:name', ledger.getLedgerBalance);
 router.get('/ledgers/:name', ledger.getLedgerByName);
 router.post('/ledgers', ledger.createLedger);
+
+// ==================== CUSTOMER LEDGER VALIDATION ROUTES ====================
+router.get('/customer/:id/summary', customerLedger.getCustomerSummary);
+router.get('/customer/:id/ledger', customerLedger.getCustomerLedger);
+router.get('/customer/:id/outstanding-bills', customerLedger.getCustomerOutstandingBills);
 
 module.exports = router;

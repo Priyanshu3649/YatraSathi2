@@ -28,10 +28,11 @@ export const RealTimeProvider = ({ children }) => {
             return;
         }
 
-        // Initialize socket connection using the same origin to leverage Vite's proxy
-        const newSocket = io({
+        // Initialize socket connection - explicitly use current origin to go through Vite proxy
+        const newSocket = io(window.location.origin, {
             reconnectionAttempts: 5,
             reconnectionDelay: 5000,
+            transports: ['websocket', 'polling'], // Prefer websocket, fallback to polling
         });
 
         newSocket.on('connect', () => {

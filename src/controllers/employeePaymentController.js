@@ -10,8 +10,9 @@ const {
   cuXcustomer: Customer,
   bkXbooking: Booking
 } = require('../models');
-const { Op } = require('sequelize');
-const { sequelize } = require('../../config/db');
+const { sequelize, sequelizeTVL } = require('../../config/db');
+const Audit = require('../services/forensicAuditService');
+
 
 // Utility function to get accounting period
 const getAccountingPeriod = (date) => {
@@ -498,39 +499,164 @@ const updatePayment = async (req, res) => {
   }
 };
 
-// Delete payment (soft delete)
+// Delete payment (soft delete / reversal)
 const deletePayment = async (req, res) => {
+  const transaction = await sequelizeTVL.transaction();
   try {
     const { id } = req.params;
     
-    const payment = await Payment.findByPk(id);
+    const payment = await Payment.findByPk(id, { transaction });
     
     if (!payment) {
+      await transaction.rollback();
       return res.status(404).json({
         success: false,
         message: 'Payment not found'
       });
     }
+
+    if (payment.pt_status === 'REVERSED') {
+      await transaction.rollback();
+      return res.status(400).json({
+        success: false,
+        message: 'Payment is already reversed'
+      });
+    }
     
     // Soft delete by updating status
     await payment.update({
-      pt_status: 'DELETED',
+      pt_status: 'REVERSED',
+      pt_unallocamt: 0.00,
+      pt_allocatedamt: 0.00,
       mby: req.user.us_usid,
       mdtm: new Date()
+    }, { transaction });
+
+    // Reverse all allocations and write compensating ledger entry
+    const CustomerLedgerService = require('../services/CustomerLedgerService');
+    await CustomerLedgerService.reversePaymentAllocations(
+      payment.pt_ptid,
+      parseFloat(payment.pt_amount),
+      payment.pt_custid,
+      transaction,
+      req.user.us_usid
+    );
+    
+    await transaction.commit();
+
+    // Forensic Audit: PAYMENT_REVERSED
+    Audit.logAction({
+      module: Audit.MODULES.PAYMENT,
+      recordId: payment.pt_ptid,
+      action: 'PAYMENT_REVERSED',
+      req,
+      fieldName: 'pt_status',
+      oldValue: 'ACTIVE',
+      newValue: 'REVERSED'
     });
     
     res.json({
       success: true,
-      message: 'Payment deleted successfully'
+      message: 'Payment reversed successfully'
     });
   } catch (error) {
-    console.error('Delete payment error:', error);
+    await transaction.rollback();
+    console.error('Delete/Reverse payment error:', error);
     res.status(500).json({
       success: false,
-      message: error.message || 'Failed to delete payment'
+      message: error.message || 'Failed to delete/reverse payment'
     });
   }
 };
+
+// Create customer payment
+const createCustomerPayment = async (req, res) => {
+  const transaction = await sequelizeTVL.transaction();
+  try {
+    const { customerId, amount, mode, refNo, paymentDate, remarks } = req.body;
+
+    if (!customerId || !amount) {
+      return res.status(400).json({
+        success: false,
+        message: 'Customer ID and amount are required'
+      });
+    }
+
+    // Resolve Account ID (pt_acid)
+    const { Account: AccountModel } = require('../models');
+    let account = await AccountModel.findOne({ where: { ac_usid: customerId }, transaction });
+    if (!account) {
+      account = await AccountModel.findOne({ transaction });
+    }
+    const acid = account ? account.ac_acid : 1;
+
+    const payDate = paymentDate ? new Date(paymentDate) : new Date();
+    const finYear = getFinancialYear(payDate);
+    const period = getAccountingPeriod(payDate);
+
+    // Create payment record in ptXpayment
+    const payment = await Payment.create({
+      pt_custid: customerId,
+      pt_totalamt: amount,
+      pt_amount: amount,
+      pt_status: 'ACTIVE',
+      pt_verification_status: 'PENDING',
+      pt_remarks: remarks || null,
+      pt_acid: acid,
+      pt_mode: mode || 'CASH',
+      pt_refno: refNo || null,
+      pt_paydt: payDate,
+      pt_rcvdt: new Date(),
+      pt_allocatedamt: 0.00,
+      pt_unallocamt: amount,
+      pt_finyear: finYear,
+      pt_period: period,
+      pt_locked: 0,
+      eby: req.user.us_usid,
+      edtm: new Date(),
+      mby: req.user.us_usid,
+      mdtm: new Date()
+    }, { transaction });
+
+    // Trigger CustomerLedgerService auto-allocation
+    const CustomerLedgerService = require('../services/CustomerLedgerService');
+    await CustomerLedgerService.allocatePaymentOnCreation(
+      payment.pt_ptid,
+      customerId,
+      parseFloat(amount),
+      transaction,
+      req.user.us_usid
+    );
+
+    await transaction.commit();
+
+    // Forensic Audit: PAYMENT_CREATED
+    Audit.logAction({
+      module: Audit.MODULES.PAYMENT,
+      recordId: payment.pt_ptid,
+      action: 'PAYMENT_CREATED',
+      req,
+      fieldName: 'pt_amount',
+      oldValue: null,
+      newValue: String(amount)
+    });
+
+    res.status(201).json({
+      success: true,
+      message: 'Customer payment created and allocated successfully',
+      payment
+    });
+
+  } catch (error) {
+    await transaction.rollback();
+    console.error('Create customer payment error:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message || 'Failed to create customer payment'
+    });
+  }
+};
+
 
 // Verify payment
 const verifyPayment = async (req, res) => {
@@ -579,5 +705,6 @@ module.exports = {
   refundPayment,
   updatePayment,
   deletePayment,
-  verifyPayment
+  verifyPayment,
+  createCustomerPayment
 };

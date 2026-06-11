@@ -10,6 +10,14 @@ const Audit = require('../services/forensicAuditService');
  * Handles all journal entry CRUD operations
  */
 class JournalController {
+  constructor() {
+    this.createJournal = this.createJournal.bind(this);
+    this.getAllJournals = this.getAllJournals.bind(this);
+    this.getJournalById = this.getJournalById.bind(this);
+    this.updateJournal = this.updateJournal.bind(this);
+    this.deleteJournal = this.deleteJournal.bind(this);
+  }
+
   async getAllJournals(req, res) {
     try {
       const { limit, offset, page } = queryHelper.getPaginationOptions(req.query);
@@ -100,7 +108,10 @@ class JournalController {
         je_voucher_type,
         je_created_by: req.user.us_usid,
         je_status: 'Active'
-      }, req.audit ? req.audit.sequelizeOptions() : {});
+      }, {
+        ...(req.audit ? req.audit.sequelizeOptions() : {}),
+        userId: req.user.us_usid
+      });
       
       // Forensic Audit: INSERT
       if (req.audit) req.audit.logInsert(journal.toJSON(), { module: 'Journal', recordId: journal.je_jeid });
@@ -148,6 +159,8 @@ class JournalController {
         je_modified_dt: new Date(),
         modified_by: req.user.us_usid,
         modified_on: new Date()
+      }, {
+        userId: req.user.us_usid
       });
       // ── Forensic Audit: UPDATE (async) ─────────────────────────────────────────
       Audit.logFieldChanges(journalBefore, updatedJournal.toJSON(), {

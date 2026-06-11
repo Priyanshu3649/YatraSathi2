@@ -1628,6 +1628,26 @@ const Billing = () => {
           }
         }} title="Delete" disabled={!selectedBill || selectedBill.bl_status === 'CANCELLED'}>Delete</button>
         <button className="erp-button" onClick={handleCancelBill} title="Cancel Bill (F6)" disabled={!selectedBill || selectedBill.bl_status === 'CANCELLED' || selectedBill.status === 'CANCELLED'}>Cancel Bill</button>
+        <button className="erp-button" style={{ background: '#2e7d32', color: '#fff' }} onClick={() => {
+          if (selectedBill) {
+            const billId = selectedBill.id || selectedBill.bl_id;
+            const billNo = selectedBill.bl_bill_no || selectedBill.billNo || selectedBill.bl_entry_no;
+            const amount = selectedBill.bl_total_amount || selectedBill.totalAmount || 0;
+            const bookingId = selectedBill.bl_booking_id || selectedBill.bookingId;
+            navigate('/payments', {
+              state: {
+                billId,
+                billNo,
+                bookingId,
+                amount: parseFloat(amount) || 0,
+                mode: 'payment',
+                fromBilling: true
+              }
+            });
+          } else {
+            alert('Please select a bill first');
+          }
+        }} title="Record payment against selected bill" disabled={!selectedBill}>Record Payment</button>
         <div className="erp-tool-separator"></div>
         <button className="erp-button" onClick={handleSave} disabled={!isEditing}>Save</button>
         <button className="erp-button" onClick={fetchBills} title="Refresh">Refresh</button>

@@ -11,10 +11,10 @@ const {
   refundPayment,
   updatePayment,
   deletePayment,
-  verifyPayment
+  verifyPayment,
+  createCustomerPayment
 } = require('../controllers/employeePaymentController');
 
-const { createPayment } = require('../controllers/paymentController');
 const authMiddleware = require('../middleware/authMiddleware');
 const { emEmployee: Employee } = require('../models');
 
@@ -76,7 +76,7 @@ router.post('/', async (req, res, next) => {
     });
   }
   next();
-}, createPayment);
+}, createCustomerPayment);
 
 // Allocate payment to PNRs (accounts team and admin)
 router.post('/:paymentId/allocate', async (req, res, next) => {

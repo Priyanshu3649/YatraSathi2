@@ -49,6 +49,7 @@ import Billing from './pages/Billing';
 import CancellationHistory from './pages/CancellationHistory';
 import PrintBill from './pages/PrintBill';
 import ServiceChargeManager from './pages/ServiceChargeManager';
+import CustomerDetails from './pages/CustomerDetails';
 import AuditTrail from './pages/AuditTrail';
 import AuditRetentionConfig from './pages/AuditRetentionConfig';
 
@@ -212,6 +213,7 @@ function App() {
                       <Route path="/admin-dashboard" element={<RoleBasedRoute requiredRole="ADM"><DynamicAdminPanel /></RoleBasedRoute>} />
                       <Route path="/admin-panel" element={<Navigate to="/admin-dashboard" replace />} />
                       <Route path="/admin/service-charges" element={<RoleBasedRoute requiredRole="ADM"><ServiceChargeManager /></RoleBasedRoute>} />
+                                            <Route path="/admin/customers/:customerId" element={<RoleBasedRoute requiredRole="ADM"><CustomerDetails /></RoleBasedRoute>} />
                       <Route path="/admin/*" element={<RoleBasedRoute requiredRole="ADM"><DynamicAdminPanel /></RoleBasedRoute>} />
 
                       {/* Forensic Audit Module — ADM only */}

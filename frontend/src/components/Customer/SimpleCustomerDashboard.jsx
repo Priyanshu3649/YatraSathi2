@@ -9,6 +9,7 @@ const SimpleCustomerDashboard = () => {
     confirmedRequests: 0,
     totalPayments: 0
   });
+  const [financialSummary, setFinancialSummary] = useState(null);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
 
@@ -33,8 +34,9 @@ const SimpleCustomerDashboard = () => {
           totalRequests: data.data.stats?.totalBookings || 0,
           pendingRequests: data.data.stats?.activeBookings || 0,
           confirmedRequests: data.data.stats?.totalBookings || 0,
-          totalPayments: 0
+          totalPayments: data.data.financialSummary?.totalReceived || 0
         });
+        setFinancialSummary(data.data.financialSummary || null);
       }
     } catch (error) {
       console.error('Dashboard stats fetch error:', error);
@@ -136,6 +138,63 @@ const SimpleCustomerDashboard = () => {
           </div>
         </div>
       </div>
+
+      {/* Customer Ledger Summary Card */}
+      {financialSummary && (
+        <div className="ledger-summary-section">
+          <h2>Financial Ledger Summary</h2>
+          <div className="glass-ledger-card">
+            <div className="ledger-card-header">
+              <h3 className="ledger-card-title">
+                <span>💳</span> Account Status
+              </h3>
+              <span className="ledger-card-badge">
+                {financialSummary.outstandingAmount > 0 ? 'Outstanding Balance' : 'Account Settled'}
+              </span>
+            </div>
+            
+            <div className="ledger-grid">
+              <div className="ledger-item">
+                <span className="ledger-item-label">Total Billing</span>
+                <span className="ledger-item-value">₹{parseFloat(financialSummary.totalBilled || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+              </div>
+              <div className="ledger-item">
+                <span className="ledger-item-label">Total Payments</span>
+                <span className="ledger-item-value">₹{parseFloat(financialSummary.totalReceived || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+              </div>
+              <div className="ledger-item">
+                <span className="ledger-item-label">Outstanding Amount</span>
+                <span className={`ledger-item-value ${financialSummary.outstandingAmount > 0 ? 'outstanding' : ''}`}>
+                  ₹{parseFloat(financialSummary.outstandingAmount || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </span>
+              </div>
+              <div className="ledger-item">
+                <span className="ledger-item-label">Advance Credit</span>
+                <span className={`ledger-item-value ${financialSummary.advanceAmount > 0 ? 'advance' : ''}`}>
+                  ₹{parseFloat(financialSummary.advanceAmount || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </span>
+              </div>
+            </div>
+
+            {(financialSummary.lastBillDate || financialSummary.lastPaymentDate) && (
+              <div className="ledger-card-footer">
+                {financialSummary.lastBillDate && (
+                  <div className="ledger-footer-info">
+                    <span>📅</span> 
+                    <span><strong>Last Bill:</strong> {new Date(financialSummary.lastBillDate).toLocaleDateString(undefined, { dateStyle: 'medium' })}</span>
+                  </div>
+                )}
+                {financialSummary.lastPaymentDate && (
+                  <div className="ledger-footer-info">
+                    <span>💰</span> 
+                    <span><strong>Last Payment:</strong> {new Date(financialSummary.lastPaymentDate).toLocaleDateString(undefined, { dateStyle: 'medium' })}</span>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       <div className="quick-actions-section">
         <h2>Quick Actions</h2>

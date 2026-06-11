@@ -1376,6 +1376,9 @@ const DynamicAdminPanel = () => {
         <div className="erp-tool-separator"></div>
         <button className="erp-button" onClick={handleSave} disabled={!isEditing}>Save</button>
         <button className="erp-button" onClick={fetchData}>Refresh</button>
+        {activeModule === 'customers' && selectedRecord && (
+          <button className="erp-button" style={{ background: '#1565c0', color: '#fff' }} onClick={() => navigate(`/admin/customers/${selectedRecord.cu_cusid || selectedRecord.cu_usid || selectedRecord.cu_custno}`)}>View Details</button>
+        )}
         <div className="erp-tool-separator"></div>
         <button className="erp-button" onClick={handleExportPDF} disabled={loading} title="Export current view to PDF">Export PDF</button>
         {['employees', 'bookings', 'billings'].includes(activeModule) && (
@@ -1722,6 +1725,11 @@ const DynamicAdminPanel = () => {
                             key={idx}
                             className={isSelected ? 'selected' : ''}
                             onClick={() => handleRecordSelect(record)}
+                                                        onDoubleClick={() => {
+                                                          if (activeModule === 'customers') {
+                                                            navigate(`/admin/customers/${record.cu_cusid || record.cu_usid || record.cu_custno}`);
+                                                          }
+                                                        }}
                           >
                             <td><input type="checkbox" checked={!!isSelected} onChange={() => {}} /></td>
                             {currentModule.columns.map((col, colIdx) => {

@@ -71,6 +71,17 @@ export const KeyboardNavigationProvider = ({ children }) => {
 
   // SET ACTIVE FORM (SCREEN SWITCHING)
   const setActiveForm = useCallback((formId) => {
+    if (!formId) {
+      setKeyboardState(prev => ({
+        ...prev,
+        activeFormId: '',
+        focusedFieldIndex: 0,
+        mode: 'VIEW',
+        activeZone: 'TABLE'
+      }));
+      return;
+    }
+
     if (!registeredForms.current.has(formId)) {
       console.error(`Cannot set active form ${formId}: not registered`);
       return;

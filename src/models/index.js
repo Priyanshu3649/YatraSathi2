@@ -57,6 +57,9 @@ const Journal = require('./Journal');
 const ForensicAuditLog = require('./ForensicAuditLog');
 const ServiceCharge = require('./ServiceCharge');
 const ServiceChargeDefault = require('./ServiceChargeDefault');
+const PaymentAllocation = require('./PaymentAllocation');
+const CustomerLedger = require('./CustomerLedger');
+
 
 // Set up associations
 // Company associations
@@ -218,8 +221,30 @@ BillTVL.belongsTo(BookingTVL, { foreignKey: 'bl_booking_id', targetKey: 'bk_bkid
 BookingTVL.hasOne(BillTVL, { foreignKey: 'bl_booking_id', sourceKey: 'bk_bkid', as: 'billing' });
 console.log('✅ BillTVL associations defined');
 
+// CustomerTVL <-> BookingTVL associations
+CustomerTVL.hasMany(BookingTVL, { foreignKey: 'bk_usid', sourceKey: 'cu_usid', as: 'bookings' });
+BookingTVL.belongsTo(CustomerTVL, { foreignKey: 'bk_usid', targetKey: 'cu_usid', as: 'customer' });
+
+// Payment, Contra, Receipt, and Journal associations
+Payment.belongsTo(User, { foreignKey: 'py_created_by', targetKey: 'us_usid', as: 'creator' });
+Contra.belongsTo(User, { foreignKey: 'ct_created_by', targetKey: 'us_usid', as: 'creator' });
+Receipt.belongsTo(User, { foreignKey: 'rc_created_by', targetKey: 'us_usid', as: 'creator' });
+Journal.belongsTo(User, { foreignKey: 'je_created_by', targetKey: 'us_usid', as: 'creator' });
+console.log('✅ Payment, Contra, Receipt, and Journal associations defined');
+
 // ForensicAuditLog associations
-ForensicAuditLog.belongsTo(UserTVL, { foreignKey: 'performedBy', targetKey: 'us_usid', as: 'user' });
+ForensicAuditLog.belongsTo(UserTVL, { foreignKey: 'changed_by', targetKey: 'us_usid', as: 'user' });
+
+// CustomerLedger associations
+CustomerLedger.belongsTo(CustomerTVL, { foreignKey: 'customer_id', targetKey: 'cu_usid', as: 'customer' });
+CustomerTVL.hasMany(CustomerLedger, { foreignKey: 'customer_id', sourceKey: 'cu_usid', as: 'ledgerEntries' });
+
+// PaymentAllocation associations
+PaymentAllocation.belongsTo(PaymentTVL, { foreignKey: 'payment_id', targetKey: 'pt_ptid', as: 'payment' });
+PaymentAllocation.belongsTo(BillTVL, { foreignKey: 'bill_id', targetKey: 'bl_id', as: 'bill' });
+PaymentTVL.hasMany(PaymentAllocation, { foreignKey: 'payment_id', sourceKey: 'pt_ptid', as: 'allocations' });
+BillTVL.hasMany(PaymentAllocation, { foreignKey: 'bill_id', sourceKey: 'bl_id', as: 'allocations' });
+
 
 module.exports = {
   Company,
@@ -284,5 +309,7 @@ module.exports = {
   ApplicationTVL,
   ModuleTVL,
   ServiceCharge,
-  ServiceChargeDefault
+  ServiceChargeDefault,
+  PaymentAllocation,
+  CustomerLedger
 };

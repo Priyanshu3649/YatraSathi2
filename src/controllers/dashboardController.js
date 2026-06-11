@@ -24,106 +24,170 @@ const getAdminDashboard = async (req, res) => {
 
     const twentyFourHoursAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
     const fortyEightHoursAgo = new Date(now.getTime() - 48 * 60 * 60 * 1000);
-    
-    // 1. Overall Statistics & Trends
-    const [
-      totalBookings,
-      totalRevenueRecord,
-      totalPendingRecord,
-      bookingsToday,
-      bookingsYesterday,
-      revenueTodayRecord,
-      revenueYesterdayRecord
-    ] = await Promise.all([
-      BookingTVL.count(),
-      // Using 'RECEIVED' as verified from DB scan for success payments
-      PaymentTVL.sum('pt_amount', { where: { pt_status: 'RECEIVED' } }),
-      PaymentTVL.sum('pt_amount', { where: { pt_status: 'PENDING' } }),
-      
-      // Trend calculation data
-      BookingTVL.count({ where: { edtm: { [Op.gte]: twentyFourHoursAgo } } }),
-      BookingTVL.count({ where: { edtm: { [Op.lt]: twentyFourHoursAgo, [Op.gte]: fortyEightHoursAgo } } }),
-      
-      PaymentTVL.sum('pt_amount', { where: { pt_status: 'RECEIVED', edtm: { [Op.gte]: twentyFourHoursAgo } } }),
-      PaymentTVL.sum('pt_amount', { where: { pt_status: 'RECEIVED', edtm: { [Op.lt]: twentyFourHoursAgo, [Op.gte]: fortyEightHoursAgo } } })
-    ]);
-
-    // 2. Financial Metrics Breakdown (from BillTVL)
-    const financialSummary = await BillTVL.findOne({
-      attributes: [
-        [BillTVL.sequelize.fn('SUM', BillTVL.sequelize.col('bl_railway_fare')), 'netFare'],
-        [BillTVL.sequelize.fn('SUM', BillTVL.sequelize.col('bl_service_charge')), 'serviceCharges'],
-        [BillTVL.sequelize.fn('SUM', BillTVL.sequelize.col('bl_platform_fee')), 'platformFees'],
-        [BillTVL.sequelize.fn('SUM', BillTVL.sequelize.col('bl_discount')), 'discounts'],
-        [BillTVL.sequelize.fn('SUM', BillTVL.sequelize.col('bl_gst')), 'taxes'],
-        [BillTVL.sequelize.fn('SUM', BillTVL.sequelize.col('bl_total_amount')), 'totalBilled']
-      ],
-      where: { bl_status: { [Op.not]: 'CAN' } },
-      raw: true
-    });
-
-    // 3. Risk & Outstanding (from BillTVL)
-    const [
-      pendingBills,
-      partialPayments,
-      refundsPending
-    ] = await Promise.all([
-      BillTVL.findAll({
-        attributes: [
-          [BillTVL.sequelize.fn('COUNT', BillTVL.sequelize.col('bl_id')), 'count'],
-          [BillTVL.sequelize.fn('SUM', BillTVL.sequelize.col('bl_total_amount')), 'amount']
-        ],
-        where: { payment_status: 'UNPAID', bl_status: { [Op.not]: 'CAN' } },
-        raw: true
-      }),
-      BillTVL.findAll({
-        attributes: [
-          [BillTVL.sequelize.fn('COUNT', BillTVL.sequelize.col('bl_id')), 'count'],
-          [BillTVL.sequelize.fn('SUM', BillTVL.sequelize.col('bl_total_amount')), 'amount']
-        ],
-        where: { payment_status: 'PARTIALLY_PAID', bl_status: { [Op.not]: 'CAN' } },
-        raw: true
-      }),
-      BillTVL.count({ where: { payment_status: 'REFUND_DUE' } })
-    ]);
-
-    // 4. Operational Status (Today vs Month)
-    const [
-      ticketsToday,
-      ticketsMonth,
-      cancelledToday,
-      cancelledMonth
-    ] = await Promise.all([
-      BookingTVL.count({ where: { bk_status: 'CONFIRMED', edtm: { [Op.gte]: startOfToday } } }),
-      BookingTVL.count({ where: { bk_status: 'CONFIRMED', edtm: { [Op.gte]: startOfMonth } } }),
-      BookingTVL.count({ where: { bk_status: 'CANCELLED', edtm: { [Op.gte]: startOfToday } } }),
-      BookingTVL.count({ where: { bk_status: 'CANCELLED', edtm: { [Op.gte]: startOfMonth } } })
-    ]);
-
-    // 5. Recent Activity Log (from ForensicAuditLog)
-    const logs = await ForensicAuditLog.findAll({
-      limit: 10,
-      order: [['performed_on', 'DESC']],
-      include: [{
-        model: UserTVL,
-        as: 'user',
-        attributes: ['us_fname', 'us_roid']
-      }]
-    });
-
-    const recentActivity = logs.map(log => ({
-      timestamp: new Date(log.performedOn).toLocaleString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
-      module: log.entityName,
-      action: log.actionType,
-      reference: `${log.entityName}-${log.entityId}`,
-      user: log.user?.us_fname || 'SYS'
-    }));
 
     // Helper to format currency
     const formatCurrency = (val) => {
       const num = parseFloat(val || 0);
       return `₹${num.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
     };
+
+    // ── Section 1: Booking & Payment Statistics ──────────────────────────
+    let totalBookings = 0, totalRevenueRecord = 0, totalPendingRecord = 0;
+    let bookingsToday = 0, bookingsYesterday = 0;
+    let revenueTodayRecord = 0, revenueYesterdayRecord = 0;
+    try {
+      [
+        totalBookings,
+        totalRevenueRecord,
+        totalPendingRecord,
+        bookingsToday,
+        bookingsYesterday,
+        revenueTodayRecord,
+        revenueYesterdayRecord
+      ] = await Promise.all([
+        BookingTVL.count(),
+        PaymentTVL.sum('pt_amount', { where: { pt_status: 'RECEIVED' } }),
+        PaymentTVL.sum('pt_amount', { where: { pt_status: 'PENDING' } }),
+        BookingTVL.count({ where: { edtm: { [Op.gte]: twentyFourHoursAgo } } }),
+        BookingTVL.count({ where: { edtm: { [Op.lt]: twentyFourHoursAgo, [Op.gte]: fortyEightHoursAgo } } }),
+        PaymentTVL.sum('pt_amount', { where: { pt_status: 'RECEIVED', edtm: { [Op.gte]: twentyFourHoursAgo } } }),
+        PaymentTVL.sum('pt_amount', { where: { pt_status: 'RECEIVED', edtm: { [Op.lt]: twentyFourHoursAgo, [Op.gte]: fortyEightHoursAgo } } })
+      ]);
+    } catch (err) {
+      console.error('Dashboard: Booking/Payment stats failed:', err.message);
+    }
+
+    // ── Section 2: Financial Metrics Breakdown (from BillTVL) ────────────
+    let financialSummary = { netFare: 0, serviceCharges: 0, platformFees: 0, discounts: 0, taxes: 0, totalBilled: 0 };
+    try {
+      financialSummary = await BillTVL.findOne({
+        attributes: [
+          [BillTVL.sequelize.fn('SUM', BillTVL.sequelize.col('bl_railway_fare')), 'netFare'],
+          [BillTVL.sequelize.fn('SUM', BillTVL.sequelize.col('bl_service_charge')), 'serviceCharges'],
+          [BillTVL.sequelize.fn('SUM', BillTVL.sequelize.col('bl_platform_fee')), 'platformFees'],
+          [BillTVL.sequelize.fn('SUM', BillTVL.sequelize.col('bl_discount')), 'discounts'],
+          [BillTVL.sequelize.fn('SUM', BillTVL.sequelize.col('bl_gst')), 'taxes'],
+          [BillTVL.sequelize.fn('SUM', BillTVL.sequelize.col('bl_total_amount')), 'totalBilled']
+        ],
+        where: { bl_status: { [Op.not]: 'CAN' } },
+        raw: true
+      }) || financialSummary;
+    } catch (err) {
+      console.error('Dashboard: Financial summary failed:', err.message);
+    }
+
+    let totalReceived = 0;
+    try {
+      totalReceived = await PaymentTVL.sum('pt_amount', {
+        where: { pt_status: { [Op.not]: 'REVERSED' } }
+      }) || 0;
+    } catch (err) {
+      console.error('Dashboard: Total received failed:', err.message);
+    }
+
+    let balanceRes = { outstanding: 0, advances: 0 };
+    try {
+      [balanceRes] = await BillTVL.sequelize.query(`
+        SELECT 
+          SUM(CASE WHEN balance > 0 THEN balance ELSE 0 END) AS outstanding,
+          SUM(CASE WHEN balance < 0 THEN ABS(balance) ELSE 0 END) AS advances
+        FROM (
+          SELECT 
+            c.cu_usid,
+            (COALESCE(b.total_billed, 0) - COALESCE(p.total_received, 0)) AS balance
+          FROM cuXcustomer c
+          LEFT JOIN (
+            SELECT bk.bk_usid, SUM(bl.bl_total_amount) AS total_billed
+            FROM blXbilling bl
+            JOIN bkXbooking bk ON bl.bl_booking_id = bk.bk_bkid
+            WHERE bl.bl_status NOT IN ('CANCELLED', 'CAN')
+            GROUP BY bk.bk_usid
+          ) b ON c.cu_usid = b.bk_usid
+          LEFT JOIN (
+            SELECT pt_custid, SUM(pt_amount) AS total_received
+            FROM ptXpayment
+            WHERE pt_status != 'REVERSED'
+            GROUP BY pt_custid
+          ) p ON c.cu_usid = p.pt_custid
+        ) AS customer_balances
+      `, { type: BillTVL.sequelize.QueryTypes.SELECT });
+    } catch (err) {
+      console.error('Dashboard: Balance calculation failed:', err.message);
+    }
+
+    // ── Section 3: Risk & Outstanding ────────────────────────────────────
+    let pendingBills = [{ count: 0, amount: 0 }];
+    let partialPayments = [{ count: 0, amount: 0 }];
+    let refundsPending = 0;
+    try {
+      [
+        pendingBills,
+        partialPayments,
+        refundsPending
+      ] = await Promise.all([
+        BillTVL.findAll({
+          attributes: [
+            [BillTVL.sequelize.fn('COUNT', BillTVL.sequelize.col('bl_id')), 'count'],
+            [BillTVL.sequelize.fn('SUM', BillTVL.sequelize.col('bl_total_amount')), 'amount']
+          ],
+          where: { payment_status: 'UNPAID', bl_status: { [Op.not]: 'CAN' } },
+          raw: true
+        }),
+        BillTVL.findAll({
+          attributes: [
+            [BillTVL.sequelize.fn('COUNT', BillTVL.sequelize.col('bl_id')), 'count'],
+            [BillTVL.sequelize.fn('SUM', BillTVL.sequelize.col('bl_total_amount')), 'amount']
+          ],
+          where: { payment_status: 'PARTIALLY_PAID', bl_status: { [Op.not]: 'CAN' } },
+          raw: true
+        }),
+        BillTVL.count({ where: { payment_status: 'REFUND_DUE' } })
+      ]);
+    } catch (err) {
+      console.error('Dashboard: Risk metrics failed:', err.message);
+    }
+
+    // ── Section 4: Operational Status ────────────────────────────────────
+    let ticketsToday = 0, ticketsMonth = 0, cancelledToday = 0, cancelledMonth = 0;
+    try {
+      [
+        ticketsToday,
+        ticketsMonth,
+        cancelledToday,
+        cancelledMonth
+      ] = await Promise.all([
+        BookingTVL.count({ where: { bk_status: 'CONFIRMED', edtm: { [Op.gte]: startOfToday } } }),
+        BookingTVL.count({ where: { bk_status: 'CONFIRMED', edtm: { [Op.gte]: startOfMonth } } }),
+        BookingTVL.count({ where: { bk_status: 'CANCELLED', edtm: { [Op.gte]: startOfToday } } }),
+        BookingTVL.count({ where: { bk_status: 'CANCELLED', edtm: { [Op.gte]: startOfMonth } } })
+      ]);
+    } catch (err) {
+      console.error('Dashboard: Operational stats failed:', err.message);
+    }
+
+    // ── Section 5: Recent Activity Log (from ForensicAuditLog) ───────────
+    let recentActivity = [];
+    try {
+      const logs = await ForensicAuditLog.findAll({
+        limit: 10,
+        order: [['change_timestamp', 'DESC']],
+        include: [{
+          model: UserTVL,
+          as: 'user',
+          attributes: ['us_fname', 'us_roid']
+        }]
+      });
+
+      recentActivity = logs.map(log => ({
+        timestamp: new Date(log.change_timestamp).toLocaleString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
+        module: log.module_name,
+        action: log.action_type,
+        reference: `${log.module_name}-${log.record_id}`,
+        user: log.user?.us_fname || 'SYS'
+      }));
+    } catch (err) {
+      console.error('Dashboard: Audit log failed:', err.message);
+    }
 
     // Format for Frontend
     const dashboardData = {
@@ -133,6 +197,13 @@ const getAdminDashboard = async (req, res) => {
         totalPending: parseFloat(totalPendingRecord || 0),
         refundsInProcess: refundsPending || 0,
         
+        receivableSummary: {
+          totalBilled: parseFloat(financialSummary.totalBilled || 0),
+          totalReceived: parseFloat(totalReceived || 0),
+          outstandingReceivables: parseFloat(balanceRes.outstanding || balanceRes[0]?.outstanding || 0),
+          customerAdvances: parseFloat(balanceRes.advances || balanceRes[0]?.advances || 0)
+        },
+
         // Detailed Financials
         netFareCollected: formatCurrency(financialSummary.netFare),
         serviceCharges: formatCurrency(financialSummary.serviceCharges),
@@ -140,7 +211,7 @@ const getAdminDashboard = async (req, res) => {
         discountsGiven: formatCurrency(financialSummary.discounts),
         taxesCollected: formatCurrency(financialSummary.taxes),
         totalBilled: formatCurrency(financialSummary.totalBilled),
-        agentFees: "₹0.00", // Placeholder if not in model
+        agentFees: "₹0.00",
 
         // Risk Metrics
         pendingBillsCount: parseInt(pendingBills[0]?.count || 0),

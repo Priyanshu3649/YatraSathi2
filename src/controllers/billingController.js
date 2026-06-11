@@ -10,6 +10,8 @@ const { generateBillPDF } = require('../utils/billPdfGenerator');
 const crypto = require('crypto');
 const numberToWords = require('../utils/numberToWords');
 const Audit = require('../services/forensicAuditService');
+const CustomerLedgerService = require('../services/CustomerLedgerService');
+
 
 
 // Helper function to generate journal entry number
@@ -605,8 +607,23 @@ const createBill = async (req, res) => {
         // The passengers can be updated later if needed
       }
       
+      // YatraSathi Customer Ledger: write BILL entry and auto-adjust advances
+      try {
+        const customerId = booking.bk_usid;
+        await CustomerLedgerService.adjustAdvanceOnBillCreation(
+          bill.bl_id,
+          customerId,
+          finalTotalAmount,
+          transaction,
+          req.user.us_usid
+        );
+      } catch (ledgerErr) {
+        console.error('New receivables ledger entry on create failed:', ledgerErr);
+      }
+      
       // 7. Commit transaction (ALL operations succeed together)
       await transaction.commit();
+
       
       console.log(`✅ Bill ${finalBillNumber} created successfully for booking ${bookingId}`);
       console.log(`✅ Booking ${bookingId} status updated to CONFIRMED`);
@@ -1543,6 +1560,27 @@ const cancelBill = async (req, res) => {
       },
       { transaction }
     );
+
+    // YatraSathi Customer Ledger: cancel allocations and write BILL_CANCELLED entry
+    try {
+      const customerId = bill.bl_usid || bill.bl_customer_id;
+      let finalCustomerId = customerId;
+      if (!finalCustomerId && bill.bl_booking_id) {
+        const booking = await BookingTVL.findByPk(bill.bl_booking_id, { transaction });
+        if (booking) finalCustomerId = booking.bk_usid;
+      }
+      
+      await CustomerLedgerService.cancelBillAllocations(
+        bill.bl_id,
+        billTotal,
+        finalCustomerId || 'CUS001',
+        transaction,
+        req.user.us_usid
+      );
+    } catch (ledgerErr) {
+      console.error('New receivables ledger entry on cancel failed:', ledgerErr);
+    }
+
 
 
     const bookingId = bill.bl_booking_id;

@@ -1,7 +1,7 @@
 // API service for making HTTP requests to the backend
+// Use relative /api path so requests go through Vite's proxy to the backend
 const API_BASE_URL =
-  import.meta.env.VITE_API_URL || 'http://localhost:5004';
-console.log('API URL:', API_BASE_URL);
+  import.meta.env.VITE_API_URL || '/api';
 // Create headers for requests
 const getHeaders = (includeAuth = false) => {
   const headers = {
@@ -1579,6 +1579,55 @@ export const customerAPI = {
     return data;
   },
 
+  // Create new customer (admin only)
+  createCustomer: async (customerData) => {
+    const response = await fetch(`${API_BASE_URL}/customer`, {
+      method: 'POST',
+      headers: getHeaders(true),
+      body: JSON.stringify(customerData)
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.message || 'Failed to create customer');
+    }
+
+    return data;
+  },
+
+  // Get customer details
+  getCustomerDetails: async (customerId) => {
+    const response = await fetch(`${API_BASE_URL}/customer/${customerId}/details`, {
+      method: 'GET',
+      headers: getHeaders(true)
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.message || 'Failed to get customer details');
+    }
+
+    return data;
+  },
+
+  // Get customer ledger
+  getCustomerLedger: async (customerId) => {
+    const response = await fetch(`${API_BASE_URL}/customer/${customerId}/ledger`, {
+      method: 'GET',
+      headers: getHeaders(true)
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.message || 'Failed to get customer ledger');
+    }
+
+    return data;
+  },
+
   // Get all customers (admin only)
   getAllCustomers: async (params = {}) => {
     const queryParams = new URLSearchParams(params).toString();
@@ -1609,6 +1658,12 @@ export const receiptAPI = {
     if (!response.ok) throw new Error(data.message || 'Failed to get receipts');
     return data;
   },
+  getReceiptById: async (id) => {
+    const response = await fetch(`${API_BASE_URL}/receipts/${id}`, { method: 'GET', headers: getHeaders(true) });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.message || 'Failed to get receipt');
+    return data;
+  },
   createReceipt: async (receiptData) => {
     const response = await fetch(`${API_BASE_URL}/receipts`, {
       method: 'POST',
@@ -1618,6 +1673,22 @@ export const receiptAPI = {
     const data = await response.json();
     if (!response.ok) throw new Error(data.message || 'Failed to create receipt');
     return data;
+  },
+  updateReceipt: async (id, receiptData) => {
+    const response = await fetch(`${API_BASE_URL}/receipts/${id}`, {
+      method: 'PUT',
+      headers: getHeaders(true),
+      body: JSON.stringify(receiptData)
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.message || 'Failed to update receipt');
+    return data;
+  },
+  deleteReceipt: async (id) => {
+    const response = await fetch(`${API_BASE_URL}/receipts/${id}`, { method: 'DELETE', headers: getHeaders(true) });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.message || 'Failed to delete receipt');
+    return data;
   }
 };
 
@@ -1625,20 +1696,42 @@ export const receiptAPI = {
 export const contraAPI = {
   getAllContras: async (params = {}) => {
     const queryParams = new URLSearchParams(params).toString();
-    const url = queryParams ? `${API_BASE_URL}/contras?${queryParams}` : `${API_BASE_URL}/contras`;
+    const url = queryParams ? `${API_BASE_URL}/contra?${queryParams}` : `${API_BASE_URL}/contra`;
     const response = await fetch(url, { method: 'GET', headers: getHeaders(true) });
     const data = await response.json();
     if (!response.ok) throw new Error(data.message || 'Failed to get contra entries');
     return data;
   },
+  getContraById: async (id) => {
+    const response = await fetch(`${API_BASE_URL}/contra/${id}`, { method: 'GET', headers: getHeaders(true) });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.message || 'Failed to get contra entry');
+    return data;
+  },
   createContra: async (contraData) => {
-    const response = await fetch(`${API_BASE_URL}/contras`, {
+    const response = await fetch(`${API_BASE_URL}/contra`, {
       method: 'POST',
       headers: getHeaders(true),
       body: JSON.stringify(contraData)
     });
     const data = await response.json();
     if (!response.ok) throw new Error(data.message || 'Failed to create contra entry');
+    return data;
+  },
+  updateContra: async (id, contraData) => {
+    const response = await fetch(`${API_BASE_URL}/contra/${id}`, {
+      method: 'PUT',
+      headers: getHeaders(true),
+      body: JSON.stringify(contraData)
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.message || 'Failed to update contra entry');
+    return data;
+  },
+  deleteContra: async (id) => {
+    const response = await fetch(`${API_BASE_URL}/contra/${id}`, { method: 'DELETE', headers: getHeaders(true) });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.message || 'Failed to delete contra entry');
     return data;
   }
 };
@@ -1647,20 +1740,42 @@ export const contraAPI = {
 export const journalAPI = {
   getAllJournals: async (params = {}) => {
     const queryParams = new URLSearchParams(params).toString();
-    const url = queryParams ? `${API_BASE_URL}/journals?${queryParams}` : `${API_BASE_URL}/journals`;
+    const url = queryParams ? `${API_BASE_URL}/journal?${queryParams}` : `${API_BASE_URL}/journal`;
     const response = await fetch(url, { method: 'GET', headers: getHeaders(true) });
     const data = await response.json();
     if (!response.ok) throw new Error(data.message || 'Failed to get journal entries');
     return data;
   },
+  getJournalById: async (id) => {
+    const response = await fetch(`${API_BASE_URL}/journal/${id}`, { method: 'GET', headers: getHeaders(true) });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.message || 'Failed to get journal entry');
+    return data;
+  },
   createJournal: async (journalData) => {
-    const response = await fetch(`${API_BASE_URL}/journals`, {
+    const response = await fetch(`${API_BASE_URL}/journal`, {
       method: 'POST',
       headers: getHeaders(true),
       body: JSON.stringify(journalData)
     });
     const data = await response.json();
     if (!response.ok) throw new Error(data.message || 'Failed to create journal entry');
+    return data;
+  },
+  updateJournal: async (id, journalData) => {
+    const response = await fetch(`${API_BASE_URL}/journal/${id}`, {
+      method: 'PUT',
+      headers: getHeaders(true),
+      body: JSON.stringify(journalData)
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.message || 'Failed to update journal entry');
+    return data;
+  },
+  deleteJournal: async (id) => {
+    const response = await fetch(`${API_BASE_URL}/journal/${id}`, { method: 'DELETE', headers: getHeaders(true) });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.message || 'Failed to delete journal entry');
     return data;
   }
 };
@@ -2085,6 +2200,68 @@ export const auditAPI = {
 };
 
 
+// ==================== CUSTOMER DETAILS API ====================
+export const customerDetailsAPI = {
+  getSummary: async (customerId) => {
+    const response = await fetch(`${API_BASE_URL}/security/customers/${encodeURIComponent(customerId)}/details`, {
+      headers: getHeaders(true)
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.message || 'Failed to fetch customer details');
+    return data;
+  },
+
+  getBookings: async (customerId, params = {}) => {
+    const query = new URLSearchParams({ page: params.page || 1, limit: params.limit || 20, ...params }).toString();
+    const response = await fetch(`${API_BASE_URL}/security/customers/${encodeURIComponent(customerId)}/bookings?${query}`, {
+      headers: getHeaders(true)
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.message || 'Failed to fetch customer bookings');
+    return data;
+  },
+
+  getBills: async (customerId, params = {}) => {
+    const query = new URLSearchParams({ page: params.page || 1, limit: params.limit || 20, ...params }).toString();
+    const response = await fetch(`${API_BASE_URL}/security/customers/${encodeURIComponent(customerId)}/bills?${query}`, {
+      headers: getHeaders(true)
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.message || 'Failed to fetch customer bills');
+    return data;
+  },
+
+  getPayments: async (customerId, params = {}) => {
+    const query = new URLSearchParams({ page: params.page || 1, limit: params.limit || 20, ...params }).toString();
+    const response = await fetch(`${API_BASE_URL}/security/customers/${encodeURIComponent(customerId)}/payments?${query}`, {
+      headers: getHeaders(true)
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.message || 'Failed to fetch customer payments');
+    return data;
+  },
+
+  getLedger: async (customerId) => {
+    const response = await fetch(`${API_BASE_URL}/security/customers/${encodeURIComponent(customerId)}/ledger`, {
+      headers: getHeaders(true)
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.message || 'Failed to fetch customer ledger');
+    return data;
+  },
+
+  getReceipts: async (customerId, params = {}) => {
+    const query = new URLSearchParams({ page: params.page || 1, limit: params.limit || 20, ...params }).toString();
+    const response = await fetch(`${API_BASE_URL}/security/customers/${encodeURIComponent(customerId)}/receipts?${query}`, {
+      headers: getHeaders(true)
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.message || 'Failed to fetch customer receipts');
+    return data;
+  },
+};
+
+
 // Named exports for individual API functions
 export const getAuditLogs = auditAPI.getAuditLogs;
 export const getAuditLogsByEntity = auditAPI.getAuditLogsByEntity;
@@ -2103,5 +2280,6 @@ export default {
   receiptAPI,
   contraAPI,
   auditAPI,
-  journalAPI
+  journalAPI,
+  customerDetailsAPI
 };
