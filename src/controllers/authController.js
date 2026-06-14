@@ -239,9 +239,10 @@ const employeeLogin = async (req, res) => {
     // ──────────────────────────────────────────────────────────────────
   } catch (error) {
     console.error('Employee login error:', error);
+    console.error('Employee login error stack:', error.stack);
     res.status(500).json({ 
       success: false, 
-      error: { code: 'SERVER_ERROR', message: 'Internal server error' } 
+      error: { code: 'SERVER_ERROR', message: 'Internal server error', details: error.message } 
     });
   }
 };
@@ -325,7 +326,8 @@ const loginUser = async (req, res) => {
     }
   } catch (error) {
     console.error('Login error:', error);
-    res.status(500).json({ message: 'Internal server error' });
+    console.error('Login error stack:', error.stack);
+    res.status(500).json({ message: 'Internal server error', details: error.message });
   }
 };
 

@@ -388,20 +388,19 @@ const customerController = {
   },
 
   /**
-   * Get customer ledger
+   * Get customer ledger (Vintage Ledger format)
    * GET /api/customers/:id/ledger
    */
   getCustomerLedger: async (req, res) => {
     try {
       const { id } = req.params;
-      const page = parseInt(req.query.page) || 1;
-      const limit = parseInt(req.query.limit) || 50;
-
-      const result = await LedgerService.getCustomerLedger(id, page, limit);
+      const { fromDate, toDate } = req.query;
+      const CustomerLedgerService = require('../services/CustomerLedgerService');
+      const result = await CustomerLedgerService.getCustomerVintageLedger(id, fromDate, toDate);
       res.json(result);
     } catch (error) {
       console.error('Customer ledger API failed:', error);
-      res.status(500).json({ error: 'Internal server error' });
+      res.status(500).json({ error: 'Internal server error', details: error.message });
     }
   }
 };

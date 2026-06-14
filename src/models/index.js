@@ -3,6 +3,7 @@ const { sequelize, sequelizeTVL } = require('../../config/db');
 // Export all models
 console.log('Loading models/index.js...');
 const Company = require('./Company');
+const CompanyTVL = require('./CompanyTVL');
 const Role = require('./Role');
 const ApplicationTVL = require('./ApplicationTVL');
 const ModuleTVL = require('./ModuleTVL');
@@ -248,6 +249,7 @@ BillTVL.hasMany(PaymentAllocation, { foreignKey: 'bill_id', sourceKey: 'bl_id', 
 
 module.exports = {
   Company,
+  CompanyTVL,
   Role,
   Permission,
   RolePermission,

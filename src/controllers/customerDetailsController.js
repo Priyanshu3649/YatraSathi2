@@ -496,35 +496,14 @@ const getCustomerPayments = async (req, res) => {
 
 /**
  * GET /api/security/customers/:id/ledger
- * Chronological ledger entries
+ * Chronological ledger entries (Vintage Ledger format)
  */
 const getCustomerLedger = async (req, res) => {
   try {
     const customerId = req.params.id;
-    const entries = await CustomerLedger.findAll({
-      where: { customer_id: customerId },
-      order: [['entry_date', 'ASC'], ['ledger_id', 'ASC']]
-    });
-
-    // Compute running balance
-    let runningBalance = 0;
-    const data = entries.map(e => {
-      runningBalance += (parseFloat(e.debit_amount) || 0) - (parseFloat(e.credit_amount) || 0);
-      return {
-        id: e.ledger_id,
-        date: e.entry_date,
-        type: e.entry_type,
-        referenceType: e.reference_type,
-        referenceId: e.reference_id,
-        debit: parseFloat(e.debit_amount) || 0,
-        credit: parseFloat(e.credit_amount) || 0,
-        balance: runningBalance,
-        remarks: e.remarks,
-        createdBy: e.created_by
-      };
-    });
-
-    res.json({ success: true, data });
+    const { fromDate, toDate } = req.query;
+    const result = await CustomerLedgerService.getCustomerVintageLedger(customerId, fromDate, toDate);
+    res.json(result);
   } catch (error) {
     console.error('CustomerLedger: error:', error);
     res.status(500).json({ success: false, message: error.message });

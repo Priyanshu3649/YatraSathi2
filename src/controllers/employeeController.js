@@ -360,6 +360,87 @@ const getCorporateCustomers = async (req, res) => {
   }
 };
 
+// Change employee password (admin or employee themselves)
+const changeEmployeePassword = async (req, res) => {
+  try {
+    const employeeId = req.params.id;
+    
+    // Check if user is admin OR changing their own password
+    if (req.user.us_usertype !== 'admin' && req.user.us_usid !== employeeId) {
+      return res.status(403).json({ 
+        success: false, 
+        error: { code: 'FORBIDDEN', message: 'Access denied' } 
+      });
+    }
+
+    const { currentPassword, newPassword } = req.body;
+    
+    // Validate required fields
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({ 
+        success: false, 
+        error: { code: 'MISSING_FIELDS', message: 'Current password and new password are required' } 
+      });
+    }
+
+    // Get employee's login record
+    const login = await require('../models').LoginTVL.findOne({ 
+      where: { lg_usid: employeeId } 
+    });
+
+    if (!login) {
+      return res.status(404).json({ 
+        success: false, 
+        error: { code: 'NOT_FOUND', message: 'Login record not found' } 
+      });
+    }
+
+    // Verify current password if user is not admin
+    if (req.user.us_usertype !== 'admin') {
+      const isPasswordValid = await bcrypt.compare(currentPassword, login.lg_passwd);
+      if (!isPasswordValid) {
+        return res.status(401).json({ 
+          success: false, 
+          error: { code: 'UNAUTHORIZED', message: 'Current password is incorrect' } 
+        });
+      }
+    }
+
+    // Hash new password
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(newPassword, salt);
+
+    // Update login record
+    login.lg_passwd = hashedPassword;
+    login.lg_salt = salt;
+    login.mby = req.user.us_usid;
+    login.mdtm = new Date();
+    await login.save();
+
+    // Forensic Audit: Password Change
+    Audit.logAction({ 
+      module: Audit.MODULES.EMPLOYEE, 
+      recordId: employeeId,
+      action: Audit.ACTIONS.UPDATE, 
+      req, 
+      fieldName: 'password',
+      oldValue: null,
+      newValue: 'Password Changed' 
+    });
+
+    res.json({ 
+      success: true, 
+      message: 'Password updated successfully' 
+    });
+  } catch (error) {
+    console.error('Change employee password error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: { code: 'SERVER_ERROR', message: error.message } 
+    });
+  }
+};
+
 module.exports = {
   getAllEmployees,
   getEmployeeById,
@@ -367,5 +448,6 @@ module.exports = {
   updateEmployee,
   deleteEmployee,
   getEmployeeBookings,
-  getCorporateCustomers
+  getCorporateCustomers,
+  changeEmployeePassword
 };

@@ -7,7 +7,16 @@ const {
   getMarketingDashboard,
   getManagementDashboard
 } = require('../controllers/dashboardController');
-const { getAllEmployees } = require('../controllers/employeeController');
+const { 
+  getAllEmployees, 
+  getEmployeeById, 
+  createEmployee, 
+  updateEmployee, 
+  deleteEmployee,
+  getEmployeeBookings,
+  getCorporateCustomers,
+  changeEmployeePassword
+} = require('../controllers/employeeController');
 const authMiddleware = require('../middleware/authMiddleware');
 const { departmentAccessControl, hasPermission, checkDepartmentAccess } = require('../middleware/departmentAccessControl');
 
@@ -16,14 +25,13 @@ const router = express.Router();
 // Apply authentication middleware to all routes
 router.use(authMiddleware);
 
-// Check if user is an employee
+// Check if user is an employee or admin
 router.use((req, res, next) => {
-  // Check if user has employee role or admin role (using role ID)
-  const allowedRoles = ['AGT', 'ACC', 'HR', 'CC', 'MKT', 'MGT', 'ADM']; // Include admin role
-  if (!allowedRoles.includes(req.user.us_roid)) {
+  const allowedRoles = ['AGT', 'ACC', 'HR', 'CC', 'MKT', 'MGT', 'ADM'];
+  if (!allowedRoles.includes(req.user.us_roid) && req.user.us_usertype !== 'admin') {
     return res.status(403).json({ 
       success: false, 
-      error: { code: 'FORBIDDEN', message: 'Access denied. Employee role required.' } 
+      error: { code: 'FORBIDDEN', message: 'Access denied. Employee or Admin role required.' } 
     });
   }
   next();
@@ -39,13 +47,18 @@ router.use(departmentAccessControl);
 
 // Employee Management Routes
 router.get('/', getAllEmployees);
+router.get('/:id', getEmployeeById);
+router.post('/', createEmployee);
+router.put('/:id', updateEmployee);
+router.delete('/:id', deleteEmployee);
+router.put('/:id/password', changeEmployeePassword);
+router.get('/:id/bookings', getEmployeeBookings);
+router.get('/corporate/customers', getCorporateCustomers);
 
 // Agent Dashboard Routes
 router.get('/agent/dashboard', (req, res, next) => {
-  // Allow access to users with agent-related roles (AGT = Agent)
-  // Other roles like ACC (Accounts), CC (Call Center), MKT (Marketing), MGT (Management) might also act as agents
   const agentRoles = ['AGT', 'ACC', 'CC', 'MKT', 'MGT'];
-  if (!agentRoles.includes(req.user.us_roid)) {
+  if (!agentRoles.includes(req.user.us_roid) && req.user.us_usertype !== 'admin') {
     return res.status(403).json({ 
       success: false, 
       error: { code: 'FORBIDDEN', message: 'Access denied. Agent role required.' } 

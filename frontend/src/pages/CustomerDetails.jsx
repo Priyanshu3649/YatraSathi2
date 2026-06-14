@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { customerDetailsAPI } from '../services/api';
 import PaginationControls from '../components/common/PaginationControls';
+import CustomerLedger from './admin/CustomerLedger';
 
 const TABS = ['Overview', 'Bookings', 'Bills', 'Receipts', 'Payments', 'Ledger'];
 
@@ -147,7 +148,7 @@ const CustomerDetails = () => {
   const creditUtil = customer.creditLimit > 0 ? ((financialSummary.outstandingAmount / customer.creditLimit) * 100).toFixed(1) : 0;
 
   return (
-    <div style={{ maxWidth: 1200, margin: '0 auto', padding: '20px 16px' }}>
+    <div style={{ maxWidth: 1200, margin: '0 auto', padding: '20px 16px', height: 'calc(100vh - 100px)', overflowY: 'auto' }}>
       {/* Back button */}
       <button onClick={() => navigate(-1)} style={{ background: 'none', border: 'none', color: '#1565c0', cursor: 'pointer', fontSize: 14, marginBottom: 16, display: 'flex', alignItems: 'center', gap: 4 }}>
         ← Back to Customer List
@@ -466,31 +467,7 @@ const CustomerDetails = () => {
 
       {/* ═══ LEDGER TAB ═══ */}
       {activeTab === 'Ledger' && !tabLoading && (
-        <div style={{ background: '#fff', borderRadius: 8, padding: 20, boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
-          <h4 style={{ margin: '0 0 12px', fontSize: 14 }}>Customer Ledger ({ledger.length} entries)</h4>
-          <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-              <thead><tr style={{ background: '#f5f5f5' }}>
-                <th style={th}>Date</th><th style={th}>Type</th><th style={th}>Reference</th><th style={th} align="right">Debit</th><th style={th} align="right">Credit</th><th style={th} align="right">Balance</th><th style={th}>Remarks</th>
-              </tr></thead>
-              <tbody>
-                {ledger.length === 0 ? <tr><td colSpan={7} style={{ ...td, textAlign: 'center', color: '#9e9e9e' }}>No ledger entries</td></tr> :
-                  ledger.map(e => (
-                    <tr key={e.id}>
-                      <td style={td}>{formatDate(e.date)}</td>
-                      <td style={td}><StatusBadge status={e.type} /></td>
-                      <td style={td}>{e.referenceType}-{e.referenceId}</td>
-                      <td style={{ ...td, textAlign: 'right' }}>{e.debit > 0 ? formatCurrency(e.debit) : '-'}</td>
-                      <td style={{ ...td, textAlign: 'right' }}>{e.credit > 0 ? formatCurrency(e.credit) : '-'}</td>
-                      <td style={{ ...td, textAlign: 'right', fontWeight: 600, color: e.balance > 0 ? '#c62828' : e.balance < 0 ? '#2e7d32' : '#616161' }}>{formatCurrency(Math.abs(e.balance))}{e.balance > 0 ? ' Dr' : e.balance < 0 ? ' Cr' : ''}</td>
-                      <td style={{ ...td, maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={e.remarks}>{e.remarks || '-'}</td>
-                    </tr>
-                  ))
-                }
-              </tbody>
-            </table>
-          </div>
-        </div>
+        <CustomerLedger customerId={customerId} customer={customer} />
       )}
 
       {/* Print styles */}

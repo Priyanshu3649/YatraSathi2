@@ -125,6 +125,7 @@ app.use('/api/employee/billing', employeeBillingRoutes);
 app.use('/api/customer/master-passengers', masterPassengerRoutes); // Master passenger routes (cmpXmasterpassenger)
 app.use('/api/customer/master-list', masterPassengerListRoutes); // Master passenger list routes (mlXmasterlist)
 app.use('/api/customer', customerRoutes); // Customer portal routes
+app.get('/api/customers/:id/ledger', require('./middleware/authMiddleware'), require('./controllers/customerController').getCustomerLedger);
 // Employee customer routes - separate access for employees
 app.use('/api/employee/customers', employeeCustomerRoutes);
 app.use('/api/audit', auditRoutes);

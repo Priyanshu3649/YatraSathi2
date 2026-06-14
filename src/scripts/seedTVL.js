@@ -1,11 +1,34 @@
+const mysql = require('mysql2/promise');
 const { sequelizeTVL } = require('../../config/db');
 const { 
-  UserTVL, EmployeeTVL, BookingTVL, PaymentTVL, AccountTVL, Customer, StationTVL, LoginTVL, CustomerTVL, RoleTVL
+  UserTVL, EmployeeTVL, BookingTVL, PaymentTVL, AccountTVL, StationTVL, LoginTVL, CustomerTVL, RoleTVL
 } = require('../models');
 const bcrypt = require('bcryptjs');
 
 async function seedTVLDatabase() {
+  let connection;
   try {
+    // First connect to MySQL server directly to drop/recreate the database
+    console.log('📡 Connecting to MySQL server...');
+    connection = await mysql.createConnection({
+      host: process.env.DB_HOST || 'localhost',
+      user: process.env.DB_USER || 'root',
+      password: process.env.DB_PASSWORD || ''
+    });
+    console.log('✅ Connected to MySQL server\n');
+
+    const dbName = process.env.DB_NAME_TVL || 'TVL_001';
+    
+    console.log(`🗄️  Dropping database: ${dbName} (if exists)...`);
+    await connection.query(`DROP DATABASE IF EXISTS \`${dbName}\``);
+    
+    console.log(`🗄️  Creating database: ${dbName}...`);
+    await connection.query(`CREATE DATABASE \`${dbName}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`);
+    console.log(`✅ Database '${dbName}' recreated successfully!\n`);
+    
+    await connection.end();
+    connection = null;
+
     // Authenticate TVL connection
     console.log('Connecting to TVL database...');
     await sequelizeTVL.authenticate();
@@ -14,30 +37,18 @@ async function seedTVLDatabase() {
     // Disable foreign key checks for seeding
     await sequelizeTVL.query('SET FOREIGN_KEY_CHECKS = 0');
     
-    // Sync TVL models (create tables if they don't exist)
+    // Sync TVL models (force sync to recreate all tables)
     console.log('Syncing TVL models...');
-    await RoleTVL.sync({ alter: true });
-    await UserTVL.sync({ alter: true });
-    await EmployeeTVL.sync({ alter: true });
-    await CustomerTVL.sync({ force: true }); // Force sync to recreate table with correct primary key
-    await StationTVL.sync({ alter: true });
-    await BookingTVL.sync({ alter: true });
-    await AccountTVL.sync({ alter: true });
-    await PaymentTVL.sync({ alter: true });
-    await LoginTVL.sync({ alter: true });
+    await RoleTVL.sync({ force: true });
+    await UserTVL.sync({ force: true });
+    await LoginTVL.sync({ force: true });
+    await EmployeeTVL.sync({ force: true });
+    await CustomerTVL.sync({ force: true });
+    await StationTVL.sync({ force: true });
+    await BookingTVL.sync({ force: true });
+    await AccountTVL.sync({ force: true });
+    await PaymentTVL.sync({ force: true });
     console.log('✅ TVL models synced');
-
-    // Clear existing data in TVL tables (in reverse foreign key dependency order)
-    console.log('Clearing existing TVL data...');
-    await PaymentTVL.destroy({ where: {}, force: true });
-    await AccountTVL.destroy({ where: {}, force: true });
-    await BookingTVL.destroy({ where: {}, force: true });
-    await StationTVL.destroy({ where: {}, force: true });
-    await EmployeeTVL.destroy({ where: {}, force: true });
-    await LoginTVL.destroy({ where: {}, force: true });
-    await UserTVL.destroy({ where: {}, force: true });
-    await RoleTVL.destroy({ where: {}, force: true });
-    console.log('✅ Existing TVL data cleared');
 
     // Create roles
     console.log('Creating roles in TVL...');

@@ -443,6 +443,195 @@ class CustomerLedgerService {
       transaction
     });
   }
+
+  /**
+   * Vintage Customer Ledger Report (ERP Grade)
+   * Dynamically calculates opening balance, debits, credits, and running balance
+   */
+  async getCustomerVintageLedger(customerId, fromDate, toDate) {
+    // 1. Calculate default dates: Current Financial Year (April 1st to March 31st)
+    const today = new Date();
+    const currentYear = today.getFullYear();
+    const currentMonth = today.getMonth(); // 0-indexed: April is 3
+    const startYear = currentMonth >= 3 ? currentYear : currentYear - 1;
+
+    const defaultFromDate = `${startYear}-04-01`;
+    const defaultToDate = `${startYear + 1}-03-31`;
+
+    const finalFromDate = fromDate || defaultFromDate;
+    const finalToDate = toDate || defaultToDate;
+
+    // 2. Retrieve customer and user profile details
+    const [customerRes] = await sequelizeTVL.query(`
+      SELECT 
+        c.cu_usid AS id,
+        c.cu_custno AS customerNo,
+        CONCAT(u.us_fname, ' ', COALESCE(u.us_lname, '')) AS name,
+        u.us_phone AS phone,
+        c.cu_compid AS company
+      FROM cuXcustomer c
+      JOIN usXuser u ON c.cu_usid = u.us_usid
+      WHERE c.cu_usid = :customerId OR c.cu_custno = :customerId OR c.cu_cusid = :customerId
+      LIMIT 1
+    `, {
+      replacements: { customerId },
+      type: QueryTypes.SELECT
+    });
+
+    const actualCustomerId = customerRes ? customerRes.id : customerId;
+
+    // 3. Calculate Opening Balance: Sum(Bills) - Sum(Payments) before finalFromDate
+    const [billsBefore] = await sequelizeTVL.query(`
+      SELECT COALESCE(SUM(bl.bl_total_amount), 0) AS total_debit
+      FROM blXbilling bl
+      JOIN bkXbooking bk ON bl.bl_booking_id = bk.bk_bkid
+      WHERE bk.bk_usid = :customerId
+        AND bl.bl_status NOT IN ('CANCELLED', 'CAN')
+        AND bl.bl_billing_date < :fromDate
+    `, {
+      replacements: { customerId: actualCustomerId, fromDate: finalFromDate },
+      type: QueryTypes.SELECT
+    });
+
+    const [paymentsBefore] = await sequelizeTVL.query(`
+      SELECT COALESCE(SUM(pt.pt_amount), 0) AS total_credit
+      FROM ptXpayment pt
+      WHERE pt.pt_custid = :customerId
+        AND pt.pt_status NOT IN ('REVERSED', 'CANCELLED')
+        AND pt.pt_paydt < :fromDate
+    `, {
+      replacements: { customerId: actualCustomerId, fromDate: finalFromDate },
+      type: QueryTypes.SELECT
+    });
+
+    const totalDebitBefore = parseFloat(billsBefore?.total_debit || 0);
+    const totalCreditBefore = parseFloat(paymentsBefore?.total_credit || 0);
+    const openingBalance = totalDebitBefore - totalCreditBefore;
+
+    // 4. Fetch Bills in the period
+    const bills = await sequelizeTVL.query(`
+      SELECT 
+        bl.bl_billing_date AS date,
+        bl.bl_bill_no AS invoice_number,
+        bl.bl_total_amount AS amount
+      FROM blXbilling bl
+      JOIN bkXbooking bk ON bl.bl_booking_id = bk.bk_bkid
+      WHERE bk.bk_usid = :customerId
+        AND bl.bl_status NOT IN ('CANCELLED', 'CAN')
+        AND bl.bl_billing_date >= :fromDate
+        AND bl.bl_billing_date <= :toDate
+    `, {
+      replacements: { customerId: actualCustomerId, fromDate: finalFromDate, toDate: finalToDate },
+      type: QueryTypes.SELECT
+    });
+
+    // 5. Fetch Payments in the period
+    const payments = await sequelizeTVL.query(`
+      SELECT 
+        pt.pt_paydt AS date,
+        pt.pt_refno AS reference_number,
+        pt.pt_ptid AS payment_id,
+        pt.pt_amount AS amount,
+        pt.pt_mode AS mode
+      FROM ptXpayment pt
+      WHERE pt.pt_custid = :customerId
+        AND pt.pt_status NOT IN ('REVERSED', 'CANCELLED')
+        AND pt.pt_paydt >= :fromDate
+        AND pt.pt_paydt <= :toDate
+    `, {
+      replacements: { customerId: actualCustomerId, fromDate: finalFromDate, toDate: finalToDate },
+      type: QueryTypes.SELECT
+    });
+
+    // 6. Map and merge entries
+    const billEntries = (bills || []).map(b => ({
+      date: b.date,
+      particular: `Invoice Generated (#${b.invoice_number})`,
+      reference: b.invoice_number || '',
+      debit: parseFloat(b.amount) || 0,
+      credit: 0,
+      sortDate: new Date(b.date).getTime()
+    }));
+
+    const paymentEntries = (payments || []).map(p => ({
+      date: p.date,
+      particular: `Payment Received (${p.mode || 'Direct'})`,
+      reference: p.reference_number || `PAY-${p.payment_id}`,
+      debit: 0,
+      credit: parseFloat(p.amount) || 0,
+      sortDate: new Date(p.date).getTime()
+    }));
+
+    const mergedEntries = [...billEntries, ...paymentEntries];
+
+    // Sort entries chronologically
+    mergedEntries.sort((a, b) => {
+      if (a.sortDate !== b.sortDate) {
+        return a.sortDate - b.sortDate;
+      }
+      if (a.debit > 0 && b.credit > 0) return -1;
+      if (a.credit > 0 && b.debit > 0) return 1;
+      return 0;
+    });
+
+    // 7. Calculate running balance and populate final array
+    let runningBalance = openingBalance;
+    const entries = [];
+
+    // Format date utility
+    const formatDateStr = (d) => {
+      const dateObj = new Date(d);
+      const year = dateObj.getFullYear();
+      const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+      const day = String(dateObj.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    };
+
+    // Include Opening Balance entry as the first record
+    entries.push({
+      date: formatDateStr(finalFromDate),
+      particular: 'Opening Balance',
+      reference: '',
+      debit: 0,
+      credit: 0,
+      balance: openingBalance
+    });
+
+    let totalDebit = 0;
+    let totalCredit = 0;
+
+    for (const entry of mergedEntries) {
+      runningBalance = runningBalance + entry.debit - entry.credit;
+      totalDebit += entry.debit;
+      totalCredit += entry.credit;
+
+      entries.push({
+        date: formatDateStr(entry.date),
+        particular: entry.particular,
+        reference: entry.reference,
+        debit: entry.debit,
+        credit: entry.credit,
+        balance: runningBalance
+      });
+    }
+
+    return {
+      success: true,
+      customer: {
+        id: actualCustomerId,
+        name: customerRes ? customerRes.name : 'Unknown Customer',
+        phone: customerRes ? customerRes.phone : '',
+        company: customerRes ? customerRes.company : ''
+      },
+      openingBalance,
+      entries,
+      totals: {
+        debit: totalDebit,
+        credit: totalCredit
+      },
+      closingBalance: runningBalance
+    };
+  }
 }
 
 module.exports = new CustomerLedgerService();

@@ -1160,6 +1160,23 @@ export const employeeAPI = {
     }
 
     return data;
+  },
+
+  // Change employee password
+  changeEmployeePassword: async (id, passwordData) => {
+    const response = await fetch(`${API_BASE_URL}/employees/${id}/password`, {
+      method: 'PUT',
+      headers: getHeaders(true),
+      body: JSON.stringify(passwordData)
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.message || 'Failed to change password');
+    }
+
+    return data;
   }
 };
 
