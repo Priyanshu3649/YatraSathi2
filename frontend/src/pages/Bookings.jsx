@@ -2043,7 +2043,7 @@ setSelectedBooking(null); // Clear selection after deletion
       <div className="layout-grid-container">
 
           <div className="erp-grid-section" style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-            <div className="erp-grid-container" style={{ flex: 1, overflowY: 'auto' }}>
+            <div className="erp-grid-container" style={{ flex: 1, overflowY: 'auto', paddingBottom: '58px' }}>
                 <table className="erp-table">
                   <thead>
                     <tr>
@@ -2267,14 +2267,48 @@ setSelectedBooking(null); // Clear selection after deletion
                     )}
                   </tbody>
                 </table>
-                
-                {/* Pagination Controls */}
-                <PaginationControls
-                  pagination={pagination}
-                  onPageChange={setPage}
-                  limit={limit}
-                  onLimitChange={changeLimit}
-                />
+            </div>
+
+            {/* ── FIXED FOOTER: always visible at bottom of viewport ── */}
+            <div style={{
+              position: 'fixed',
+              bottom: 0,
+              left: 0,
+              right: 0,
+              zIndex: 200,
+            }}>
+              {/* Totals summary bar */}
+              <div style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                padding: '3px 12px',
+                backgroundColor: '#5a6268',
+                borderTop: '2px solid #495057',
+                fontSize: '11px',
+                fontWeight: 'bold',
+                color: '#ffffff',
+              }}>
+                <div style={{ display: 'flex', gap: '20px' }}>
+                  <span>TOTAL RECORDS: <span style={{ color: '#ffcc00' }}>{pagination.totalRecords || bookings.length}</span></span>
+                  <span>DISPLAYED: <span style={{ color: '#ffcc00' }}>{bookings.length}</span></span>
+                </div>
+                <div style={{ display: 'flex', gap: '20px', alignItems: 'center' }}>
+                  <span>CONFIRMED: <span style={{ color: '#ffcc00' }}>{bookings.filter(b => b.bk_status === 'CNF' || b.bk_status === 'CONFIRMED').length}</span></span>
+                  <span>PENDING: <span style={{ color: '#ffcc00' }}>{bookings.filter(b => b.bk_status === 'PND' || b.bk_status === 'PENDING').length}</span></span>
+                  <span>DRAFT: <span style={{ color: '#ffcc00' }}>{bookings.filter(b => b.bk_status === 'DRF' || b.bk_status === 'DRAFT').length}</span></span>
+                  <span>CANCELLED: <span style={{ color: '#ffcc00' }}>{bookings.filter(b => b.bk_status === 'CAN' || b.bk_status === 'CANCELLED').length}</span></span>
+                </div>
+              </div>
+
+              {/* Pagination bar */}
+              <PaginationControls
+                pagination={pagination}
+                onPageChange={setPage}
+                limit={limit}
+                onLimitChange={changeLimit}
+                recordCount={bookings.length}
+              />
             </div>
           </div>
       </div>
