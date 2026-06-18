@@ -2,107 +2,172 @@ const { DataTypes } = require('sequelize');
 const { sequelize } = require('./baseModel');
 
 const CustomerLedger = sequelize.define('CustomerLedger', {
-  id: {
+  ledger_id: {
     type: DataTypes.BIGINT,
     primaryKey: true,
     autoIncrement: true,
-    allowNull: false
+    allowNull: false,
+    field: 'ledger_id'
   },
-  customerId: {
+  id: {
+    type: DataTypes.VIRTUAL,
+    get() {
+      return this.getDataValue('ledger_id');
+    },
+    set(val) {
+      this.setDataValue('ledger_id', val);
+    }
+  },
+  customer_id: {
     type: DataTypes.STRING(15),
     allowNull: false,
-    field: 'customer_id',
-    comment: 'Foreign key to customer (cu_usid)'
+    field: 'customer_id'
   },
-  transactionDate: {
+  customerId: {
+    type: DataTypes.VIRTUAL,
+    get() {
+      return this.getDataValue('customer_id');
+    },
+    set(val) {
+      this.setDataValue('customer_id', val);
+    }
+  },
+  entry_date: {
     type: DataTypes.DATE,
     allowNull: false,
-    field: 'transaction_date',
+    field: 'entry_date',
     defaultValue: DataTypes.NOW
   },
-  transactionType: {
-    type: DataTypes.ENUM(
-      'BILL', 
-      'PAYMENT', 
-      'RECEIPT', 
-      'ADJUSTMENT', 
-      'REVERSAL', 
-      'CONTRA'
-    ),
+  transactionDate: {
+    type: DataTypes.VIRTUAL,
+    get() {
+      return this.getDataValue('entry_date');
+    },
+    set(val) {
+      this.setDataValue('entry_date', val);
+    }
+  },
+  entry_type: {
+    type: DataTypes.ENUM('BILL', 'PAYMENT', 'PAYMENT_REVERSAL', 'BILL_CANCELLED', 'ADJUSTMENT'),
     allowNull: false,
-    field: 'transaction_type'
+    field: 'entry_type'
+  },
+  transactionType: {
+    type: DataTypes.VIRTUAL,
+    get() {
+      return this.getDataValue('entry_type');
+    },
+    set(val) {
+      this.setDataValue('entry_type', val);
+    }
+  },
+  reference_type: {
+    type: DataTypes.STRING(20),
+    allowNull: false,
+    field: 'reference_type'
   },
   referenceType: {
-    type: DataTypes.STRING(50),
-    allowNull: true,
-    field: 'reference_type',
-    comment: 'e.g., BILLING, PAYMENT, RECEIPT'
+    type: DataTypes.VIRTUAL,
+    get() {
+      return this.getDataValue('reference_type');
+    },
+    set(val) {
+      this.setDataValue('reference_type', val);
+    }
   },
-  referenceId: {
+  reference_id: {
     type: DataTypes.BIGINT,
-    allowNull: true,
+    allowNull: false,
     field: 'reference_id'
   },
-  debit: {
-    type: DataTypes.DECIMAL(15, 2),
+  referenceId: {
+    type: DataTypes.VIRTUAL,
+    get() {
+      return this.getDataValue('reference_id');
+    },
+    set(val) {
+      this.setDataValue('reference_id', val);
+    }
+  },
+  debit_amount: {
+    type: DataTypes.DECIMAL(12, 2),
     allowNull: false,
-    defaultValue: 0.00
+    defaultValue: 0.00,
+    field: 'debit_amount'
+  },
+  debit: {
+    type: DataTypes.VIRTUAL,
+    get() {
+      return this.getDataValue('debit_amount');
+    },
+    set(val) {
+      this.setDataValue('debit_amount', val);
+    }
+  },
+  credit_amount: {
+    type: DataTypes.DECIMAL(12, 2),
+    allowNull: false,
+    defaultValue: 0.00,
+    field: 'credit_amount'
   },
   credit: {
-    type: DataTypes.DECIMAL(15, 2),
-    allowNull: false,
-    defaultValue: 0.00
+    type: DataTypes.VIRTUAL,
+    get() {
+      return this.getDataValue('credit_amount');
+    },
+    set(val) {
+      this.setDataValue('credit_amount', val);
+    }
   },
   runningBalance: {
-    type: DataTypes.DECIMAL(15, 2),
-    allowNull: false,
-    field: 'running_balance',
-    comment: 'Outstanding after this transaction'
+    type: DataTypes.VIRTUAL,
+    get() {
+      return this.getDataValue('runningBalance') || 0.00;
+    },
+    set(val) {
+      this.setDataValue('runningBalance', val);
+    }
   },
   remarks: {
     type: DataTypes.TEXT,
-    allowNull: true
+    allowNull: true,
+    field: 'remarks'
   },
-  // Base Model Audit Fields
-  edtm: {
-    type: DataTypes.DATE,
-    defaultValue: DataTypes.NOW,
-    allowNull: false,
-    comment: 'Entered Date Time'
+  created_by: {
+    type: DataTypes.STRING(15),
+    allowNull: true,
+    field: 'created_by'
   },
   eby: {
-    type: DataTypes.STRING(15),
-    allowNull: false,
-    comment: 'Entered By'
+    type: DataTypes.VIRTUAL,
+    get() {
+      return this.getDataValue('created_by');
+    },
+    set(val) {
+      this.setDataValue('created_by', val);
+    }
   },
-  mdtm: {
+  created_at: {
     type: DataTypes.DATE,
+    allowNull: false,
     defaultValue: DataTypes.NOW,
-    onUpdate: DataTypes.NOW,
-    allowNull: false,
-    comment: 'Modified Date Time'
+    field: 'created_at'
   },
-  mby: {
-    type: DataTypes.STRING(15),
-    allowNull: true,
-    comment: 'Modified By'
-  },
-  cby: {
-    type: DataTypes.STRING(15),
-    allowNull: true,
-    comment: 'Closed By'
-  },
-  cdtm: {
-    type: DataTypes.DATE,
-    allowNull: true,
-    comment: 'Closed Date Time'
+  edtm: {
+    type: DataTypes.VIRTUAL,
+    get() {
+      return this.getDataValue('created_at');
+    },
+    set(val) {
+      this.setDataValue('created_at', val);
+    }
   }
 }, {
   tableName: 'customer_ledger',
   timestamps: false,
   indexes: [
     { name: 'idx_customer', fields: ['customer_id'] },
-    { name: 'idx_transaction_date', fields: ['transaction_date'] },
+    { name: 'idx_entry_type', fields: ['entry_type'] },
     { name: 'idx_reference', fields: ['reference_type', 'reference_id'] }
   ]
 });

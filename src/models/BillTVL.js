@@ -3,7 +3,7 @@ const { sequelizeTVL } = require('../../config/db');
 
 const BillTVL = sequelizeTVL.define('blXbilling', {
   bl_id: {
-    type: DataTypes.INTEGER,
+    type: DataTypes.BIGINT,
     primaryKey: true,
     autoIncrement: true,
     allowNull: false,

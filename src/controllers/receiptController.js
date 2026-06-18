@@ -24,14 +24,18 @@ class ReceiptController {
       const sortBy = req.query.sortBy || 'rc_date';
       const sortOrder = (req.query.sortOrder || 'DESC').toUpperCase();
       
-      const whereClause = { rc_status: 'Active' };
+      const filterMap = {
+        dateColumn: 'rc_date',
+        amountColumn: 'rc_amount',
+        statusColumn: 'rc_status',
+        searchColumns: ['rc_entry_no', 'rc_customer_name', 'rc_customer_phone'],
+        customFilters: {}
+      };
       
-      if (req.query.search) {
-        whereClause[Op.or] = [
-          { rc_entry_no: { [Op.like]: `%${req.query.search}%` } },
-          { rc_customer_name: { [Op.like]: `%${req.query.search}%` } },
-          { rc_customer_phone: { [Op.like]: `%${req.query.search}%` } }
-        ];
+      const whereClause = queryHelper.buildWhereClause(req.query, filterMap);
+      
+      if (!req.query.status) {
+        whereClause.rc_status = 'Active';
       }
       
       const { count, rows: receipts } = await Receipt.findAndCountAll({

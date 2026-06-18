@@ -11,19 +11,11 @@ const Permission = require('./Permission');
 const RolePermission = require('./RolePermission');
 const RolePermissionTVL = require('./RolePermissionTVL');
 const RoleTVL = require('./RoleTVL');
-const User = require('./User');
-const Login = require('./Login');
-const Employee = require('./Employee');
-const Customer = require('./Customer');
 const CorporateCustomer = require('./CorporateCustomer');
 const CustomerContact = require('./CustomerContact');
-const Station = require('./Station');
-const Train = require('./Train');
 const Booking = require('./Booking');
 const Passenger = require('./Passenger');
 const Pnr = require('./Pnr');
-const Account = require('./Account');
-const Payment = require('./Payment');
 const PaymentAlloc = require('./PaymentAlloc');
 const PaymentAllocTVL = require('./PaymentAllocTVL');
 const Session = require('./Session');
@@ -42,9 +34,7 @@ const LoginTVL = require('./LoginTVL');
 const UserPermissionTVL = require('./UserPermissionTVL');
 const PermissionTVL = require('./PermissionTVL');
 const Ledger = require('./Ledger');
-const CustomerAdvance = require('./CustomerAdvance');
 const CustomerAdvanceTVL = require('./CustomerAdvanceTVL');
-const YearEndClosing = require('./YearEndClosing');
 const YearEndClosingTVL = require('./YearEndClosingTVL');
 const BillTVL = require('./BillTVL');
 const BillingMaster = require('./BillingMaster');
@@ -61,6 +51,18 @@ const ServiceChargeDefault = require('./ServiceChargeDefault');
 const PaymentAllocation = require('./PaymentAllocation');
 const CustomerLedger = require('./CustomerLedger');
 
+// Map legacy model variables to active TVL models for backwards-compatibility
+const User = UserTVL;
+const Login = LoginTVL;
+const Employee = EmployeeTVL;
+const Customer = CustomerTVL;
+const Station = StationTVL;
+const Train = TrainTVL;
+const Account = AccountTVL;
+const Payment = require('./Payment');
+const CustomerAdvance = CustomerAdvanceTVL;
+const YearEndClosing = YearEndClosingTVL;
+
 
 // Set up associations
 // Company associations
@@ -74,7 +76,7 @@ Role.hasMany(RolePermission, { foreignKey: 'rp_roid', sourceKey: 'fn_fnid' });
 Permission.hasMany(RolePermission, { foreignKey: 'rp_peid', sourceKey: 'op_opid' });
 
 // User associations
-User.belongsTo(Role, { foreignKey: 'us_roid', targetKey: 'fn_fnid' });
+User.belongsTo(Role, { foreignKey: 'us_roid', targetKey: 'fn_fnid', as: 'fnXfunction' });
 User.belongsTo(Company, { foreignKey: 'us_coid', targetKey: 'co_coid' });
 User.hasOne(Login, { foreignKey: 'lg_usid', sourceKey: 'us_usid' });
 User.hasOne(Employee, { foreignKey: 'em_usid', sourceKey: 'us_usid' });
@@ -91,7 +93,7 @@ Employee.belongsTo(User, { foreignKey: 'em_manager', targetKey: 'us_usid', as: '
 // Customer associations
 Customer.belongsTo(User, { foreignKey: 'cu_usid', targetKey: 'us_usid' });
 Customer.hasMany(CustomerContact, { foreignKey: 'cc_usid', sourceKey: 'cu_usid' });
-Customer.hasMany(Booking, { foreignKey: 'bk_usid', sourceKey: 'cu_usid' });
+Customer.hasMany(Booking, { foreignKey: 'bk_usid', sourceKey: 'cu_usid', as: 'bookings' });
 Customer.hasMany(Account, { foreignKey: 'ac_usid', sourceKey: 'cu_usid' });
 Customer.hasMany(ServiceCharge, { foreignKey: 'customer_id', sourceKey: 'cu_usid' });
 ServiceCharge.belongsTo(Customer, { foreignKey: 'customer_id', targetKey: 'cu_usid' });
@@ -208,9 +210,6 @@ Session.belongsTo(Company, { foreignKey: 'ss_coid', targetKey: 'co_coid' });
 // EmployeeTVL association with UserTVL is defined in EmployeeTVL.js
 EmployeeTVL.belongsTo(EmployeeTVL, { foreignKey: 'em_manager', targetKey: 'em_usid', as: 'manager' });
 
-// UserTVL associations
-UserTVL.belongsTo(RoleTVL, { foreignKey: 'us_roid', targetKey: 'fn_fnid', as: 'fnXfunction' });
-
 // TrainTVL associations
 TrainTVL.associate({ StationTVL });
 
@@ -221,10 +220,6 @@ ModuleTVL.belongsTo(ApplicationTVL, { foreignKey: 'mo_apid', targetKey: 'ap_apid
 BillTVL.belongsTo(BookingTVL, { foreignKey: 'bl_booking_id', targetKey: 'bk_bkid', as: 'booking' });
 BookingTVL.hasOne(BillTVL, { foreignKey: 'bl_booking_id', sourceKey: 'bk_bkid', as: 'billing' });
 console.log('✅ BillTVL associations defined');
-
-// CustomerTVL <-> BookingTVL associations
-CustomerTVL.hasMany(BookingTVL, { foreignKey: 'bk_usid', sourceKey: 'cu_usid', as: 'bookings' });
-BookingTVL.belongsTo(CustomerTVL, { foreignKey: 'bk_usid', targetKey: 'cu_usid', as: 'customer' });
 
 // Payment, Contra, Receipt, and Journal associations
 Payment.belongsTo(User, { foreignKey: 'py_created_by', targetKey: 'us_usid', as: 'creator' });

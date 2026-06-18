@@ -144,7 +144,8 @@ if (typeof document !== 'undefined') {
 import BillCreationForm from '../components/Billing/BillCreationForm';
 import BillList from '../components/Billing/BillList';
 import BillDetails from '../components/Billing/BillDetails';
-import CustomerLedger from '../components/Billing/CustomerLedger';
+import CustomerLedger from './admin/CustomerLedger';
+import { customerAPI } from '../services/api';
 
 const Billing = () => {
   const { user } = useAuth();
@@ -216,6 +217,35 @@ const Billing = () => {
   // Booking integration state
   const [bookingData, setBookingData] = useState(null);
   const [billingMode, setBillingMode] = useState('list'); // 'list', 'generate', 'view'
+
+  // Ledger view state
+  const [ledgerCustomerId, setLedgerCustomerId] = useState(null);
+  const [ledgerCustomerName, setLedgerCustomerName] = useState('');
+  const [ledgerSearch, setLedgerSearch] = useState('');
+  const [ledgerSearchResults, setLedgerSearchResults] = useState([]);
+  const [ledgerSearching, setLedgerSearching] = useState(false);
+
+  const handleLedgerSearch = useCallback(async (term) => {
+    setLedgerSearch(term);
+    if (term.length < 2) { setLedgerSearchResults([]); return; }
+    setLedgerSearching(true);
+    try {
+      const data = await customerAPI.searchCustomers(term);
+      setLedgerSearchResults(Array.isArray(data) ? data.slice(0, 10) : []);
+    } catch (err) {
+      console.error('Ledger customer search error:', err);
+      setLedgerSearchResults([]);
+    } finally {
+      setLedgerSearching(false);
+    }
+  }, []);
+
+  const selectLedgerCustomer = useCallback((cust) => {
+    setLedgerCustomerId(cust.cu_usid || cust.id || cust.usid);
+    setLedgerCustomerName(cust.cu_name || cust.name || '');
+    setLedgerSearch('');
+    setLedgerSearchResults([]);
+  }, []);
   
   // Save confirmation state
   const [showSaveModal, setShowSaveModal] = useState(false);
@@ -1682,6 +1712,14 @@ const Billing = () => {
         <Link className="erp-button" to="/billing/cancellations" title="Cancellation history">
           Cancellations
         </Link>
+        <button
+          className="erp-button"
+          onClick={() => { setActiveView(activeView === 'ledger' ? 'list' : 'ledger'); setLedgerCustomerId(null); setLedgerCustomerName(''); }}
+          style={activeView === 'ledger' ? { background: '#8b7355', color: '#fff' } : {}}
+          title="Customer Ledger"
+        >
+          Ledger
+        </button>
         
         <div style={{ flex: 1 }}></div>
         <div style={{ fontWeight: 'bold', fontSize: '12px' }}>
@@ -1690,6 +1728,44 @@ const Billing = () => {
       </div>
 
       {/* Main Content Area - Scrollable */}
+      {activeView === 'ledger' ? (
+        <div style={{ height: 'calc(100vh - 110px)', overflow: 'auto', padding: '16px', background: '#f5ecd7' }}>
+          <div style={{ marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <div style={{ position: 'relative', flex: '0 0 350px' }}>
+              <input
+                type="text"
+                className="erp-input"
+                placeholder="Search customer by name, phone, or ID..."
+                value={ledgerSearch}
+                onChange={(e) => handleLedgerSearch(e.target.value)}
+                style={{ width: '100%' }}
+              />
+              {ledgerSearchResults.length > 0 && (
+                <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: '#fff', border: '1px solid #8b7355', borderRadius: '0 0 4px 4px', maxHeight: '250px', overflowY: 'auto', zIndex: 1000, boxShadow: '0 4px 8px rgba(0,0,0,0.15)' }}>
+                  {ledgerSearchResults.map((c) => (
+                    <div key={c.cu_usid || c.id || c.usid} onClick={() => selectLedgerCustomer(c)} style={{ padding: '8px 12px', cursor: 'pointer', borderBottom: '1px solid #eee', fontSize: '13px' }} onMouseEnter={(e) => e.currentTarget.style.background = '#f5ecd7'} onMouseLeave={(e) => e.currentTarget.style.background = '#fff'}>
+                      <strong>{c.cu_name || c.name}</strong>
+                      <span style={{ color: '#666', marginLeft: '8px', fontSize: '11px' }}>{c.cu_usid || c.id || c.usid}</span>
+                      {c.cu_phone && <span style={{ color: '#888', marginLeft: '8px', fontSize: '11px' }}>{c.cu_phone}</span>}
+                    </div>
+                  ))}
+                </div>
+              )}
+              {ledgerSearching && <div style={{ padding: '8px', textAlign: 'center', color: '#888', fontSize: '12px' }}>Searching...</div>}
+            </div>
+            {ledgerCustomerId && <span style={{ fontWeight: 'bold', fontSize: '14px', color: '#5c4a2a' }}>Viewing: {ledgerCustomerName} ({ledgerCustomerId})</span>}
+          </div>
+          {ledgerCustomerId ? (
+            <CustomerLedger customerId={ledgerCustomerId} />
+          ) : (
+            <div style={{ textAlign: 'center', padding: '60px 20px', color: '#8b7355', border: '2px dashed #8b7355', borderRadius: '8px', background: '#fff' }}>
+              <div style={{ fontSize: '32px', marginBottom: '8px' }}>📒</div>
+              <div style={{ fontSize: '16px', fontWeight: 'bold' }}>Select a customer to view their ledger</div>
+              <div style={{ fontSize: '13px', marginTop: '4px', color: '#a08560' }}>Search by customer name, phone number, or customer ID</div>
+            </div>
+          )}
+        </div>
+      ) : (
       <div className="layout-content-wrapper" style={{ display: 'flex', height: 'calc(100vh - 110px)', overflow: 'hidden' }}>
         {/* Center Content */}
         <div className="layout-main-column" style={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0, height: '100%' }}>
@@ -2676,6 +2752,7 @@ const Billing = () => {
           </div>
         </div>
       </div>
+      )}
 
       {/* Save Confirmation Modal */}
       {showSaveModal && (

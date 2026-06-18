@@ -46,7 +46,6 @@ import useERPFilters from '../hooks/useERPFilters';
 import PaginationControls from '../components/common/PaginationControls';
 import SaveConfirmationModal from '../components/common/SaveConfirmationModal';
 import RecordActionMenu from '../components/common/RecordActionMenu';
-import AuditPanel from '../components/common/AuditPanel';
 import AuditHistoryButton from '../components/common/AuditHistoryButton';
 import { useKeyboardForm } from '../hooks/useKeyboardForm';
 import { usePassengerEntry } from '../hooks/usePassengerEntry';
@@ -94,6 +93,25 @@ if (typeof document !== 'undefined') {
   styleSheet.textContent = keyboardNavigationStyles;
   document.head.appendChild(styleSheet);
 }
+
+// Helper to format audit dates to locale string (matches AuditPanel formatting)
+const formatAuditDate = (dateStr) => {
+  if (!dateStr) return '';
+  try {
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return dateStr;
+    return d.toLocaleString('en-IN', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true,
+    });
+  } catch {
+    return dateStr;
+  }
+};
 
 const Bookings = () => {
   const { user, isAuthenticated } = useAuth();
@@ -1985,15 +2003,27 @@ setSelectedBooking(null); // Clear selection after deletion
                </div>
             </div>
             
-            {/* Audit Panel — read-only, always visible in view and edit mode */}
-            <AuditPanel
-              enteredBy={formData.createdBy || selectedBooking?.eby}
-              enteredOn={formData.createdOn || selectedBooking?.edtm}
-              modifiedBy={formData.modifiedBy || selectedBooking?.mby}
-              modifiedOn={formData.modifiedOn || selectedBooking?.mdtm}
-              closedBy={formData.closedBy || selectedBooking?.closed_by}
-              closedOn={formData.closedOn || selectedBooking?.closed_on}
-            />
+            {/* Audit Section */}
+            <div className="erp-audit-section">
+              <div className="erp-audit-row">
+                <label className="erp-audit-label">Entered On</label>
+                <input type="text" className="erp-audit-input" value={formatAuditDate(formData.createdOn || selectedBooking?.edtm) || ''} readOnly />
+                <label className="erp-audit-label">Entered By</label>
+                <input type="text" className="erp-audit-input" value={formData.createdBy || selectedBooking?.eby || ''} readOnly />
+              </div>
+              <div className="erp-audit-row">
+                <label className="erp-audit-label">Modified On</label>
+                <input type="text" className="erp-audit-input" value={formatAuditDate(formData.modifiedOn || selectedBooking?.mdtm) || ''} readOnly />
+                <label className="erp-audit-label">Modified By</label>
+                <input type="text" className="erp-audit-input" value={formData.modifiedBy || selectedBooking?.mby || ''} readOnly />
+              </div>
+              <div className="erp-audit-row">
+                <label className="erp-audit-label">Closed On</label>
+                <input type="text" className="erp-audit-input" value={formatAuditDate(formData.closedOn || selectedBooking?.closed_on) || ''} readOnly />
+                <label className="erp-audit-label">Closed By</label>
+                <input type="text" className="erp-audit-input" value={formData.closedBy || selectedBooking?.closed_by || ''} readOnly />
+              </div>
+            </div>
             {/* History Button — opens forensic timeline modal */}
             {(selectedBooking?.bk_bkid) && (
               <div style={{ marginTop: '8px' }}>

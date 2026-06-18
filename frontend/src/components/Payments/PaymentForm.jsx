@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useKeyboardNavigation } from '../../contexts/KeyboardNavigationContext';
 import { usePagination } from '../../hooks/usePagination';
+import useERPFilters from '../../hooks/useERPFilters';
 import PaginationControls from '../common/PaginationControls';
 import SaveConfirmationModal from '../common/SaveConfirmationModal';
 import AuditHistoryButton from '../common/AuditHistoryButton';
@@ -58,6 +59,29 @@ const PaymentForm = ({ onBack }) => {
     changeLimit
   } = usePagination(1, 50);
 
+  const {
+    draftFilters: inlineFilters,
+    activeFilters,
+    handleFilterChange: handleInlineFilterChange,
+    applyFiltersManual: applyFilters,
+    clearFiltersManual: clearFilters
+  } = useERPFilters({
+    py_date: '',
+    py_entry_no: '',
+    py_customer_name: '',
+    py_customer_phone: '',
+    py_bank_account: '',
+    py_payment_mode: '',
+    py_amount: '',
+    py_entry_type: '',
+    py_ref_number: ''
+  }, () => {
+    setPage(1);
+  }, { 
+    realTime: true, 
+    debounceMs: 500 
+  });
+
   const [accounts] = useState([
     'Cash Account',
     'Bank Account - SBI',
@@ -88,7 +112,13 @@ const PaymentForm = ({ onBack }) => {
   const fetchPayments = useCallback(async () => {
     try {
       setLoading(true);
-      const response = await paymentAPI.getAllPayments({ page, limit, type: 'Debit' });
+      const params = {
+        page,
+        limit,
+        type: 'Debit',
+        ...activeFilters
+      };
+      const response = await paymentAPI.getAllPayments(params);
       setPaymentRecords(response.data || []);
       updatePagination(response.pagination);
     } catch (err) {
@@ -97,7 +127,7 @@ const PaymentForm = ({ onBack }) => {
     } finally {
       setLoading(false);
     }
-  }, [page, limit, updatePagination]);
+  }, [page, limit, activeFilters, updatePagination]);
 
   useEffect(() => {
     fetchPayments();
@@ -620,15 +650,114 @@ const PaymentForm = ({ onBack }) => {
               <table className="erp-table">
                 <thead style={{ position: 'sticky', top: 0, backgroundColor: '#f5f5f5', zIndex: 1 }}>
                   <tr>
+                    <th style={{ width: '30px' }}><input type="checkbox" disabled style={{ opacity: 0.3 }} /></th>
                     <th style={{ width: '100px' }}>Date</th>
                     <th style={{ width: '120px' }}>Entry No</th>
                     <th>Payee Name</th>
+                    <th>Payee Phone</th>
                     <th>Account</th>
                     <th style={{ width: '100px' }}>Mode</th>
                     <th className="text-right" style={{ width: '150px' }}>Amount (₹)</th>
                     <th style={{ width: '80px' }}>Type</th>
                     <th>Ref No</th>
                     <th style={{ width: '90px' }}>History</th>
+                  </tr>
+                  {/* Inline Filter Row */}
+                  <tr style={{ backgroundColor: '#f8f9fa' }}>
+                    <td><input type="checkbox" disabled style={{ opacity: 0.3 }} /></td>
+                    <td>
+                      <input 
+                        type="text" 
+                        placeholder="Filter Date..."
+                        value={inlineFilters.py_date || ''}
+                        onChange={(e) => handleInlineFilterChange('py_date', e.target.value)}
+                        className="inline-filter-input"
+                        style={{ width: '100%', padding: '2px 4px', fontSize: '11px', border: '1px solid #ddd' }}
+                      />
+                    </td>
+                    <td>
+                      <input 
+                        type="text" 
+                        placeholder="Filter Entry No..."
+                        value={inlineFilters.py_entry_no || ''}
+                        onChange={(e) => handleInlineFilterChange('py_entry_no', e.target.value)}
+                        className="inline-filter-input"
+                        style={{ width: '100%', padding: '2px 4px', fontSize: '11px', border: '1px solid #ddd' }}
+                      />
+                    </td>
+                    <td>
+                      <input 
+                        type="text" 
+                        placeholder="Filter Payee..."
+                        value={inlineFilters.py_customer_name || ''}
+                        onChange={(e) => handleInlineFilterChange('py_customer_name', e.target.value)}
+                        className="inline-filter-input"
+                        style={{ width: '100%', padding: '2px 4px', fontSize: '11px', border: '1px solid #ddd' }}
+                      />
+                    </td>
+                    <td>
+                      <input 
+                        type="text" 
+                        placeholder="Filter Phone..."
+                        value={inlineFilters.py_customer_phone || ''}
+                        onChange={(e) => handleInlineFilterChange('py_customer_phone', e.target.value)}
+                        className="inline-filter-input"
+                        style={{ width: '100%', padding: '2px 4px', fontSize: '11px', border: '1px solid #ddd' }}
+                      />
+                    </td>
+                    <td>
+                      <input 
+                        type="text" 
+                        placeholder="Filter Account..."
+                        value={inlineFilters.py_bank_account || ''}
+                        onChange={(e) => handleInlineFilterChange('py_bank_account', e.target.value)}
+                        className="inline-filter-input"
+                        style={{ width: '100%', padding: '2px 4px', fontSize: '11px', border: '1px solid #ddd' }}
+                      />
+                    </td>
+                    <td>
+                      <input 
+                        type="text" 
+                        placeholder="Filter Mode..."
+                        value={inlineFilters.py_payment_mode || ''}
+                        onChange={(e) => handleInlineFilterChange('py_payment_mode', e.target.value)}
+                        className="inline-filter-input"
+                        style={{ width: '100%', padding: '2px 4px', fontSize: '11px', border: '1px solid #ddd' }}
+                      />
+                    </td>
+                    <td>
+                      <input 
+                        type="text" 
+                        placeholder="Filter Amount..."
+                        value={inlineFilters.py_amount || ''}
+                        onChange={(e) => handleInlineFilterChange('py_amount', e.target.value)}
+                        className="inline-filter-input"
+                        style={{ width: '100%', padding: '2px 4px', fontSize: '11px', border: '1px solid #ddd' }}
+                      />
+                    </td>
+                    <td>
+                      <select
+                        value={inlineFilters.py_entry_type || ''}
+                        onChange={(e) => handleInlineFilterChange('py_entry_type', e.target.value)}
+                        className="inline-filter-input"
+                        style={{ width: '100%', padding: '2px', fontSize: '11px', border: '1px solid #ddd' }}
+                      >
+                        <option value="">All</option>
+                        <option value="Debit">Debit</option>
+                        <option value="Credit">Credit</option>
+                      </select>
+                    </td>
+                    <td>
+                      <input 
+                        type="text" 
+                        placeholder="Filter Ref..."
+                        value={inlineFilters.py_ref_number || ''}
+                        onChange={(e) => handleInlineFilterChange('py_ref_number', e.target.value)}
+                        className="inline-filter-input"
+                        style={{ width: '100%', padding: '2px 4px', fontSize: '11px', border: '1px solid #ddd' }}
+                      />
+                    </td>
+                    <td></td>
                   </tr>
                 </thead>
                 <tbody>
@@ -641,9 +770,11 @@ const PaymentForm = ({ onBack }) => {
                         onClick={() => handleRecordSelect(r)}
                         style={{ cursor: 'pointer' }}
                       >
+                        <td><input type="checkbox" checked={!!isSelected} onChange={() => {}} /></td>
                         <td>{new Date(r.py_date || r.date).toLocaleDateString()}</td>
                         <td className="font-bold">{r.py_entry_no || r.receipt_no}</td>
                         <td>{r.py_customer_name || r.customer_name}</td>
+                        <td>{r.py_customer_phone || ''}</td>
                         <td>{r.py_bank_account || r.account_name}</td>
                         <td>{r.py_payment_mode || 'Cash'}</td>
                         <td className="text-right font-bold" style={{ color: '#c62828' }}>
@@ -667,7 +798,7 @@ const PaymentForm = ({ onBack }) => {
                       </tr>
                     );
                   }) : (
-                    <tr><td colSpan="9" style={{ textAlign: 'center', padding: '20px' }}>No historical records found</td></tr>
+                    <tr><td colSpan="11" style={{ textAlign: 'center', padding: '20px' }}>No historical records found</td></tr>
                   )}
                 </tbody>
               </table>

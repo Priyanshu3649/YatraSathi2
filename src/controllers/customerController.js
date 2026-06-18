@@ -1,14 +1,14 @@
 const { Op } = require('sequelize');
 const bcrypt = require('bcrypt');
 const { sequelize, sequelizeTVL } = require('../../config/db');
-const Customer = require('../models/Customer');
+const Customer = require('../models/CustomerTVL');
 const CustomerTVL = require('../models/CustomerTVL');
-const User = require('../models/User');
+const User = require('../models/UserTVL');
 const UserTVL = require('../models/UserTVL');
 const CustomerFinancialService = require('../services/CustomerFinancialService');
 const LedgerService = require('../services/LedgerService');
 const BillTVL = require('../models/BillTVL');
-const Payment = require('../models/Payment');
+const Payment = require('../models/PaymentTVL');
 const Booking = require('../models/Booking');
 
 const customerController = {

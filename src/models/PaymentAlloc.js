@@ -1,6 +1,6 @@
 const { DataTypes } = require('sequelize');
 const { sequelize, BaseModel } = require('./baseModel');
-const Payment = require('./Payment');
+const Payment = require('./PaymentTVL');
 const Pnr = require('./Pnr');
 
 /**
@@ -41,21 +41,19 @@ const PaymentAlloc = sequelize.define('paXpayalloc', {
     comment: 'Allocated Amount (must be <= PNR pending amount)'
   },
   pa_alloctn_date: {
-    type: DataTypes.DATE,
-    allowNull: true,
-    defaultValue: DataTypes.NOW,
-    comment: 'Allocation Date'
+    type: DataTypes.VIRTUAL,
+    get() { return this.getDataValue('pa_alloctn_date') || this.pa_allocdt; },
+    set(val) { this.setDataValue('pa_alloctn_date', val); }
   },
   pa_alloctn_type: {
-    type: DataTypes.STRING(10),
-    defaultValue: 'MANUAL',
-    allowNull: true,
-    comment: 'Allocation Type: AUTO (FIFO) | MANUAL (user selected)'
+    type: DataTypes.VIRTUAL,
+    get() { return this.getDataValue('pa_alloctn_type') || 'MANUAL'; },
+    set(val) { this.setDataValue('pa_alloctn_type', val); }
   },
   pa_remarks: {
-    type: DataTypes.TEXT,
-    allowNull: true,
-    comment: 'Allocation Remarks'
+    type: DataTypes.VIRTUAL,
+    get() { return this.getDataValue('pa_remarks') || this.pa_rmrks; },
+    set(val) { this.setDataValue('pa_remarks', val); }
   },
   pa_allocdt: {
     type: DataTypes.DATE,
@@ -92,7 +90,6 @@ const PaymentAlloc = sequelize.define('paXpayalloc', {
     { fields: ['pa_ptid'] },
     { fields: ['pa_pnid'] },
     { fields: ['pa_pnr'] },
-    { fields: ['pa_alloctn_date'] },
     { fields: ['pa_allocdt'] }
   ]
 });

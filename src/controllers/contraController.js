@@ -24,14 +24,18 @@ class ContraController {
       const sortBy = req.query.sortBy || 'ct_date';
       const sortOrder = (req.query.sortOrder || 'DESC').toUpperCase();
       
-      const whereClause = { ct_status: 'Active' };
+      const filterMap = {
+        dateColumn: 'ct_date',
+        amountColumn: 'ct_amount',
+        statusColumn: 'ct_status',
+        searchColumns: ['ct_entry_no', 'ct_from_account', 'ct_to_account'],
+        customFilters: {}
+      };
       
-      if (req.query.search) {
-        whereClause[Op.or] = [
-          { ct_entry_no: { [Op.like]: `%${req.query.search}%` } },
-          { ct_from_account: { [Op.like]: `%${req.query.search}%` } },
-          { ct_to_account: { [Op.like]: `%${req.query.search}%` } }
-        ];
+      const whereClause = queryHelper.buildWhereClause(req.query, filterMap);
+      
+      if (!req.query.status) {
+        whereClause.ct_status = 'Active';
       }
       
       const { count, rows: contras } = await Contra.findAndCountAll({

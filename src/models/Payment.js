@@ -1,11 +1,11 @@
 const { DataTypes } = require('sequelize');
-const { sequelize, BaseModel, auditHooks } = require('./baseModel');
+const { sequelize, BaseModel } = require('./baseModel');
 
 /**
- * Payment Model
+ * Payment Model (Voucher entry payments)
  * Handles payment transactions and records
  */
-const Payment = sequelize.define('pyPayment', {
+const Payment = sequelize.define('pyXpayment', {
   py_pymtid: {
     type: DataTypes.BIGINT,
     primaryKey: true,
@@ -31,7 +31,8 @@ const Payment = sequelize.define('pyPayment', {
   py_entry_type: {
     type: DataTypes.ENUM('Debit', 'Credit'),
     allowNull: false,
-    comment: 'Entry type'
+    defaultValue: 'Debit',
+    comment: 'Entry type: Debit (Payment Out) | Credit (Refund In)'
   },
   
   py_customer_name: {
@@ -202,7 +203,6 @@ const Payment = sequelize.define('pyPayment', {
 
 // Define associations
 Payment.associate = function(models) {
-  // Payment belongs to user who created it
   Payment.belongsTo(models.User, {
     foreignKey: 'py_created_by',
     targetKey: 'us_usid',

@@ -1,7 +1,7 @@
 const { sequelize } = require('../../config/db');
 const CustomerLedger = require('../models/CustomerLedger');
 const BillTVL = require('../models/BillTVL');
-const Payment = require('../models/Payment');
+const Payment = require('../models/PaymentTVL');
 
 class LedgerService {
   /**

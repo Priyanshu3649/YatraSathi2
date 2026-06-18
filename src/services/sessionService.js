@@ -1,5 +1,5 @@
 const Session = require('../models/Session');
-const User = require('../models/User');
+const User = require('../models/UserTVL');
 const Company = require('../models/Company');
 const { SessionTVL, UserTVL, CompanyTVL } = require('../models'); // Import TVL models
 const crypto = require('crypto');

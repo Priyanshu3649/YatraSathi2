@@ -3,7 +3,7 @@ const { sequelizeTVL } = require('../../config/db');
 
 const ApplicationTVL = sequelizeTVL.define('apXapplication', {
   ap_apid: {
-    type: DataTypes.STRING(4),
+    type: DataTypes.STRING(10),
     primaryKey: true,
     allowNull: false,
     defaultValue: '',

@@ -1,7 +1,7 @@
-const User = require('../models/User');
+const User = require('../models/UserTVL');
 const Role = require('../models/Role');
-const Station = require('../models/Station');
-const Train = require('../models/Train');
+const Station = require('../models/StationTVL');
+const Train = require('../models/TrainTVL');
 const bcrypt = require('bcryptjs');
 
 // Seed roles

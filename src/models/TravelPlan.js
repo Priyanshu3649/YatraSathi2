@@ -1,6 +1,6 @@
 const { DataTypes } = require('sequelize');
 const { sequelize, BaseModel, auditHooks } = require('./baseModel');
-const User = require('./User');
+const User = require('./UserTVL');
 
 const TravelPlan = sequelize.define('tpTravelPlan', {
   tp_tpid: {

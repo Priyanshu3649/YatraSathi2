@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useKeyboardNavigation } from '../../contexts/KeyboardNavigationContext';
 import { usePagination } from '../../hooks/usePagination';
+import useERPFilters from '../../hooks/useERPFilters';
 import PaginationControls from '../common/PaginationControls';
 import SaveConfirmationModal from '../common/SaveConfirmationModal';
 import { journalAPI } from '../../services/api';
@@ -53,6 +54,26 @@ const JournalForm = ({ onBack }) => {
     changeLimit
   } = usePagination(1, 50);
 
+  const {
+    draftFilters: inlineFilters,
+    activeFilters,
+    handleFilterChange: handleInlineFilterChange,
+    applyFiltersManual: applyFilters,
+    clearFiltersManual: clearFilters
+  } = useERPFilters({
+    je_date: '',
+    je_entry_no: '',
+    je_account: '',
+    je_amount: '',
+    je_ref_number: '',
+    je_narration: ''
+  }, () => {
+    setPage(1);
+  }, { 
+    realTime: true, 
+    debounceMs: 500 
+  });
+
   const fieldOrder = useMemo(() => [
     'date', 
     'debit_account', 
@@ -72,7 +93,12 @@ const JournalForm = ({ onBack }) => {
   const fetchJournals = useCallback(async () => {
     try {
       setLoading(true);
-      const response = await journalAPI.getAllJournals({ page, limit });
+      const params = {
+        page,
+        limit,
+        ...activeFilters
+      };
+      const response = await journalAPI.getAllJournals(params);
       setJournalRecords(response.data || []);
       updatePagination(response.pagination);
     } catch (err) {
@@ -81,7 +107,7 @@ const JournalForm = ({ onBack }) => {
     } finally {
       setLoading(false);
     }
-  }, [page, limit, updatePagination]);
+  }, [page, limit, activeFilters, updatePagination]);
 
   useEffect(() => {
     fetchJournals();
@@ -550,12 +576,77 @@ const JournalForm = ({ onBack }) => {
               <table className="erp-table">
                 <thead style={{ position: 'sticky', top: 0, backgroundColor: '#f5f5f5', zIndex: 1 }}>
                   <tr>
+                    <th style={{ width: '30px' }}><input type="checkbox" disabled style={{ opacity: 0.3 }} /></th>
                     <th style={{ width: '100px' }}>Date</th>
                     <th style={{ width: '120px' }}>Entry No</th>
                     <th>Debit Account</th>
                     <th>Credit Account</th>
                     <th className="text-right" style={{ width: '150px' }}>Amount (₹)</th>
                     <th>Reference</th>
+                  </tr>
+                  {/* Inline Filter Row */}
+                  <tr style={{ backgroundColor: '#f8f9fa' }}>
+                    <td><input type="checkbox" disabled style={{ opacity: 0.3 }} /></td>
+                    <td>
+                      <input 
+                        type="text" 
+                        placeholder="Filter Date..."
+                        value={inlineFilters.je_date || ''}
+                        onChange={(e) => handleInlineFilterChange('je_date', e.target.value)}
+                        className="inline-filter-input"
+                        style={{ width: '100%', padding: '2px 4px', fontSize: '11px', border: '1px solid #ddd' }}
+                      />
+                    </td>
+                    <td>
+                      <input 
+                        type="text" 
+                        placeholder="Filter Entry No..."
+                        value={inlineFilters.je_entry_no || ''}
+                        onChange={(e) => handleInlineFilterChange('je_entry_no', e.target.value)}
+                        className="inline-filter-input"
+                        style={{ width: '100%', padding: '2px 4px', fontSize: '11px', border: '1px solid #ddd' }}
+                      />
+                    </td>
+                    <td>
+                      <input 
+                        type="text" 
+                        placeholder="Filter Debit..."
+                        value={inlineFilters.je_account || ''}
+                        onChange={(e) => handleInlineFilterChange('je_account', e.target.value)}
+                        className="inline-filter-input"
+                        style={{ width: '100%', padding: '2px 4px', fontSize: '11px', border: '1px solid #ddd' }}
+                      />
+                    </td>
+                    <td>
+                      <input 
+                        type="text" 
+                        placeholder="Filter Credit..."
+                        value={inlineFilters.je_narration || ''}
+                        onChange={(e) => handleInlineFilterChange('je_narration', e.target.value)}
+                        className="inline-filter-input"
+                        style={{ width: '100%', padding: '2px 4px', fontSize: '11px', border: '1px solid #ddd' }}
+                      />
+                    </td>
+                    <td>
+                      <input 
+                        type="text" 
+                        placeholder="Filter Amount..."
+                        value={inlineFilters.je_amount || ''}
+                        onChange={(e) => handleInlineFilterChange('je_amount', e.target.value)}
+                        className="inline-filter-input"
+                        style={{ width: '100%', padding: '2px 4px', fontSize: '11px', border: '1px solid #ddd' }}
+                      />
+                    </td>
+                    <td>
+                      <input 
+                        type="text" 
+                        placeholder="Filter Ref..."
+                        value={inlineFilters.je_ref_number || ''}
+                        onChange={(e) => handleInlineFilterChange('je_ref_number', e.target.value)}
+                        className="inline-filter-input"
+                        style={{ width: '100%', padding: '2px 4px', fontSize: '11px', border: '1px solid #ddd' }}
+                      />
+                    </td>
                   </tr>
                 </thead>
                 <tbody>
@@ -581,6 +672,7 @@ const JournalForm = ({ onBack }) => {
                         onClick={() => handleRecordSelect(r)}
                         style={{ cursor: 'pointer' }}
                       >
+                        <td><input type="checkbox" checked={!!isSelected} onChange={() => {}} /></td>
                         <td>{r.je_date ? new Date(r.je_date).toLocaleDateString() : ''}</td>
                         <td className="font-bold">{r.je_entry_no || ''}</td>
                         <td>{debitAcc}</td>
@@ -592,7 +684,7 @@ const JournalForm = ({ onBack }) => {
                       </tr>
                     );
                   }) : (
-                    <tr><td colSpan="6" style={{ textAlign: 'center', padding: '20px' }}>No historical records found</td></tr>
+                    <tr><td colSpan="7" style={{ textAlign: 'center', padding: '20px' }}>No historical records found</td></tr>
                   )}
                 </tbody>
               </table>

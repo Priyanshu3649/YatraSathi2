@@ -3,13 +3,13 @@ const { sequelizeTVL } = require('../../config/db');
 
 const CompanyTVL = sequelizeTVL.define('coCompany', {
   co_coid: {
-    type: DataTypes.STRING(3),
+    type: DataTypes.STRING(10),
     primaryKey: true,
     allowNull: false,
     comment: 'Company ID'
   },
   co_coidb: {
-    type: DataTypes.STRING(3),
+    type: DataTypes.STRING(10),
     allowNull: true,
     comment: 'Base Company ID'
   },

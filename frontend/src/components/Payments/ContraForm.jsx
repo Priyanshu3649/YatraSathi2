@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useKeyboardNavigation } from '../../contexts/KeyboardNavigationContext';
 import { usePagination } from '../../hooks/usePagination';
+import useERPFilters from '../../hooks/useERPFilters';
 import PaginationControls from '../common/PaginationControls';
 import SaveConfirmationModal from '../common/SaveConfirmationModal';
 import { contraAPI } from '../../services/api';
@@ -53,6 +54,26 @@ const ContraForm = ({ onBack }) => {
     changeLimit
   } = usePagination(1, 50);
 
+  const {
+    draftFilters: inlineFilters,
+    activeFilters,
+    handleFilterChange: handleInlineFilterChange,
+    applyFiltersManual: applyFilters,
+    clearFiltersManual: clearFilters
+  } = useERPFilters({
+    ct_date: '',
+    ct_entry_no: '',
+    ct_from_account: '',
+    ct_to_account: '',
+    ct_amount: '',
+    ct_ref_number: ''
+  }, () => {
+    setPage(1);
+  }, { 
+    realTime: true, 
+    debounceMs: 500 
+  });
+
   const fieldOrder = useMemo(() => [
     'date', 
     'from_account', 
@@ -72,7 +93,12 @@ const ContraForm = ({ onBack }) => {
   const fetchContras = useCallback(async () => {
     try {
       setLoading(true);
-      const response = await contraAPI.getAllContras({ page, limit });
+      const params = {
+        page,
+        limit,
+        ...activeFilters
+      };
+      const response = await contraAPI.getAllContras(params);
       setPaymentRecords(response.data || []);
       updatePagination(response.pagination);
     } catch (err) {
@@ -81,7 +107,7 @@ const ContraForm = ({ onBack }) => {
     } finally {
       setLoading(false);
     }
-  }, [page, limit, updatePagination]);
+  }, [page, limit, activeFilters, updatePagination]);
 
   useEffect(() => {
     fetchContras();
@@ -538,12 +564,77 @@ const ContraForm = ({ onBack }) => {
               <table className="erp-table">
                 <thead style={{ position: 'sticky', top: 0, backgroundColor: '#f5f5f5', zIndex: 1 }}>
                   <tr>
+                    <th style={{ width: '30px' }}><input type="checkbox" disabled style={{ opacity: 0.3 }} /></th>
                     <th style={{ width: '100px' }}>Date</th>
                     <th style={{ width: '120px' }}>Entry No</th>
                     <th>From Account</th>
                     <th>To Account</th>
                     <th className="text-right" style={{ width: '150px' }}>Amount (₹)</th>
                     <th>Reference</th>
+                  </tr>
+                  {/* Inline Filter Row */}
+                  <tr style={{ backgroundColor: '#f8f9fa' }}>
+                    <td><input type="checkbox" disabled style={{ opacity: 0.3 }} /></td>
+                    <td>
+                      <input 
+                        type="text" 
+                        placeholder="Filter Date..."
+                        value={inlineFilters.ct_date || ''}
+                        onChange={(e) => handleInlineFilterChange('ct_date', e.target.value)}
+                        className="inline-filter-input"
+                        style={{ width: '100%', padding: '2px 4px', fontSize: '11px', border: '1px solid #ddd' }}
+                      />
+                    </td>
+                    <td>
+                      <input 
+                        type="text" 
+                        placeholder="Filter Entry No..."
+                        value={inlineFilters.ct_entry_no || ''}
+                        onChange={(e) => handleInlineFilterChange('ct_entry_no', e.target.value)}
+                        className="inline-filter-input"
+                        style={{ width: '100%', padding: '2px 4px', fontSize: '11px', border: '1px solid #ddd' }}
+                      />
+                    </td>
+                    <td>
+                      <input 
+                        type="text" 
+                        placeholder="Filter From..."
+                        value={inlineFilters.ct_from_account || ''}
+                        onChange={(e) => handleInlineFilterChange('ct_from_account', e.target.value)}
+                        className="inline-filter-input"
+                        style={{ width: '100%', padding: '2px 4px', fontSize: '11px', border: '1px solid #ddd' }}
+                      />
+                    </td>
+                    <td>
+                      <input 
+                        type="text" 
+                        placeholder="Filter To..."
+                        value={inlineFilters.ct_to_account || ''}
+                        onChange={(e) => handleInlineFilterChange('ct_to_account', e.target.value)}
+                        className="inline-filter-input"
+                        style={{ width: '100%', padding: '2px 4px', fontSize: '11px', border: '1px solid #ddd' }}
+                      />
+                    </td>
+                    <td>
+                      <input 
+                        type="text" 
+                        placeholder="Filter Amount..."
+                        value={inlineFilters.ct_amount || ''}
+                        onChange={(e) => handleInlineFilterChange('ct_amount', e.target.value)}
+                        className="inline-filter-input"
+                        style={{ width: '100%', padding: '2px 4px', fontSize: '11px', border: '1px solid #ddd' }}
+                      />
+                    </td>
+                    <td>
+                      <input 
+                        type="text" 
+                        placeholder="Filter Ref..."
+                        value={inlineFilters.ct_ref_number || ''}
+                        onChange={(e) => handleInlineFilterChange('ct_ref_number', e.target.value)}
+                        className="inline-filter-input"
+                        style={{ width: '100%', padding: '2px 4px', fontSize: '11px', border: '1px solid #ddd' }}
+                      />
+                    </td>
                   </tr>
                 </thead>
                 <tbody>
@@ -556,6 +647,7 @@ const ContraForm = ({ onBack }) => {
                         onClick={() => handleRecordSelect(r)}
                         style={{ cursor: 'pointer' }}
                       >
+                        <td><input type="checkbox" checked={!!isSelected} onChange={() => {}} /></td>
                         <td>{new Date(r.ct_date || r.date).toLocaleDateString()}</td>
                         <td className="font-bold">{r.ct_entry_no || r.contra_no}</td>
                         <td>{r.ct_from_account || r.from_account}</td>
@@ -567,7 +659,7 @@ const ContraForm = ({ onBack }) => {
                       </tr>
                     );
                   }) : (
-                    <tr><td colSpan="6" style={{ textAlign: 'center', padding: '20px' }}>No historical records found</td></tr>
+                    <tr><td colSpan="7" style={{ textAlign: 'center', padding: '20px' }}>No historical records found</td></tr>
                   )}
                 </tbody>
               </table>

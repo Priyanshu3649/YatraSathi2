@@ -1,7 +1,7 @@
 const { DataTypes } = require('sequelize');
 const { sequelize, BaseModel, auditHooks } = require('./baseModel');
 const Booking = require('./Booking');
-const Train = require('./Train');
+const Train = require('./TrainTVL');
 
 const Pnr = sequelize.define('pnXpnr', {
   pn_pnid: {

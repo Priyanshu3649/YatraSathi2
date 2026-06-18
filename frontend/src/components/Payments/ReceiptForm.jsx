@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useKeyboardNavigation } from '../../contexts/KeyboardNavigationContext';
 import { usePagination } from '../../hooks/usePagination';
+import useERPFilters from '../../hooks/useERPFilters';
 import PaginationControls from '../common/PaginationControls';
 import SaveConfirmationModal from '../common/SaveConfirmationModal';
 import { receiptAPI } from '../../services/api';
@@ -57,6 +58,28 @@ const ReceiptForm = ({ onBack }) => {
     changeLimit
   } = usePagination(1, 50);
 
+  const {
+    draftFilters: inlineFilters,
+    activeFilters,
+    handleFilterChange: handleInlineFilterChange,
+    applyFiltersManual: applyFilters,
+    clearFiltersManual: clearFilters
+  } = useERPFilters({
+    rc_date: '',
+    rc_entry_no: '',
+    rc_customer_name: '',
+    rc_customer_phone: '',
+    rc_bank_account: '',
+    rc_payment_mode: '',
+    rc_amount: '',
+    rc_ref_number: ''
+  }, () => {
+    setPage(1);
+  }, { 
+    realTime: true, 
+    debounceMs: 500 
+  });
+
   // Field order for keyboard navigation context
   const fieldOrder = useMemo(() => [
     'date', 
@@ -80,7 +103,12 @@ const ReceiptForm = ({ onBack }) => {
   const fetchReceipts = useCallback(async () => {
     try {
       setLoading(true);
-      const response = await receiptAPI.getAllReceipts({ page, limit });
+      const params = {
+        page,
+        limit,
+        ...activeFilters
+      };
+      const response = await receiptAPI.getAllReceipts(params);
       setReceipts(response.data || []);
       updatePagination(response.pagination);
     } catch (err) {
@@ -89,7 +117,7 @@ const ReceiptForm = ({ onBack }) => {
     } finally {
       setLoading(false);
     }
-  }, [page, limit, updatePagination]);
+  }, [page, limit, activeFilters, updatePagination]);
 
   useEffect(() => {
     fetchReceipts();
@@ -617,13 +645,99 @@ const ReceiptForm = ({ onBack }) => {
               <table className="erp-table">
                 <thead style={{ position: 'sticky', top: 0, backgroundColor: '#f5f5f5', zIndex: 1 }}>
                   <tr>
+                    <th style={{ width: '30px' }}><input type="checkbox" disabled style={{ opacity: 0.3 }} /></th>
                     <th style={{ width: '100px' }}>Date</th>
                     <th style={{ width: '120px' }}>Voucher No</th>
                     <th>Customer Name</th>
+                    <th>Customer Phone</th>
                     <th>Account</th>
                     <th style={{ width: '100px' }}>Mode</th>
                     <th className="text-right" style={{ width: '150px' }}>Amount (₹)</th>
                     <th>Reference</th>
+                  </tr>
+                  {/* Inline Filter Row */}
+                  <tr style={{ backgroundColor: '#f8f9fa' }}>
+                    <td><input type="checkbox" disabled style={{ opacity: 0.3 }} /></td>
+                    <td>
+                      <input 
+                        type="text" 
+                        placeholder="Filter Date..."
+                        value={inlineFilters.rc_date || ''}
+                        onChange={(e) => handleInlineFilterChange('rc_date', e.target.value)}
+                        className="inline-filter-input"
+                        style={{ width: '100%', padding: '2px 4px', fontSize: '11px', border: '1px solid #ddd' }}
+                      />
+                    </td>
+                    <td>
+                      <input 
+                        type="text" 
+                        placeholder="Filter Voucher No..."
+                        value={inlineFilters.rc_entry_no || ''}
+                        onChange={(e) => handleInlineFilterChange('rc_entry_no', e.target.value)}
+                        className="inline-filter-input"
+                        style={{ width: '100%', padding: '2px 4px', fontSize: '11px', border: '1px solid #ddd' }}
+                      />
+                    </td>
+                    <td>
+                      <input 
+                        type="text" 
+                        placeholder="Filter Customer..."
+                        value={inlineFilters.rc_customer_name || ''}
+                        onChange={(e) => handleInlineFilterChange('rc_customer_name', e.target.value)}
+                        className="inline-filter-input"
+                        style={{ width: '100%', padding: '2px 4px', fontSize: '11px', border: '1px solid #ddd' }}
+                      />
+                    </td>
+                    <td>
+                      <input 
+                        type="text" 
+                        placeholder="Filter Phone..."
+                        value={inlineFilters.rc_customer_phone || ''}
+                        onChange={(e) => handleInlineFilterChange('rc_customer_phone', e.target.value)}
+                        className="inline-filter-input"
+                        style={{ width: '100%', padding: '2px 4px', fontSize: '11px', border: '1px solid #ddd' }}
+                      />
+                    </td>
+                    <td>
+                      <input 
+                        type="text" 
+                        placeholder="Filter Account..."
+                        value={inlineFilters.rc_bank_account || ''}
+                        onChange={(e) => handleInlineFilterChange('rc_bank_account', e.target.value)}
+                        className="inline-filter-input"
+                        style={{ width: '100%', padding: '2px 4px', fontSize: '11px', border: '1px solid #ddd' }}
+                      />
+                    </td>
+                    <td>
+                      <input 
+                        type="text" 
+                        placeholder="Filter Mode..."
+                        value={inlineFilters.rc_payment_mode || ''}
+                        onChange={(e) => handleInlineFilterChange('rc_payment_mode', e.target.value)}
+                        className="inline-filter-input"
+                        style={{ width: '100%', padding: '2px 4px', fontSize: '11px', border: '1px solid #ddd' }}
+                      />
+                    </td>
+                    <td>
+                      <input 
+                        type="text" 
+                        placeholder="Filter Amount..."
+                        value={inlineFilters.rc_amount || ''}
+                        onChange={(e) => handleInlineFilterChange('rc_amount', e.target.value)}
+                        className="inline-filter-input"
+                        style={{ width: '100%', padding: '2px 4px', fontSize: '11px', border: '1px solid #ddd' }}
+                      />
+                    </td>
+                    <td>
+                      <input 
+                        type="text" 
+                        placeholder="Filter Ref..."
+                        value={inlineFilters.rc_ref_number || ''}
+                        onChange={(e) => handleInlineFilterChange('rc_ref_number', e.target.value)}
+                        className="inline-filter-input"
+                        style={{ width: '100%', padding: '2px 4px', fontSize: '11px', border: '1px solid #ddd' }}
+                      />
+                    </td>
                   </tr>
                 </thead>
                 <tbody>
@@ -636,9 +750,11 @@ const ReceiptForm = ({ onBack }) => {
                         onClick={() => handleRecordSelect(r)}
                         style={{ cursor: 'pointer' }}
                       >
+                        <td><input type="checkbox" checked={!!isSelected} onChange={() => {}} /></td>
                         <td>{new Date(r.rc_date || r.date).toLocaleDateString()}</td>
                         <td className="font-bold">{r.rc_entry_no || r.receipt_no}</td>
                         <td>{r.rc_customer_name || r.customer_name}</td>
+                        <td>{r.rc_customer_phone || ''}</td>
                         <td>{r.rc_bank_account || r.account_name}</td>
                         <td>{r.rc_payment_mode || 'Cash'}</td>
                         <td className="text-right font-bold" style={{ color: '#006400' }}>
@@ -648,7 +764,7 @@ const ReceiptForm = ({ onBack }) => {
                       </tr>
                     );
                   }) : (
-                    <tr><td colSpan="7" style={{ textAlign: 'center', padding: '20px' }}>No historical records found</td></tr>
+                    <tr><td colSpan="9" style={{ textAlign: 'center', padding: '20px' }}>No historical records found</td></tr>
                   )}
                 </tbody>
               </table>

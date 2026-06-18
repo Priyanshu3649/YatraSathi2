@@ -24,14 +24,18 @@ class JournalController {
       const sortBy = req.query.sortBy || 'je_date';
       const sortOrder = (req.query.sortOrder || 'DESC').toUpperCase();
       
-      const whereClause = { je_status: 'Active' };
+      const filterMap = {
+        dateColumn: 'je_date',
+        amountColumn: 'je_amount',
+        statusColumn: 'je_status',
+        searchColumns: ['je_entry_no', 'je_account', 'je_narration'],
+        customFilters: {}
+      };
       
-      if (req.query.search) {
-        whereClause[Op.or] = [
-          { je_entry_no: { [Op.like]: `%${req.query.search}%` } },
-          { je_account: { [Op.like]: `%${req.query.search}%` } },
-          { je_narration: { [Op.like]: `%${req.query.search}%` } }
-        ];
+      const whereClause = queryHelper.buildWhereClause(req.query, filterMap);
+      
+      if (!req.query.status) {
+        whereClause.je_status = 'Active';
       }
       
       const { count, rows: journals } = await Journal.findAndCountAll({

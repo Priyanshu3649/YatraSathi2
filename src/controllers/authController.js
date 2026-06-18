@@ -8,8 +8,8 @@ const Audit = require('../services/forensicAuditService');
 
 
 // Generate JWT token
-const generateToken = (id) => {
-  return jwt.sign({ id }, process.env.JWT_SECRET || 'default_secret', {
+const generateToken = (id, role) => {
+  return jwt.sign({ id, role }, process.env.JWT_SECRET || 'default_secret', {
     expiresIn: '30d'
   });
 };
@@ -84,7 +84,7 @@ const registerUser = async (req, res) => {
         name: user.us_fname,
         email: user.us_email,
         us_usertype: user.us_usertype,
-        token: generateToken(user.us_usid),
+        token: generateToken(user.us_usid, user.us_roid),
         message: 'Registration successful. Please check your email for verification.'
       });
     } else {
@@ -226,7 +226,7 @@ const employeeLogin = async (req, res) => {
           employeeNumber: employee?.em_empno || 'ADMIN001',
           us_usertype: user.us_usertype
         },
-        token: generateToken(user.us_usid),
+        token: generateToken(user.us_usid, user.us_roid),
         sessionId: session ? session.ss_ssid : null
       }
     });
@@ -309,7 +309,7 @@ const loginUser = async (req, res) => {
         name: user.us_fname,
         email: login.lg_email,
         us_usertype: user.us_usertype,
-        token: generateToken(user.us_usid),
+        token: generateToken(user.us_usid, user.us_roid),
         sessionId: sessionId,
         message: 'Login successful'
       });

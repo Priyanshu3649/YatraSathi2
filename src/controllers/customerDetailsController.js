@@ -8,6 +8,56 @@ const { sequelizeTVL } = require('../../config/db');
 const CustomerLedgerService = require('../services/CustomerLedgerService');
 const queryHelper = require('../utils/queryHelper');
 
+const getMatchingCustomerIds = async (customerId) => {
+  const [customerRes] = await sequelizeTVL.query(`
+    SELECT 
+      c.cu_usid AS id,
+      CONCAT(u.us_fname, ' ', COALESCE(u.us_lname, '')) AS name,
+      u.us_phone AS phone
+    FROM cuXcustomer c
+    JOIN usXuser u ON c.cu_usid = u.us_usid
+    WHERE c.cu_usid = :customerId OR c.cu_custno = :customerId OR c.cu_cusid = :customerId
+    LIMIT 1
+  `, {
+    replacements: { customerId },
+    type: QueryTypes.SELECT
+  });
+
+  if (!customerRes) {
+    return [customerId];
+  }
+
+  const matchingCustomers = await sequelizeTVL.query(`
+    SELECT c.cu_usid AS id
+    FROM cuXcustomer c
+    JOIN usXuser u ON c.cu_usid = u.us_usid
+    WHERE (CONCAT(u.us_fname, ' ', COALESCE(u.us_lname, '')) = :name AND u.us_phone = :phone)
+       OR c.cu_usid = :customerId
+  `, {
+    replacements: { name: customerRes.name, phone: customerRes.phone, customerId: customerRes.id },
+    type: QueryTypes.SELECT
+  });
+
+  return matchingCustomers.map(c => c.id);
+};
+
+const getNumericId = (id) => {
+  if (typeof id === 'number') return id;
+  if (!id) return null;
+  const numStr = String(id).replace(/\D/g, '');
+  return numStr ? parseInt(numStr, 10) : null;
+};
+
+const getMatchingIdsAndNumerics = async (customerId) => {
+  const customerIds = await getMatchingCustomerIds(customerId);
+  const numerics = customerIds.map(id => getNumericId(id)).filter(v => v !== null);
+  return {
+    customerIds,
+    customerIdsOrNumerics: [...customerIds, ...numerics]
+  };
+};
+
+
 /**
  * GET /api/security/customers/:id/details
  * Comprehensive customer summary for admin view
@@ -64,15 +114,17 @@ const getCustomerDetails = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Customer not found' });
     }
 
+    const { customerIds, customerIdsOrNumerics } = await getMatchingIdsAndNumerics(customer.id);
+
     // ── 2. Booking Statistics ────────────────────────────────────────────
     let bookingStats = { total: 0, confirmed: 0, pending: 0, cancelled: 0, completed: 0 };
     try {
       const statusCounts = await sequelizeTVL.query(`
         SELECT bk_status, COUNT(*) AS cnt
         FROM bkXbooking
-        WHERE bk_usid = :customerId
+        WHERE bk_usid IN (:customerIds)
         GROUP BY bk_status
-      `, { replacements: { customerId }, type: QueryTypes.SELECT });
+      `, { replacements: { customerIds }, type: QueryTypes.SELECT });
 
       for (const row of (statusCounts || [])) {
         bookingStats.total += parseInt(row.cnt) || 0;
@@ -99,8 +151,8 @@ const getCustomerDetails = async (req, res) => {
           SUM(CASE WHEN bl.bl_status IN ('CANCELLED', 'CAN') THEN 1 ELSE 0 END) AS cancelled
         FROM blXbilling bl
         JOIN bkXbooking bk ON bl.bl_booking_id = bk.bk_bkid
-        WHERE bk.bk_usid = :customerId
-      `, { replacements: { customerId }, type: QueryTypes.SELECT });
+        WHERE bk.bk_usid IN (:customerIds)
+      `, { replacements: { customerIds }, type: QueryTypes.SELECT });
 
       if (billData && billData.length > 0) {
         const d = billData[0];
@@ -125,14 +177,16 @@ const getCustomerDetails = async (req, res) => {
     try {
       const payAgg = await sequelizeTVL.query(`
         SELECT
-          COALESCE(SUM(pt_amount), 0) AS totalReceived,
+          COALESCE(SUM(pt.pt_amount), 0) AS totalReceived,
           COUNT(*) AS cnt,
-          COALESCE(AVG(pt_amount), 0) AS averagePayment,
-          COALESCE(MAX(pt_amount), 0) AS largestPayment,
-          MAX(pt_paydt) AS lastPaymentDate
-        FROM ptXpayment
-        WHERE pt_custid = :customerId AND pt_status != 'REVERSED'
-      `, { replacements: { customerId }, type: QueryTypes.SELECT });
+          COALESCE(AVG(pt.pt_amount), 0) AS averagePayment,
+          COALESCE(MAX(pt.pt_amount), 0) AS largestPayment,
+          MAX(pt.pt_paydt) AS lastPaymentDate
+        FROM ptXpayment pt
+        LEFT JOIN bkXbooking bk ON pt.pt_bkid = bk.bk_bkid
+        WHERE (pt.pt_custid IN (:customerIdsOrNumerics) OR bk.bk_usid IN (:customerIds))
+          AND pt.pt_status != 'REVERSED'
+      `, { replacements: { customerIds, customerIdsOrNumerics }, type: QueryTypes.SELECT });
 
       if (payAgg && payAgg.length > 0) {
         paymentStats.totalReceived = parseFloat(payAgg[0].totalReceived) || 0;
@@ -144,23 +198,26 @@ const getCustomerDetails = async (req, res) => {
 
       // Payment method breakdown
       const byMethod = await sequelizeTVL.query(`
-        SELECT COALESCE(pt_mode, 'Unknown') AS method, COUNT(*) AS cnt, COALESCE(SUM(pt_amount), 0) AS amount
-        FROM ptXpayment
-        WHERE pt_custid = :customerId AND pt_status != 'REVERSED'
-        GROUP BY pt_mode
-      `, { replacements: { customerId }, type: QueryTypes.SELECT });
+        SELECT COALESCE(pt.pt_mode, 'Unknown') AS method, COUNT(*) AS cnt, COALESCE(SUM(pt.pt_amount), 0) AS amount
+        FROM ptXpayment pt
+        LEFT JOIN bkXbooking bk ON pt.pt_bkid = bk.bk_bkid
+        WHERE (pt.pt_custid IN (:customerIdsOrNumerics) OR bk.bk_usid IN (:customerIds))
+          AND pt.pt_status != 'REVERSED'
+        GROUP BY pt.pt_mode
+      `, { replacements: { customerIds, customerIdsOrNumerics }, type: QueryTypes.SELECT });
       paymentStats.byMethod = byMethod || [];
 
       // Payment status summary
       const statusSummary = await sequelizeTVL.query(`
         SELECT
-          SUM(CASE WHEN pt_allocatedamt >= pt_amount AND pt_amount > 0 THEN 1 ELSE 0 END) AS fullyAllocated,
-          SUM(CASE WHEN pt_allocatedamt > 0 AND pt_allocatedamt < pt_amount THEN 1 ELSE 0 END) AS partiallyAllocated,
-          SUM(CASE WHEN COALESCE(pt_unallocamt, 0) > 0 AND COALESCE(pt_allocatedamt, 0) = 0 THEN 1 ELSE 0 END) AS unallocatedAdvance,
-          SUM(CASE WHEN pt_status = 'REVERSED' THEN 1 ELSE 0 END) AS reversed
-        FROM ptXpayment
-        WHERE pt_custid = :customerId
-      `, { replacements: { customerId }, type: QueryTypes.SELECT });
+          SUM(CASE WHEN pt.pt_allocatedamt >= pt.pt_amount AND pt.pt_amount > 0 THEN 1 ELSE 0 END) AS fullyAllocated,
+          SUM(CASE WHEN pt.pt_allocatedamt > 0 AND pt.pt_allocatedamt < pt.pt_amount THEN 1 ELSE 0 END) AS partiallyAllocated,
+          SUM(CASE WHEN COALESCE(pt.pt_unallocamt, 0) > 0 AND COALESCE(pt.pt_allocatedamt, 0) = 0 THEN 1 ELSE 0 END) AS unallocatedAdvance,
+          SUM(CASE WHEN pt.pt_status = 'REVERSED' THEN 1 ELSE 0 END) AS reversed
+        FROM ptXpayment pt
+        LEFT JOIN bkXbooking bk ON pt.pt_bkid = bk.bk_bkid
+        WHERE pt.pt_custid IN (:customerIdsOrNumerics) OR bk.bk_usid IN (:customerIds)
+      `, { replacements: { customerIds, customerIdsOrNumerics }, type: QueryTypes.SELECT });
       if (statusSummary && statusSummary.length > 0) {
         paymentStats.statusSummary = {
           fullyAllocated: parseInt(statusSummary[0].fullyAllocated) || 0,
@@ -232,11 +289,11 @@ const getCustomerDetails = async (req, res) => {
         FROM blXbilling bl
         JOIN bkXbooking bk ON bl.bl_booking_id = bk.bk_bkid
         LEFT JOIN payment_allocations pa ON bl.bl_id = pa.bill_id
-        WHERE bk.bk_usid = :customerId
+        WHERE bk.bk_usid IN (:customerIds)
         GROUP BY bl.bl_id, bl.bl_bill_no, bl.bl_total_amount, bl.bl_billing_date, bl.bl_status, bl.payment_status, bl.bl_booking_id
         ORDER BY bl.bl_billing_date DESC, bl.bl_id DESC
         LIMIT 10
-      `, { replacements: { customerId }, type: QueryTypes.SELECT });
+      `, { replacements: { customerIds }, type: QueryTypes.SELECT });
       recentBills = (bills || []).map(b => ({
         id: b.bl_id,
         billNo: b.bl_bill_no,
@@ -256,12 +313,13 @@ const getCustomerDetails = async (req, res) => {
     let recentPayments = [];
     try {
       const payments = await sequelizeTVL.query(`
-        SELECT pt_ptid, pt_amount, pt_paydt, pt_mode, pt_status, pt_allocatedamt, pt_unallocamt, eby, edtm
-        FROM ptXpayment
-        WHERE pt_custid = :customerId
-        ORDER BY pt_paydt DESC, pt_ptid DESC
+        SELECT pt.pt_ptid, pt.pt_amount, pt.pt_paydt, pt.pt_mode, pt.pt_status, pt.pt_allocatedamt, pt.pt_unallocamt, pt.eby, pt.edtm
+        FROM ptXpayment pt
+        LEFT JOIN bkXbooking bk ON pt.pt_bkid = bk.bk_bkid
+        WHERE pt.pt_custid IN (:customerIdsOrNumerics) OR bk.bk_usid IN (:customerIds)
+        ORDER BY pt.pt_paydt DESC, pt.pt_ptid DESC
         LIMIT 10
-      `, { replacements: { customerId }, type: QueryTypes.SELECT });
+      `, { replacements: { customerIds, customerIdsOrNumerics }, type: QueryTypes.SELECT });
       recentPayments = (payments || []).map(p => ({
         id: p.pt_ptid,
         amount: parseFloat(p.pt_amount) || 0,
@@ -340,7 +398,8 @@ const getCustomerBookings = async (req, res) => {
     const { limit, offset, page } = queryHelper.getPaginationOptions(req.query);
     const { fromDate, toDate, status } = req.query;
 
-    const where = { bk_usid: customerId };
+    const customerIds = await getMatchingCustomerIds(customerId);
+    const where = { bk_usid: { [Op.in]: customerIds } };
     if (status) where.bk_status = status;
     if (fromDate || toDate) {
       where.edtm = {};
@@ -404,6 +463,7 @@ const getCustomerBills = async (req, res) => {
   try {
     const customerId = req.params.id;
     const { limit, offset, page } = queryHelper.getPaginationOptions(req.query);
+    const customerIds = await getMatchingCustomerIds(customerId);
 
     const bills = await sequelizeTVL.query(`
       SELECT bl.bl_id, bl.bl_bill_no, bl.bl_total_amount, bl.bl_billing_date, bl.bl_status, bl.payment_status,
@@ -412,18 +472,18 @@ const getCustomerBills = async (req, res) => {
       FROM blXbilling bl
       JOIN bkXbooking bk ON bl.bl_booking_id = bk.bk_bkid
       LEFT JOIN payment_allocations pa ON bl.bl_id = pa.bill_id
-      WHERE bk.bk_usid = :customerId
+      WHERE bk.bk_usid IN (:customerIds)
       GROUP BY bl.bl_id, bl.bl_bill_no, bl.bl_total_amount, bl.bl_billing_date, bl.bl_status, bl.payment_status, bl.bl_booking_id
       ORDER BY bl.bl_billing_date DESC, bl.bl_id DESC
       LIMIT :limit OFFSET :offset
-    `, { replacements: { customerId, limit, offset }, type: QueryTypes.SELECT });
+    `, { replacements: { customerIds, limit, offset }, type: QueryTypes.SELECT });
 
     const countRes = await sequelizeTVL.query(`
       SELECT COUNT(*) AS total
       FROM blXbilling bl
       JOIN bkXbooking bk ON bl.bl_booking_id = bk.bk_bkid
-      WHERE bk.bk_usid = :customerId
-    `, { replacements: { customerId }, type: QueryTypes.SELECT });
+      WHERE bk.bk_usid IN (:customerIds)
+    `, { replacements: { customerIds }, type: QueryTypes.SELECT });
 
     const total = parseInt(countRes?.[0]?.total) || 0;
     const data = (bills || []).map(b => ({
@@ -457,19 +517,24 @@ const getCustomerPayments = async (req, res) => {
   try {
     const customerId = req.params.id;
     const { limit, offset, page } = queryHelper.getPaginationOptions(req.query);
+    const { customerIds, customerIdsOrNumerics } = await getMatchingIdsAndNumerics(customerId);
 
     const countRes = await sequelizeTVL.query(`
-      SELECT COUNT(*) AS total FROM ptXpayment WHERE pt_custid = :customerId
-    `, { replacements: { customerId }, type: QueryTypes.SELECT });
+      SELECT COUNT(*) AS total 
+      FROM ptXpayment pt
+      LEFT JOIN bkXbooking bk ON pt.pt_bkid = bk.bk_bkid
+      WHERE pt.pt_custid IN (:customerIdsOrNumerics) OR bk.bk_usid IN (:customerIds)
+    `, { replacements: { customerIds, customerIdsOrNumerics }, type: QueryTypes.SELECT });
     const total = parseInt(countRes?.[0]?.total) || 0;
 
     const payments = await sequelizeTVL.query(`
-      SELECT pt_ptid, pt_amount, pt_paydt, pt_mode, pt_status, pt_allocatedamt, pt_unallocamt, eby, edtm
-      FROM ptXpayment
-      WHERE pt_custid = :customerId
-      ORDER BY pt_paydt DESC, pt_ptid DESC
+      SELECT pt.pt_ptid, pt.pt_amount, pt.pt_paydt, pt.pt_mode, pt.pt_status, pt.pt_allocatedamt, pt.pt_unallocamt, pt.eby, pt.edtm
+      FROM ptXpayment pt
+      LEFT JOIN bkXbooking bk ON pt.pt_bkid = bk.bk_bkid
+      WHERE pt.pt_custid IN (:customerIdsOrNumerics) OR bk.bk_usid IN (:customerIds)
+      ORDER BY pt.pt_paydt DESC, pt.pt_ptid DESC
       LIMIT :limit OFFSET :offset
-    `, { replacements: { customerId, limit, offset }, type: QueryTypes.SELECT });
+    `, { replacements: { customerIds, customerIdsOrNumerics, limit, offset }, type: QueryTypes.SELECT });
 
     const data = (payments || []).map(p => ({
       id: p.pt_ptid,
@@ -534,11 +599,9 @@ const getCustomerReceipts = async (req, res) => {
     const customerName = cust.user ? `${cust.user.us_fname || ''} ${cust.user.us_lname || ''}`.trim() : '';
 
     const where = { rc_status: 'Active' };
-    const orConditions = [];
-    if (customerPhone) orConditions.push({ rc_customer_phone: customerPhone });
-    if (customerName) orConditions.push({ rc_customer_name: customerName });
-    if (orConditions.length > 0) {
-      where[Op.or] = orConditions;
+    if (customerPhone && customerName) {
+      where.rc_customer_name = customerName;
+      where.rc_customer_phone = customerPhone;
     } else {
       return res.json({ success: true, data: [], pagination: { total: 0, page: 1, pages: 0, limit } });
     }

@@ -83,6 +83,9 @@ const AdminDashboard = () => {
             <button onClick={() => navigate('/admin/customers')} className="btn-secondary">
               Manage Customers
             </button>
+            <button onClick={() => navigate('/admin/ledger')} className="btn-secondary">
+              Customer Ledger
+            </button>
             <button onClick={handleLogout} className="btn-outline">
               <i className="fas fa-sign-out-alt"></i>
               Logout

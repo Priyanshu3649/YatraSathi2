@@ -114,12 +114,12 @@ app.use('/api/payments', paymentRoutes);
 app.use('/api/contra', contraRoutes);
 app.use('/api/receipts', receiptRoutes);
 app.use('/api/journal', journalRoutes);
-app.use('/api/employees', employeeRoutes);
-app.use('/api/employee', employeeRoutes); // Employee dashboard routes
 // Employee booking, payment, and billing routes - separate access for employees
 app.use('/api/employee/bookings', employeeBookingRoutes);
 app.use('/api/employee/payments', employeePaymentRoutes);
 app.use('/api/employee/billing', employeeBillingRoutes);
+app.use('/api/employees', employeeRoutes);
+app.use('/api/employee', employeeRoutes); // Employee dashboard routes
 // Customer portal routes - removed /api/customers to avoid conflicts
 // IMPORTANT: Register specific routes BEFORE general routes to avoid conflicts
 app.use('/api/customer/master-passengers', masterPassengerRoutes); // Master passenger routes (cmpXmasterpassenger)
@@ -156,6 +156,17 @@ const QueryPerformance = require('./services/queryPerformance');
 
 // Connect to database and start server
 connectDB().then(async () => {
+  // Synchronize database schemas (creating missing tables safely)
+  try {
+    const { sequelize, sequelizeTVL } = require('./models');
+    console.log('🔄 Synchronizing database schemas (force: false, alter: false)...');
+    await sequelize.sync({ alter: false, force: false });
+    await sequelizeTVL.sync({ alter: false, force: false });
+    console.log('✅ Database schemas synchronized successfully!');
+  } catch (syncErr) {
+    console.error('⚠️  Failed to synchronize database schemas:', syncErr);
+  }
+
   // Initialize query performance optimizations
   try {
     await QueryPerformance.initialize();
@@ -216,6 +227,10 @@ connectDB().then(async () => {
   
   server.on('error', (error) => {
     console.error('Server error:', error);
+    if (error.code === 'EADDRINUSE') {
+      console.error('❌ EADDRINUSE: Port is already in use. Exiting process...');
+      process.exit(1);
+    }
   });
 })
 .catch((error) => {

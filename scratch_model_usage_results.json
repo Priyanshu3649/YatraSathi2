@@ -1,0 +1,587 @@
+[
+  {
+    "model": "Company",
+    "table": "coCompany",
+    "useCount": 16,
+    "sampleFiles": [
+      "src/controllers/__tests__/billCancellation.integration.test.js",
+      "src/controllers/billingController.js",
+      "src/models/CompanyTVL.js"
+    ]
+  },
+  {
+    "model": "CompanyTVL",
+    "table": "coCompany",
+    "useCount": 1,
+    "sampleFiles": [
+      "src/services/sessionService.js"
+    ]
+  },
+  {
+    "model": "Role",
+    "table": "fnXfunction",
+    "useCount": 19,
+    "sampleFiles": [
+      "src/controllers/permissionController.js",
+      "src/controllers/securityController.js",
+      "src/middleware/authMiddleware.js"
+    ]
+  },
+  {
+    "model": "Permission",
+    "table": "opXoperation",
+    "useCount": 8,
+    "sampleFiles": [
+      "src/controllers/bookingController.js",
+      "src/controllers/genericReportController.js",
+      "src/controllers/securityController.js"
+    ]
+  },
+  {
+    "model": "RolePermission",
+    "table": "rpRolePermission",
+    "useCount": 2,
+    "sampleFiles": [
+      "src/middleware/departmentAccessControl.js",
+      "src/middleware/rbacMiddleware.js"
+    ]
+  },
+  {
+    "model": "RolePermissionTVL",
+    "table": "fpXfuncperm",
+    "useCount": 3,
+    "sampleFiles": [
+      "src/controllers/securityController.js",
+      "src/middleware/departmentAccessControl.js",
+      "src/scripts/seed-rbac-roles.js"
+    ]
+  },
+  {
+    "model": "RoleTVL",
+    "table": "fnXfunction",
+    "useCount": 11,
+    "sampleFiles": [
+      "src/controllers/permissionController.js",
+      "src/controllers/securityController.js",
+      "src/middleware/authMiddleware.js"
+    ]
+  },
+  {
+    "model": "User",
+    "table": "usUser",
+    "useCount": 70,
+    "sampleFiles": [
+      "src/controllers/__tests__/billCancellation.integration.test.js",
+      "src/controllers/authController.js",
+      "src/controllers/bookingController.js"
+    ]
+  },
+  {
+    "model": "Login",
+    "table": "lgLogin",
+    "useCount": 9,
+    "sampleFiles": [
+      "src/controllers/authController.js",
+      "src/controllers/employeeController.js",
+      "src/controllers/profileController.js"
+    ]
+  },
+  {
+    "model": "Employee",
+    "table": "emEmployee",
+    "useCount": 38,
+    "sampleFiles": [
+      "src/controllers/authController.js",
+      "src/controllers/billingController.js",
+      "src/controllers/bookingController.js"
+    ]
+  },
+  {
+    "model": "Customer",
+    "table": "cuCustomer",
+    "useCount": 60,
+    "sampleFiles": [
+      "src/controllers/__tests__/billCancellation.integration.test.js",
+      "src/controllers/billingController.js",
+      "src/controllers/bookingController.js"
+    ]
+  },
+  {
+    "model": "CorporateCustomer",
+    "table": "cuCorporateCustomer",
+    "useCount": 7,
+    "sampleFiles": [
+      "src/controllers/dashboardController.js",
+      "src/controllers/employeeController.js",
+      "src/controllers/profileController.js"
+    ]
+  },
+  {
+    "model": "CustomerContact",
+    "table": "ccCustContact",
+    "useCount": 1,
+    "sampleFiles": [
+      "src/scripts/mass-seed.js"
+    ]
+  },
+  {
+    "model": "Station",
+    "table": "stStation",
+    "useCount": 14,
+    "sampleFiles": [
+      "src/controllers/bookingController.js",
+      "src/controllers/customerDetailsController.js",
+      "src/models/BillTVL.js"
+    ]
+  },
+  {
+    "model": "Train",
+    "table": "trTrain",
+    "useCount": 10,
+    "sampleFiles": [
+      "src/models/BillTVL.js",
+      "src/models/Pnr.js",
+      "src/models/TrainTVL.js"
+    ]
+  },
+  {
+    "model": "Booking",
+    "table": "bkXbooking",
+    "useCount": 46,
+    "sampleFiles": [
+      "src/controllers/__tests__/billCancellation.integration.test.js",
+      "src/controllers/billingController.js",
+      "src/controllers/billingIntegrationController.js"
+    ]
+  },
+  {
+    "model": "Pnr",
+    "table": "pnXpnr",
+    "useCount": 5,
+    "sampleFiles": [
+      "src/controllers/bookingController.js",
+      "src/controllers/employeePaymentController.js",
+      "src/controllers/reportController.js"
+    ]
+  },
+  {
+    "model": "Account",
+    "table": "acAccount",
+    "useCount": 14,
+    "sampleFiles": [
+      "src/controllers/accountingController.js",
+      "src/controllers/bookingController.js",
+      "src/controllers/dashboardController.js"
+    ]
+  },
+  {
+    "model": "Payment",
+    "table": "pyXpayment",
+    "useCount": 46,
+    "sampleFiles": [
+      "src/controllers/accountingController.js",
+      "src/controllers/billingController.js",
+      "src/controllers/customerController.js"
+    ]
+  },
+  {
+    "model": "PaymentAlloc",
+    "table": "paXpayalloc",
+    "useCount": 4,
+    "sampleFiles": [
+      "src/controllers/employeePaymentController.js",
+      "src/controllers/reportController.js",
+      "src/scripts/migrate-all-payment-tables.js"
+    ]
+  },
+  {
+    "model": "pnXpnr",
+    "table": "pnXpnr",
+    "useCount": 8,
+    "sampleFiles": [
+      "src/controllers/employeePaymentController.js",
+      "src/models/PaymentAlloc.js",
+      "src/models/PaymentAllocTVL.js"
+    ]
+  },
+  {
+    "model": "ptXpayment",
+    "table": "ptXpayment",
+    "useCount": 13,
+    "sampleFiles": [
+      "src/controllers/customerDetailsController.js",
+      "src/controllers/dashboardController.js",
+      "src/controllers/employeePaymentController.js"
+    ]
+  },
+  {
+    "model": "paXpayalloc",
+    "table": "paXpayalloc",
+    "useCount": 5,
+    "sampleFiles": [
+      "src/controllers/employeePaymentController.js",
+      "src/models/PaymentAlloc.js",
+      "src/models/PaymentAllocTVL.js"
+    ]
+  },
+  {
+    "model": "ptPayment",
+    "table": "ptXpayment",
+    "useCount": 5,
+    "sampleFiles": [
+      "src/models/PaymentAlloc.js",
+      "src/scripts/add-verification-status-column.js",
+      "src/scripts/mass-seed.js"
+    ]
+  },
+  {
+    "model": "paPaymentAlloc",
+    "table": "paXpayalloc",
+    "useCount": 3,
+    "sampleFiles": [
+      "src/scripts/migrate-all-payment-tables.js",
+      "src/scripts/migrate-payment-alloc-table.js",
+      "src/scripts/migrate-pnr-table.js"
+    ]
+  },
+  {
+    "model": "billXbill",
+    "table": "blXbilling",
+    "useCount": 2,
+    "sampleFiles": [
+      "src/controllers/customerLedgerController.js",
+      "src/services/CustomerLedgerService.js"
+    ]
+  },
+  {
+    "model": "BillTVL",
+    "table": "blXbilling",
+    "useCount": 15,
+    "sampleFiles": [
+      "src/controllers/__tests__/billCancellation.integration.test.js",
+      "src/controllers/billingController.js",
+      "src/controllers/customerController.js"
+    ]
+  },
+  {
+    "model": "BillingMaster",
+    "table": "billingMaster",
+    "useCount": 7,
+    "sampleFiles": [
+      "src/controllers/billingIntegrationController.js",
+      "src/controllers/bookingController.js",
+      "src/hooks/auditHook.js"
+    ]
+  },
+  {
+    "model": "Session",
+    "table": "ssSession",
+    "useCount": 3,
+    "sampleFiles": [
+      "src/controllers/authController.js",
+      "src/middleware/sessionMiddleware.js",
+      "src/services/sessionService.js"
+    ]
+  },
+  {
+    "model": "Audit",
+    "table": "auAudit",
+    "useCount": 64,
+    "sampleFiles": [
+      "src/controllers/__tests__/billCancellation.integration.test.js",
+      "src/controllers/auditController.js",
+      "src/controllers/authController.js"
+    ]
+  },
+  {
+    "model": "Config",
+    "table": "cfConfig",
+    "useCount": 1,
+    "sampleFiles": [
+      "src/scripts/mass-seed.js"
+    ]
+  },
+  {
+    "model": "TravelPlan",
+    "table": "tpTravelPlan",
+    "useCount": 4,
+    "sampleFiles": [
+      "src/controllers/reportCatalogController.js",
+      "src/controllers/travelPlanController.js",
+      "src/scripts/mass-seed.js"
+    ]
+  },
+  {
+    "model": "EmployeeTVL",
+    "table": "emXemployee",
+    "useCount": 18,
+    "sampleFiles": [
+      "src/controllers/authController.js",
+      "src/controllers/billingController.js",
+      "src/controllers/bookingController.js"
+    ]
+  },
+  {
+    "model": "AccountTVL",
+    "table": "acXaccount",
+    "useCount": 1,
+    "sampleFiles": [
+      "src/scripts/seedTVL.js"
+    ]
+  },
+  {
+    "model": "UserTVL",
+    "table": "usXuser",
+    "useCount": 29,
+    "sampleFiles": [
+      "src/controllers/__tests__/billCancellation.integration.test.js",
+      "src/controllers/authController.js",
+      "src/controllers/billingController.js"
+    ]
+  },
+  {
+    "model": "StationTVL",
+    "table": "stXstation",
+    "useCount": 7,
+    "sampleFiles": [
+      "src/controllers/bookingController.js",
+      "src/controllers/customerDetailsController.js",
+      "src/controllers/reportCatalogController.js"
+    ]
+  },
+  {
+    "model": "TrainTVL",
+    "table": "trXtrain",
+    "useCount": 2,
+    "sampleFiles": [
+      "src/routes/trainRoutes.js",
+      "src/scripts/migrateToTVL.js"
+    ]
+  },
+  {
+    "model": "CustomerTVL",
+    "table": "cuXcustomer",
+    "useCount": 16,
+    "sampleFiles": [
+      "src/controllers/__tests__/billCancellation.integration.test.js",
+      "src/controllers/billingController.js",
+      "src/controllers/bookingController.js"
+    ]
+  },
+  {
+    "model": "LoginTVL",
+    "table": "lgXlogin",
+    "useCount": 6,
+    "sampleFiles": [
+      "src/controllers/authController.js",
+      "src/controllers/employeeController.js",
+      "src/controllers/profileController.js"
+    ]
+  },
+  {
+    "model": "BookingTVL",
+    "table": "bkXbooking",
+    "useCount": 19,
+    "sampleFiles": [
+      "src/controllers/__tests__/billCancellation.integration.test.js",
+      "src/controllers/billingController.js",
+      "src/controllers/billingIntegrationController.js"
+    ]
+  },
+  {
+    "model": "PaymentTVL",
+    "table": "ptXpayment",
+    "useCount": 13,
+    "sampleFiles": [
+      "src/controllers/billingController.js",
+      "src/controllers/customerDetailsController.js",
+      "src/controllers/dashboardController.js"
+    ]
+  },
+  {
+    "model": "UserPermissionTVL",
+    "table": "upXusrperm",
+    "useCount": 1,
+    "sampleFiles": [
+      "src/controllers/securityController.js"
+    ]
+  },
+  {
+    "model": "Ledger",
+    "table": "lgLedger",
+    "useCount": 16,
+    "sampleFiles": [
+      "src/controllers/__tests__/billCancellation.integration.test.js",
+      "src/controllers/accountingController.js",
+      "src/controllers/billingController.js"
+    ]
+  },
+  {
+    "model": "CustomerAdvance",
+    "table": "caCustomerAdvance",
+    "useCount": 1,
+    "sampleFiles": [
+      "src/scripts/mass-seed.js"
+    ]
+  },
+  {
+    "model": "CustomerAdvanceTVL",
+    "table": "caXcustomeradvance",
+    "useCount": 0,
+    "sampleFiles": []
+  },
+  {
+    "model": "YearEndClosing",
+    "table": "yeYearEndClosing",
+    "useCount": 0,
+    "sampleFiles": []
+  },
+  {
+    "model": "YearEndClosingTVL",
+    "table": "yeXyearendclosing",
+    "useCount": 0,
+    "sampleFiles": []
+  },
+  {
+    "model": "PassengerTVL",
+    "table": "psXpassenger",
+    "useCount": 5,
+    "sampleFiles": [
+      "src/controllers/__tests__/billCancellation.integration.test.js",
+      "src/controllers/billingController.js",
+      "src/controllers/bookingController.js"
+    ]
+  },
+  {
+    "model": "MasterPassengerList",
+    "table": "mlXmasterlist",
+    "useCount": 2,
+    "sampleFiles": [
+      "src/controllers/masterPassengerListController.js",
+      "src/scripts/mass-seed.js"
+    ]
+  },
+  {
+    "model": "CustomerMasterPassenger",
+    "table": "cmpXmasterpassenger",
+    "useCount": 2,
+    "sampleFiles": [
+      "src/controllers/masterPassengerController.js",
+      "src/scripts/mass-seed.js"
+    ]
+  },
+  {
+    "model": "ReportTemplate",
+    "table": "rtXreporttemplate",
+    "useCount": 2,
+    "sampleFiles": [
+      "src/controllers/genericReportController.js",
+      "src/scripts/mass-seed.js"
+    ]
+  },
+  {
+    "model": "Contra",
+    "table": "ctXcontra",
+    "useCount": 10,
+    "sampleFiles": [
+      "src/controllers/accountingController.js",
+      "src/controllers/contraController.js",
+      "src/controllers/paymentController.js"
+    ]
+  },
+  {
+    "model": "Receipt",
+    "table": "rcXreceipt",
+    "useCount": 15,
+    "sampleFiles": [
+      "src/controllers/__tests__/billCancellation.integration.test.js",
+      "src/controllers/accountingController.js",
+      "src/controllers/billingController.js"
+    ]
+  },
+  {
+    "model": "Journal",
+    "table": "jeXjournal",
+    "useCount": 15,
+    "sampleFiles": [
+      "src/controllers/__tests__/billCancellation.integration.test.js",
+      "src/controllers/accountingController.js",
+      "src/controllers/billingController.js"
+    ]
+  },
+  {
+    "model": "PermissionTVL",
+    "table": "opXoperation",
+    "useCount": 4,
+    "sampleFiles": [
+      "src/controllers/permissionController.js",
+      "src/controllers/securityController.js",
+      "src/middleware/departmentAccessControl.js"
+    ]
+  },
+  {
+    "model": "ForensicAuditLog",
+    "table": "audit_forensic_log",
+    "useCount": 7,
+    "sampleFiles": [
+      "src/controllers/__tests__/billCancellation.integration.test.js",
+      "src/controllers/billingController.js",
+      "src/controllers/dashboardController.js"
+    ]
+  },
+  {
+    "model": "ApplicationTVL",
+    "table": "apXapplication",
+    "useCount": 1,
+    "sampleFiles": [
+      "src/controllers/securityController.js"
+    ]
+  },
+  {
+    "model": "ModuleTVL",
+    "table": "moXmodule",
+    "useCount": 1,
+    "sampleFiles": [
+      "src/controllers/securityController.js"
+    ]
+  },
+  {
+    "model": "ServiceCharge",
+    "table": "service_charges",
+    "useCount": 4,
+    "sampleFiles": [
+      "src/controllers/reportCatalogController.js",
+      "src/controllers/serviceChargeController.js",
+      "src/services/forensicAuditService.js"
+    ]
+  },
+  {
+    "model": "ServiceChargeDefault",
+    "table": "service_charges_default",
+    "useCount": 2,
+    "sampleFiles": [
+      "src/controllers/serviceChargeController.js",
+      "src/services/serviceChargeService.js"
+    ]
+  },
+  {
+    "model": "PaymentAllocation",
+    "table": "payment_allocations",
+    "useCount": 4,
+    "sampleFiles": [
+      "src/controllers/customerDetailsController.js",
+      "src/services/CustomerFinancialService.js",
+      "src/services/CustomerLedgerService.js"
+    ]
+  },
+  {
+    "model": "CustomerLedger",
+    "table": "customer_ledger",
+    "useCount": 5,
+    "sampleFiles": [
+      "src/controllers/customerDetailsController.js",
+      "src/controllers/customerLedgerController.js",
+      "src/services/CustomerFinancialService.js"
+    ]
+  }
+]

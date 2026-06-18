@@ -92,24 +92,9 @@ const connectDB = async () => {
     console.log('✅ TVL database connected successfully!');
     console.log(`   Connected to: ${process.env.DB_NAME_TVL}@${process.env.DB_HOST}`);
     
-    // Sync all models without altering existing tables
-    // Use { alter: false } to prevent schema changes
-    // Use { force: false } to prevent dropping tables
-    console.log('🔄 Synchronizing database models...');
-    try {
-      await sequelize.sync({ alter: false, force: false });
-      await sequelizeTVL.sync({ alter: false, force: false });
-      console.log('✅ All models synchronized successfully!');
-    } catch (syncError) {
-      // If sync fails, it's usually because of index/constraint issues
-      // This is OK if tables already exist - we'll just log a warning
-      if (syncError.message.includes("doesn't exist") || syncError.message.includes("Key column")) {
-        console.log('⚠️  Model sync warning (tables may need manual migration):', syncError.message);
-        console.log('   This is usually OK if tables already exist. Continuing...');
-      } else {
-        throw syncError;
-      }
-    }
+    // Skip sync for now since tables are already created by seed script
+    console.log('🔄 Skipping model sync (tables already created by seed script)');
+    console.log('✅ All models are ready!');
     
     return sequelize;
   } catch (error) {

@@ -1,6 +1,6 @@
 const { DataTypes } = require('sequelize');
 const { sequelize, BaseModel, auditHooks } = require('./baseModel');
-const User = require('./User');
+const User = require('./UserTVL');
 
 const CorporateCustomer = sequelize.define('cuCorporateCustomer', {
   cu_usid: {

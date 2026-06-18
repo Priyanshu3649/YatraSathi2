@@ -52,6 +52,7 @@ import ServiceChargeManager from './pages/ServiceChargeManager';
 import CustomerDetails from './pages/CustomerDetails';
 import AuditTrail from './pages/AuditTrail';
 import AuditRetentionConfig from './pages/AuditRetentionConfig';
+import CustomerLedgerPage from './pages/CustomerLedgerPage';
 
 // Import customer pages
 import MyBookings from './pages/MyBookings';
@@ -213,6 +214,7 @@ function App() {
                       <Route path="/admin-dashboard" element={<RoleBasedRoute requiredRole="ADM"><DynamicAdminPanel /></RoleBasedRoute>} />
                       <Route path="/admin-panel" element={<Navigate to="/admin-dashboard" replace />} />
                       <Route path="/admin/service-charges" element={<RoleBasedRoute requiredRole="ADM"><ServiceChargeManager /></RoleBasedRoute>} />
+                      <Route path="/admin/ledger" element={<RoleBasedRoute requiredRole="ADM"><CustomerLedgerPage /></RoleBasedRoute>} />
                                             <Route path="/admin/customers/:customerId" element={<RoleBasedRoute requiredRole="ADM"><CustomerDetails /></RoleBasedRoute>} />
                       <Route path="/admin/*" element={<RoleBasedRoute requiredRole="ADM"><DynamicAdminPanel /></RoleBasedRoute>} />
 

@@ -1954,10 +1954,11 @@ const searchBills = async (req, res) => {
   }
 };
 
-// Get customer ledger
+// Get customer ledger (vintage format with opening balance, running balance, summary)
 const getCustomerLedger = async (req, res) => {
   try {
     const { customerId } = req.params;
+    const { fromDate, toDate } = req.query;
 
     // Check if user has permission to access this customer's ledger
     if (req.user.us_usertype !== 'admin' && 
@@ -1966,62 +1967,11 @@ const getCustomerLedger = async (req, res) => {
       return res.status(403).json({ message: 'Access denied' });
     }
 
-    // Get all bills for the customer
-    const bills = await BillTVL.findAll({
-      where: { bl_created_by: convertUserIdToInt(customerId) },
-      order: [['bl_billing_date', 'ASC']]
-    });
-
-    // Get all payments for the customer
-    const { PaymentTVL } = require('../models');
-    const payments = await PaymentTVL.findAll({
-      where: { pt_usid: customerId },
-      order: [['pt_pymtdt', 'ASC']]
-    });
-
-    // Combine bills and payments into ledger entries
-    const ledgerEntries = [];
-
-    // Add bills as debit entries
-    bills.forEach(bill => {
-      ledgerEntries.push({
-        date: bill.bl_billing_date,
-        billId: bill.bl_bill_no,
-        description: `Bill #${bill.bl_bill_no} - ${bill.bl_class || ''} - ${bill.bl_train_no || ''}`,
-        debit: parseFloat(bill.bl_total_amount),
-        credit: 0,
-        balance: 0 // Will calculate later
-      });
-    });
-
-    // Add payments as credit entries
-    payments.forEach(payment => {
-      ledgerEntries.push({
-        date: payment.pt_pymtdt,
-        billId: payment.pt_bkid ? `BK${payment.pt_bkid}` : null,
-        description: `Payment #${payment.pt_ptid} - ${payment.pt_mode || ''}`,
-        debit: 0,
-        credit: parseFloat(payment.pt_amount),
-        balance: 0 // Will calculate later
-      });
-    });
-
-    // Sort by date
-    ledgerEntries.sort((a, b) => new Date(a.date) - new Date(b.date));
-
-    // Calculate running balance
-    let runningBalance = 0;
-    ledgerEntries.forEach(entry => {
-      runningBalance += (entry.debit || 0) - (entry.credit || 0);
-      entry.balance = runningBalance;
-    });
-
-    res.json({
-      ledger: ledgerEntries,
-      customer: customerId
-    });
+    const result = await CustomerLedgerService.getCustomerVintageLedger(customerId, fromDate, toDate);
+    res.json(result);
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    console.error('getCustomerLedger error:', error);
+    res.status(500).json({ success: false, message: error.message });
   }
 };
 

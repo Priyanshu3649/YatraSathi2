@@ -18,6 +18,34 @@ const getHeaders = (includeAuth = false) => {
   return headers;
 };
 
+// Helper function to get user role from localStorage
+const getUserRole = () => {
+  try {
+    // Try to get user data from localStorage (set by AuthContext)
+    const userStr = localStorage.getItem('user');
+    if (userStr) {
+      const user = JSON.parse(userStr);
+      if (user.us_usertype === 'admin' || user.usertype === 'admin') return 'ADM';
+      return user.us_roid || user.role || 'CUS';
+    }
+
+    // Fallback: try to decode token (though it may not have role info)
+    const token = localStorage.getItem('token');
+    if (token) {
+      const payload = JSON.parse(atob(token.split('.')[1]));
+      if (payload.role) return payload.role;
+      if (payload.us_roid) return payload.us_roid;
+      if (payload.id) {
+        if (payload.id.startsWith('CUS')) return 'CUS';
+        return 'ADM'; // Default non-customer fallback to 'ADM'
+      }
+    }
+  } catch (e) {
+    console.warn('Could not determine user role:', e);
+  }
+  return 'CUS'; // Default to customer
+};
+
 // Authentication API calls
 export const authAPI = {
   // Login user
@@ -601,6 +629,16 @@ export const paymentAPI = {
     return data;
   },
 
+  // Get all voucher payments specifically (bypasses employee booking payment routing)
+  getAllVoucherPayments: async (params = {}) => {
+    const queryParams = new URLSearchParams(params).toString();
+    const url = queryParams ? `${API_BASE_URL}/payments?${queryParams}` : `${API_BASE_URL}/payments`;
+    const response = await fetch(url, { method: 'GET', headers: getHeaders(true) });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.message || 'Failed to get payments');
+    return data;
+  },
+
   // Get all payments for current user (kept for backward compatibility if used elsewhere)
   getMyPayments: async () => {
     const response = await fetch(`${API_BASE_URL}/payments/my-payments`, {
@@ -630,17 +668,7 @@ export const paymentAPI = {
 
   // Get all payments (admin and employees)
   getAllPayments: async (params = {}) => {
-    const token = localStorage.getItem('token');
-    // Try to decode token to check user role
-    let userRole = 'customer'; // default
-    if (token) {
-      try {
-        const payload = JSON.parse(atob(token.split('.')[1]));
-        userRole = payload.role || 'customer';
-      } catch (e) {
-        console.warn('Could not decode token to determine role');
-      }
-    }
+    const userRole = getUserRole();
 
     // Use employee-specific endpoint for employee roles
     const isEmployee = ['AGT', 'ACC', 'HR', 'CC', 'MKT', 'MGT', 'ADM'].includes(userRole);
@@ -842,17 +870,7 @@ export const paymentAPI = {
 
   // Search customers for dropdown
   searchCustomers: async (searchTerm) => {
-    const token = localStorage.getItem('token');
-    // Try to decode token to check user role
-    let userRole = 'CUS'; // default to customer
-    if (token) {
-      try {
-        const payload = JSON.parse(atob(token.split('.')[1]));
-        userRole = payload.us_roid || payload.role || 'CUS'; // Look for us_roid first, then role, default to CUS
-      } catch (e) {
-        console.warn('Could not decode token to determine role');
-      }
-    }
+    const userRole = getUserRole();
 
     // Use employee-specific endpoint for non-customer roles
     const isEmployee = ['AGT', 'ACC', 'HR', 'CC', 'MKT', 'MGT', 'ADM'].includes(userRole);
@@ -876,17 +894,7 @@ export const paymentAPI = {
 
   // Get customer by ID
   getCustomerById: async (customerId) => {
-    const token = localStorage.getItem('token');
-    // Try to decode token to check user role
-    let userRole = 'CUS'; // default to customer
-    if (token) {
-      try {
-        const payload = JSON.parse(atob(token.split('.')[1]));
-        userRole = payload.us_roid || payload.role || 'CUS'; // Look for us_roid first, then role, default to CUS
-      } catch (e) {
-        console.warn('Could not decode token to determine role');
-      }
-    }
+    const userRole = getUserRole();
 
     // Use employee-specific endpoint for non-customer roles
     const isEmployee = ['AGT', 'ACC', 'HR', 'CC', 'MKT', 'MGT', 'ADM'].includes(userRole);
@@ -1201,17 +1209,7 @@ export const billingAPI = {
 
   // Get all bills for current user
   getMyBills: async (params = {}) => {
-    const token = localStorage.getItem('token');
-    // Try to decode token to check user role
-    let userRole = 'customer'; // default
-    if (token) {
-      try {
-        const payload = JSON.parse(atob(token.split('.')[1]));
-        userRole = payload.role || 'customer';
-      } catch (e) {
-        console.warn('Could not decode token to determine role');
-      }
-    }
+    const userRole = getUserRole();
 
     // Use employee-specific endpoint for employee roles
     const isEmployee = ['AGT', 'ACC', 'HR', 'CC', 'MKT', 'MGT', 'ADM'].includes(userRole);
@@ -1495,28 +1493,6 @@ export const billingAPI = {
   }
 };
 
-// Helper function to get user role from localStorage
-const getUserRole = () => {
-  try {
-    // Try to get user data from localStorage (set by AuthContext)
-    const userStr = localStorage.getItem('user');
-    if (userStr) {
-      const user = JSON.parse(userStr);
-      if (user.us_usertype === 'admin' || user.usertype === 'admin') return 'ADM';
-      return user.us_roid || user.role || 'CUS';
-    }
-
-    // Fallback: try to decode token (though it may not have role info)
-    const token = localStorage.getItem('token');
-    if (token) {
-      const payload = JSON.parse(atob(token.split('.')[1]));
-      return payload.us_roid || payload.role || 'CUS';
-    }
-  } catch (e) {
-    console.warn('Could not determine user role:', e);
-  }
-  return 'CUS'; // Default to customer
-};
 
 // Customer API calls
 export const customerAPI = {

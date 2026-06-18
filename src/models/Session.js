@@ -1,6 +1,6 @@
 const { DataTypes } = require('sequelize');
 const { sequelize, BaseModel, auditHooks } = require('./baseModel');
-const User = require('./User');
+const User = require('./UserTVL');
 const Company = require('./Company');
 
 const Session = sequelize.define('ssSession', {

@@ -115,11 +115,12 @@ const CustomerLedger = ({ customerId, customer }) => {
     );
   }
 
-  const { openingBalance, entries, totals, closingBalance } = ledgerData || {
+  const { openingBalance, entries, totals, closingBalance, summary } = ledgerData || {
     openingBalance: 0,
     entries: [],
     totals: { debit: 0, credit: 0 },
-    closingBalance: 0
+    closingBalance: 0,
+    summary: { totalBilled: 0, totalReceived: 0, outstandingAmount: 0, advanceAmount: 0 }
   };
 
   return (
@@ -157,6 +158,28 @@ const CustomerLedger = ({ customerId, customer }) => {
         </div>
       </div>
 
+      {/* Financial Summary Cards */}
+      {(summary?.totalBilled > 0 || summary?.totalReceived > 0 || summary?.outstandingAmount > 0 || summary?.advanceAmount > 0) && (
+        <div className="vintage-summary-cards no-print">
+          <div className="summary-card">
+            <span className="card-label">Total Billed</span>
+            <span className="card-value debit-color">{formatCurrency(summary.totalBilled)}</span>
+          </div>
+          <div className="summary-card">
+            <span className="card-label">Total Received</span>
+            <span className="card-value credit-color">{formatCurrency(summary.totalReceived)}</span>
+          </div>
+          <div className="summary-card">
+            <span className="card-label">Outstanding</span>
+            <span className={`card-value ${summary.outstandingAmount > 0 ? 'debit-color' : ''}`}>{formatCurrency(summary.outstandingAmount)}</span>
+          </div>
+          <div className="summary-card">
+            <span className="card-label">Advance</span>
+            <span className={`card-value ${summary.advanceAmount > 0 ? 'credit-color' : ''}`}>{formatCurrency(summary.advanceAmount)}</span>
+          </div>
+        </div>
+      )}
+
       {/* Main Vintage Account Book Sheet */}
       <div className="vintage-ledger-sheet" id="vintage-ledger-printable">
         {/* Decorative double red line header borders typical of ledger registers */}
@@ -169,10 +192,15 @@ const CustomerLedger = ({ customerId, customer }) => {
               <div><strong>Account Name:</strong> {ledgerData.customer?.name || customer?.name}</div>
               <div><strong>Phone Number:</strong> {ledgerData.customer?.phone || customer?.phone || '-'}</div>
               <div><strong>Company Name:</strong> {ledgerData.customer?.company || customer?.company || '-'}</div>
+              {ledgerData.customer?.gstNumber && <div><strong>GST Number:</strong> {ledgerData.customer.gstNumber}</div>}
+              {ledgerData.customer?.panNumber && <div><strong>PAN Number:</strong> {ledgerData.customer.panNumber}</div>}
             </div>
             <div className="vintage-meta-column text-right">
               <div><strong>Statement Period:</strong> {formatDate(filterFrom)} to {formatDate(filterTo)}</div>
               <div><strong>Opening Balance:</strong> {formatCurrency(Math.abs(openingBalance))} {openingBalance > 0 ? 'Dr' : openingBalance < 0 ? 'Cr' : ''}</div>
+              {ledgerData.customer?.creditLimit > 0 && <div><strong>Credit Limit:</strong> {formatCurrency(ledgerData.customer.creditLimit)}</div>}
+              {ledgerData.customer?.creditDays > 0 && <div><strong>Credit Days:</strong> {ledgerData.customer.creditDays}</div>}
+              {ledgerData.customer?.customerType && <div><strong>Customer Type:</strong> {ledgerData.customer.customerType}</div>}
             </div>
           </div>
         </div>
@@ -301,6 +329,51 @@ const CustomerLedger = ({ customerId, customer }) => {
         .vintage-btn:hover {
           background-color: #d7cbb0;
           color: #3e2723;
+        }
+
+        .vintage-summary-cards {
+          display: grid;
+          grid-template-columns: repeat(4, 1fr);
+          gap: 15px;
+          margin-bottom: 20px;
+        }
+
+        .summary-card {
+          background-color: #f5ecd7;
+          border: 1px solid #8b7355;
+          border-radius: 4px;
+          padding: 14px 18px;
+          display: flex;
+          flex-direction: column;
+          gap: 6px;
+        }
+
+        .card-label {
+          font-size: 11px;
+          text-transform: uppercase;
+          letter-spacing: 0.5px;
+          color: #5d4037;
+          font-weight: bold;
+        }
+
+        .card-value {
+          font-size: 20px;
+          font-weight: bold;
+          color: #3e2723;
+        }
+
+        .debit-color {
+          color: #b71c1c;
+        }
+
+        .credit-color {
+          color: #1b5e20;
+        }
+
+        @media (max-width: 768px) {
+          .vintage-summary-cards {
+            grid-template-columns: repeat(2, 1fr);
+          }
         }
 
         .vintage-loading {

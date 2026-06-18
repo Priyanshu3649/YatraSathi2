@@ -15,6 +15,7 @@ const DynamicAdminPanel = () => {
   const navigate = useNavigate();
   const [activeModule, setActiveModule] = useState('applications');
   const [data, setData] = useState([]);
+  const [filteredData, setFilteredData] = useState([]);
   const [loading, setLoading] = useState(false);
   const [selectedRecord, setSelectedRecord] = useState(null);
   const [formData, setFormData] = useState({});
@@ -692,35 +693,36 @@ const DynamicAdminPanel = () => {
         }
       }
     });
+    setFilteredData(filtered);
   }, [filters, data, inlineFilters]);
 
-  // Auto-select first record when data changes (only on initial load or module change)
+  // Auto-select first record when filteredData changes (only on initial load or module change)
   useEffect(() => {
-    if (data.length > 0 && !selectedRecord && !isEditing) {
-      const firstRecord = data[0];
+    if (filteredData.length > 0 && !selectedRecord && !isEditing) {
+      const firstRecord = filteredData[0];
       handleRecordSelect(firstRecord);
     }
-  }, [activeModule, data.length]); // Only trigger on module change or data load
+  }, [activeModule, filteredData.length]); // Only trigger on module change or data load
 
   // Keyboard navigation - Arrow keys
   useEffect(() => {
     const handleKeyDown = (e) => {
       if (!selectedRecord || isEditing) return;
       
-      const currentIndex = data.findIndex(item => 
+      const currentIndex = filteredData.findIndex(item => 
         isSameRecord(item, selectedRecord, activeModule)
       );
       
       if (e.key === 'ArrowDown') {
         e.preventDefault();
-        if (currentIndex < data.length - 1) {
-          handleRecordSelect(data[currentIndex + 1]);
+        if (currentIndex < filteredData.length - 1) {
+          handleRecordSelect(filteredData[currentIndex + 1]);
           scrollToSelectedRow();
         }
       } else if (e.key === 'ArrowUp') {
         e.preventDefault();
         if (currentIndex > 0) {
-          handleRecordSelect(data[currentIndex - 1]);
+          handleRecordSelect(filteredData[currentIndex - 1]);
           scrollToSelectedRow();
         }
       } else if (e.key === 'Enter' && !isEditing) {
@@ -737,7 +739,7 @@ const DynamicAdminPanel = () => {
     
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [selectedRecord, isEditing, activeModule, data, currentPage]);
+  }, [selectedRecord, isEditing, activeModule, filteredData, currentPage]);
 
   // Scroll to selected row
   const scrollToSelectedRow = () => {
@@ -1715,10 +1717,10 @@ const DynamicAdminPanel = () => {
                     </tr>
                   </thead>
                   <tbody>
-                    {data.length === 0 ? (
+                    {filteredData.length === 0 ? (
                       <tr><td colSpan={currentModule.columns.length + 1} style={{ textAlign: 'center' }}>No records found</td></tr>
                     ) : (
-                      data.map((record, idx) => {
+                      filteredData.map((record, idx) => {
                         const isSelected = selectedRecord && isSameRecord(record, selectedRecord, activeModule);
                         return (
                           <tr 
@@ -1780,8 +1782,8 @@ const DynamicAdminPanel = () => {
         <div className="erp-filter-panel">
           <div className="erp-filter-header">
             Filter Criteria
-            {(data.length !== data.length) && (
-              <span className="erp-filter-indicator">{data.length}/{data.length}</span>
+            {(filteredData.length !== data.length) && (
+              <span className="erp-filter-indicator">{filteredData.length}/{data.length}</span>
             )}
           </div>
           

@@ -1,6 +1,6 @@
 const { DataTypes } = require('sequelize');
 const { sequelize, BaseModel, auditHooks } = require('./baseModel');
-const Customer = require('./Customer');
+const Customer = require('./CustomerTVL');
 
 const CustomerContact = sequelize.define('ccCustContact', {
   cc_ccid: {

@@ -13,7 +13,7 @@ const ServiceCharge = sequelizeTVL.define('service_charges', {
     allowNull: false
   },
   customer_id: {
-    type: DataTypes.BIGINT,
+    type: DataTypes.STRING(15),
     allowNull: false,
     comment: 'Customer ID from UserTVL/CustomerTVL'
   },

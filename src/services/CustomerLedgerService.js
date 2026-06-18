@@ -3,7 +3,50 @@ const { sequelizeTVL } = require('../../config/db');
 const { QueryTypes, Op } = require('sequelize');
 const Audit = require('./forensicAuditService');
 
+const getNumericId = (id) => {
+  if (typeof id === 'number') return id;
+  if (!id) return null;
+  const numStr = String(id).replace(/\D/g, '');
+  return numStr ? parseInt(numStr, 10) : null;
+};
+
 class CustomerLedgerService {
+  /**
+   * Helper to retrieve all customer IDs that match the Name + Phone composite identifier of a customer
+   */
+  async getMatchingCustomerIds(customerId) {
+    const [customerRes] = await sequelizeTVL.query(`
+      SELECT 
+        c.cu_usid AS id,
+        CONCAT(u.us_fname, ' ', COALESCE(u.us_lname, '')) AS name,
+        u.us_phone AS phone
+      FROM cuXcustomer c
+      JOIN usXuser u ON c.cu_usid = u.us_usid
+      WHERE c.cu_usid = :customerId OR c.cu_custno = :customerId OR c.cu_cusid = :customerId
+      LIMIT 1
+    `, {
+      replacements: { customerId },
+      type: QueryTypes.SELECT
+    });
+
+    if (!customerRes) {
+      return [customerId];
+    }
+
+    const matchingCustomers = await sequelizeTVL.query(`
+      SELECT c.cu_usid AS id
+      FROM cuXcustomer c
+      JOIN usXuser u ON c.cu_usid = u.us_usid
+      WHERE (CONCAT(u.us_fname, ' ', COALESCE(u.us_lname, '')) = :name AND u.us_phone = :phone)
+         OR c.cu_usid = :customerId
+    `, {
+      replacements: { name: customerRes.name, phone: customerRes.phone, customerId: customerRes.id },
+      type: QueryTypes.SELECT
+    });
+
+    return matchingCustomers.map(c => c.id);
+  }
+
   /**
    * Write an entry to the customer ledger (immutable audit trail)
    */
@@ -36,6 +79,10 @@ class CustomerLedgerService {
    * Get the customer financial summary on-the-fly
    */
   async getCustomerFinancialSummary(customerId) {
+    const customerIds = await this.getMatchingCustomerIds(customerId);
+    const numericIds = customerIds.map(id => getNumericId(id)).filter(v => v !== null);
+    const customerIdsOrNumerics = [...customerIds, ...numericIds];
+
     // 1. Calculate total billed (excluding cancelled bills)
     const [billedResult] = await sequelizeTVL.query(`
       SELECT 
@@ -43,23 +90,24 @@ class CustomerLedgerService {
         MAX(b.bl_billing_date) AS lastBillDate
       FROM blXbilling b
       JOIN bkXbooking bk ON b.bl_booking_id = bk.bk_bkid
-      WHERE bk.bk_usid = :customerId
+      WHERE bk.bk_usid IN (:customerIds)
         AND b.bl_status NOT IN ('CANCELLED', 'CAN')
     `, {
-      replacements: { customerId },
+      replacements: { customerIds },
       type: QueryTypes.SELECT
     });
 
     // 2. Calculate total received (excluding reversed payments)
     const [receivedResult] = await sequelizeTVL.query(`
       SELECT 
-        COALESCE(SUM(pt_amount), 0) AS totalReceived,
-        MAX(pt_paydt) AS lastPaymentDate
-      FROM ptXpayment
-      WHERE pt_custid = :customerId
-        AND pt_status != 'REVERSED'
+        COALESCE(SUM(pt.pt_amount), 0) AS totalReceived,
+        MAX(pt.pt_paydt) AS lastPaymentDate
+      FROM ptXpayment pt
+      LEFT JOIN bkXbooking bk ON pt.pt_bkid = bk.bk_bkid
+      WHERE (pt.pt_custid IN (:customerIdsOrNumerics) OR bk.bk_usid IN (:customerIds))
+        AND pt.pt_status != 'REVERSED'
     `, {
-      replacements: { customerId },
+      replacements: { customerIds, customerIdsOrNumerics },
       type: QueryTypes.SELECT
     });
 
@@ -103,6 +151,8 @@ class CustomerLedgerService {
       createdBy: userId
     }, transaction);
 
+    const customerIds = await this.getMatchingCustomerIds(customerId);
+
     // Step 2: Fetch unpaid / partially paid bills ordered by bill_date ASC (oldest first)
     const [unpaidBills] = await sequelizeTVL.query(`
       SELECT 
@@ -112,13 +162,13 @@ class CustomerLedgerService {
       FROM blXbilling b
       JOIN bkXbooking bk ON b.bl_booking_id = bk.bk_bkid
       LEFT JOIN payment_allocations pa ON b.bl_id = pa.bill_id
-      WHERE bk.bk_usid = :customerId
+      WHERE bk.bk_usid IN (:customerIds)
         AND b.bl_status NOT IN ('CANCELLED', 'CAN')
         AND (b.payment_status IS NULL OR b.payment_status IN ('UNPAID', 'PARTIALLY_PAID'))
       GROUP BY b.bl_id, b.bl_total_amount, b.bl_billing_date
       ORDER BY b.bl_billing_date ASC, b.bl_id ASC
     `, {
-      replacements: { customerId },
+      replacements: { customerIds },
       type: QueryTypes.SELECT,
       transaction
     });
@@ -219,10 +269,14 @@ class CustomerLedgerService {
       createdBy: userId
     }, transaction);
 
+    const customerIds = await this.getMatchingCustomerIds(customerId);
+    const numericIds = customerIds.map(id => getNumericId(id)).filter(v => v !== null);
+    const customerIdsOrNumerics = [...customerIds, ...numericIds];
+
     // Step 2: Fetch active payments with remaining unallocated balance
     const unallocatedPayments = await PaymentTVL.findAll({
       where: {
-        pt_custid: customerId,
+        pt_custid: { [Op.in]: customerIdsOrNumerics },
         pt_status: { [Op.not]: 'REVERSED' },
         pt_unallocamt: { [Op.gt]: 0 }
       },
@@ -479,28 +533,32 @@ class CustomerLedgerService {
     });
 
     const actualCustomerId = customerRes ? customerRes.id : customerId;
+    const customerIds = await this.getMatchingCustomerIds(actualCustomerId);
+    const numericIds = customerIds.map(id => getNumericId(id)).filter(v => v !== null);
+    const customerIdsOrNumerics = [...customerIds, ...numericIds];
 
     // 3. Calculate Opening Balance: Sum(Bills) - Sum(Payments) before finalFromDate
     const [billsBefore] = await sequelizeTVL.query(`
       SELECT COALESCE(SUM(bl.bl_total_amount), 0) AS total_debit
       FROM blXbilling bl
       JOIN bkXbooking bk ON bl.bl_booking_id = bk.bk_bkid
-      WHERE bk.bk_usid = :customerId
+      WHERE bk.bk_usid IN (:customerIds)
         AND bl.bl_status NOT IN ('CANCELLED', 'CAN')
         AND bl.bl_billing_date < :fromDate
     `, {
-      replacements: { customerId: actualCustomerId, fromDate: finalFromDate },
+      replacements: { customerIds, fromDate: finalFromDate },
       type: QueryTypes.SELECT
     });
 
     const [paymentsBefore] = await sequelizeTVL.query(`
       SELECT COALESCE(SUM(pt.pt_amount), 0) AS total_credit
       FROM ptXpayment pt
-      WHERE pt.pt_custid = :customerId
+      LEFT JOIN bkXbooking bk ON pt.pt_bkid = bk.bk_bkid
+      WHERE (pt.pt_custid IN (:customerIdsOrNumerics) OR bk.bk_usid IN (:customerIds))
         AND pt.pt_status NOT IN ('REVERSED', 'CANCELLED')
         AND pt.pt_paydt < :fromDate
     `, {
-      replacements: { customerId: actualCustomerId, fromDate: finalFromDate },
+      replacements: { customerIds, customerIdsOrNumerics, fromDate: finalFromDate },
       type: QueryTypes.SELECT
     });
 
@@ -516,12 +574,12 @@ class CustomerLedgerService {
         bl.bl_total_amount AS amount
       FROM blXbilling bl
       JOIN bkXbooking bk ON bl.bl_booking_id = bk.bk_bkid
-      WHERE bk.bk_usid = :customerId
+      WHERE bk.bk_usid IN (:customerIds)
         AND bl.bl_status NOT IN ('CANCELLED', 'CAN')
         AND bl.bl_billing_date >= :fromDate
         AND bl.bl_billing_date <= :toDate
     `, {
-      replacements: { customerId: actualCustomerId, fromDate: finalFromDate, toDate: finalToDate },
+      replacements: { customerIds, fromDate: finalFromDate, toDate: finalToDate },
       type: QueryTypes.SELECT
     });
 
@@ -534,12 +592,13 @@ class CustomerLedgerService {
         pt.pt_amount AS amount,
         pt.pt_mode AS mode
       FROM ptXpayment pt
-      WHERE pt.pt_custid = :customerId
+      LEFT JOIN bkXbooking bk ON pt.pt_bkid = bk.bk_bkid
+      WHERE (pt.pt_custid IN (:customerIdsOrNumerics) OR bk.bk_usid IN (:customerIds))
         AND pt.pt_status NOT IN ('REVERSED', 'CANCELLED')
         AND pt.pt_paydt >= :fromDate
         AND pt.pt_paydt <= :toDate
     `, {
-      replacements: { customerId: actualCustomerId, fromDate: finalFromDate, toDate: finalToDate },
+      replacements: { customerIds, customerIdsOrNumerics, fromDate: finalFromDate, toDate: finalToDate },
       type: QueryTypes.SELECT
     });
 
@@ -615,13 +674,31 @@ class CustomerLedgerService {
       });
     }
 
+    // Fetch financial summary and customer metadata for enriched response
+    const summary = await this.getCustomerFinancialSummary(actualCustomerId);
+    const [customerMeta] = await sequelizeTVL.query(`
+      SELECT cu_gstno, cu_creditlimit, cu_creditdays, cu_panno, cu_custtype
+      FROM cuXcustomer WHERE cu_usid = :customerId LIMIT 1
+    `, { replacements: { customerId: actualCustomerId }, type: QueryTypes.SELECT });
+
     return {
       success: true,
       customer: {
         id: actualCustomerId,
         name: customerRes ? customerRes.name : 'Unknown Customer',
         phone: customerRes ? customerRes.phone : '',
-        company: customerRes ? customerRes.company : ''
+        company: customerRes ? customerRes.company : '',
+        gstNumber: customerMeta?.cu_gstno || '',
+        creditLimit: parseFloat(customerMeta?.cu_creditlimit) || 0,
+        creditDays: parseInt(customerMeta?.cu_creditdays) || 0,
+        panNumber: customerMeta?.cu_panno || '',
+        customerType: customerMeta?.cu_custtype || ''
+      },
+      summary: {
+        totalBilled: summary.totalBilled,
+        totalReceived: summary.totalReceived,
+        outstandingAmount: summary.outstandingAmount,
+        advanceAmount: summary.advanceAmount
       },
       openingBalance,
       entries,

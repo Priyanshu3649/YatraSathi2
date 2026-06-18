@@ -2,66 +2,107 @@ const { DataTypes } = require('sequelize');
 const { sequelize } = require('./baseModel');
 
 const PaymentAllocation = sequelize.define('PaymentAllocation', {
-  id: {
+  allocation_id: {
     type: DataTypes.BIGINT,
     primaryKey: true,
     autoIncrement: true,
-    allowNull: false
+    allowNull: false,
+    field: 'allocation_id'
   },
-  paymentId: {
+  id: {
+    type: DataTypes.VIRTUAL,
+    get() {
+      return this.getDataValue('allocation_id');
+    },
+    set(val) {
+      this.setDataValue('allocation_id', val);
+    }
+  },
+  payment_id: {
     type: DataTypes.BIGINT,
     allowNull: false,
     field: 'payment_id'
   },
-  billId: {
+  paymentId: {
+    type: DataTypes.VIRTUAL,
+    get() {
+      return this.getDataValue('payment_id');
+    },
+    set(val) {
+      this.setDataValue('payment_id', val);
+    }
+  },
+  bill_id: {
     type: DataTypes.BIGINT,
     allowNull: false,
     field: 'bill_id'
   },
-  allocatedAmount: {
+  billId: {
+    type: DataTypes.VIRTUAL,
+    get() {
+      return this.getDataValue('bill_id');
+    },
+    set(val) {
+      this.setDataValue('bill_id', val);
+    }
+  },
+  allocated_amount: {
     type: DataTypes.DECIMAL(15, 2),
     allowNull: false,
     field: 'allocated_amount'
   },
-  allocatedDate: {
+  allocatedAmount: {
+    type: DataTypes.VIRTUAL,
+    get() {
+      return this.getDataValue('allocated_amount');
+    },
+    set(val) {
+      this.setDataValue('allocated_amount', val);
+    }
+  },
+  allocation_date: {
     type: DataTypes.DATE,
     allowNull: false,
-    field: 'allocated_date',
+    field: 'allocation_date',
     defaultValue: DataTypes.NOW
   },
-  // Base Model Audit Fields
-  edtm: {
-    type: DataTypes.DATE,
-    defaultValue: DataTypes.NOW,
-    allowNull: false,
-    comment: 'Entered Date Time'
+  allocatedDate: {
+    type: DataTypes.VIRTUAL,
+    get() {
+      return this.getDataValue('allocation_date');
+    },
+    set(val) {
+      this.setDataValue('allocation_date', val);
+    }
+  },
+  created_by: {
+    type: DataTypes.STRING(15),
+    allowNull: true,
+    field: 'created_by'
   },
   eby: {
-    type: DataTypes.STRING(15),
-    allowNull: false,
-    comment: 'Entered By'
+    type: DataTypes.VIRTUAL,
+    get() {
+      return this.getDataValue('created_by');
+    },
+    set(val) {
+      this.setDataValue('created_by', val);
+    }
   },
-  mdtm: {
+  created_at: {
     type: DataTypes.DATE,
+    allowNull: false,
     defaultValue: DataTypes.NOW,
-    onUpdate: DataTypes.NOW,
-    allowNull: false,
-    comment: 'Modified Date Time'
+    field: 'created_at'
   },
-  mby: {
-    type: DataTypes.STRING(15),
-    allowNull: true,
-    comment: 'Modified By'
-  },
-  cby: {
-    type: DataTypes.STRING(15),
-    allowNull: true,
-    comment: 'Closed By'
-  },
-  cdtm: {
-    type: DataTypes.DATE,
-    allowNull: true,
-    comment: 'Closed Date Time'
+  edtm: {
+    type: DataTypes.VIRTUAL,
+    get() {
+      return this.getDataValue('created_at');
+    },
+    set(val) {
+      this.setDataValue('created_at', val);
+    }
   }
 }, {
   tableName: 'payment_allocations',

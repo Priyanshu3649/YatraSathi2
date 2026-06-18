@@ -1,9 +1,9 @@
 const { DataTypes } = require('sequelize');
 const { sequelize, BaseModel, auditHooks } = require('./baseModel');
-const Customer = require('./Customer');
-const Employee = require('./Employee');
-const Station = require('./Station');
-const User = require('./User');
+const Customer = require('./CustomerTVL');
+const Employee = require('./EmployeeTVL');
+const Station = require('./StationTVL');
+const User = require('./UserTVL');
 
 const Booking = sequelize.define('bkBooking', {
   bk_bkid: {
