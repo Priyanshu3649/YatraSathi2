@@ -49,7 +49,6 @@ const registerUser = async (req, res) => {
       us_email: email,
       us_phone: phone,
       us_usertype: 'customer', // Default user type
-      us_roid: 'CUS', // Default customer role
       us_coid: 'TRV', // Default company
       us_active: 1,
       us_appadmin: 0,

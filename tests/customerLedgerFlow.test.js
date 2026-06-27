@@ -30,7 +30,11 @@ jest.mock('../src/models', () => ({
 
 const mockQueryResults = [];
 const mockSequelizeTVL = {
-  query: jest.fn().mockImplementation(async () => {
+  query: jest.fn().mockImplementation(async (sql, options) => {
+    const query = sql.toLowerCase();
+    if (query.includes('c.cu_usid as id') && query.includes('usxuser') && query.includes('limit 1')) {
+      return [];
+    }
     return mockQueryResults.shift() || [[]];
   }),
 };
@@ -71,7 +75,7 @@ describe('CustomerLedgerService Integration Flow Tests', () => {
         lastBillDate: '2026-06-01',
         lastPaymentDate: '2026-06-05',
       });
-      expect(mockSequelizeTVL.query).toHaveBeenCalledTimes(2);
+      expect(mockSequelizeTVL.query).toHaveBeenCalledTimes(3);
     });
 
     it('should handle net advance scenario correctly', async () => {

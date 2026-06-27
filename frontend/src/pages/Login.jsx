@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { authAPI } from '../services/api';
@@ -13,6 +13,35 @@ const Login = () => {
   const [error, setError] = useState('');
   const navigate = useNavigate();
   const { login } = useAuth();
+
+  // Keyboard navigation: Tab cycles fields, Enter submits
+  const emailRef = useRef(null);
+  const passwordRef = useRef(null);
+  const submitRef = useRef(null);
+  const fields = [emailRef, passwordRef, submitRef];
+
+  const focusField = useCallback((index) => {
+    const ref = fields[index];
+    if (ref?.current) ref.current.focus();
+  }, []);
+
+  useEffect(() => {
+    focusField(0); // auto-focus email on mount
+  }, [focusField]);
+
+  const handleKeyDown = useCallback((e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      // If on last input field or submit button, submit the form
+      if (e.target === submitRef.current || e.target === passwordRef.current) {
+        handleSubmit(e);
+      } else {
+        // Move to next field
+        const idx = fields.findIndex(r => r.current === e.target);
+        if (idx >= 0 && idx < fields.length - 1) focusField(idx + 1);
+      }
+    }
+  }, [focusField]);
 
   const handleChange = (e) => {
     setFormData({
@@ -136,8 +165,10 @@ const Login = () => {
             type="email"
             id="email"
             name="email"
+            ref={emailRef}
             value={formData.email}
             onChange={handleChange}
+            onKeyDown={handleKeyDown}
             required
             className="form-control"
             disabled={loading}
@@ -149,22 +180,24 @@ const Login = () => {
             type="password"
             id="password"
             name="password"
+            ref={passwordRef}
             value={formData.password}
             onChange={handleChange}
+            onKeyDown={handleKeyDown}
             required
             className="form-control"
             disabled={loading}
           />
         </div>
         <div className="text-center mt-3">
-          <button type="submit" disabled={loading} className="btn btn-primary">
+          <button ref={submitRef} type="submit" onKeyDown={handleKeyDown} disabled={loading} className="btn btn-primary">
             {loading ? 'Logging in...' : 'Login'}
           </button>
         </div>
       </form>
       <div className="text-center mt-3">
         <p>
-          <a href="/auth/forgot-password">Forgot your password?</a>
+          <a href="/forgot-password">Forgot your password?</a>
         </p>
         <p>
           Don't have an account? <a href="/register">Register here</a>

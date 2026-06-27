@@ -22,19 +22,20 @@ const Profile = () => {
   const fetchProfile = async () => {
     try {
       setLoading(true);
-      const data = await authAPI.getProfile();
+      const response = await authAPI.getProfile();
+      const data = response.data || response;
       setProfile(data);
       setFormData({
-        firstName: data.firstName,
-        lastName: data.lastName,
-        email: data.email,
-        phone: data.phone,
-        aadhaar: data.aadhaar,
-        pan: data.pan,
-        address: data.address,
-        city: data.city,
-        state: data.state,
-        pincode: data.pincode
+        firstName: data.firstName || '',
+        lastName: data.lastName || '',
+        email: data.email || '',
+        phone: data.phone || '',
+        aadhaar: data.aadhaar || '',
+        pan: data.pan || '',
+        address: data.address || '',
+        city: data.city || '',
+        state: data.state || '',
+        pincode: data.pincode || ''
       });
     } catch (err) {
       setError(err.message || 'Failed to load profile');

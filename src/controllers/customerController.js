@@ -402,6 +402,43 @@ const customerController = {
       console.error('Customer ledger API failed:', error);
       res.status(500).json({ error: 'Internal server error', details: error.message });
     }
+  },
+
+  /**
+   * Generate customer ledger PDF
+   * GET /api/customers/:id/ledger/pdf
+   */
+  getCustomerLedgerPdf: async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { fromDate, toDate } = req.query;
+      const CustomerLedgerService = require('../services/CustomerLedgerService');
+      const ledgerData = await CustomerLedgerService.getCustomerVintageLedger(id, fromDate, toDate);
+
+      if (!ledgerData.success) {
+        return res.status(400).json({ error: 'Failed to generate ledger data' });
+      }
+
+      const { generateLedgerPDF } = require('../utils/ledgerPdfGenerator');
+      const pdfBuffer = await generateLedgerPDF({
+        customer: ledgerData.customer,
+        entries: ledgerData.entries || [],
+        openingBalance: ledgerData.openingBalance || 0,
+        closingBalance: ledgerData.closingBalance || 0,
+        totals: ledgerData.totals || { debit: 0, credit: 0 },
+        summary: ledgerData.summary || {},
+        period: { from: fromDate, to: toDate }
+      });
+
+      const filename = `ledger_${id}_${fromDate || 'all'}_${toDate || 'all'}.pdf`;
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+      res.setHeader('Content-Length', pdfBuffer.length);
+      res.send(pdfBuffer);
+    } catch (error) {
+      console.error('Customer ledger PDF generation failed:', error);
+      res.status(500).json({ error: 'Failed to generate PDF', details: error.message });
+    }
   }
 };
 

@@ -19,7 +19,6 @@ const CreateCustomer = () => {
     pincode: '',
     customerType: 'INDIVIDUAL',
     companyName: '',
-    gstNumber: '',
     creditLimit: 0
   });
   
@@ -55,7 +54,6 @@ const CreateCustomer = () => {
           pincode: '',
           customerType: 'INDIVIDUAL',
           companyName: '',
-          gstNumber: '',
           creditLimit: 0
         });
       }, 2000);
@@ -266,17 +264,6 @@ const CreateCustomer = () => {
                           id="companyName"
                           name="companyName"
                           value={formData.companyName}
-                          onChange={onChange}
-                        />
-                      </div>
-                      <div className="col-md-6 mb-3">
-                        <label htmlFor="gstNumber" className="form-label">GST Number</label>
-                        <input
-                          type="text"
-                          className="form-control"
-                          id="gstNumber"
-                          name="gstNumber"
-                          value={formData.gstNumber}
                           onChange={onChange}
                         />
                       </div>

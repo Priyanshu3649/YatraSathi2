@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import '../../styles/erp-auth-theme.css';
 
@@ -10,6 +10,33 @@ const CustomerLogin = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const navigate = useNavigate();
+
+  // Keyboard navigation
+  const emailRef = useRef(null);
+  const passwordRef = useRef(null);
+  const submitRef = useRef(null);
+  const fields = [emailRef, passwordRef, submitRef];
+
+  const focusField = useCallback((index) => {
+    const ref = fields[index];
+    if (ref?.current) ref.current.focus();
+  }, []);
+
+  useEffect(() => { focusField(0); }, [focusField]);
+
+  const handleKeyDown = useCallback((e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      if (e.target === submitRef.current || e.target === passwordRef.current) {
+        // Trigger form submit
+        const form = e.target.closest('form');
+        if (form) form.requestSubmit();
+      } else {
+        const idx = fields.findIndex(r => r.current === e.target);
+        if (idx >= 0 && idx < fields.length - 1) focusField(idx + 1);
+      }
+    }
+  }, [focusField]);
 
   const handleChange = (e) => {
     setFormData({
@@ -109,8 +136,10 @@ const CustomerLogin = () => {
                   type="email"
                   id="email"
                   name="email"
+                  ref={emailRef}
                   value={formData.email}
                   onChange={handleChange}
+                  onKeyDown={handleKeyDown}
                   required
                   placeholder="Enter your email"
                   disabled={loading}
@@ -126,8 +155,10 @@ const CustomerLogin = () => {
                   type="password"
                   id="password"
                   name="password"
+                  ref={passwordRef}
                   value={formData.password}
                   onChange={handleChange}
+                  onKeyDown={handleKeyDown}
                   required
                   placeholder="Enter your password"
                   disabled={loading}
@@ -137,7 +168,9 @@ const CustomerLogin = () => {
 
               <div className="erp-auth-form-group" style={{ marginTop: '20px' }}>
                 <button 
+                  ref={submitRef}
                   type="submit" 
+                  onKeyDown={handleKeyDown}
                   className="erp-auth-button erp-auth-button-primary"
                   disabled={loading}
                   style={{ width: '100%' }}
@@ -153,13 +186,13 @@ const CustomerLogin = () => {
 
             <div className="erp-auth-footer">
               <p>
-                <a href="/auth/forgot-password">Forgot your password?</a>
+                <a href="/forgot-password">Forgot your password?</a>
               </p>
               <p>
-                Don't have an account? <a href="/auth/register">Sign up here</a>
+                Don't have an account? <a href="/register">Sign up here</a>
               </p>
               <p>
-                Employee? <a href="/auth/employee-login">Login here</a>
+                Employee? <a href="/login">Login here</a>
               </p>
             </div>
           </div>

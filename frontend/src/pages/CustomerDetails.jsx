@@ -176,8 +176,6 @@ const CustomerDetails = () => {
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '12px 24px', marginTop: 20, fontSize: 13 }}>
           <div><span style={{ color: '#9e9e9e' }}>Email:</span> {customer.email || '-'}</div>
           <div><span style={{ color: '#9e9e9e' }}>Phone:</span> {customer.phone || '-'}</div>
-          <div><span style={{ color: '#9e9e9e' }}>GST:</span> {customer.gstNumber || '-'}</div>
-          <div><span style={{ color: '#9e9e9e' }}>PAN:</span> {customer.panNumber || '-'}</div>
           <div><span style={{ color: '#9e9e9e' }}>Address:</span> {[customer.address, customer.city, customer.state, customer.pin].filter(Boolean).join(', ') || '-'}</div>
           <div><span style={{ color: '#9e9e9e' }}>Credit Limit:</span> {formatCurrency(customer.creditLimit)}</div>
           <div><span style={{ color: '#9e9e9e' }}>Status:</span> <StatusBadge status={customer.active ? 'ACTIVE' : 'INACTIVE'} /></div>

@@ -18,7 +18,8 @@ const CustomerProfile = () => {
 
   const fetchProfile = async () => {
     try {
-      const data = await authAPI.getProfile();
+      const response = await authAPI.getProfile();
+      const data = response.data || response;
       
       // Safely transform the data to match the expected format
       const profileData = {

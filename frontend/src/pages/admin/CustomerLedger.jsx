@@ -68,6 +68,31 @@ const CustomerLedger = ({ customerId, customer }) => {
     window.print();
   };
 
+  const handleExportPDF = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(
+        `/api/customers/${encodeURIComponent(customerId)}/ledger/pdf?fromDate=${filterFrom}&toDate=${filterTo}`,
+        { headers: { 'Authorization': `Bearer ${token}` } }
+      );
+      if (!response.ok) {
+        throw new Error('Failed to generate PDF');
+      }
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `ledger_${customerId}_${filterFrom}_${filterTo}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('PDF export error:', err);
+      setError('Failed to export PDF. Please try again.');
+    }
+  };
+
   const handleExportCSV = () => {
     if (!ledgerData) return;
     let csvContent = "data:text/csv;charset=utf-8,\uFEFF";
@@ -149,7 +174,7 @@ const CustomerLedger = ({ customerId, customer }) => {
           <button onClick={handlePrint} className="vintage-btn">
             🖨️ Print Ledger
           </button>
-          <button onClick={handlePrint} className="vintage-btn">
+          <button onClick={handleExportPDF} className="vintage-btn">
             📄 Export PDF
           </button>
           <button onClick={handleExportCSV} className="vintage-btn">
@@ -192,8 +217,6 @@ const CustomerLedger = ({ customerId, customer }) => {
               <div><strong>Account Name:</strong> {ledgerData.customer?.name || customer?.name}</div>
               <div><strong>Phone Number:</strong> {ledgerData.customer?.phone || customer?.phone || '-'}</div>
               <div><strong>Company Name:</strong> {ledgerData.customer?.company || customer?.company || '-'}</div>
-              {ledgerData.customer?.gstNumber && <div><strong>GST Number:</strong> {ledgerData.customer.gstNumber}</div>}
-              {ledgerData.customer?.panNumber && <div><strong>PAN Number:</strong> {ledgerData.customer.panNumber}</div>}
             </div>
             <div className="vintage-meta-column text-right">
               <div><strong>Statement Period:</strong> {formatDate(filterFrom)} to {formatDate(filterTo)}</div>

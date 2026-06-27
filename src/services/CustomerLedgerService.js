@@ -651,8 +651,8 @@ class CustomerLedgerService {
       date: formatDateStr(finalFromDate),
       particular: 'Opening Balance',
       reference: '',
-      debit: 0,
-      credit: 0,
+      debit: openingBalance > 0 ? openingBalance : 0,
+      credit: openingBalance < 0 ? Math.abs(openingBalance) : 0,
       balance: openingBalance
     });
 
@@ -677,7 +677,7 @@ class CustomerLedgerService {
     // Fetch financial summary and customer metadata for enriched response
     const summary = await this.getCustomerFinancialSummary(actualCustomerId);
     const [customerMeta] = await sequelizeTVL.query(`
-      SELECT cu_gstno, cu_creditlimit, cu_creditdays, cu_panno, cu_custtype
+      SELECT cu_creditlimit, cu_creditdays, cu_custtype
       FROM cuXcustomer WHERE cu_usid = :customerId LIMIT 1
     `, { replacements: { customerId: actualCustomerId }, type: QueryTypes.SELECT });
 
@@ -688,10 +688,8 @@ class CustomerLedgerService {
         name: customerRes ? customerRes.name : 'Unknown Customer',
         phone: customerRes ? customerRes.phone : '',
         company: customerRes ? customerRes.company : '',
-        gstNumber: customerMeta?.cu_gstno || '',
         creditLimit: parseFloat(customerMeta?.cu_creditlimit) || 0,
         creditDays: parseInt(customerMeta?.cu_creditdays) || 0,
-        panNumber: customerMeta?.cu_panno || '',
         customerType: customerMeta?.cu_custtype || ''
       },
       summary: {

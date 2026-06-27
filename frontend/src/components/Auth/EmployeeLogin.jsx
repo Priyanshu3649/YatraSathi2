@@ -151,10 +151,10 @@ const EmployeeLogin = () => {
       </form>
       <div className="text-center mt-3">
         <p>
-          <a href="/auth/forgot-password">Forgot your password?</a>
+          <a href="/forgot-password">Forgot your password?</a>
         </p>
         <p>
-          Customer? <a href="/auth/login">Login here</a>
+          Customer? <a href="/login">Login here</a>
         </p>
       </div>
     </div>

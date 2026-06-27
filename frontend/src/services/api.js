@@ -106,7 +106,12 @@ export const authAPI = {
       headers: getHeaders(true)
     });
 
-    const data = await response.json();
+    let data;
+    try {
+      data = await response.json();
+    } catch {
+      data = { message: 'Invalid response from server' };
+    }
 
     if (!response.ok) {
       throw new Error(data.message || 'Failed to get profile');
@@ -2194,12 +2199,18 @@ export const auditAPI = {
 
 
 // ==================== CUSTOMER DETAILS API ====================
+
+/** Safely parse JSON from a fetch Response, falling back to an error object. */
+const safeJson = async (response) => {
+  try { return await response.json(); } catch { return { message: 'Invalid response from server' }; }
+};
+
 export const customerDetailsAPI = {
   getSummary: async (customerId) => {
     const response = await fetch(`${API_BASE_URL}/security/customers/${encodeURIComponent(customerId)}/details`, {
       headers: getHeaders(true)
     });
-    const data = await response.json();
+    const data = await safeJson(response);
     if (!response.ok) throw new Error(data.message || 'Failed to fetch customer details');
     return data;
   },
@@ -2209,7 +2220,7 @@ export const customerDetailsAPI = {
     const response = await fetch(`${API_BASE_URL}/security/customers/${encodeURIComponent(customerId)}/bookings?${query}`, {
       headers: getHeaders(true)
     });
-    const data = await response.json();
+    const data = await safeJson(response);
     if (!response.ok) throw new Error(data.message || 'Failed to fetch customer bookings');
     return data;
   },
@@ -2219,7 +2230,7 @@ export const customerDetailsAPI = {
     const response = await fetch(`${API_BASE_URL}/security/customers/${encodeURIComponent(customerId)}/bills?${query}`, {
       headers: getHeaders(true)
     });
-    const data = await response.json();
+    const data = await safeJson(response);
     if (!response.ok) throw new Error(data.message || 'Failed to fetch customer bills');
     return data;
   },
@@ -2229,7 +2240,7 @@ export const customerDetailsAPI = {
     const response = await fetch(`${API_BASE_URL}/security/customers/${encodeURIComponent(customerId)}/payments?${query}`, {
       headers: getHeaders(true)
     });
-    const data = await response.json();
+    const data = await safeJson(response);
     if (!response.ok) throw new Error(data.message || 'Failed to fetch customer payments');
     return data;
   },
@@ -2238,7 +2249,7 @@ export const customerDetailsAPI = {
     const response = await fetch(`${API_BASE_URL}/security/customers/${encodeURIComponent(customerId)}/ledger`, {
       headers: getHeaders(true)
     });
-    const data = await response.json();
+    const data = await safeJson(response);
     if (!response.ok) throw new Error(data.message || 'Failed to fetch customer ledger');
     return data;
   },
@@ -2248,7 +2259,7 @@ export const customerDetailsAPI = {
     const response = await fetch(`${API_BASE_URL}/security/customers/${encodeURIComponent(customerId)}/receipts?${query}`, {
       headers: getHeaders(true)
     });
-    const data = await response.json();
+    const data = await safeJson(response);
     if (!response.ok) throw new Error(data.message || 'Failed to fetch customer receipts');
     return data;
   },

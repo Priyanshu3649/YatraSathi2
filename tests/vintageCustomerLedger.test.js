@@ -17,23 +17,69 @@ jest.mock('../src/models', () => ({
 const CustomerLedgerService = require('../src/services/CustomerLedgerService');
 
 describe('Vintage Customer Ledger System (ERP Grade) - 5 Cases Test Suite', () => {
+  let mockBillsBefore = 0;
+  let mockPaymentsBefore = 0;
+  let mockBillsInPeriod = [];
+  let mockPaymentsInPeriod = [];
+  let mockBilledResult = { totalBilled: 0, lastBillDate: null };
+  let mockReceivedResult = { totalReceived: 0, lastPaymentDate: null };
+  let mockCustomerMeta = { cu_creditlimit: 100000, cu_creditdays: 30, cu_custtype: 'B2B' };
+  let mockCustomerProfile = { id: 'CUST01', customerNo: 'CUST01', name: 'Test Client', phone: '1234567890', company: 'Client Corp' };
+
   beforeEach(() => {
     jest.clearAllMocks();
+    mockBillsBefore = 0;
+    mockPaymentsBefore = 0;
+    mockBillsInPeriod = [];
+    mockPaymentsInPeriod = [];
+    mockBilledResult = { totalBilled: 0, lastBillDate: null };
+    mockReceivedResult = { totalReceived: 0, lastPaymentDate: null };
+    mockCustomerMeta = { cu_creditlimit: 100000, cu_creditdays: 30, cu_custtype: 'B2B' };
+    mockCustomerProfile = { id: 'CUST01', customerNo: 'CUST01', name: 'Test Client', phone: '1234567890', company: 'Client Corp' };
+
+    mockSequelizeTVL.query.mockImplementation((sql, options) => {
+      const query = sql.toLowerCase();
+      // getMatchingCustomerIds / getCustomerVintageLedger profile lookup
+      if (query.includes('cuxcustomer') && query.includes('usxuser') && query.includes('limit 1')) {
+        return Promise.resolve([mockCustomerProfile]);
+      }
+      if (query.includes('cuxcustomer') && query.includes('usxuser') && !query.includes('limit 1')) {
+        return Promise.resolve([{ id: mockCustomerProfile.id }]);
+      }
+      // billsBefore sum
+      if (query.includes('blxbilling') && query.includes('< :fromdate')) {
+        return Promise.resolve([{ total_debit: mockBillsBefore }]);
+      }
+      // paymentsBefore sum
+      if (query.includes('ptxpayment') && query.includes('< :fromdate')) {
+        return Promise.resolve([{ total_credit: mockPaymentsBefore }]);
+      }
+      // bills in period
+      if (query.includes('blxbilling') && query.includes('>= :fromdate')) {
+        return Promise.resolve(mockBillsInPeriod);
+      }
+      // payments in period
+      if (query.includes('ptxpayment') && query.includes('>= :fromdate')) {
+        return Promise.resolve(mockPaymentsInPeriod);
+      }
+      // billedResult in financial summary
+      if (query.includes('sum(b.bl_total_amount)')) {
+        return Promise.resolve([mockBilledResult]);
+      }
+      // receivedResult in financial summary
+      if (query.includes('sum(pt.pt_amount)')) {
+        return Promise.resolve([mockReceivedResult]);
+      }
+      // customerMeta query
+      if (query.includes('cu_creditlimit')) {
+        return Promise.resolve([mockCustomerMeta]);
+      }
+      return Promise.resolve([[]]);
+    });
   });
 
   // Case 1: Customer with no transactions
   test('Case 1: Customer with no transactions -> Opening: 0, Closing: 0, Entries: 1 (Opening Balance)', async () => {
-    // 1. customer profile query
-    mockSequelizeTVL.query.mockResolvedValueOnce([{ id: 'CUST01', name: 'Test Client', phone: '1234567890', company: 'Client Corp' }]);
-    // 2. billsBefore sum
-    mockSequelizeTVL.query.mockResolvedValueOnce([{ total_debit: 0 }]);
-    // 3. paymentsBefore sum
-    mockSequelizeTVL.query.mockResolvedValueOnce([{ total_credit: 0 }]);
-    // 4. bills in period query
-    mockSequelizeTVL.query.mockResolvedValueOnce([]);
-    // 5. payments in period query
-    mockSequelizeTVL.query.mockResolvedValueOnce([]);
-
     const result = await CustomerLedgerService.getCustomerVintageLedger('CUST01', '2026-06-01', '2026-06-30');
 
     expect(result.success).toBe(true);
@@ -53,18 +99,10 @@ describe('Vintage Customer Ledger System (ERP Grade) - 5 Cases Test Suite', () =
 
   // Case 2: Only bill of ₹10000
   test('Case 2: Only bill -> Debit: 10000, Closing Balance: 10000', async () => {
-    // 1. customer profile
-    mockSequelizeTVL.query.mockResolvedValueOnce([{ id: 'CUST01', name: 'Test Client' }]);
-    // 2. billsBefore
-    mockSequelizeTVL.query.mockResolvedValueOnce([{ total_debit: 0 }]);
-    // 3. paymentsBefore
-    mockSequelizeTVL.query.mockResolvedValueOnce([{ total_credit: 0 }]);
-    // 4. bills in period (₹10000)
-    mockSequelizeTVL.query.mockResolvedValueOnce([
+    mockBillsInPeriod = [
       { date: '2026-06-05', invoice_number: 'INV001', amount: 10000 }
-    ]);
-    // 5. payments in period (empty)
-    mockSequelizeTVL.query.mockResolvedValueOnce([]);
+    ];
+    mockBilledResult = { totalBilled: 10000, lastBillDate: '2026-06-05' };
 
     const result = await CustomerLedgerService.getCustomerVintageLedger('CUST01', '2026-06-01', '2026-06-30');
 
@@ -85,20 +123,14 @@ describe('Vintage Customer Ledger System (ERP Grade) - 5 Cases Test Suite', () =
 
   // Case 3: Bill + Payment
   test('Case 3: Bill (50000) + Payment (30000) -> Closing Balance: 20000', async () => {
-    // 1. customer profile
-    mockSequelizeTVL.query.mockResolvedValueOnce([{ id: 'CUST01', name: 'Test Client' }]);
-    // 2. billsBefore
-    mockSequelizeTVL.query.mockResolvedValueOnce([{ total_debit: 0 }]);
-    // 3. paymentsBefore
-    mockSequelizeTVL.query.mockResolvedValueOnce([{ total_credit: 0 }]);
-    // 4. bills in period (₹50000)
-    mockSequelizeTVL.query.mockResolvedValueOnce([
+    mockBillsInPeriod = [
       { date: '2026-06-05', invoice_number: 'INV001', amount: 50000 }
-    ]);
-    // 5. payments in period (₹30000)
-    mockSequelizeTVL.query.mockResolvedValueOnce([
+    ];
+    mockPaymentsInPeriod = [
       { date: '2026-06-10', reference_number: 'REC001', payment_id: 1, amount: 30000, mode: 'Cash' }
-    ]);
+    ];
+    mockBilledResult = { totalBilled: 50000, lastBillDate: '2026-06-05' };
+    mockReceivedResult = { totalReceived: 30000, lastPaymentDate: '2026-06-10' };
 
     const result = await CustomerLedgerService.getCustomerVintageLedger('CUST01', '2026-06-01', '2026-06-30');
 
@@ -119,20 +151,14 @@ describe('Vintage Customer Ledger System (ERP Grade) - 5 Cases Test Suite', () =
 
   // Case 4: Advance Payment
   test('Case 4: Advance Payment -> Payment (50000) + Bill (30000) -> Closing: -20000', async () => {
-    // 1. customer profile
-    mockSequelizeTVL.query.mockResolvedValueOnce([{ id: 'CUST01', name: 'Test Client' }]);
-    // 2. billsBefore
-    mockSequelizeTVL.query.mockResolvedValueOnce([{ total_debit: 0 }]);
-    // 3. paymentsBefore
-    mockSequelizeTVL.query.mockResolvedValueOnce([{ total_credit: 0 }]);
-    // 4. bills in period (₹30000)
-    mockSequelizeTVL.query.mockResolvedValueOnce([
+    mockBillsInPeriod = [
       { date: '2026-06-15', invoice_number: 'INV002', amount: 30000 }
-    ]);
-    // 5. payments in period (₹50000)
-    mockSequelizeTVL.query.mockResolvedValueOnce([
+    ];
+    mockPaymentsInPeriod = [
       { date: '2026-06-10', reference_number: 'REC002', payment_id: 2, amount: 50000, mode: 'UPI' }
-    ]);
+    ];
+    mockBilledResult = { totalBilled: 30000, lastBillDate: '2026-06-15' };
+    mockReceivedResult = { totalReceived: 50000, lastPaymentDate: '2026-06-10' };
 
     const result = await CustomerLedgerService.getCustomerVintageLedger('CUST01', '2026-06-01', '2026-06-30');
 
@@ -154,17 +180,6 @@ describe('Vintage Customer Ledger System (ERP Grade) - 5 Cases Test Suite', () =
 
   // Case 5: Cancelled Bill
   test('Case 5: Cancelled Bill -> excluded entirely from calculations', async () => {
-    // 1. customer profile
-    mockSequelizeTVL.query.mockResolvedValueOnce([{ id: 'CUST01', name: 'Test Client' }]);
-    // 2. billsBefore
-    mockSequelizeTVL.query.mockResolvedValueOnce([{ total_debit: 0 }]);
-    // 3. paymentsBefore
-    mockSequelizeTVL.query.mockResolvedValueOnce([{ total_credit: 0 }]);
-    // 4. bills in period (empty since it was cancelled)
-    mockSequelizeTVL.query.mockResolvedValueOnce([]);
-    // 5. payments in period (empty)
-    mockSequelizeTVL.query.mockResolvedValueOnce([]);
-
     const result = await CustomerLedgerService.getCustomerVintageLedger('CUST01', '2026-06-01', '2026-06-30');
 
     expect(result.totals.debit).toBe(0);

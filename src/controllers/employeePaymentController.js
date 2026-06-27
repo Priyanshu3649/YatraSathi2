@@ -7,10 +7,10 @@ const {
   ptXpayment: Payment,
   pnXpnr: Pnr,
   paXpayalloc: PaymentAlloc,
-  cuXcustomer: Customer,
   bkXbooking: Booking
 } = require('../models');
 const { sequelize, sequelizeTVL } = require('../../config/db');
+const { Op, QueryTypes } = require('sequelize');
 const Audit = require('../services/forensicAuditService');
 
 
@@ -39,7 +39,12 @@ const getFinancialYear = (date) => {
 // Get all payments (for employees with proper permissions)
 const getAllPayments = async (req, res) => {
   try {
-    const { customerId, status, startDate, endDate, limit = 100, offset = 0 } = req.query;
+    const { customerId, status, startDate, endDate, limit = 100, offset: rawOffset, page } = req.query;
+    // Support both page-based and offset-based pagination
+    const parsedLimit = parseInt(limit) || 100;
+    const offset = rawOffset !== undefined
+      ? parseInt(rawOffset)
+      : page ? (parseInt(page) - 1) * parsedLimit : 0;
 
     const whereClause = {};
     
@@ -64,20 +69,97 @@ const getAllPayments = async (req, res) => {
     const payments = await Payment.findAll({
       where: whereClause,
       order: [['edtm', 'DESC']],
-      limit: parseInt(limit),
-      offset: parseInt(offset)
+      limit: parsedLimit,
+      offset
     });
 
     const total = await Payment.count({ where: whereClause });
 
+    // Batch-fetch customer names and account info via raw SQL
+    // (Sequelize includes are not viable here due to cross-schema type mismatch:
+    //  pt_custid is BIGINT while cu_cusid/cu_usid are STRING)
+    const plainPayments = payments.map(p => p.get ? p.get({ plain: true }) : p);
+    const custIds = [...new Set(plainPayments.map(p => p.pt_custid).filter(Boolean))];
+    const acIds   = [...new Set(plainPayments.map(p => p.pt_acid).filter(Boolean))];
+
+    // Customer lookup: join cuXcustomer + usXuser, match on numeric portion of cu_cusid
+    let customerMap = {};
+    if (custIds.length > 0) {
+      const customers = await sequelizeTVL.query(`
+        SELECT c.cu_cusid, c.cu_usid, u.us_fname, u.us_lname, u.us_phone
+        FROM cuXcustomer c
+        JOIN usXuser u ON c.cu_usid = u.us_usid
+      `, { type: QueryTypes.SELECT });
+
+      // Build map keyed by numeric portion of cu_cusid (matches pt_custid BIGINT)
+      customers.forEach(c => {
+        const numericId = parseInt(String(c.cu_cusid).replace(/\D/g, ''), 10);
+        if (!isNaN(numericId)) {
+          customerMap[numericId] = {
+            name: `${c.us_fname || ''} ${c.us_lname || ''}`.trim() || c.cu_usid,
+            phone: c.us_phone || ''
+          };
+        }
+        // Also map by cu_usid string for fallback matching
+        customerMap[c.cu_usid] = {
+          name: `${c.us_fname || ''} ${c.us_lname || ''}`.trim() || c.cu_usid,
+          phone: c.us_phone || ''
+        };
+      });
+    }
+
+    // Account lookup: acXaccount has no ac_name column; use ac_acid as identifier
+    let accountMap = {};
+    if (acIds.length > 0) {
+      const accounts = await sequelizeTVL.query(`
+        SELECT ac_acid, ac_usid, ac_bkid, ac_status
+        FROM acXaccount
+        WHERE ac_acid IN (:acIds)
+      `, { replacements: { acIds }, type: QueryTypes.SELECT });
+
+      accounts.forEach(a => {
+        accountMap[a.ac_acid] = {
+          name: `Account #${a.ac_acid}`,
+          status: a.ac_status || ''
+        };
+      });
+    }
+
+    // Transform ptXpayment records to include py_* aliases for frontend compatibility
+    const transformedPayments = plainPayments.map(plain => {
+      const cust  = customerMap[plain.pt_custid] || {};
+      const acct  = accountMap[plain.pt_acid]    || {};
+      return {
+        ...plain,
+        py_pymtid:        plain.pt_ptid,
+        py_entry_no:      plain.pt_refno || `PAY-${plain.pt_ptid}`,
+        py_date:          plain.pt_paydt,
+        py_entry_type:    'Debit',
+        py_customer_name: cust.name  || `Customer #${plain.pt_custid}`,
+        py_customer_phone: cust.phone || '',
+        py_bank_account:  acct.name  || `Account #${plain.pt_acid}`,
+        py_amount:        plain.pt_amount,
+        py_payment_mode:  plain.pt_mode  || 'Cash',
+        py_ref_number:    plain.pt_refno || '',
+        py_narration:     plain.pt_remarks || '',
+        py_status:        plain.pt_status === 'ALLOCATED' ? 'Active' : plain.pt_status
+      };
+    });
+
     res.json({
       success: true,
-      payments: payments || [],
+      data: transformedPayments,
+      payments: transformedPayments,
       pagination: {
+        totalRecords: total || 0,
         total: total || 0,
-        limit: parseInt(limit),
-        offset: parseInt(offset),
-        hasMore: (parseInt(offset) + parseInt(limit)) < (total || 0)
+        limit: parsedLimit,
+        offset,
+        hasMore: (offset + parsedLimit) < (total || 0),
+        currentPage: Math.floor(offset / parsedLimit) + 1,
+        totalPages: Math.ceil((total || 0) / parsedLimit),
+        hasNextPage: offset + parsedLimit < (total || 0),
+        hasPrevPage: offset > 0
       }
     });
   } catch (error) {

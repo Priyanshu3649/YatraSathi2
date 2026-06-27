@@ -265,7 +265,6 @@ const DynamicAdminPanel = () => {
         { name: 'cu_phone', label: 'Phone', type: 'tel', readOnly: true },
         { name: 'cu_custtype', label: 'Customer Type', type: 'text' },
         { name: 'cu_company', label: 'Company Name', type: 'text' },
-        { name: 'cu_gst', label: 'GST Number', type: 'text' },
         { name: 'cu_creditlmt', label: 'Credit Limit', type: 'number', step: '0.01' },
         { name: 'cu_status', label: 'Status', type: 'text' },
       ],

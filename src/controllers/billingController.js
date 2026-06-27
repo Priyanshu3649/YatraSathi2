@@ -203,10 +203,10 @@ async function getBillPrintPayload(bill, booking, user) {
     }),
     ForensicAuditLog.findAll({
       where: {
-        entityName: 'BILL',
-        entityId: bill.bl_id
+        module_name: 'BILL',
+        record_id: String(bill.bl_id)
       },
-      order: [['performedOn', 'DESC']]
+      order: [['change_timestamp', 'DESC']]
     })
   ]);
 
@@ -261,14 +261,14 @@ async function getBillPrintPayload(bill, booking, user) {
   const signature = crypto.createHmac('sha256', secret).update(invoiceData).digest('hex');
 
   // Resolve audit users
-  const createdAudit = auditLogs.find(entry => entry.actionType === 'CREATE');
-  const updatedAudit = auditLogs.find(entry => entry.actionType === 'UPDATE');
-  const closedAudit = auditLogs.find(entry => ['CLOSE', 'CANCEL'].includes(entry.actionType));
+  const createdAudit = auditLogs.find(entry => entry.action_type === 'INSERT' || entry.action_type === 'CREATE');
+  const updatedAudit = auditLogs.find(entry => entry.action_type === 'UPDATE');
+  const closedAudit = auditLogs.find(entry => ['CLOSE', 'CANCEL', 'DELETE'].includes(entry.action_type));
 
   const [enteredBy, modifiedBy, closedBy] = await Promise.all([
-    resolveAuditUserLabel(bill.entered_by || bill.bl_created_by || createdAudit?.performedBy),
-    resolveAuditUserLabel(bill.modified_by || bill.mby || updatedAudit?.performedBy),
-    resolveAuditUserLabel(bill.closed_by || bill.cancelled_by || closedAudit?.performedBy)
+    resolveAuditUserLabel(bill.entered_by || bill.bl_created_by || createdAudit?.changed_by),
+    resolveAuditUserLabel(bill.modified_by || bill.mby || updatedAudit?.changed_by),
+    resolveAuditUserLabel(bill.closed_by || bill.cancelled_by || closedAudit?.changed_by)
   ]);
 
   return {
@@ -354,11 +354,11 @@ async function getBillPrintPayload(bill, booking, user) {
     },
     audit: {
       enteredBy: enteredBy || 'System',
-      enteredOn: bill.entered_on || bill.bl_created_at || createdAudit?.performedOn || null,
+      enteredOn: bill.entered_on || bill.bl_created_at || createdAudit?.change_timestamp || null,
       modifiedBy: modifiedBy || null,
-      modifiedOn: bill.modified_on || bill.bl_modified_at || updatedAudit?.performedOn || null,
+      modifiedOn: bill.modified_on || bill.bl_modified_at || updatedAudit?.change_timestamp || null,
       closedBy: closedBy || null,
-      closedOn: bill.closed_on || bill.cancelled_on || closedAudit?.performedOn || null
+      closedOn: bill.closed_on || bill.cancelled_on || closedAudit?.change_timestamp || null
     },
     jespr: {
       sales: {
