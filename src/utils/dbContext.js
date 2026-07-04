@@ -16,10 +16,9 @@ const cacheFYs = async () => {
     // Lazily require sequelize to avoid circular dependencies
     const { sequelize } = require('../../config/db');
     
-    // Fetch active financial years from master database
-    const masterDb = process.env.DB_NAME_TVL || 'TVL_001';
+    // Fetch active financial years from current database context
     const rows = await sequelize.query(
-      `SELECT fy_name, fy_dbname FROM \`${masterDb}\`.financial_years WHERE fy_active = 1`,
+      'SELECT fy_name, fy_dbname FROM financial_years WHERE fy_active = 1',
       { type: sequelize.QueryTypes.SELECT }
     );
     
@@ -50,9 +49,8 @@ const checkUserFYPermission = async (userId, fy) => {
     const { sequelize } = require('../../config/db');
     
     // First, check if the user is an admin. Admins have access to all financial years.
-    const masterDb = process.env.DB_NAME_TVL || 'TVL_001';
     const [user] = await sequelize.query(
-      `SELECT us_usertype, us_roid FROM \`${masterDb}\`.usXuser WHERE us_usid = ?`,
+      'SELECT us_usertype, us_roid FROM usXuser WHERE us_usid = ?',
       { replacements: [userId], type: sequelize.QueryTypes.SELECT }
     );
     
@@ -62,8 +60,8 @@ const checkUserFYPermission = async (userId, fy) => {
 
     // Otherwise, check explicit mapping in user_financial_years
     const rows = await sequelize.query(
-      `SELECT 1 FROM \`${masterDb}\`.user_financial_years ufy
-       JOIN \`${masterDb}\`.financial_years fy ON ufy.ufy_fyid = fy.fy_id
+      `SELECT 1 FROM user_financial_years ufy
+       JOIN financial_years fy ON ufy.ufy_fyid = fy.fy_id
        WHERE ufy.ufy_usid = ? AND fy.fy_name = ? AND fy.fy_active = 1`,
       { replacements: [userId, fy], type: sequelize.QueryTypes.SELECT }
     );

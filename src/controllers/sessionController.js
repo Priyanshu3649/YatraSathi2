@@ -10,20 +10,19 @@ const getAvailableYears = async (req, res) => {
     const userRole = req.user.us_roid || req.user.role?.fn_fnid;
     const userType = req.user.us_usertype || req.user.usertype;
 
-    const masterDb = process.env.DB_NAME_TVL || 'TVL_001';
     let rows;
     
     // Admins have access to all active financial years
     if (userRole === 'ADM' || userType === 'admin') {
       rows = await sequelize.query(
-        `SELECT fy_id, fy_name, fy_desc FROM \`${masterDb}\`.financial_years WHERE fy_active = 1 ORDER BY fy_name ASC`,
+        'SELECT fy_id, fy_name, fy_desc FROM financial_years WHERE fy_active = 1 ORDER BY fy_name ASC',
         { type: sequelize.QueryTypes.SELECT }
       );
     } else {
       // Regular users only have access to mapped financial years
       rows = await sequelize.query(
-        `SELECT fy.fy_id, fy.fy_name, fy.fy_desc FROM \`${masterDb}\`.user_financial_years ufy
-         JOIN \`${masterDb}\`.financial_years fy ON ufy.ufy_fyid = fy.fy_id
+        `SELECT fy.fy_id, fy.fy_name, fy.fy_desc FROM user_financial_years ufy
+         JOIN financial_years fy ON ufy.ufy_fyid = fy.fy_id
          WHERE ufy.ufy_usid = ? AND fy.fy_active = 1
          ORDER BY fy.fy_name ASC`,
         { replacements: [userId], type: sequelize.QueryTypes.SELECT }

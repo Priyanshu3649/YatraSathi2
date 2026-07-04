@@ -15,6 +15,8 @@ const dbConfig = {
 const MASTER_DB = process.env.DB_NAME_TVL || 'TVL_001';
 
 const MASTER_TABLES = [
+  'financial_years',
+  'user_financial_years',
   'apXapplication',
   'billingMaster',
   'ccCustContact',
@@ -122,7 +124,7 @@ async function run() {
 
     // 6. Get all tables of the Master Database to clone
     const [tables] = await connection.query('SHOW TABLES');
-    const tableNames = tables.map(row => Object.values(row)[0]).filter(name => name !== 'financial_years' && name !== 'user_financial_years');
+    const tableNames = tables.map(row => Object.values(row)[0]);
 
     // 7. Clone database structure and master data for each financial year
     for (const fy of fys) {
