@@ -15,6 +15,11 @@ const getHeaders = (includeAuth = false) => {
     }
   }
 
+  const financialYear = localStorage.getItem('financialYear');
+  if (financialYear) {
+    headers['X-Financial-Year'] = financialYear;
+  }
+
   return headers;
 };
 
@@ -2198,6 +2203,95 @@ export const auditAPI = {
 };
 
 
+// ==================== STATION BOY API ====================
+export const stationBoyAPI = {
+  getAll: async () => {
+    const response = await fetch(`${API_BASE_URL}/station-boys`, {
+      method: 'GET',
+      headers: getHeaders(true)
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.message || 'Failed to fetch station boys');
+    return data;
+  },
+
+  getById: async (id) => {
+    const response = await fetch(`${API_BASE_URL}/station-boys/${id}`, {
+      method: 'GET',
+      headers: getHeaders(true)
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.message || 'Failed to fetch station boy details');
+    return data;
+  },
+
+  create: async (boyData) => {
+    const response = await fetch(`${API_BASE_URL}/station-boys`, {
+      method: 'POST',
+      headers: getHeaders(true),
+      body: JSON.stringify(boyData)
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.message || 'Failed to create station boy');
+    return data;
+  },
+
+  update: async (id, boyData) => {
+    const response = await fetch(`${API_BASE_URL}/station-boys/${id}`, {
+      method: 'PUT',
+      headers: getHeaders(true),
+      body: JSON.stringify(boyData)
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.message || 'Failed to update station boy');
+    return data;
+  },
+
+  delete: async (id) => {
+    const response = await fetch(`${API_BASE_URL}/station-boys/${id}`, {
+      method: 'DELETE',
+      headers: getHeaders(true)
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.message || 'Failed to delete station boy');
+    return data;
+  },
+
+  getActive: async () => {
+    const response = await fetch(`${API_BASE_URL}/station-boys/active`, {
+      method: 'GET',
+      headers: getHeaders(true)
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.message || 'Failed to fetch active station boys');
+    return data;
+  },
+
+  addPayment: async (id, paymentData) => {
+    const response = await fetch(`${API_BASE_URL}/station-boys/${id}/payments`, {
+      method: 'POST',
+      headers: getHeaders(true),
+      body: JSON.stringify(paymentData)
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.message || 'Failed to record payment');
+    return data;
+  },
+
+  getLedger: async (id, params = {}) => {
+    const query = new URLSearchParams(params).toString();
+    const url = query ? `${API_BASE_URL}/station-boys/${id}/ledger?${query}` : `${API_BASE_URL}/station-boys/${id}/ledger`;
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: getHeaders(true)
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.message || 'Failed to fetch station boy ledger');
+    return data;
+  }
+};
+
+
 // ==================== CUSTOMER DETAILS API ====================
 
 /** Safely parse JSON from a fetch Response, falling back to an error object. */
@@ -2265,6 +2359,49 @@ export const customerDetailsAPI = {
   },
 };
 
+// Session/Financial Year API calls
+export const sessionAPI = {
+  getAvailableYears: async () => {
+    const response = await fetch(`${API_BASE_URL}/session/financial-years`, {
+      method: 'GET',
+      headers: getHeaders(true)
+    });
+    
+    let data;
+    try {
+      data = await response.json();
+    } catch {
+      data = { message: 'Invalid response from server' };
+    }
+    
+    if (!response.ok) {
+      throw new Error(data.error?.message || data.message || 'Failed to get financial years');
+    }
+    
+    return data;
+  },
+
+  selectYear: async (financialYear) => {
+    const response = await fetch(`${API_BASE_URL}/session/select-year`, {
+      method: 'POST',
+      headers: getHeaders(true),
+      body: JSON.stringify({ financialYear })
+    });
+    
+    let data;
+    try {
+      data = await response.json();
+    } catch {
+      data = { message: 'Invalid response from server' };
+    }
+    
+    if (!response.ok) {
+      throw new Error(data.error?.message || data.message || 'Failed to select financial year');
+    }
+    
+    return data;
+  }
+};
 
 // Named exports for individual API functions
 export const getAuditLogs = auditAPI.getAuditLogs;
@@ -2285,5 +2422,7 @@ export default {
   contraAPI,
   auditAPI,
   journalAPI,
-  customerDetailsAPI
+  customerDetailsAPI,
+  stationBoyAPI,
+  sessionAPI
 };

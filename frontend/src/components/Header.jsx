@@ -1,17 +1,50 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { sessionAPI } from '../services/api';
 import '../styles/header.css';
 
 const Header = () => {
-  const { user, logout } = useAuth();
+  const { 
+    user, 
+    logout, 
+    selectedFinancialYear, 
+    selectFinancialYear, 
+    availableFinancialYears, 
+    setAvailableFinancialYears 
+  } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
-  
+
+  useEffect(() => {
+    if (user && availableFinancialYears.length === 0) {
+      sessionAPI.getAvailableYears()
+        .then(res => {
+          if (res.success) {
+            setAvailableFinancialYears(res.data);
+          }
+        })
+        .catch(err => console.error('Failed to fetch years in Header:', err));
+    }
+  }, [user, availableFinancialYears.length, setAvailableFinancialYears]);
+
+  const handleSwitchFY = async (fy) => {
+    try {
+      const res = await sessionAPI.selectYear(fy);
+      if (res.success) {
+        selectFinancialYear(fy);
+        // Force full page reload to clear cached page states
+        window.location.reload();
+      }
+    } catch (err) {
+      alert(err.message || 'Failed to switch financial year');
+    }
+  };
+
   const isActive = (path) => {
     return location.pathname === path;
   };
-  
+
   const handleLogout = async () => {
     try {
       await logout();
@@ -20,7 +53,7 @@ const Header = () => {
       console.error('Logout failed:', error);
     }
   };
-  
+
   return (
     <header className="header panel" style={{ marginBottom: '0' }}>
       <div className="container">
@@ -42,7 +75,7 @@ const Header = () => {
                     <li><Link to="/customer/profile" className={isActive('/customer/profile') ? 'active' : ''}>Profile</Link></li>
                   </>
                 )}
-                
+
                 {/* Employee/Admin Navigation */}
                 {(user.us_usertype === 'admin' || user.us_usertype === 'employee' || user.us_roid === 'ADM' || user.us_roid === 'AGT' || user.us_roid === 'ACC' || user.us_roid === 'HR' || user.us_roid === 'CC' || user.us_roid === 'MKT' || user.us_roid === 'MGT') && (
                   <>
@@ -54,7 +87,7 @@ const Header = () => {
                     <li><Link to="/reports" className={isActive('/reports') ? 'active' : ''}>Reports</Link></li>
                   </>
                 )}
-                
+
                 {/* Admin Only Navigation */}
                 {(user.us_usertype === 'admin' || user.us_roid === 'ADM') && (
                   <>
@@ -72,12 +105,37 @@ const Header = () => {
                   </>
                 )}
 
-                
+
                 {/* Common for all logged in users */}
                 {user.us_roid !== 'CUS' && (
                   <li><Link to="/profile" className={isActive('/profile') ? 'active' : ''}>Profile</Link></li>
                 )}
-                
+
+                {user && selectedFinancialYear && (
+                  <li style={{ display: 'flex', alignItems: 'center', marginRight: '15px' }}>
+                    <span style={{ marginRight: '5px', fontWeight: 'bold', fontSize: '11px', color: '#000' }}>Session:</span>
+                    <select
+                      value={selectedFinancialYear}
+                      onChange={(e) => handleSwitchFY(e.target.value)}
+                      className="form-control"
+                      style={{ 
+                        width: '90px', 
+                        height: '22px', 
+                        fontSize: '11px',
+                        padding: '0 2px',
+                        backgroundColor: '#fff',
+                        border: '1px solid #000',
+                        boxShadow: '1px 1px 0px #808080 inset',
+                        color: '#000'
+                      }}
+                    >
+                      {availableFinancialYears.map(fy => (
+                        <option key={fy.fy_id} value={fy.fy_name}>{fy.fy_name}</option>
+                      ))}
+                    </select>
+                  </li>
+                )}
+
                 <li>
                   <button onClick={handleLogout} className="btn btn-primary" style={{ marginLeft: '10px' }}>
                     Logout

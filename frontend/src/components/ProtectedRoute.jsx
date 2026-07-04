@@ -3,7 +3,7 @@ import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 
 const ProtectedRoute = ({ children, requiredRole = null }) => {
-  const { user, isAuthenticated, loading } = useAuth();
+  const { user, isAuthenticated, loading, selectedFinancialYear } = useAuth();
   const location = useLocation();
 
   // Show loading state while authentication is being checked
@@ -24,6 +24,11 @@ const ProtectedRoute = ({ children, requiredRole = null }) => {
 
   // If not authenticated, redirect to login
   if (!isAuthenticated) {
+    return <Navigate to="/login" state={{ from: location }} replace />;
+  }
+
+  // If authenticated but no financial year selected, redirect to login page for session selection
+  if (!selectedFinancialYear && location.pathname !== '/login') {
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 

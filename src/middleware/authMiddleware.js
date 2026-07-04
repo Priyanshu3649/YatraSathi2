@@ -35,6 +35,20 @@ const auth = async (req, res, next) => {
     }
 
     req.user = user;
+
+    // Validate financial year permission if header is provided
+    const fy = req.header('X-Financial-Year');
+    if (fy) {
+      const dbContext = require('../utils/dbContext');
+      const hasPermission = await dbContext.checkUserFYPermission(user.us_usid, fy);
+      if (!hasPermission) {
+        return res.status(403).json({
+          success: false,
+          error: { code: 'FORBIDDEN', message: 'You do not have permission to access this financial year.' }
+        });
+      }
+    }
+
     next();
   } catch (error) {
     console.error('Auth error:', error.message);

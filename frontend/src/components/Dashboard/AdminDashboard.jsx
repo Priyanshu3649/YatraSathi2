@@ -86,6 +86,9 @@ const AdminDashboard = () => {
             <button onClick={() => navigate('/admin/ledger')} className="btn-secondary">
               Customer Ledger
             </button>
+            <button onClick={() => navigate('/admin/station-boys')} className="btn-secondary">
+              Station Boys
+            </button>
             <button onClick={handleLogout} className="btn-outline">
               <i className="fas fa-sign-out-alt"></i>
               Logout
@@ -258,6 +261,10 @@ const AdminDashboard = () => {
             <button onClick={() => navigate('/admin/customers')} className="action-card">
               <i className="fas fa-user-friends"></i>
               <span>Customer Management</span>
+            </button>
+            <button onClick={() => navigate('/admin/station-boys')} className="action-card">
+              <i className="fas fa-running"></i>
+              <span>Station Boys</span>
             </button>
             <button onClick={() => navigate('/admin/reports')} className="action-card">
               <i className="fas fa-chart-bar"></i>

@@ -50,6 +50,8 @@ const ServiceCharge = require('./ServiceCharge');
 const ServiceChargeDefault = require('./ServiceChargeDefault');
 const PaymentAllocation = require('./PaymentAllocation');
 const CustomerLedger = require('./CustomerLedger');
+const StationBoy = require('./StationBoy');
+const StationBoyPayment = require('./StationBoyPayment');
 
 // Map legacy model variables to active TVL models for backwards-compatibility
 const User = UserTVL;
@@ -241,6 +243,10 @@ PaymentAllocation.belongsTo(BillTVL, { foreignKey: 'bill_id', targetKey: 'bl_id'
 PaymentTVL.hasMany(PaymentAllocation, { foreignKey: 'payment_id', sourceKey: 'pt_ptid', as: 'allocations' });
 BillTVL.hasMany(PaymentAllocation, { foreignKey: 'bill_id', sourceKey: 'bl_id', as: 'allocations' });
 
+// Station Boy associations
+StationBoy.hasMany(StationBoyPayment, { foreignKey: 'station_boy_id', as: 'payments' });
+StationBoyPayment.belongsTo(StationBoy, { foreignKey: 'station_boy_id', as: 'stationBoy' });
+
 
 module.exports = {
   Company,
@@ -308,5 +314,7 @@ module.exports = {
   ServiceCharge,
   ServiceChargeDefault,
   PaymentAllocation,
-  CustomerLedger
+  CustomerLedger,
+  StationBoy,
+  StationBoyPayment
 };

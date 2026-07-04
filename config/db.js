@@ -2,11 +2,32 @@ const { Sequelize } = require('sequelize');
 const mysql = require('mysql2/promise');
 const path = require('path');
 const dotenv = require('dotenv');
+const dbContext = require('../src/utils/dbContext');
+
+const registerSwitchingHook = (sequelizeInstance) => {
+  const defaultDb = sequelizeInstance.config.database || 'TVL_001';
+  sequelizeInstance.addHook('afterPoolAcquire', async (connection, options) => {
+    const targetDb = dbContext.getStore() || defaultDb;
+    if (connection.__currentDb !== targetDb) {
+      await new Promise((resolve, reject) => {
+        connection.changeUser({ database: targetDb }, (err) => {
+          if (err) {
+            console.error(`Failed to change database to ${targetDb}:`, err.message);
+            return reject(err);
+          }
+          connection.__currentDb = targetDb;
+          resolve();
+        });
+      });
+    }
+  });
+};
+
 
 // Load environment variables from .env file (only in development)
 if (process.env.NODE_ENV !== 'production') {
   const result = dotenv.config();
-  
+
   if (result.error) {
     console.log('No .env file found (running in production or missing file)');
   } else {
@@ -80,6 +101,9 @@ const sequelizeTVL = new Sequelize(
   }
 );
 
+registerSwitchingHook(sequelize);
+registerSwitchingHook(sequelizeTVL);
+
 // Test the connection and sync models
 const connectDB = async () => {
   try {
@@ -87,20 +111,20 @@ const connectDB = async () => {
     await sequelize.authenticate();
     console.log('✅ Main database connected successfully!');
     console.log(`   Connected to: ${process.env.DB_NAME_TVL}@${process.env.DB_HOST}`);
-    
+
     await sequelizeTVL.authenticate();
     console.log('✅ TVL database connected successfully!');
     console.log(`   Connected to: ${process.env.DB_NAME_TVL}@${process.env.DB_HOST}`);
-    
+
     // Skip sync for now since tables are already created by seed script
     console.log('🔄 Skipping model sync (tables already created by seed script)');
     console.log('✅ All models are ready!');
-    
+
     return sequelize;
   } catch (error) {
     console.error('❌ Failed to connect to MySQL database!');
     console.error('Error details:', error.message);
-    
+
     // Provide helpful error messages
     if (error.code === 'ER_ACCESS_DENIED_ERROR') {
       console.error('\n💡 Access denied. Please check:');
@@ -117,19 +141,19 @@ const connectDB = async () => {
       console.error('   - DB_HOST is correct (default: localhost)');
       console.error('   - MySQL is listening on port 3306');
     }
-    
+
     console.error('\n🔧 To fix this:');
     console.error('   1. Check your .env file configuration');
     console.error('   2. Ensure MySQL server is running');
     console.error('   3. Create the database if it doesn\'t exist');
     console.error('   4. Run: npm run setup-mysql (to create database and seed data)');
-    
+
     process.exit(1);
   }
 };
 
 // Create MySQL connection pool for raw queries
-const mysqlPool = mysql.createPool({
+const originalPool = mysql.createPool({
   host: process.env.DB_HOST,
   port: parseInt(process.env.DB_PORT || '3306'),
   user: process.env.DB_USER,
@@ -138,6 +162,59 @@ const mysqlPool = mysql.createPool({
   waitForConnections: true,
   connectionLimit: 20,  // Increased for better performance
   queueLimit: 0
+});
+
+const mysqlPool = new Proxy(originalPool, {
+  get(target, prop) {
+    const defaultDb = process.env.DB_NAME_TVL || 'TVL_001';
+    if (prop === 'execute' || prop === 'query') {
+      return async function(sql, values) {
+        const dbName = dbContext.getStore();
+        if (dbName) {
+          const connection = await target.getConnection();
+          try {
+            await connection.changeUser({ database: dbName });
+            const result = await connection[prop](sql, values);
+            return result;
+          } finally {
+            await connection.changeUser({ database: defaultDb });
+            connection.release();
+          }
+        } else {
+          return target[prop](sql, values);
+        }
+      };
+    }
+    
+    if (prop === 'getConnection') {
+      return async function() {
+        const connection = await target.getConnection();
+        const dbName = dbContext.getStore();
+        if (dbName) {
+          await connection.changeUser({ database: dbName });
+        }
+        
+        const originalRelease = connection.release;
+        connection.release = function() {
+          connection.changeUser({ database: defaultDb })
+            .then(() => {
+              originalRelease.call(connection);
+            })
+            .catch((err) => {
+              console.error('Failed to restore connection database on release:', err);
+              originalRelease.call(connection);
+            });
+        };
+        return connection;
+      };
+    }
+
+    const value = target[prop];
+    if (typeof value === 'function') {
+      return value.bind(target);
+    }
+    return value;
+  }
 });
 
 module.exports = { sequelize, sequelizeTVL, connectDB, mysqlPool };

@@ -94,6 +94,21 @@ const BillTVL = sequelizeTVL.define('blXbilling', {
     defaultValue: 0.00,
     comment: 'Station Boy Incentive'
   },
+  station_boy_id: {
+    type: DataTypes.INTEGER,
+    allowNull: true,
+    comment: 'Station Boy ID'
+  },
+  station_boy_name_snapshot: {
+    type: DataTypes.STRING(150),
+    allowNull: true,
+    comment: 'Station Boy Name Snapshot'
+  },
+  station_boy_incentive_amount: {
+    type: DataTypes.DECIMAL(10, 2),
+    defaultValue: 0.00,
+    comment: 'Station Boy Incentive Amount'
+  },
   bl_gst: {
     type: DataTypes.DECIMAL(10, 2),
     defaultValue: 0.00,

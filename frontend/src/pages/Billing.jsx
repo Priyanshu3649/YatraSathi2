@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
-import { bookingAPI, paymentAPI, billingAPI } from '../services/api';
+import { bookingAPI, paymentAPI, billingAPI, stationBoyAPI } from '../services/api';
 import { usePagination } from '../hooks/usePagination';
 import useERPFilters from '../hooks/useERPFilters';
 import PaginationControls from '../components/common/PaginationControls';
@@ -283,6 +283,25 @@ const Billing = () => {
     'remarks'
   ], []);
   
+  const [stationBoys, setStationBoys] = useState([]);
+  const [sbSearchTerm, setSbSearchTerm] = useState('');
+  const [sbDropdownOpen, setSbDropdownOpen] = useState(false);
+
+  // Fetch active station boys on mount
+  useEffect(() => {
+    const fetchActiveStationBoys = async () => {
+      try {
+        const res = await stationBoyAPI.getActive();
+        if (res && res.success) {
+          setStationBoys(res.data || []);
+        }
+      } catch (err) {
+        console.error('Failed to fetch active station boys:', err);
+      }
+    };
+    fetchActiveStationBoys();
+  }, []);
+
   const [formData, setFormData] = useState({
     id: '',
     billDate: new Date().toISOString().split('T')[0],
@@ -291,6 +310,7 @@ const Billing = () => {
     customerName: '',
     phoneNumber: '',
     stationBoy: '',
+    stationBoyId: '',
     fromStation: '',
     toStation: '',
     journeyDate: '',
@@ -314,6 +334,11 @@ const Billing = () => {
     remarks: '',
     status: 'DRAFT'
   });
+
+  // Update search term when formData.stationBoy changes
+  useEffect(() => {
+    setSbSearchTerm(formData.stationBoy || '');
+  }, [formData.stationBoy]);
 
   // Initialize keyboard navigation
   useEffect(() => {
@@ -885,6 +910,7 @@ const Billing = () => {
         customerName: bill.bl_customer_name || bill.customerName,
         phoneNumber: bill.bl_customer_phone || bill.customerPhone || bill.phoneNumber || bill.phone,
         stationBoy: bill.bl_station_boy || bill.stationBoy,
+        stationBoyId: bill.station_boy_id || bill.stationBoyId || '',
         fromStation: bill.bl_from_station || bill.fromStation,
         toStation: bill.bl_to_station || bill.toStation,
         journeyDate: bill.bl_journey_date || bill.journeyDate,
@@ -1005,6 +1031,7 @@ const Billing = () => {
         customerName: billData.customerName || '',
         phoneNumber: billData.phoneNumber || '',
         stationBoy: billData.stationBoy || '',
+        stationBoyId: billData.stationBoyId || '',
         fromStation: billData.fromStation || '',
         toStation: billData.toStation || '',
         journeyDate: billData.journeyDate || '',
@@ -1069,6 +1096,7 @@ const Billing = () => {
         customerName: billData.customerName || '',
         phoneNumber: billData.phoneNumber || '',
         stationBoy: billData.stationBoy || '',
+        stationBoyId: billData.stationBoyId || '',
         fromStation: billData.fromStation || '',
         toStation: billData.toStation || '',
         journeyDate: billData.journeyDate || '',
@@ -1244,6 +1272,7 @@ const Billing = () => {
       customerName: bill.customerName || '',
       phoneNumber: bill.phoneNumber || '',
       stationBoy: bill.stationBoy || '',
+      stationBoyId: bill.stationBoyId || bill.station_boy_id || '',
       fromStation: bill.fromStation || '',
       toStation: bill.toStation || '',
       journeyDate: bill.journeyDate || '',
@@ -1294,6 +1323,7 @@ const Billing = () => {
       customerName: '',
       phoneNumber: '',
       stationBoy: '',
+      stationBoyId: '',
       fromStation: '',
       toStation: '',
       journeyDate: '', // Will be set from booking data if available
@@ -1846,17 +1876,96 @@ const Billing = () => {
                 placeholder="Enter phone number"
               />
               <label className="erp-form-label">Station Boy Name</label>
-              <input 
-                type="text" 
-                name="stationBoy" 
-                className="erp-input" 
-                value={formData.stationBoy || ''}
-                onChange={(e) => setFormData({...formData, stationBoy: e.target.value})}
-                disabled={!isEditing}
-                tabIndex={0}
-                placeholder="Enter station boy name"
-                onKeyDown={(e) => handleEnhancedTabNavigation(e, 'stationBoy')}
-              />
+              <div style={{ position: 'relative', width: '100%' }}>
+                <input 
+                  type="text" 
+                  name="stationBoy" 
+                  className="erp-input" 
+                  value={sbSearchTerm}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setSbSearchTerm(val);
+                    setSbDropdownOpen(true);
+                    setFormData({
+                      ...formData,
+                      stationBoy: val,
+                      stationBoyId: ''
+                    });
+                  }}
+                  onFocus={() => isEditing && setSbDropdownOpen(true)}
+                  onBlur={() => {
+                    setTimeout(() => {
+                      setSbDropdownOpen(false);
+                      const match = stationBoys.find(sb => sb.name.toLowerCase() === sbSearchTerm.toLowerCase());
+                      if (match) {
+                        setFormData(prev => ({
+                          ...prev,
+                          stationBoy: match.name,
+                          stationBoyId: match.id
+                        }));
+                        setSbSearchTerm(match.name);
+                      }
+                    }, 200);
+                  }}
+                  disabled={!isEditing}
+                  tabIndex={0}
+                  placeholder="Enter or select station boy"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Escape') {
+                      setSbDropdownOpen(false);
+                      e.target.blur();
+                    } else {
+                      handleEnhancedTabNavigation(e, 'stationBoy');
+                    }
+                  }}
+                />
+                {sbDropdownOpen && isEditing && (
+                  <div className="erp-dropdown-menu" style={{
+                    position: 'absolute',
+                    top: '100%',
+                    left: 0,
+                    right: 0,
+                    backgroundColor: '#fff',
+                    border: '1px solid #ccc',
+                    maxHeight: '150px',
+                    overflowY: 'auto',
+                    zIndex: 1000,
+                    boxShadow: '0 4px 8px rgba(0,0,0,0.1)'
+                  }}>
+                    {stationBoys
+                      .filter(sb => sb.name.toLowerCase().includes(sbSearchTerm.toLowerCase()))
+                      .map(sb => (
+                        <div
+                          key={sb.id}
+                          className="erp-dropdown-item"
+                          style={{
+                            padding: '6px 10px',
+                            cursor: 'pointer',
+                            color: '#333',
+                            borderBottom: '1px solid #eee'
+                          }}
+                          onMouseDown={() => {
+                            setFormData(prev => ({
+                              ...prev,
+                              stationBoy: sb.name,
+                              stationBoyId: sb.id
+                            }));
+                            setSbSearchTerm(sb.name);
+                            setSbDropdownOpen(false);
+                          }}
+                        >
+                          {sb.name}
+                        </div>
+                      ))
+                    }
+                    {stationBoys.filter(sb => sb.name.toLowerCase().includes(sbSearchTerm.toLowerCase())).length === 0 && (
+                      <div style={{ padding: '6px 10px', color: '#999', fontSize: '12px' }}>
+                        No matching station boy found
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
               <label className="erp-form-label required">From Station</label>
               <input 
                 type="text" 

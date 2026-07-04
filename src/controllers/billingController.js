@@ -1,4 +1,4 @@
-const { BillTVL, UserTVL, CustomerTVL: Customer, BookingTVL, Journal, PassengerTVL: Passenger, ForensicAuditLog, Company, Receipt, PassengerTVL, Ledger } = require('../models');
+const { BillTVL, UserTVL, CustomerTVL: Customer, BookingTVL, Journal, PassengerTVL: Passenger, ForensicAuditLog, Company, Receipt, PassengerTVL, Ledger, StationBoy } = require('../models');
 const serviceChargeService = require('../services/serviceChargeService');
 const { Sequelize, Op } = require('sequelize');
 const { sequelizeTVL } = require('../../config/db');
@@ -389,6 +389,41 @@ async function getBillPrintPayload(bill, booking, user) {
     }
   };
 }
+
+// Helper to validate and resolve Station Boy from input ID or Name snapshot
+async function resolveAndValidateStationBoy(stationBoyId, stationBoyName, isNewBill = false, currentStationBoyId = null) {
+  if (stationBoyId === null || stationBoyId === undefined || stationBoyId === '') {
+    if (!stationBoyName || !stationBoyName.trim()) {
+      return { id: null, nameSnapshot: null };
+    }
+  }
+
+  let stationBoy = null;
+  if (stationBoyId) {
+    stationBoy = await StationBoy.findByPk(stationBoyId);
+  } else if (stationBoyName && stationBoyName.trim()) {
+    stationBoy = await StationBoy.findOne({ 
+      where: { name: stationBoyName.trim() } 
+    });
+  }
+
+  if (!stationBoy) {
+    throw new Error('Invalid station boy. Please select a station boy from the Station Boy List.');
+  }
+
+  if (stationBoy.status !== 'ACTIVE') {
+    const isSameAsCurrent = currentStationBoyId && parseInt(currentStationBoyId, 10) === parseInt(stationBoy.id, 10);
+    if (isNewBill || !isSameAsCurrent) {
+      throw new Error('Invalid station boy. Please select a station boy from the Station Boy List.');
+    }
+  }
+
+  return {
+    id: stationBoy.id,
+    nameSnapshot: stationBoy.name
+  };
+}
+
 // Create a new bill (TRANSACTIONAL - AUTHORITATIVE BUSINESS FLOW)
 const createBill = async (req, res) => {
   try {
@@ -402,6 +437,7 @@ const createBill = async (req, res) => {
       customerName,
       phoneNumber,
       stationBoy,
+      stationBoyId,
       fromStation,
       toStation,
       journeyDate,
@@ -473,6 +509,9 @@ const createBill = async (req, res) => {
         throw new Error('Booking not found');
       }
 
+      // Resolve and validate Station Boy
+      const resolvedStationBoy = await resolveAndValidateStationBoy(stationBoyId, stationBoy, true);
+
       // AUTHORITATIVE RULE: Billing can only be generated for DRAFT/PENDING bookings
       // CONFIRMED bookings already have bills
       if (booking.bk_status && booking.bk_status.toUpperCase() === 'CNF') {
@@ -541,8 +580,11 @@ const createBill = async (req, res) => {
         bl_billing_date: billDate ? new Date(billDate) : new Date(), // Required billing date
         bl_customer_name: customerName,
         bl_customer_phone: phoneNumber, // Required phone field
-        bl_station_boy: stationBoy || '',
+        bl_station_boy: resolvedStationBoy.nameSnapshot || '',
         bl_from_station: fromStation || '',
+        station_boy_id: resolvedStationBoy.id,
+        station_boy_name_snapshot: resolvedStationBoy.nameSnapshot,
+        station_boy_incentive_amount: stationBoyIncentive || 0,
         bl_to_station: toStation || '',
         bl_journey_date: journeyDate && journeyDate.trim() ? new Date(journeyDate) : booking.bk_trvldt,
         bl_train_no: trainNumber,
@@ -672,6 +714,12 @@ const createBill = async (req, res) => {
       // 7. Rollback transaction on ANY error (atomicity)
       await transaction.rollback();
       console.error('❌ Transaction rolled back due to error:', error.message);
+      if (error.message && error.message.includes('Invalid station boy')) {
+        return res.status(400).json({
+          success: false,
+          message: error.message
+        });
+      }
       throw error;
     }
     
@@ -1095,35 +1143,49 @@ const updateBill = async (req, res) => {
       return res.status(400).json({ message: 'Cannot update a finalized or paid bill' });
     }
     
-    // Calculate total amount if needed
-    let totalAmount = req.body.railwayFare ? parseFloat(req.body.railwayFare) : parseFloat(bill.bl_railway_fare) || 0;
-    totalAmount += req.body.serviceCharges ? parseFloat(req.body.serviceCharges) : parseFloat(bill.bl_service_charge) || 0;
-    totalAmount += req.body.platformFees ? parseFloat(req.body.platformFees) : parseFloat(bill.bl_platform_fee) || 0;
-    totalAmount += req.body.agentFees ? parseFloat(req.body.agentFees) : parseFloat(bill.bl_agent_fees) || 0;
-
-    // Add extra charges
-    const extraCharges = req.body.extraCharges || JSON.parse(bill.extra_charges || '[]');
-    if (extraCharges && Array.isArray(extraCharges)) {
-      extraCharges.forEach(charge => {
-        if (charge.amount) {
-          totalAmount += parseFloat(charge.amount) || 0;
-        }
+    // Resolve and validate Station Boy if changing
+    const { stationBoyId, stationBoy, stationBoyIncentive } = req.body;
+    let resolvedStationBoy;
+    try {
+      resolvedStationBoy = await resolveAndValidateStationBoy(
+        stationBoyId !== undefined ? stationBoyId : null,
+        stationBoy !== undefined ? stationBoy : null,
+        false,
+        bill.station_boy_id
+      );
+    } catch (sbError) {
+      return res.status(400).json({
+        success: false,
+        message: sbError.message
       });
     }
 
-    // Apply discounts
-    const discounts = req.body.discounts || JSON.parse(bill.discounts || '[]');
-    if (discounts && Array.isArray(discounts)) {
-      discounts.forEach(discount => {
-        if (discount.amount) {
-          if (discount.type === 'PERCENTAGE') {
-            const discountAmount = (totalAmount * parseFloat(discount.amount)) / 100;
-            totalAmount -= discountAmount;
-          } else {
-            totalAmount -= parseFloat(discount.amount) || 0;
-          }
-        }
-      });
+    // Calculate total amount if needed
+    let totalAmount = req.body.totalAmount !== undefined ? parseFloat(req.body.totalAmount) : 
+                     (req.body.bl_total_amount !== undefined ? parseFloat(req.body.bl_total_amount) : null);
+    
+    if (totalAmount === null) {
+      totalAmount = req.body.railwayFare ? parseFloat(req.body.railwayFare) : parseFloat(bill.bl_railway_fare) || 0;
+      totalAmount += req.body.serviceCharges ? parseFloat(req.body.serviceCharges) : parseFloat(bill.bl_service_charge) || 0;
+      totalAmount += req.body.platformFees ? parseFloat(req.body.platformFees) : parseFloat(bill.bl_platform_fee) || 0;
+      
+      const sbIncentive = stationBoyIncentive !== undefined ? parseFloat(stationBoyIncentive) : parseFloat(bill.bl_sb_incentive) || 0;
+      totalAmount += sbIncentive;
+      
+      const gstVal = req.body.gst !== undefined ? parseFloat(req.body.gst) : parseFloat(bill.bl_gst) || 0;
+      totalAmount += gstVal;
+
+      const misc = req.body.miscCharges !== undefined ? parseFloat(req.body.miscCharges) : parseFloat(bill.bl_misc_charges) || 0;
+      totalAmount += misc;
+
+      const delivery = req.body.deliveryCharges !== undefined ? parseFloat(req.body.deliveryCharges) : parseFloat(bill.bl_delivery_charge) || 0;
+      totalAmount += delivery;
+
+      const surchargeVal = req.body.surcharge !== undefined ? parseFloat(req.body.surcharge) : parseFloat(bill.bl_surcharge) || 0;
+      totalAmount += surchargeVal;
+
+      const discountVal = req.body.discount !== undefined ? parseFloat(req.body.discount) : parseFloat(bill.bl_discount) || 0;
+      totalAmount -= discountVal;
     }
 
     // Ensure total amount is not negative
@@ -1133,8 +1195,15 @@ const updateBill = async (req, res) => {
     const billBeforeUpdate = bill.toJSON();
 
     // Update the bill
+    const incentiveAmount = stationBoyIncentive !== undefined ? parseFloat(stationBoyIncentive) : parseFloat(bill.station_boy_incentive_amount) || 0;
+
     await bill.update({
       ...req.body,
+      station_boy_id: resolvedStationBoy.id,
+      station_boy_name_snapshot: resolvedStationBoy.nameSnapshot,
+      station_boy_incentive_amount: incentiveAmount,
+      bl_station_boy: resolvedStationBoy.nameSnapshot || '',
+      bl_sb_incentive: incentiveAmount,
       bl_total_amount: totalAmount,
       bl_modified_by: convertUserIdToInt(req.user.us_usid),
       bl_modified_at: new Date(),

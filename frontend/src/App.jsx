@@ -53,6 +53,8 @@ import CustomerDetails from './pages/CustomerDetails';
 import AuditTrail from './pages/AuditTrail';
 import AuditRetentionConfig from './pages/AuditRetentionConfig';
 import CustomerLedgerPage from './pages/CustomerLedgerPage';
+import StationBoyList from './pages/admin/StationBoyList';
+import StationBoyLedger from './pages/admin/StationBoyLedger';
 
 // Import customer pages
 import MyBookings from './pages/MyBookings';
@@ -101,8 +103,8 @@ function App() {
           <div style={{
             marginTop: '20px'
           }}>
-            <Link 
-              to="/dashboard" 
+            <Link
+              to="/dashboard"
               style={{
                 backgroundColor: '#3b82f6',
                 color: 'white',
@@ -115,8 +117,8 @@ function App() {
             >
               Go to Dashboard
             </Link>
-            <Link 
-              to="/" 
+            <Link
+              to="/"
               style={{
                 backgroundColor: '#6b7280',
                 color: 'white',
@@ -140,12 +142,12 @@ function App() {
       const { user, loading } = useAuth();
       const location = useLocation();
       const isPrintRoute = location.pathname.startsWith('/print/');
-      
+
       // Show nothing while loading to prevent flash of incorrect header
       if (loading || isPrintRoute) {
         return null;
       }
-      
+
       // Show customer header only for customers, otherwise show regular header
       if (user && (user.us_roid === 'CUS')) {
         return <CustomerHeader />;
@@ -175,148 +177,150 @@ function App() {
           <PaymentProvider>
             <ReportProvider>
               <KeyboardNavigationProvider>
-              <Router future={{ 
-                v7_startTransition: true,
-                v7_relativeSplatPath: true 
-              }}>
-                <div className="App">
-                  <MessageDisplay />
-                  <ConditionalHeader />
-                  <main>
-                    <Routes>
-                      <Route path="/" element={<Home />} />
-                      
-                      {/* Authentication Routes */}
-                      <Route path="/login" element={<Login />} />
-                      <Route path="/register" element={<Register />} />
-                      <Route path="/forgot-password" element={<ForgotPassword />} />
-                      <Route path="/reset-password" element={<ResetPassword />} />
-                      
-                      {/* Legacy Routes - Protected */}
-                      <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
-                      <Route path="/bookings" element={<ProtectedRoute><Bookings /></ProtectedRoute>} />
-                      <Route path="/payments" element={<ProtectedRoute><Payments /></ProtectedRoute>} />
-                      <Route path="/reports" element={<ProtectedRoute><Reports /></ProtectedRoute>} />
-                                            <Route path="/reports/catalog" element={<ProtectedRoute><ReportCatalog /></ProtectedRoute>} />
-                      <Route path="/travel-plans" element={<ProtectedRoute><TravelPlans /></ProtectedRoute>} />
-                      <Route path="/travel-plans/:id" element={<ProtectedRoute><TravelPlanDetail /></ProtectedRoute>} />
-                      <Route path="/travel-plans/edit/:id" element={<ProtectedRoute><EditTravelPlan /></ProtectedRoute>} />
-                      <Route path="/travel-plans/new" element={<ProtectedRoute><EditTravelPlan /></ProtectedRoute>} />
-                      <Route path="/billing/cancellations" element={<RoleBasedRoute requiredModule="billing"><CancellationHistory /></RoleBasedRoute>} />
-                      <Route path="/billing" element={<RoleBasedRoute requiredModule="billing"><Billing /></RoleBasedRoute>} />
-                      <Route path="/print/bill/:billId" element={<ProtectedRoute><PrintBill /></ProtectedRoute>} />
-                      <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
-                      
-                      {/* Unauthorized Access Route */}
-                      <Route path="/unauthorized" element={<UnauthorizedPage />} />
-                      
-                      {/* Admin Routes with Role-Based Access Control */}
-                      <Route path="/admin-dashboard" element={<RoleBasedRoute requiredRole="ADM"><DynamicAdminPanel /></RoleBasedRoute>} />
-                      <Route path="/admin-panel" element={<Navigate to="/admin-dashboard" replace />} />
-                      <Route path="/admin/service-charges" element={<RoleBasedRoute requiredRole="ADM"><ServiceChargeManager /></RoleBasedRoute>} />
-                      <Route path="/admin/ledger" element={<RoleBasedRoute requiredRole="ADM"><CustomerLedgerPage /></RoleBasedRoute>} />
-                                            <Route path="/admin/customers/:customerId" element={<RoleBasedRoute requiredRole="ADM"><CustomerDetails /></RoleBasedRoute>} />
-                      <Route path="/admin/*" element={<RoleBasedRoute requiredRole="ADM"><DynamicAdminPanel /></RoleBasedRoute>} />
+                <Router future={{
+                  v7_startTransition: true,
+                  v7_relativeSplatPath: true
+                }}>
+                  <div className="App">
+                    <MessageDisplay />
+                    <ConditionalHeader />
+                    <main>
+                      <Routes>
+                        <Route path="/" element={<Home />} />
 
-                      {/* Forensic Audit Module — ADM only */}
-                      <Route path="/audit" element={<RoleBasedRoute requiredRole="ADM"><AuditTrail /></RoleBasedRoute>} />
-                      <Route path="/audit/retention" element={<RoleBasedRoute requiredRole="ADM"><AuditRetentionConfig /></RoleBasedRoute>} />
+                        {/* Authentication Routes */}
+                        <Route path="/login" element={<Login />} />
+                        <Route path="/register" element={<Register />} />
+                        <Route path="/forgot-password" element={<ForgotPassword />} />
+                        <Route path="/reset-password" element={<ResetPassword />} />
 
-                      {/* Employee Routes with Role-Based Access Control */}
-                      <Route path="/employee/dashboard" element={<RoleBasedRoute requiredModule="employee"><EmployeeDashboard /></RoleBasedRoute>} />
-                      <Route path="/employee/*" element={<RoleBasedRoute requiredModule="employee"><EmployeeDashboard /></RoleBasedRoute>} />
-                      
-                      {/* Customer Portal Routes */}
-                      <Route path="/customer/booking/new" element={<BookingForm />} />
-                      
-                      {/* Customer Routes with Role-Based Access Control */}
-                      <Route path="/customer/dashboard" element={<RoleBasedRoute requiredRole="CUS"><CustomerDashboard /></RoleBasedRoute>} />
-                      <Route path="/customer/booking/new" element={<RoleBasedRoute requiredRole="CUS"><BookingForm /></RoleBasedRoute>} />
-                      <Route path="/customer/bookings" element={<RoleBasedRoute requiredRole="CUS"><MyBookings /></RoleBasedRoute>} />
-                      <Route path="/customer/bookings/:bookingId" element={<RoleBasedRoute requiredRole="CUS"><CustomerBookingDetails /></RoleBasedRoute>} />
-                      <Route path="/customer/bills-payments" element={<RoleBasedRoute requiredRole="CUS"><BillsPayments /></RoleBasedRoute>} />
-                      <Route path="/customer/master-passengers" element={<RoleBasedRoute requiredRole="CUS"><MasterPassengerList /></RoleBasedRoute>} />
-                      <Route path="/customer/master-list" element={<RoleBasedRoute requiredRole="CUS"><MasterPassengerListML /></RoleBasedRoute>} />
-                      <Route path="/customer/profile" element={<RoleBasedRoute requiredRole="CUS"><CustomerProfile /></RoleBasedRoute>} />
-                      
-                      {/* Catch-all route for 404 handling - MUST be LAST */}
-                      <Route path="*" element={
-                        <div style={{
-                          display: 'flex',
-                          flexDirection: 'column',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          minHeight: '60vh',
-                          textAlign: 'center',
-                          padding: '20px'
-                        }}>
+                        {/* Legacy Routes - Protected */}
+                        <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+                        <Route path="/bookings" element={<ProtectedRoute><Bookings /></ProtectedRoute>} />
+                        <Route path="/payments" element={<ProtectedRoute><Payments /></ProtectedRoute>} />
+                        <Route path="/reports" element={<ProtectedRoute><Reports /></ProtectedRoute>} />
+                        <Route path="/reports/catalog" element={<ProtectedRoute><ReportCatalog /></ProtectedRoute>} />
+                        <Route path="/travel-plans" element={<ProtectedRoute><TravelPlans /></ProtectedRoute>} />
+                        <Route path="/travel-plans/:id" element={<ProtectedRoute><TravelPlanDetail /></ProtectedRoute>} />
+                        <Route path="/travel-plans/edit/:id" element={<ProtectedRoute><EditTravelPlan /></ProtectedRoute>} />
+                        <Route path="/travel-plans/new" element={<ProtectedRoute><EditTravelPlan /></ProtectedRoute>} />
+                        <Route path="/billing/cancellations" element={<RoleBasedRoute requiredModule="billing"><CancellationHistory /></RoleBasedRoute>} />
+                        <Route path="/billing" element={<RoleBasedRoute requiredModule="billing"><Billing /></RoleBasedRoute>} />
+                        <Route path="/print/bill/:billId" element={<ProtectedRoute><PrintBill /></ProtectedRoute>} />
+                        <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
+
+                        {/* Unauthorized Access Route */}
+                        <Route path="/unauthorized" element={<UnauthorizedPage />} />
+
+                        {/* Admin Routes with Role-Based Access Control */}
+                        <Route path="/admin-dashboard" element={<RoleBasedRoute requiredRole="ADM"><DynamicAdminPanel /></RoleBasedRoute>} />
+                        <Route path="/admin-panel" element={<Navigate to="/admin-dashboard" replace />} />
+                        <Route path="/admin/service-charges" element={<RoleBasedRoute requiredRole="ADM"><ServiceChargeManager /></RoleBasedRoute>} />
+                        <Route path="/admin/ledger" element={<RoleBasedRoute requiredRole="ADM"><CustomerLedgerPage /></RoleBasedRoute>} />
+                        <Route path="/admin/station-boys" element={<RoleBasedRoute requiredRole="ADM"><StationBoyList /></RoleBasedRoute>} />
+                        <Route path="/admin/station-boys/:id/ledger" element={<RoleBasedRoute requiredRole="ADM"><StationBoyLedger /></RoleBasedRoute>} />
+                        <Route path="/admin/customers/:customerId" element={<RoleBasedRoute requiredRole="ADM"><CustomerDetails /></RoleBasedRoute>} />
+                        <Route path="/admin/*" element={<RoleBasedRoute requiredRole="ADM"><DynamicAdminPanel /></RoleBasedRoute>} />
+
+                        {/* Forensic Audit Module — ADM only */}
+                        <Route path="/audit" element={<RoleBasedRoute requiredRole="ADM"><AuditTrail /></RoleBasedRoute>} />
+                        <Route path="/audit/retention" element={<RoleBasedRoute requiredRole="ADM"><AuditRetentionConfig /></RoleBasedRoute>} />
+
+                        {/* Employee Routes with Role-Based Access Control */}
+                        <Route path="/employee/dashboard" element={<RoleBasedRoute requiredModule="employee"><EmployeeDashboard /></RoleBasedRoute>} />
+                        <Route path="/employee/*" element={<RoleBasedRoute requiredModule="employee"><EmployeeDashboard /></RoleBasedRoute>} />
+
+                        {/* Customer Portal Routes */}
+                        <Route path="/customer/booking/new" element={<BookingForm />} />
+
+                        {/* Customer Routes with Role-Based Access Control */}
+                        <Route path="/customer/dashboard" element={<RoleBasedRoute requiredRole="CUS"><CustomerDashboard /></RoleBasedRoute>} />
+                        <Route path="/customer/booking/new" element={<RoleBasedRoute requiredRole="CUS"><BookingForm /></RoleBasedRoute>} />
+                        <Route path="/customer/bookings" element={<RoleBasedRoute requiredRole="CUS"><MyBookings /></RoleBasedRoute>} />
+                        <Route path="/customer/bookings/:bookingId" element={<RoleBasedRoute requiredRole="CUS"><CustomerBookingDetails /></RoleBasedRoute>} />
+                        <Route path="/customer/bills-payments" element={<RoleBasedRoute requiredRole="CUS"><BillsPayments /></RoleBasedRoute>} />
+                        <Route path="/customer/master-passengers" element={<RoleBasedRoute requiredRole="CUS"><MasterPassengerList /></RoleBasedRoute>} />
+                        <Route path="/customer/master-list" element={<RoleBasedRoute requiredRole="CUS"><MasterPassengerListML /></RoleBasedRoute>} />
+                        <Route path="/customer/profile" element={<RoleBasedRoute requiredRole="CUS"><CustomerProfile /></RoleBasedRoute>} />
+
+                        {/* Catch-all route for 404 handling - MUST be LAST */}
+                        <Route path="*" element={
                           <div style={{
-                            backgroundColor: '#fef2f2',
-                            border: '1px solid #fecaca',
-                            borderRadius: '8px',
-                            padding: '30px',
-                            maxWidth: '500px',
-                            width: '100%'
+                            display: 'flex',
+                            flexDirection: 'column',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            minHeight: '60vh',
+                            textAlign: 'center',
+                            padding: '20px'
                           }}>
-                            <h1 style={{
-                              color: '#dc2626',
-                              fontSize: '2rem',
-                              marginBottom: '15px'
-                            }}>
-                              Page Not Found
-                            </h1>
-                            <p style={{
-                              color: '#6b7280',
-                              fontSize: '16px',
-                              marginBottom: '20px'
-                            }}>
-                              The page you're looking for doesn't exist.
-                            </p>
                             <div style={{
-                              marginTop: '20px'
+                              backgroundColor: '#fef2f2',
+                              border: '1px solid #fecaca',
+                              borderRadius: '8px',
+                              padding: '30px',
+                              maxWidth: '500px',
+                              width: '100%'
                             }}>
-                              <Link 
-                                to="/dashboard" 
-                                style={{
-                                  backgroundColor: '#3b82f6',
-                                  color: 'white',
-                                  padding: '10px 20px',
-                                  borderRadius: '6px',
-                                  textDecoration: 'none',
-                                  marginRight: '10px',
-                                  display: 'inline-block'
-                                }}
-                              >
-                                Go to Dashboard
-                              </Link>
-                              <Link 
-                                to="/" 
-                                style={{
-                                  backgroundColor: '#6b7280',
-                                  color: 'white',
-                                  padding: '10px 20px',
-                                  borderRadius: '6px',
-                                  textDecoration: 'none',
-                                  display: 'inline-block'
-                                }}
-                              >
-                                Go Home
-                              </Link>
+                              <h1 style={{
+                                color: '#dc2626',
+                                fontSize: '2rem',
+                                marginBottom: '15px'
+                              }}>
+                                Page Not Found
+                              </h1>
+                              <p style={{
+                                color: '#6b7280',
+                                fontSize: '16px',
+                                marginBottom: '20px'
+                              }}>
+                                The page you're looking for doesn't exist.
+                              </p>
+                              <div style={{
+                                marginTop: '20px'
+                              }}>
+                                <Link
+                                  to="/dashboard"
+                                  style={{
+                                    backgroundColor: '#3b82f6',
+                                    color: 'white',
+                                    padding: '10px 20px',
+                                    borderRadius: '6px',
+                                    textDecoration: 'none',
+                                    marginRight: '10px',
+                                    display: 'inline-block'
+                                  }}
+                                >
+                                  Go to Dashboard
+                                </Link>
+                                <Link
+                                  to="/"
+                                  style={{
+                                    backgroundColor: '#6b7280',
+                                    color: 'white',
+                                    padding: '10px 20px',
+                                    borderRadius: '6px',
+                                    textDecoration: 'none',
+                                    display: 'inline-block'
+                                  }}
+                                >
+                                  Go Home
+                                </Link>
+                              </div>
                             </div>
                           </div>
-                        </div>
-                      } />
-                    </Routes>
-                  </main>
-                  <ConditionalFooter />
-                </div>
-              </Router>
-            </KeyboardNavigationProvider>
-          </ReportProvider>
-        </PaymentProvider>
-      </BookingProvider>
-    </RealTimeProvider>
-  </AuthProvider>
+                        } />
+                      </Routes>
+                    </main>
+                    <ConditionalFooter />
+                  </div>
+                </Router>
+              </KeyboardNavigationProvider>
+            </ReportProvider>
+          </PaymentProvider>
+        </BookingProvider>
+      </RealTimeProvider>
+    </AuthProvider>
   );
 }
 

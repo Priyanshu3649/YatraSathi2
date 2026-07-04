@@ -184,7 +184,7 @@ const RoleBasedRoute = ({ children, requiredRole, requiredModule, requiredOperat
   const [hasAccess, setHasAccess] = useState(null);
   
   // Use the auth context directly
-  const { user, isAuthenticated, loading } = useAuth();
+  const { user, isAuthenticated, loading, selectedFinancialYear } = useAuth();
 
   useEffect(() => {
     if (loading) return;
@@ -237,6 +237,11 @@ const RoleBasedRoute = ({ children, requiredRole, requiredModule, requiredOperat
 
   if (!isAuthenticated) {
     // Redirect to unified login page for all users
+    return <Navigate to="/login" state={{ from: location }} replace />;
+  }
+
+  // If authenticated but no financial year selected, redirect to login page for session selection
+  if (!selectedFinancialYear && location.pathname !== '/login') {
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 

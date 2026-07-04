@@ -1,5 +1,5 @@
 import React, { createContext, useState, useContext, useEffect } from 'react';
-import { authAPI } from '../services/api';
+import { authAPI, sessionAPI } from '../services/api';
 
 // Create Auth Context
 const AuthContext = createContext();
@@ -8,6 +8,8 @@ export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [selectedFinancialYear, setSelectedFinancialYear] = useState(localStorage.getItem('financialYear') || null);
+  const [availableFinancialYears, setAvailableFinancialYears] = useState([]);
 
   // Check if user is logged in on initial load
   useEffect(() => {
@@ -140,8 +142,11 @@ export const AuthProvider = ({ children }) => {
       localStorage.removeItem('token');
       localStorage.removeItem('user');
       localStorage.removeItem('sessionId');
+      localStorage.removeItem('financialYear');
       setUser(null);
       setIsAuthenticated(false);
+      setSelectedFinancialYear(null);
+      setAvailableFinancialYears([]);
       setLoading(false); // Ensure loading is false after logout
     }
   };
@@ -152,7 +157,19 @@ export const AuthProvider = ({ children }) => {
     loading,
     isAuthenticated,
     login,
-    logout
+    logout,
+    selectedFinancialYear,
+    setSelectedFinancialYear,
+    availableFinancialYears,
+    setAvailableFinancialYears,
+    selectFinancialYear: (fy) => {
+      localStorage.setItem('financialYear', fy);
+      setSelectedFinancialYear(fy);
+    },
+    clearFinancialYear: () => {
+      localStorage.removeItem('financialYear');
+      setSelectedFinancialYear(null);
+    }
   };
 
   return (

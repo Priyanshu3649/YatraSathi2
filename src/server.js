@@ -30,6 +30,27 @@ app.use(cors({
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+const { run: runInDbContext, getDbNameForFY, cacheFYs } = require('./utils/dbContext');
+
+// Populates initial financial year cache on startup
+cacheFYs();
+
+// Global middleware to handle financial year database switching context
+app.use(async (req, res, next) => {
+  const fy = req.header('X-Financial-Year');
+  if (fy) {
+    try {
+      const dbName = await getDbNameForFY(fy);
+      if (dbName) {
+        return runInDbContext(dbName, next);
+      }
+    } catch (err) {
+      console.error('Error resolving database name for financial year:', err.message);
+    }
+  }
+  next();
+});
+
 // Universal audit middleware — attaches req.audit helpers for forensic logging
 const auditMiddleware = require('./middleware/auditMiddleware');
 app.use(auditMiddleware.attach);
@@ -58,6 +79,7 @@ require('./models');
 
 // Import routes
 const authRoutes = require('./routes/authRoutes');
+const sessionRoutes = require('./routes/sessionRoutes');
 const travelPlanRoutes = require('./routes/travelPlanRoutes');
 const reportRoutes = require('./routes/reportRoutes');
 const dashboardRoutes = require('./routes/dashboardRoutes');
@@ -92,12 +114,14 @@ const profileRoutes = require('./routes/profileRoutes');
 const accountingRoutes = require('./routes/accountingRoutes');
 const passengerRoutes = require('./routes/passengerRoutes');
 const healthRoutes = require('./routes/healthRoutes');
+const stationBoyRoutes = require('./routes/stationBoyRoutes');
 
 // Use routes
 if (process.env.NODE_ENV === 'development') {
   console.log('Registering auth routes');
 }
 app.use('/api/auth', authRoutes);
+app.use('/api/session', sessionRoutes);
 app.use('/api/security', securityRoutes);
 if (process.env.NODE_ENV === 'development') {
   console.log('Auth routes registered');
@@ -144,6 +168,7 @@ app.use('/api/profile', profileRoutes);
 app.use('/api/accounting', accountingRoutes);
 app.use('/api/passengers', passengerRoutes);
 app.use('/api/health', healthRoutes);
+app.use('/api/station-boys', stationBoyRoutes);
 
 // 404 handler
 app.use(notFound);
@@ -177,7 +202,7 @@ connectDB().then(async () => {
     // Continue startup even if performance optimizations fail
   }
   console.log('Database connection established');
-  
+
   // Schedule nightly financial ledger integrity checks
   try {
     const { runValidation } = require('./scripts/nightly-validation');
@@ -186,7 +211,7 @@ connectDB().then(async () => {
   } catch (scheduleErr) {
     console.error('Failed to schedule nightly integrity checks:', scheduleErr.message);
   }
-  
+
   const PORT = process.env.PORT || 5004;
 
   let server;
@@ -220,12 +245,12 @@ connectDB().then(async () => {
   // Initialize Real-Time Service
   const RealTimeService = require('./services/realTimeService');
   RealTimeService.init(io);
-  
+
   server.on('listening', () => {
     const address = server.address();
     console.log(`Server is listening on:`, address);
   });
-  
+
   server.on('error', (error) => {
     console.error('Server error:', error);
     if (error.code === 'EADDRINUSE') {
@@ -234,7 +259,7 @@ connectDB().then(async () => {
     }
   });
 })
-.catch((error) => {
-  console.error('Failed to connect to database:', error);
-  process.exit(1);
-});
+  .catch((error) => {
+    console.error('Failed to connect to database:', error);
+    process.exit(1);
+  });

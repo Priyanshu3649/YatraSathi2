@@ -80,6 +80,18 @@ const BillingMaster = sequelizeTVL.define('billingMaster', {
     type: DataTypes.DECIMAL(10, 2),
     defaultValue: 0
   },
+  station_boy_id: {
+    type: DataTypes.INTEGER,
+    allowNull: true
+  },
+  station_boy_name_snapshot: {
+    type: DataTypes.STRING(150),
+    allowNull: true
+  },
+  station_boy_incentive_amount: {
+    type: DataTypes.DECIMAL(10, 2),
+    defaultValue: 0
+  },
   bl_gst: {
     type: DataTypes.DECIMAL(10, 2),
     defaultValue: 0

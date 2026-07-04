@@ -14,6 +14,31 @@ const BillingMasterForm = ({
   // State for save confirmation modal
   const [showSaveModal, setShowSaveModal] = useState(false);
 
+  const [stationBoys, setStationBoys] = useState([]);
+  const [isOpen, setIsOpen] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+
+  // Fetch active station boys on mount
+  useEffect(() => {
+    const fetchActive = async () => {
+      try {
+        const { stationBoyAPI } = await import('../../services/api');
+        const res = await stationBoyAPI.getActive();
+        if (res && res.success) {
+          setStationBoys(res.data || []);
+        }
+      } catch (err) {
+        console.error('Failed to fetch active station boys:', err);
+      }
+    };
+    fetchActive();
+  }, []);
+
+  // Update search term when parent changes formData.stationBoy
+  useEffect(() => {
+    setSearchTerm(formData.stationBoy || '');
+  }, [formData.stationBoy]);
+
   // Handle field changes
   const handleChange = (field, value) => {
     onChange({ ...formData, [field]: value });
@@ -247,42 +272,94 @@ const BillingMasterForm = ({
           </div>
 
           {/* Station Boy */}
-          <div className="field">
+          <div className="field" style={{ position: 'relative' }}>
             <label className="label">Station Boy</label>
-            <select
+            <input
+              type="text"
               className="erp-input"
-              value={formData.stationBoy || ''}
-              onChange={(e) => handleChange('stationBoy', e.target.value)}
-              disabled={!isEditing}
-              onFocus={() => handleFocus('stationBoy')}
-              onBlur={(e) => handleBlur('stationBoy', e.target.value)}
-              onKeyDown={(e) => {
-                // Handle arrow keys for dropdown navigation
-                if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
-                  // Let the browser handle native dropdown behavior
-                  return;
-                }
-                // Handle Enter to select option
-                if (e.key === 'Enter') {
-                  // Let the browser handle native dropdown behavior
-                  return;
-                }
-                // Handle Escape to close dropdown
-                if (e.key === 'Escape') {
-                  e.target.blur();
-                  return;
-                }
-                handleKeyDown(e, 'stationBoy');
+              value={searchTerm}
+              onChange={(e) => {
+                const val = e.target.value;
+                setSearchTerm(val);
+                setIsOpen(true);
+                onChange({
+                  ...formData,
+                  stationBoy: val,
+                  stationBoyId: ''
+                });
               }}
-            >
-              <option value="">Select Station Boy</option>
-              <option value="Ramesh">Ramesh</option>
-              <option value="Suresh">Suresh</option>
-              <option value="Mahesh">Mahesh</option>
-              <option value="Rajesh">Rajesh</option>
-              <option value="Vijay">Vijay</option>
-              <option value="Amit">Amit</option>
-            </select>
+              onFocus={() => isEditing && setIsOpen(true)}
+              onBlur={() => {
+                setTimeout(() => {
+                  setIsOpen(false);
+                  const match = stationBoys.find(sb => sb.name.toLowerCase() === searchTerm.toLowerCase());
+                  if (match) {
+                    onChange({
+                      ...formData,
+                      stationBoy: match.name,
+                      stationBoyId: match.id
+                    });
+                    setSearchTerm(match.name);
+                  }
+                }, 200);
+              }}
+              disabled={!isEditing}
+              placeholder="Search station boy..."
+              onKeyDown={(e) => {
+                if (e.key === 'Escape') {
+                  setIsOpen(false);
+                  e.target.blur();
+                } else {
+                  handleKeyDown(e, 'stationBoy');
+                }
+              }}
+            />
+            {isOpen && isEditing && (
+              <div className="erp-dropdown-menu" style={{
+                position: 'absolute',
+                top: '100%',
+                left: 0,
+                right: 0,
+                backgroundColor: '#fff',
+                border: '1px solid #ccc',
+                maxHeight: '150px',
+                overflowY: 'auto',
+                zIndex: 1000,
+                boxShadow: '0 4px 8px rgba(0,0,0,0.1)'
+              }}>
+                {stationBoys
+                  .filter(sb => sb.name.toLowerCase().includes(searchTerm.toLowerCase()))
+                  .map(sb => (
+                    <div
+                      key={sb.id}
+                      className="erp-dropdown-item"
+                      style={{
+                        padding: '6px 10px',
+                        cursor: 'pointer',
+                        color: '#333',
+                        borderBottom: '1px solid #eee'
+                      }}
+                      onMouseDown={() => {
+                        onChange({
+                          ...formData,
+                          stationBoy: sb.name,
+                          stationBoyId: sb.id
+                        });
+                        setSearchTerm(sb.name);
+                        setIsOpen(false);
+                      }}
+                    >
+                      {sb.name}
+                    </div>
+                  ))
+                }
+                {stationBoys.filter(sb => sb.name.toLowerCase().includes(searchTerm.toLowerCase())).length === 0 && (
+                  <div style={{ padding: '6px 10px', color: '#999', fontSize: '12px' }}>
+                    No matching station boy found
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           {/* From Station */}
