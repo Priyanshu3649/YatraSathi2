@@ -10,10 +10,10 @@ import '../styles/dynamic-admin-panel.css';
 
 const API_BASE_URL = '/api';
 
-const DynamicAdminPanel = () => {
+const DynamicAdminPanel = ({ initialModule = 'applications' }) => {
   const { user } = useAuth();
   const navigate = useNavigate();
-  const [activeModule, setActiveModule] = useState('applications');
+  const [activeModule, setActiveModule] = useState(initialModule);
   const [data, setData] = useState([]);
   const [filteredData, setFilteredData] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -272,6 +272,23 @@ const DynamicAdminPanel = () => {
       columnLabels: ['Customer No', 'Name', 'Email', 'Phone', 'Type', 'Company', 'Status', 'Registered On'],
       columnWidths: ['120px', '180px', '200px', '130px', '100px', '150px', '80px', '150px'],
       filterFields: ['cu_custno', 'cu_name', 'cu_email', 'cu_custtype', 'cu_status']
+    },
+    stationBoys: {
+      name: 'Station Boys',
+      endpoint: '/station-boys',
+      fields: [
+        { name: 'name', label: 'Name', type: 'text', required: true, maxLength: 100 },
+        { name: 'phone', label: 'Phone', type: 'tel', maxLength: 15 },
+        { name: 'address', label: 'Address', type: 'textarea' },
+        { name: 'status', label: 'Status', type: 'select', required: true, defaultValue: 'ACTIVE', options: [
+          { value: 'ACTIVE', label: 'ACTIVE' },
+          { value: 'INACTIVE', label: 'INACTIVE' }
+        ]}
+      ],
+      columns: ['id', 'name', 'phone', 'address', 'status', 'totalIncentive', 'totalPaid', 'pendingPayable'],
+      columnLabels: ['ID', 'Name', 'Phone', 'Address', 'Status', 'Total Incentive', 'Total Paid', 'Pending'],
+      columnWidths: ['80px', '200px', '130px', '200px', '100px', '120px', '120px', '120px'],
+      filterFields: ['name', 'phone', 'status']
     },
     employees: {
       name: 'Employee Management',
@@ -1377,8 +1394,16 @@ const DynamicAdminPanel = () => {
         <div className="erp-tool-separator"></div>
         <button className="erp-button" onClick={handleSave} disabled={!isEditing}>Save</button>
         <button className="erp-button" onClick={fetchData}>Refresh</button>
-        {activeModule === 'customers' && selectedRecord && (
-          <button className="erp-button" style={{ background: '#1565c0', color: '#fff' }} onClick={() => navigate(`/admin/customers/${selectedRecord.cu_cusid || selectedRecord.cu_usid || selectedRecord.cu_custno}`)}>View Details</button>
+        {['customers', 'stationBoys'].includes(activeModule) && selectedRecord && (
+          <button className="erp-button" style={{ background: '#1565c0', color: '#fff' }} onClick={() => {
+            if (activeModule === 'customers') {
+              navigate(`/admin/customers/${selectedRecord.cu_cusid || selectedRecord.cu_usid || selectedRecord.cu_custno}`);
+            } else if (activeModule === 'stationBoys') {
+              navigate(`/admin/station-boys/${selectedRecord.id}/ledger`);
+            }
+          }}>
+            {activeModule === 'customers' ? 'View Details' : 'View Ledger'}
+          </button>
         )}
         <div className="erp-tool-separator"></div>
         <button className="erp-button" onClick={handleExportPDF} disabled={loading} title="Export current view to PDF">Export PDF</button>
@@ -1484,6 +1509,12 @@ const DynamicAdminPanel = () => {
                   onClick={() => handleModuleChange('employees')}
                 >
                   Employee Management
+                </div>
+                <div 
+                  className={`erp-nav-item sub-item ${activeModule === 'stationBoys' ? 'active' : ''}`}
+                  onClick={() => handleModuleChange('stationBoys')}
+                >
+                  Station Boys (NEW)
                 </div>
               </>
             )}

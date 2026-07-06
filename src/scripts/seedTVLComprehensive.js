@@ -6,8 +6,6 @@ const {
   RoleTVL,
   ApplicationTVL,
   ModuleTVL,
-  PermissionTVL,
-  RolePermissionTVL,
   UserTVL,
   LoginTVL,
   EmployeeTVL,
@@ -128,7 +126,7 @@ async function seedTVLComprehensive() {
     const applications = [];
     for (let i = 1; i <= 100; i++) {
       applications.push({
-        ap_apid: `APP${String(i).padStart(1, '0')}`,
+        ap_apid: `APP${String(i).padStart(2, '0')}`,
         ap_apshort: `APP${i}`,
         ap_apdesc: `Application ${i}`,
         ap_active: 1,
@@ -149,7 +147,7 @@ async function seedTVLComprehensive() {
     for (let i = 1; i <= 150; i++) {
       modules.push({
         mo_apid: random.pick(applications).ap_apid,
-        mo_moid: `MOD${String(i).padStart(1, '0')}`,
+        mo_moid: `MOD${String(i).padStart(2, '0')}`,
         mo_moshort: `MOD${i}`,
         mo_modesc: `Module ${i}`,
         mo_active: 1,
@@ -170,22 +168,25 @@ async function seedTVLComprehensive() {
     const logins = [];
     const employees = [];
     const customers = [];
-    const salt = await bcrypt.genSalt(10);
+    const saltRounds = 10;
+    const salt = await bcrypt.genSalt(saltRounds);
     for (let i = 1; i <= 200; i++) {
       const userType = i <= 50 ? 'admin' : (i <= 100 ? 'employee' : 'customer');
       const prefix = userType === 'admin' ? 'ADM' : (userType === 'employee' ? 'EMP' : 'CUS');
       const userId = `${prefix}${String(i).padStart(4, '0')}`;
       const firstName = random.pick(firstNames);
       const lastName = random.pick(lastNames);
+      const email = `${firstName.toLowerCase()}.${lastName.toLowerCase()}${i}@example.com`;
 
       // Add to users array
       users.push({
         us_usid: userId,
+        us_usname: `${firstName} ${lastName}`,
         us_fname: firstName,
         us_lname: lastName,
-        us_email: `${firstName.toLowerCase()}.${lastName.toLowerCase()}${i}@example.com`,
+        us_email: email,
         us_phone: `+91${random.int(9000000000, 9999999999)}`,
-        us_usertype: userType,
+        us_usertype: userType.toUpperCase(),
         us_roid: random.pick(roles).fn_fnid,
         us_coid: random.pick(companies).co_coid,
         us_active: 1,
@@ -198,14 +199,15 @@ async function seedTVLComprehensive() {
       // Add to logins array
       logins.push({
         lg_usid: userId,
-        lg_email: `${firstName.toLowerCase()}.${lastName.toLowerCase()}${i}@example.com`,
+        lg_email: email,
         lg_passwd: await bcrypt.hash('password123', salt),
+        lg_salt: salt,
         lg_active: 1,
         lg_email_verified: 1,
-        lg_edtm: new Date(),
-        lg_eby: 'SEEDER',
-        lg_mdtm: new Date(),
-        lg_mby: 'SEEDER'
+        edtm: new Date(),
+        eby: 'SEEDER',
+        mdtm: new Date(),
+        mby: 'SEEDER'
       });
 
       // Add to employees or customers array
@@ -213,25 +215,25 @@ async function seedTVLComprehensive() {
         employees.push({
           em_usid: userId,
           em_empno: `EMP${String(i).padStart(4, '0')}`,
-          em_dept: random.pick(['Sales', 'Marketing', 'Operations', 'Finance', 'Support']),
-          em_desg: random.pick(['Executive', 'Senior Executive', 'Manager', 'Assistant Manager', 'Director']),
+          em_dept: random.pick(['SALES', 'MARKETING', 'OPERATIONS', 'FINANCE', 'SUPPORT']),
+          em_salary: random.float(20000, 100000),
+          em_joindt: random.date(),
           em_status: 'ACTIVE',
-          em_edtm: new Date(),
-          em_eby: 'SEEDER',
-          em_mdtm: new Date(),
-          em_mby: 'SEEDER'
+          edtm: new Date(),
+          eby: 'SEEDER',
+          mdtm: new Date(),
+          mby: 'SEEDER'
         });
       } else {
         customers.push({
+          cu_cusid: userId,
           cu_usid: userId,
-          cu_customerno: `CUS${String(i).padStart(4, '0')}`,
-          cu_type: random.pick(['Individual', 'Corporate']),
+          cu_custno: `CUS${String(i).padStart(4, '0')}`,
+          cu_custtype: random.pick(['INDIVIDUAL', 'CORPORATE']),
           cu_creditlimit: random.float(10000, 500000),
-          cu_status: 'ACTIVE',
-          cu_edtm: new Date(),
-          cu_eby: 'SEEDER',
-          cu_mdtm: new Date(),
-          cu_mby: 'SEEDER'
+          cu_active: 1,
+          status: 'OPEN',
+          entered_on: new Date()
         });
       }
     }
@@ -255,13 +257,14 @@ async function seedTVLComprehensive() {
     for (let i = 1; i <= 150; i++) {
       stations.push({
         st_stid: `ST${String(i).padStart(3, '0')}`,
+        st_stcode: `STC${String(i).padStart(3, '0')}`,
         st_stname: `${random.pick(cities)} Station ${i}`,
         st_city: random.pick(cities),
-        st_active: 1,
-        st_edtm: new Date(),
-        st_eby: 'SEEDER',
-        st_mdtm: new Date(),
-        st_mby: 'SEEDER'
+        st_state: random.pick(['Maharashtra', 'Delhi', 'Karnataka', 'Telangana', 'Tamil Nadu']),
+        edtm: new Date(),
+        eby: 'SEEDER',
+        mdtm: new Date(),
+        mby: 'SEEDER'
       });
     }
     const createdStations = await StationTVL.bulkCreate(stations);
@@ -275,19 +278,20 @@ async function seedTVLComprehensive() {
     for (let i = 1; i <= 120; i++) {
       const fromSt = random.pick(stations);
       let toSt = random.pick(stations);
-      while (toSt.st_stid === fromSt.st_stid) {
+      while (toSt.st_stcode === fromSt.st_stcode) {
         toSt = random.pick(stations);
       }
       trains.push({
         tr_trid: `TR${String(i).padStart(4, '0')}`,
+        tr_trno: `TRN${String(i).padStart(4, '0')}`,
         tr_trname: `Express ${i}`,
-        tr_fromst: fromSt.st_stid,
-        tr_tost: toSt.st_stid,
+        tr_fromst: fromSt.st_stcode,
+        tr_tost: toSt.st_stcode,
         tr_active: 1,
-        tr_edtm: new Date(),
-        tr_eby: 'SEEDER',
-        tr_mdtm: new Date(),
-        tr_mby: 'SEEDER'
+        edtm: new Date(),
+        eby: 'SEEDER',
+        mdtm: new Date(),
+        mby: 'SEEDER'
       });
     }
     const createdTrains = await TrainTVL.bulkCreate(trains);
@@ -301,26 +305,32 @@ async function seedTVLComprehensive() {
     for (let i = 1; i <= 200; i++) {
       const fromSt = random.pick(stations);
       let toSt = random.pick(stations);
-      while (toSt.st_stid === fromSt.st_stid) {
+      while (toSt.st_stcode === fromSt.st_stcode) {
         toSt = random.pick(stations);
       }
-      bookings.push({
-        bk_bkid: i,
+      const booking = {
         bk_bkno: `BK${String(i).padStart(6, '0')}`,
         bk_usid: random.pick(customers).cu_usid,
-        bk_fromst: fromSt.st_stid,
-        bk_tost: toSt.st_stid,
+        bk_fromst: fromSt.st_stcode,
+        bk_tost: toSt.st_stcode,
         bk_trvldt: random.date(),
         bk_class: random.pick(['1A', '2A', '3A', 'SL']),
         bk_status: random.pick(bookingStatuses),
-        bk_edtm: new Date(),
-        bk_eby: random.pick(employees).em_usid,
-        bk_mdtm: new Date(),
-        bk_mby: random.pick(employees).em_usid
-      });
+        edtm: new Date(),
+        eby: random.pick(employees).em_usid,
+        mdtm: new Date(),
+        mby: random.pick(employees).em_usid
+      };
+      bookings.push(booking);
     }
     const createdBookings = await BookingTVL.bulkCreate(bookings);
     report.tables.push({ name: 'BookingTVL', rows: createdBookings.length, pass: createdBookings.length >= 100 });
+
+    // We need to get the created bookings so we have their actual bk_bkid values!
+    // Because BookingTVL uses auto-increment, we can't hard-code bk_bkid
+    // So let's fetch the bookings we just created!
+    const createdBookingsList = await BookingTVL.findAll({ attributes: ['bk_bkid'] });
+    const bookingIds = createdBookingsList.map(b => b.bk_bkid);
 
     // --------------------------
     // 9. PassengerTVL
@@ -328,16 +338,18 @@ async function seedTVLComprehensive() {
     console.log('\n📦 Seeding PassengerTVL...');
     const passengers = [];
     for (let i = 1; i <= 400; i++) {
+      const fname = random.pick(firstNames);
+      const lname = random.pick(lastNames);
       passengers.push({
-        ps_psid: i,
-        ps_bkid: random.pick(bookings).bk_bkid,
-        ps_name: `${random.pick(firstNames)} ${random.pick(lastNames)}`,
+        ps_bkid: random.pick(bookingIds),
+        ps_fname: fname,
+        ps_lname: lname,
         ps_age: random.int(1, 80),
-        ps_gender: random.pick(['M', 'F']),
-        ps_edtm: new Date(),
-        ps_eby: 'SEEDER',
-        ps_mdtm: new Date(),
-        ps_mby: 'SEEDER'
+        ps_gender: random.pick(['M', 'F', 'O']),
+        edtm: new Date(),
+        eby: 'SEEDER',
+        mdtm: new Date(),
+        mby: 'SEEDER'
       });
     }
     const createdPassengers = await PassengerTVL.bulkCreate(passengers);
@@ -349,21 +361,27 @@ async function seedTVLComprehensive() {
     console.log('\n📦 Seeding AccountTVL...');
     const accounts = [];
     for (let i = 1; i <= 150; i++) {
+      const totalAmt = random.float(1000, 50000);
+      const receivedAmt = random.float(0, totalAmt);
       accounts.push({
-        ac_acid: i,
-        ac_bkid: random.pick(bookings).bk_bkid,
+        ac_bkid: random.pick(bookingIds),
         ac_usid: random.pick(customers).cu_usid,
-        ac_amount: random.float(1000, 50000),
-        ac_type: random.pick(['DEBIT', 'CREDIT']),
-        ac_status: random.pick(['PENDING', 'PAID', 'CANCELLED']),
-        ac_edtm: new Date(),
-        ac_eby: 'SEEDER',
-        ac_mdtm: new Date(),
-        ac_mby: 'SEEDER'
+        ac_totamt: totalAmt,
+        ac_rcvdamt: receivedAmt,
+        ac_pendamt: totalAmt - receivedAmt,
+        ac_status: receivedAmt >= totalAmt ? 'PAID' : random.pick(['PENDING', 'PAID']),
+        edtm: new Date(),
+        eby: 'SEEDER',
+        mdtm: new Date(),
+        mby: 'SEEDER'
       });
     }
     const createdAccounts = await AccountTVL.bulkCreate(accounts);
     report.tables.push({ name: 'AccountTVL', rows: createdAccounts.length, pass: createdAccounts.length >= 100 });
+
+    // Get created accounts' ac_acid values
+    const createdAccountsList = await AccountTVL.findAll({ attributes: ['ac_acid'] });
+    const accountIds = createdAccountsList.map(a => a.ac_acid);
 
     // --------------------------
     // 11. PaymentTVL
@@ -371,17 +389,21 @@ async function seedTVLComprehensive() {
     console.log('\n📦 Seeding PaymentTVL...');
     const payments = [];
     for (let i = 1; i <= 180; i++) {
+      const amount = random.float(1000, 50000);
       payments.push({
-        pt_ptid: i,
-        pt_bkid: random.pick(bookings).bk_bkid,
-        pt_acid: random.pick(accounts).ac_acid,
-        pt_amount: random.float(1000, 50000),
-        pt_status: random.pick(['PAID', 'PENDING', 'FAILED']),
+        pt_custid: i, // We'll just use i for now
+        pt_totalamt: amount,
+        pt_amount: amount,
+        pt_acid: random.pick(accountIds),
+        pt_mode: random.pick(['CASH', 'UPI', 'NET_BANKING', 'CARD']),
+        pt_status: random.pick(['RECEIVED', 'PENDING']),
         pt_paydt: random.date(),
-        pt_edtm: new Date(),
-        pt_eby: 'SEEDER',
-        pt_mdtm: new Date(),
-        pt_mby: 'SEEDER'
+        pt_finyear: '2024-25',
+        pt_period: '2024-07',
+        edtm: new Date(),
+        eby: 'SEEDER',
+        mdtm: new Date(),
+        mby: 'SEEDER'
       });
     }
     const createdPayments = await PaymentTVL.bulkCreate(payments);
@@ -393,14 +415,19 @@ async function seedTVLComprehensive() {
     console.log('\n📦 Seeding YearEndClosingTVL...');
     const yearEndClosings = [];
     for (let i = 1; i <= 110; i++) {
+      const year = 2020 + (i % 10);
       yearEndClosings.push({
-        ye_yeid: i,
-        ye_year: 2020 + i,
+        ye_fyear: `${year}-${(year + 1) % 100}`,
+        ye_closing_date: new Date(year, 11, 31),
+        ye_total_pending_receivables: random.float(100000, 1000000),
+        ye_total_advance_balance: random.float(50000, 500000),
+        ye_total_customers: customers.length,
+        ye_total_pending_pnrs: random.int(10, 500),
         ye_status: i <= 5 ? 'COMPLETED' : 'PENDING',
-        ye_edtm: new Date(),
-        ye_eby: 'SEEDER',
-        ye_mdtm: new Date(),
-        ye_mby: 'SEEDER'
+        edtm: new Date(),
+        eby: 'SEEDER',
+        mdtm: new Date(),
+        mby: 'SEEDER'
       });
     }
     const createdYearEndClosings = await YearEndClosingTVL.bulkCreate(yearEndClosings);
@@ -446,8 +473,8 @@ async function seedTVLComprehensive() {
 
   } catch (error) {
     console.error('\n❌ Seeding failed!');
-    console.error(error);
-    if (error.stack) console.error(error.stack);
+    console.error('Error:', error);
+    if (error.stack) console.error('Stack:', error.stack);
     report.overallPass = false;
   } finally {
     if (connection) await connection.end();

@@ -124,11 +124,11 @@ const employeeLogin = async (req, res) => {
       // Regular user found
       isTVLUser = false;
       
-      // Get user details
+      // Get user details - case-insensitive usertype match
       user = await User.findOne({
         where: { 
           us_usid: login.lg_usid, 
-          us_usertype: { [Sequelize.Op.in]: ['employee', 'admin'] }
+          us_usertype: { [Sequelize.Op.in]: ['employee', 'admin', 'EMPLOYEE', 'ADMIN'] }
         }
       });
       
@@ -150,7 +150,7 @@ const employeeLogin = async (req, res) => {
         user = await UserTVL.findByPk(login.lg_usid);
         
         // Get employee details separately since association might not be set up
-        if (user && (user.us_usertype === 'employee' || user.us_usertype === 'admin')) {
+        if (user && (user.us_usertype?.toLowerCase() === 'employee' || user.us_usertype?.toLowerCase() === 'admin')) {
           employee = await EmployeeTVL.findOne({
             where: { em_usid: user.us_usid }
           });
@@ -159,11 +159,25 @@ const employeeLogin = async (req, res) => {
     }
     
     if (!login || !user) {
-      console.log(`Login failed for email: ${sanitizedEmail} - User not found`);
-      return res.status(401).json({ 
-        success: false, 
-        error: { code: 'UNAUTHORIZED', message: 'Invalid email or password' } 
-      });
+      // If login found but user not found due to usertype restriction, try fetching user without type restriction
+      if (login && !user) {
+        const anyUser = await UserTVL.findByPk(login.lg_usid) || await User.findByPk(login.lg_usid);
+        if (anyUser) {
+          user = anyUser;
+        } else {
+          console.log(`Login failed for email: ${sanitizedEmail} - User not found`);
+          return res.status(401).json({ 
+            success: false, 
+            error: { code: 'UNAUTHORIZED', message: 'Invalid email or password' } 
+          });
+        }
+      } else {
+        console.log(`Login failed for email: ${sanitizedEmail} - User not found`);
+        return res.status(401).json({ 
+          success: false, 
+          error: { code: 'UNAUTHORIZED', message: 'Invalid email or password' } 
+        });
+      }
     }
 
     // Verify password

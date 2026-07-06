@@ -10,21 +10,22 @@ const getAvailableYears = async (req, res) => {
     const userRole = req.user.us_roid || req.user.role?.fn_fnid;
     const userType = req.user.us_usertype || req.user.usertype;
 
+    const masterDb = process.env.DB_NAME_TVL || 'TVL_001';
     let rows;
     
     // Admins have access to all active financial years
     if (userRole === 'ADM' || userType === 'admin') {
       rows = await sequelize.query(
-        'SELECT fy_id, fy_name, fy_desc FROM financial_years WHERE fy_active = 1 ORDER BY fy_name ASC',
+        `SELECT fy_id, fy_label AS fy_name, fy_code AS fy_desc FROM \`${masterDb}\`.financial_years WHERE is_active = 1 ORDER BY fy_label ASC`,
         { type: sequelize.QueryTypes.SELECT }
       );
     } else {
       // Regular users only have access to mapped financial years
       rows = await sequelize.query(
-        `SELECT fy.fy_id, fy.fy_name, fy.fy_desc FROM user_financial_years ufy
-         JOIN financial_years fy ON ufy.ufy_fyid = fy.fy_id
-         WHERE ufy.ufy_usid = ? AND fy.fy_active = 1
-         ORDER BY fy.fy_name ASC`,
+        `SELECT fy.fy_id, fy.fy_label AS fy_name, fy.fy_code AS fy_desc FROM \`${masterDb}\`.user_financial_years ufy
+         JOIN \`${masterDb}\`.financial_years fy ON ufy.ufy_fyid = fy.fy_id
+         WHERE ufy.ufy_usid = ? AND fy.is_active = 1
+         ORDER BY fy.fy_label ASC`,
         { replacements: [userId], type: sequelize.QueryTypes.SELECT }
       );
     }
@@ -37,7 +38,12 @@ const getAvailableYears = async (req, res) => {
     console.error('Error fetching available financial years:', error.message);
     res.status(500).json({
       success: false,
-      error: { code: 'SERVER_ERROR', message: 'Failed to fetch available financial years' }
+      error: { 
+        code: 'SERVER_ERROR', 
+        message: 'Failed to fetch available financial years',
+        details: error.message, // Added for debugging
+        stack: error.stack      // Added for debugging
+      }
     });
   }
 };

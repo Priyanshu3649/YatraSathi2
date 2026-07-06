@@ -3,14 +3,14 @@ const { sequelizeTVL } = require('../../config/db');
 
 const ModuleTVL = sequelizeTVL.define('moXmodule', {
   mo_apid: {
-    type: DataTypes.STRING(4),
+    type: DataTypes.STRING(10),
     primaryKey: true,
     allowNull: false,
     defaultValue: '',
     comment: 'Application ID'
   },
   mo_moid: {
-    type: DataTypes.STRING(4),
+    type: DataTypes.STRING(10),
     primaryKey: true,
     allowNull: false,
     defaultValue: '',

@@ -18,7 +18,7 @@ const cacheFYs = async () => {
     
     // Fetch active financial years from current database context
     const rows = await sequelize.query(
-      'SELECT fy_name, fy_dbname FROM financial_years WHERE fy_active = 1',
+      'SELECT fy_label AS fy_name, db_name AS fy_dbname FROM financial_years WHERE is_active = 1',
       { type: sequelize.QueryTypes.SELECT }
     );
     
@@ -62,7 +62,7 @@ const checkUserFYPermission = async (userId, fy) => {
     const rows = await sequelize.query(
       `SELECT 1 FROM user_financial_years ufy
        JOIN financial_years fy ON ufy.ufy_fyid = fy.fy_id
-       WHERE ufy.ufy_usid = ? AND fy.fy_name = ? AND fy.fy_active = 1`,
+       WHERE ufy.ufy_usid = ? AND fy.fy_label = ? AND fy.is_active = 1`,
       { replacements: [userId, fy], type: sequelize.QueryTypes.SELECT }
     );
     
