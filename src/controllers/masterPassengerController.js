@@ -42,7 +42,12 @@ const createMasterPassenger = async (req, res) => {
       berthPreference,
       idType,
       idNumber,
-      aadhaar
+      aadhaar,
+      dob,
+      nationality,
+      phone,
+      email,
+      lastBookingRef
     } = req.body;
     
     // Validate required fields
@@ -67,6 +72,11 @@ const createMasterPassenger = async (req, res) => {
       cmp_idtype: idType || null,
       cmp_idnumber: idNumber || null,
       cmp_aadhaar: aadhaar || null,
+      cmp_dob: dob || null,
+      cmp_nationality: nationality || null,
+      cmp_phone: phone || null,
+      cmp_email: email || null,
+      cmp_last_booking_ref: lastBookingRef || null,
       cmp_active: 1,
       cmp_created_by: customerId,
       cmp_modified_by: customerId
@@ -102,6 +112,11 @@ const updateMasterPassenger = async (req, res) => {
       idType,
       idNumber,
       aadhaar,
+      dob,
+      nationality,
+      phone,
+      email,
+      lastBookingRef,
       active
     } = req.body;
     
@@ -130,6 +145,11 @@ const updateMasterPassenger = async (req, res) => {
     if (idType !== undefined) updateData.cmp_idtype = idType;
     if (idNumber !== undefined) updateData.cmp_idnumber = idNumber;
     if (aadhaar !== undefined) updateData.cmp_aadhaar = aadhaar;
+    if (dob !== undefined) updateData.cmp_dob = dob;
+    if (nationality !== undefined) updateData.cmp_nationality = nationality;
+    if (phone !== undefined) updateData.cmp_phone = phone;
+    if (email !== undefined) updateData.cmp_email = email;
+    if (lastBookingRef !== undefined) updateData.cmp_last_booking_ref = lastBookingRef;
     if (active !== undefined) updateData.cmp_active = active ? 1 : 0;
     
     updateData.cmp_modified_by = customerId;

@@ -32,6 +32,31 @@ const CustomerMasterPassenger = sequelize.define('CustomerMasterPassenger', {
     allowNull: false,
     field: 'cmp_age'
   },
+  cmp_dob: {
+    type: DataTypes.DATEONLY,
+    allowNull: true,
+    field: 'cmp_dob'
+  },
+  cmp_nationality: {
+    type: DataTypes.STRING(50),
+    allowNull: true,
+    field: 'cmp_nationality'
+  },
+  cmp_phone: {
+    type: DataTypes.STRING(20),
+    allowNull: true,
+    field: 'cmp_phone'
+  },
+  cmp_email: {
+    type: DataTypes.STRING(100),
+    allowNull: true,
+    field: 'cmp_email'
+  },
+  cmp_last_booking_ref: {
+    type: DataTypes.STRING(50),
+    allowNull: true,
+    field: 'cmp_last_booking_ref'
+  },
   cmp_gender: {
     type: DataTypes.ENUM('M', 'F', 'O'),
     allowNull: false,

@@ -10,6 +10,18 @@ import '../styles/dynamic-admin-panel.css';
 
 const API_BASE_URL = '/api';
 
+// Helper to build common auth + FY headers for fetch calls
+const getAuthHeaders = (includeContentType = false) => {
+  const token = localStorage.getItem('token');
+  const financialYear = localStorage.getItem('financialYear');
+  const headers = {
+    'Authorization': `Bearer ${token}`
+  };
+  if (includeContentType) headers['Content-Type'] = 'application/json';
+  if (financialYear) headers['X-Financial-Year'] = financialYear;
+  return headers;
+};
+
 const DynamicAdminPanel = ({ initialModule = 'applications' }) => {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -786,15 +798,14 @@ const DynamicAdminPanel = ({ initialModule = 'applications' }) => {
   };
 
   const fetchDropdownData = async () => {
-    const token = localStorage.getItem('token');
     try {
       // Fetch all dropdown sources
       const [appsRes, modsRes, opsRes, rolesRes, usersRes] = await Promise.all([
-        fetch(`${API_BASE_URL}/security/applications`, { headers: { 'Authorization': `Bearer ${token}` } }),
-        fetch(`${API_BASE_URL}/security/modules`, { headers: { 'Authorization': `Bearer ${token}` } }),
-        fetch(`${API_BASE_URL}/permissions`, { headers: { 'Authorization': `Bearer ${token}` } }),
-        fetch(`${API_BASE_URL}/permissions/roles`, { headers: { 'Authorization': `Bearer ${token}` } }),
-        fetch(`${API_BASE_URL}/security/users`, { headers: { 'Authorization': `Bearer ${token}` } })
+        fetch(`${API_BASE_URL}/security/applications`, { headers: getAuthHeaders() }),
+        fetch(`${API_BASE_URL}/security/modules`, { headers: getAuthHeaders() }),
+        fetch(`${API_BASE_URL}/permissions`, { headers: getAuthHeaders() }),
+        fetch(`${API_BASE_URL}/permissions/roles`, { headers: getAuthHeaders() }),
+        fetch(`${API_BASE_URL}/security/users`, { headers: getAuthHeaders() })
       ]);
 
       const apps = appsRes.ok ? await appsRes.json() : [];
@@ -825,7 +836,6 @@ const DynamicAdminPanel = ({ initialModule = 'applications' }) => {
     setLoading(true);
     try {
       const filtersToUse = currentFilters || activeFilters || {};
-      const token = localStorage.getItem('token');
       
       const queryParams = new URLSearchParams({
         page,
@@ -834,7 +844,7 @@ const DynamicAdminPanel = ({ initialModule = 'applications' }) => {
       });
       
       const response = await fetch(`${API_BASE_URL}${modules[activeModule].endpoint}?${queryParams.toString()}`, {
-        headers: { 'Authorization': `Bearer ${token}` }
+        headers: getAuthHeaders()
       });
       
       if (response.ok) {
@@ -1052,7 +1062,6 @@ const DynamicAdminPanel = ({ initialModule = 'applications' }) => {
         return;
       }
 
-      const token = localStorage.getItem('token');
       const method = selectedRecord ? 'PUT' : 'POST';
       
       // Build URL based on module type (handle composite keys)
@@ -1079,10 +1088,7 @@ const DynamicAdminPanel = ({ initialModule = 'applications' }) => {
 
       const response = await fetch(url, {
         method,
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
+        headers: getAuthHeaders(true),
         body: JSON.stringify(formData)
       });
 
@@ -1147,8 +1153,6 @@ const DynamicAdminPanel = ({ initialModule = 'applications' }) => {
 
     if (window.confirm('Are you sure you want to delete this record?')) {
       try {
-        const token = localStorage.getItem('token');
-        
         // Build URL based on module type (handle composite keys)
         let url = `${API_BASE_URL}${modules[activeModule].endpoint}`;
         
@@ -1170,7 +1174,7 @@ const DynamicAdminPanel = ({ initialModule = 'applications' }) => {
         
         const response = await fetch(url, {
           method: 'DELETE',
-          headers: { 'Authorization': `Bearer ${token}` }
+          headers: getAuthHeaders()
         });
 
         if (response.ok) {
@@ -1195,7 +1199,6 @@ const DynamicAdminPanel = ({ initialModule = 'applications' }) => {
   const handleExportPDF = async () => {
     try {
       setLoading(true);
-      const token = localStorage.getItem('token');
       
       // Determine report type based on active module
       const reportType = activeModule.toUpperCase();
@@ -1208,10 +1211,7 @@ const DynamicAdminPanel = ({ initialModule = 'applications' }) => {
       
       const response = await fetch(`${API_BASE_URL}/reports/export`, {
         method: 'POST',
-        headers: { 
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
+        headers: getAuthHeaders(true),
         body: JSON.stringify({
           reportType,
           format: 'PDF',
@@ -1248,7 +1248,6 @@ const DynamicAdminPanel = ({ initialModule = 'applications' }) => {
   const handleExportGroupedPDF = async () => {
     try {
       setLoading(true);
-      const token = localStorage.getItem('token');
       
       // Determine grouped report type
       let reportType = '';
@@ -1262,10 +1261,7 @@ const DynamicAdminPanel = ({ initialModule = 'applications' }) => {
       
       const response = await fetch(`${API_BASE_URL}/reports/export`, {
         method: 'POST',
-        headers: { 
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
+        headers: getAuthHeaders(true),
         body: JSON.stringify({
           reportType,
           format: 'PDF',
@@ -1757,11 +1753,24 @@ const DynamicAdminPanel = ({ initialModule = 'applications' }) => {
                             key={idx}
                             className={isSelected ? 'selected' : ''}
                             onClick={() => handleRecordSelect(record)}
-                                                        onDoubleClick={() => {
-                                                          if (activeModule === 'customers') {
-                                                            navigate(`/admin/customers/${record.cu_cusid || record.cu_usid || record.cu_custno}`);
-                                                          }
-                                                        }}
+                            onDoubleClick={() => {
+                              if (activeModule === 'customers') {
+                                navigate(`/admin/customers/${record.cu_cusid || record.cu_usid || record.cu_custno}`);
+                              } else if (activeModule === 'stationBoys') {
+                                navigate(`/admin/station-boys/${record.id}/ledger`);
+                              }
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                if (activeModule === 'stationBoys') {
+                                  navigate(`/admin/station-boys/${record.id}/ledger`);
+                                } else if (activeModule === 'customers') {
+                                  navigate(`/admin/customers/${record.cu_cusid || record.cu_usid || record.cu_custno}`);
+                                }
+                              }
+                            }}
+                            tabIndex={0}
+                            style={{ cursor: activeModule === 'stationBoys' || activeModule === 'customers' ? 'pointer' : 'default' }}
                           >
                             <td><input type="checkbox" checked={!!isSelected} onChange={() => {}} /></td>
                             {currentModule.columns.map((col, colIdx) => {
@@ -1777,8 +1786,33 @@ const DynamicAdminPanel = ({ initialModule = 'applications' }) => {
                                 }
                               }
                               // Handle date columns
-                              else if (col.includes('edtm') || col.includes('mdtm') || col.includes('cdtm')) {
-                                value = value ? new Date(value).toLocaleDateString() : '-';
+                              else if (col.includes('edtm') || col.includes('mdtm') || col.includes('cdtm') || col.includes('trvldt') || col.includes('bill_date') || col.includes('pt_paydt')) {
+                                value = value ? new Date(value).toLocaleDateString('en-IN') : '-';
+                              }
+                              // Handle status columns with color badges
+                              else if (col === 'bk_status' || col === 'status' || col === 'bl_status') {
+                                const statusColors = {
+                                  DRF: '#e67e22', DRAFT: '#e67e22',
+                                  PND: '#2980b9', REQUESTED: '#2980b9', PENDING: '#2980b9',
+                                  CNF: '#27ae60', CONFIRMED: '#27ae60', FINAL: '#27ae60',
+                                  CAN: '#c0392b', CANCELLED: '#c0392b',
+                                  CLOSED: '#7f8c8d', INA: '#95a5a6',
+                                  ACTIVE: '#27ae60', INACTIVE: '#c0392b',
+                                  UNPAID: '#c0392b', PARTIALLY_PAID: '#e67e22', PAID: '#27ae60',
+                                };
+                                const statusLabels = {
+                                  DRF: 'Draft', PND: 'Pending', CNF: 'Confirmed',
+                                  CAN: 'Cancelled', CLOSED: 'Closed', INA: 'Inactive',
+                                };
+                                const displayVal = statusLabels[value] || value || '-';
+                                const bg = statusColors[value] || '#95a5a6';
+                                return (
+                                  <td key={colIdx}>
+                                    <span style={{ display:'inline-block', padding:'1px 6px', fontSize:'10px', fontWeight:'bold', color:'#fff', background: bg }}>
+                                      {displayVal}
+                                    </span>
+                                  </td>
+                                );
                               }
                               // Default
                               else if (!value && value !== 0) {

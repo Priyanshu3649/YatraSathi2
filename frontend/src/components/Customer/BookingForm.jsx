@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { masterPassengerAPI } from '../../services/api';
 import '../../styles/booking-form.css';
 
 const BookingForm = () => {
@@ -7,16 +8,58 @@ const BookingForm = () => {
   const [formData, setFormData] = useState({
     from: '',
     to: '',
-    journeyDate: new Date(new Date().setDate(new Date().getDate() + 1)).toISOString().split('T')[0], // Tomorrow's date by default
+    journeyDate: new Date(new Date().setDate(new Date().getDate() + 1)).toISOString().split('T')[0],
     trainClass: 'SL',
-    trainPreferences: [], // Array to store multiple train preferences
+    trainPreferences: [],
     passengers: [
       { name: '', age: '', gender: 'M', berthPreference: 'NO_PREF' }
     ]
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [customerProfile, setCustomerProfile] = useState({ name: '', phone: '' });
+  const [masterPassengers, setMasterPassengers] = useState([]);
   const navigate = useNavigate();
+
+  // ── Step 1 refs ──
+  const fromRef = useRef(null);
+  const toRef = useRef(null);
+  const dateRef = useRef(null);
+  const classRef = useRef(null);
+  const trainPrefRef = useRef(null);
+  const nextBtnRef = useRef(null);
+
+  // ── Step 2 refs (for the LAST passenger row being entered) ──
+  const nameRef = useRef(null);
+  const ageRef = useRef(null);
+  const genderRef = useRef(null);
+  const berthRef = useRef(null);
+  const addPassengerRef = useRef(null);
+
+  // ── Step 3 ref ──
+  const submitRef = useRef(null);
+
+  // Load customer profile + master passengers
+  useEffect(() => {
+    try {
+      const stored = JSON.parse(localStorage.getItem('user') || '{}');
+      setCustomerProfile({
+        name: `${stored.us_fname || ''} ${stored.us_lname || ''}`.trim() || stored.us_usname || 'Customer',
+        phone: stored.us_phone || '0000000000',
+      });
+    } catch (_) {}
+
+    masterPassengerAPI.getMasterPassengers()
+      .then(res => { if (res.success) setMasterPassengers(res.data || []); })
+      .catch(() => {});
+  }, []);
+
+  // Auto-focus on step change
+  useEffect(() => {
+    if (currentStep === 1) setTimeout(() => fromRef.current?.focus(), 60);
+    if (currentStep === 2) setTimeout(() => nameRef.current?.focus(), 60);
+    if (currentStep === 3) setTimeout(() => submitRef.current?.focus(), 60);
+  }, [currentStep]);
 
   const trainClasses = [
     { value: 'SL', label: 'Sleeper (SL)' },
@@ -37,19 +80,13 @@ const BookingForm = () => {
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      [name]: value
-    }));
+    setFormData(prev => ({ ...prev, [name]: value }));
   };
 
   const handlePassengerChange = (index, field, value) => {
     const updatedPassengers = [...formData.passengers];
     updatedPassengers[index][field] = value;
-    setFormData(prev => ({
-      ...prev,
-      passengers: updatedPassengers
-    }));
+    setFormData(prev => ({ ...prev, passengers: updatedPassengers }));
   };
 
   const addPassenger = () => {
@@ -57,16 +94,15 @@ const BookingForm = () => {
       ...prev,
       passengers: [...prev.passengers, { name: '', age: '', gender: 'M', berthPreference: 'NO_PREF' }]
     }));
+    // Focus will move to the new passenger's name field
+    setTimeout(() => nameRef.current?.focus(), 60);
   };
-
-
 
   const removePassenger = (index) => {
     if (formData.passengers.length > 1) {
-      const updatedPassengers = formData.passengers.filter((_, i) => i !== index);
       setFormData(prev => ({
         ...prev,
-        passengers: updatedPassengers
+        passengers: prev.passengers.filter((_, i) => i !== index)
       }));
     }
   };
@@ -76,23 +112,18 @@ const BookingForm = () => {
       setError('Please fill in all journey details');
       return false;
     }
-    
     const journeyDate = new Date(formData.journeyDate);
-    const today = new Date();
-    const tomorrow = new Date(today);
+    const tomorrow = new Date();
     tomorrow.setDate(tomorrow.getDate() + 1);
     tomorrow.setHours(0, 0, 0, 0);
-    
     if (journeyDate < tomorrow) {
       setError('Journey date cannot be in the past or today');
       return false;
     }
-    
     if (formData.from === formData.to) {
       setError('From and To stations cannot be the same');
       return false;
     }
-    
     return true;
   };
 
@@ -103,7 +134,6 @@ const BookingForm = () => {
         setError(`Please fill in details for passenger ${i + 1}`);
         return false;
       }
-      
       const age = parseInt(passenger.age);
       if (isNaN(age) || age < 1 || age > 120) {
         setError(`Please enter a valid age for passenger ${i + 1}`);
@@ -113,54 +143,111 @@ const BookingForm = () => {
     return true;
   };
 
-  const nextStep = () => {
+  const nextStep = useCallback(() => {
     setError('');
-    
-    if (currentStep === 1 && !validateStep1()) {
-      return;
-    }
-    
-    if (currentStep === 2 && !validateStep2()) {
-      return;
-    }
-    
+    if (currentStep === 1 && !validateStep1()) return;
+    if (currentStep === 2 && !validateStep2()) return;
     setCurrentStep(prev => prev + 1);
-  };
+  }, [currentStep, formData]);
 
-  const prevStep = () => {
-    setCurrentStep(prev => prev - 1);
-  };
+  const prevStep = () => setCurrentStep(prev => prev - 1);
+
+  // ── Tab key handler for Step 1 fields: move to next ref, last field goes to Next button ──
+  const handleStep1Tab = useCallback((e, nextRef) => {
+    if (e.key === 'Tab' && !e.shiftKey) {
+      e.preventDefault();
+      if (nextRef === 'nextBtn') {
+        nextStep();
+      } else {
+        nextRef?.current?.focus();
+      }
+    }
+    // Enter on any field also advances
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      if (nextRef === 'nextBtn') {
+        nextStep();
+      } else {
+        nextRef?.current?.focus();
+      }
+    }
+  }, [nextStep]);
+
+  // ── Tab key handler for Step 2 passenger fields ──
+  const handleAddPassengerKey = useCallback((e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      // Validate last passenger before adding
+      const last = formData.passengers[formData.passengers.length - 1];
+      if (!last.name || !last.age) {
+        setError('Please fill in name and age before adding another passenger.');
+        nameRef.current?.focus();
+        return;
+      }
+      setError('');
+      addPassenger();
+    } else if (e.key === 'Tab' && !e.shiftKey) {
+      // Tab on "Add Another Passenger" → go to next step
+      e.preventDefault();
+      nextStep();
+    }
+  }, [formData.passengers, nextStep]);
+
+  // ── Submit button key handler ──
+  const handleSubmitKey = useCallback((e) => {
+    if (e.key === 'Enter' || (e.key === 'Tab' && !e.shiftKey)) {
+      e.preventDefault();
+      submitBooking();
+    }
+  }, [formData, customerProfile]);
 
   const submitBooking = async () => {
-    if (!validateStep2()) {
-      return;
-    }
+    if (!validateStep2()) return;
 
     setLoading(true);
     setError('');
 
     try {
       const token = localStorage.getItem('token');
+      const fy = localStorage.getItem('financialYear');
+
+      // Map to what the backend createBooking expects
+      const payload = {
+        fromStation: formData.from,
+        toStation: formData.to,
+        travelDate: formData.journeyDate,
+        travelClass: formData.trainClass,
+        berthPreference: formData.passengers[0]?.berthPreference || 'NO_PREF',
+        totalPassengers: formData.passengers.length,
+        passengerList: formData.passengers.map(p => ({
+          name: p.name,
+          age: p.age,
+          gender: p.gender,
+          berthPreference: p.berthPreference,
+        })),
+        trainPreferences: formData.trainPreferences,
+        customerName: customerProfile.name,
+        phoneNumber: customerProfile.phone,
+        status: 'DRF',
+      };
+
       const response = await fetch('/api/customer/bookings', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          ...(fy ? { 'X-Financial-Year': fy } : {}),
         },
-        body: JSON.stringify({
-          ...formData,
-          passengers: formData.passengers,
-          berthPreference: formData.passengers[0]?.berthPreference || 'NO_PREF' // Use first passenger's preference as overall preference
-        })
+        body: JSON.stringify(payload)
       });
 
       const data = await response.json();
 
       if (data.success) {
         navigate('/customer/bookings', {
-          state: { 
+          state: {
             message: 'Booking created successfully! You will be contacted by our agent soon.',
-            bookingId: data.data.bookingId
+            bookingId: data.data?.bk_bkid || data.data?.bookingId
           }
         });
       } else {
@@ -177,198 +264,223 @@ const BookingForm = () => {
   const renderStep1 = () => (
     <div className="booking-step">
       <h2 className="journey-heading">Journey Details</h2>
-      
+
       <div className="journey-form-grid">
         <div className="form-group full-width">
           <label>From Station *</label>
           <input
+            ref={fromRef}
             type="text"
             name="from"
             value={formData.from}
             onChange={handleInputChange}
+            onKeyDown={(e) => handleStep1Tab(e, toRef)}
             placeholder="Enter departure station (e.g., New Delhi, Mumbai Central)"
             required
             className="wide-input"
           />
         </div>
-                
+
         <div className="form-group full-width">
           <label>To Station *</label>
           <input
+            ref={toRef}
             type="text"
             name="to"
             value={formData.to}
             onChange={handleInputChange}
+            onKeyDown={(e) => handleStep1Tab(e, dateRef)}
             placeholder="Enter destination station (e.g., Chennai Central, Bangalore City)"
             required
             className="wide-input"
           />
         </div>
-      
+
         <div className="form-group full-width">
           <label>Journey Date *</label>
           <input
+            ref={dateRef}
             type="date"
             name="journeyDate"
             value={formData.journeyDate}
             onChange={handleInputChange}
+            onKeyDown={(e) => handleStep1Tab(e, classRef)}
             min={new Date(new Date().setDate(new Date().getDate() + 1)).toISOString().split('T')[0]}
             required
             className="wide-input"
           />
         </div>
-      
+
         <div className="form-group full-width">
           <label>Class *</label>
           <select
+            ref={classRef}
             name="trainClass"
             value={formData.trainClass}
             onChange={handleInputChange}
+            onKeyDown={(e) => handleStep1Tab(e, trainPrefRef)}
             className="wide-input"
           >
             {trainClasses.map(cls => (
-              <option key={cls.value} value={cls.value}>
-                {cls.label}
-              </option>
+              <option key={cls.value} value={cls.value}>{cls.label}</option>
             ))}
           </select>
         </div>
-      
+
         <div className="form-group full-width">
           <label>Train Preferences (Optional)</label>
           <input
+            ref={trainPrefRef}
             type="text"
             name="trainPreferences"
             value={formData.trainPreferences.join(', ')}
             onChange={(e) => {
-              const preferences = e.target.value.split(',').map(pref => pref.trim()).filter(pref => pref);
-              setFormData(prev => ({
-                ...prev,
-                trainPreferences: preferences
-              }));
+              const preferences = e.target.value.split(',').map(p => p.trim()).filter(p => p);
+              setFormData(prev => ({ ...prev, trainPreferences: preferences }));
             }}
-            placeholder="Enter train numbers separated by commas (e.g., 12345, 67890, 11223)"
+            onKeyDown={(e) => handleStep1Tab(e, 'nextBtn')}
+            placeholder="Enter train numbers separated by commas (e.g., 12345, 67890)"
             className="wide-input"
           />
           <small className="form-help-text">Enter multiple train numbers separated by commas</small>
         </div>
       </div>
-      
     </div>
   );
+
+  const lastIdx = formData.passengers.length - 1;
 
   const renderStep2 = () => (
     <div className="booking-step">
       <h3>Passenger Details</h3>
-      
-      {formData.passengers.map((passenger, index) => (
+
+      {/* Confirmed (non-last) passengers shown as read-only cards */}
+      {formData.passengers.slice(0, lastIdx).map((passenger, index) => (
         <div key={index} className="passenger-card">
           <div className="passenger-header">
             <div className="passenger-title">
               <h4>Passenger {index + 1}</h4>
             </div>
-            {formData.passengers.length > 1 && (
-              <button
-                type="button"
-                onClick={() => removePassenger(index)}
-                className="remove-passenger"
-                title="Remove Passenger"
-              >
-                <i className="fas fa-times"></i>
-                Remove
-              </button>
-            )}
+            <button type="button" onClick={() => removePassenger(index)} className="remove-passenger" title="Remove Passenger">
+              <i className="fas fa-times"></i> Remove
+            </button>
           </div>
-          
           <div className="passenger-details-grid">
-            <div className="passenger-field">
-              <label>Full Name</label>
-              <input
-                type="text"
-                value={passenger.name}
-                onChange={(e) => handlePassengerChange(index, 'name', e.target.value)}
-                placeholder="Enter full name"
-                required
-              />
-            </div>
-            
-            <div className="passenger-field">
-              <label>Age</label>
-              <input
-                type="number"
-                value={passenger.age}
-                onChange={(e) => handlePassengerChange(index, 'age', e.target.value)}
-                placeholder="Age"
-                min="1"
-                max="120"
-                required
-              />
-            </div>
-            
-            <div className="passenger-field">
-              <label>Gender</label>
-              <select
-                value={passenger.gender}
-                onChange={(e) => handlePassengerChange(index, 'gender', e.target.value)}
-              >
-                <option value="M">Male</option>
-                <option value="F">Female</option>
-                <option value="O">Other</option>
+            <div className="passenger-field"><label>Full Name</label><input type="text" value={passenger.name} onChange={(e) => handlePassengerChange(index, 'name', e.target.value)} /></div>
+            <div className="passenger-field"><label>Age</label><input type="number" value={passenger.age} onChange={(e) => handlePassengerChange(index, 'age', e.target.value)} min="1" max="120" /></div>
+            <div className="passenger-field"><label>Gender</label>
+              <select value={passenger.gender} onChange={(e) => handlePassengerChange(index, 'gender', e.target.value)}>
+                <option value="M">Male</option><option value="F">Female</option><option value="O">Other</option>
               </select>
             </div>
-            
-            <div className="passenger-field">
-              <label>Berth Preference</label>
-              <select
-                value={passenger.berthPreference}
-                onChange={(e) => handlePassengerChange(index, 'berthPreference', e.target.value)}
-              >
-                {berthPreferences.map(pref => (
-                  <option key={pref.value} value={pref.value}>
-                    {pref.label}
-                  </option>
-                ))}
+            <div className="passenger-field"><label>Berth Preference</label>
+              <select value={passenger.berthPreference} onChange={(e) => handlePassengerChange(index, 'berthPreference', e.target.value)}>
+                {berthPreferences.map(pref => <option key={pref.value} value={pref.value}>{pref.label}</option>)}
               </select>
             </div>
           </div>
         </div>
       ))}
-      
+
+      {/* Current (last) passenger — keyboard-navigable */}
+      <div className="passenger-card">
+        <div className="passenger-header">
+          <div className="passenger-title"><h4>Passenger {lastIdx + 1}</h4></div>
+          {formData.passengers.length > 1 && (
+            <button type="button" onClick={() => removePassenger(lastIdx)} className="remove-passenger">
+              <i className="fas fa-times"></i> Remove
+            </button>
+          )}
+        </div>
+        <div className="passenger-details-grid">
+          <div className="passenger-field">
+            <label>Full Name</label>
+            <input
+              ref={nameRef}
+              type="text"
+              value={formData.passengers[lastIdx].name}
+              onChange={(e) => handlePassengerChange(lastIdx, 'name', e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Tab' && !e.shiftKey) { e.preventDefault(); ageRef.current?.focus(); } }}
+              placeholder="Enter full name"
+              required
+              autoFocus
+            />
+          </div>
+          <div className="passenger-field">
+            <label>Age</label>
+            <input
+              ref={ageRef}
+              type="number"
+              value={formData.passengers[lastIdx].age}
+              onChange={(e) => handlePassengerChange(lastIdx, 'age', e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Tab' && !e.shiftKey) { e.preventDefault(); genderRef.current?.focus(); } }}
+              placeholder="Age"
+              min="1"
+              max="120"
+              required
+            />
+          </div>
+          <div className="passenger-field">
+            <label>Gender</label>
+            <select
+              ref={genderRef}
+              value={formData.passengers[lastIdx].gender}
+              onChange={(e) => handlePassengerChange(lastIdx, 'gender', e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Tab' && !e.shiftKey) { e.preventDefault(); berthRef.current?.focus(); } }}
+            >
+              <option value="M">Male</option>
+              <option value="F">Female</option>
+              <option value="O">Other</option>
+            </select>
+          </div>
+          <div className="passenger-field">
+            <label>Berth Preference</label>
+            <select
+              ref={berthRef}
+              value={formData.passengers[lastIdx].berthPreference}
+              onChange={(e) => handlePassengerChange(lastIdx, 'berthPreference', e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Tab' && !e.shiftKey) { e.preventDefault(); addPassengerRef.current?.focus(); } }}
+            >
+              {berthPreferences.map(pref => (
+                <option key={pref.value} value={pref.value}>{pref.label}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+      </div>
+
       <div className="passenger-actions">
         <button
+          ref={addPassengerRef}
           type="button"
           onClick={addPassenger}
+          onKeyDown={handleAddPassengerKey}
           className="add-passenger"
         >
           <i className="fas fa-plus"></i>
           Add Another Passenger
         </button>
+        {masterPassengers.length > 0 && (
+          <span style={{ marginLeft: '8px', fontSize: '12px', color: '#666' }}>
+            — or pick from <strong>Passenger List</strong> page to pre-fill
+          </span>
+        )}
       </div>
     </div>
   );
 
   const renderStep3 = () => (
     <div className="booking-step">
-      <h3>Review & Submit</h3>
-      
+      <h3>Review &amp; Submit</h3>
+
       <div className="booking-summary">
         <div className="summary-section">
           <h4>Journey Details</h4>
-          <div className="summary-item">
-            <span>Route:</span>
-            <span>{formData.from} → {formData.to}</span>
-          </div>
-          <div className="summary-item">
-            <span>Date:</span>
-            <span>{new Date(formData.journeyDate).toLocaleDateString()}</span>
-          </div>
-          <div className="summary-item">
-            <span>Class:</span>
-            <span>{trainClasses.find(c => c.value === formData.trainClass)?.label}</span>
-          </div>
-
+          <div className="summary-item"><span>Route:</span><span>{formData.from} → {formData.to}</span></div>
+          <div className="summary-item"><span>Date:</span><span>{new Date(formData.journeyDate).toLocaleDateString()}</span></div>
+          <div className="summary-item"><span>Class:</span><span>{trainClasses.find(c => c.value === formData.trainClass)?.label}</span></div>
         </div>
-        
+
         <div className="summary-section">
           <h4>Passengers ({formData.passengers.length})</h4>
           {formData.passengers.map((passenger, index) => (
@@ -395,25 +507,12 @@ const BookingForm = () => {
 
         <div className="booking-form-card">
           <div className="step-indicator">
-            <div className={`step ${currentStep >= 1 ? 'active' : ''}`}>
-              <span>1</span>
-              <label>Journey</label>
-            </div>
-            <div className={`step ${currentStep >= 2 ? 'active' : ''}`}>
-              <span>2</span>
-              <label>Passengers</label>
-            </div>
-            <div className={`step ${currentStep >= 3 ? 'active' : ''}`}>
-              <span>3</span>
-              <label>Review</label>
-            </div>
+            <div className={`step ${currentStep >= 1 ? 'active' : ''}`}><span>1</span><label>Journey</label></div>
+            <div className={`step ${currentStep >= 2 ? 'active' : ''}`}><span>2</span><label>Passengers</label></div>
+            <div className={`step ${currentStep >= 3 ? 'active' : ''}`}><span>3</span><label>Review</label></div>
           </div>
 
-          {error && (
-            <div className="error-message">
-              {error}
-            </div>
-          )}
+          {error && <div className="error-message">{error}</div>}
 
           <form onSubmit={(e) => e.preventDefault()}>
             {currentStep === 1 && renderStep1()}
@@ -422,18 +521,14 @@ const BookingForm = () => {
 
             <div className="form-actions">
               {currentStep > 1 && (
-                <button
-                  type="button"
-                  onClick={prevStep}
-                  className="btn-outline"
-                  disabled={loading}
-                >
+                <button type="button" onClick={prevStep} className="btn-outline" disabled={loading}>
                   Previous
                 </button>
               )}
-              
+
               {currentStep < 3 ? (
                 <button
+                  ref={nextBtnRef}
                   type="button"
                   onClick={nextStep}
                   className="btn-primary"
@@ -443,8 +538,10 @@ const BookingForm = () => {
                 </button>
               ) : (
                 <button
+                  ref={submitRef}
                   type="button"
                   onClick={submitBooking}
+                  onKeyDown={handleSubmitKey}
                   className="btn-primary"
                   disabled={loading}
                 >

@@ -2,6 +2,22 @@ const { sequelize } = require('../../config/db');
 const dbContext = require('../utils/dbContext');
 
 /**
+ * Compute the current financial year label based on today's date.
+ * In India the FY runs April 1 – March 31.
+ * e.g. today = 2026-07-13 → "2026-27"
+ *      today = 2027-01-10 → "2026-27"
+ *      today = 2027-04-01 → "2027-28"
+ */
+const computeCurrentFYLabel = () => {
+  const today = new Date();
+  const year = today.getFullYear();
+  const month = today.getMonth() + 1; // 1-based
+  const startYear = month >= 4 ? year : year - 1;
+  const endYear = (startYear + 1) % 100; // last two digits
+  return `${startYear}-${String(endYear).padStart(2, '0')}`;
+};
+
+/**
  * Get all available financial years for the authenticated user
  */
 const getAvailableYears = async (req, res) => {
@@ -30,9 +46,15 @@ const getAvailableYears = async (req, res) => {
       );
     }
 
+    // Compute the current FY label (e.g. "2026-27") and find it in the rows
+    const currentFYLabel = computeCurrentFYLabel();
+    // Best match: exact fy_name match; fallback to the last row (latest year)
+    const currentFY = rows.find(r => r.fy_name === currentFYLabel) || rows[rows.length - 1] || null;
+
     res.json({
       success: true,
-      data: rows
+      data: rows,
+      currentFY: currentFY ? currentFY.fy_name : (rows[rows.length - 1]?.fy_name || null)
     });
   } catch (error) {
     console.error('Error fetching available financial years:', error.message);
@@ -41,8 +63,8 @@ const getAvailableYears = async (req, res) => {
       error: { 
         code: 'SERVER_ERROR', 
         message: 'Failed to fetch available financial years',
-        details: error.message, // Added for debugging
-        stack: error.stack      // Added for debugging
+        details: error.message,
+        stack: error.stack
       }
     });
   }

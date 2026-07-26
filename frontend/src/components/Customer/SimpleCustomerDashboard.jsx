@@ -1,254 +1,243 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import '../../styles/modern-customer-dashboard.css';
+import { useAuth } from '../../contexts/AuthContext';
+import '../../styles/vintage-erp-theme.css';
+import '../../styles/dynamic-admin-panel.css';
 
 const SimpleCustomerDashboard = () => {
-  const [dashboardStats, setDashboardStats] = useState({
-    totalRequests: 0,
-    pendingRequests: 0,
-    confirmedRequests: 0,
-    totalPayments: 0
-  });
-  const [financialSummary, setFinancialSummary] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const { user } = useAuth();
   const navigate = useNavigate();
+  const [stats, setStats] = useState({
+    totalBookings: 0,
+    pendingBookings: 0,
+    confirmedBookings: 0,
+    totalBilled: 0,
+    outstandingAmount: 0,
+  });
+  const [recentBookings, setRecentBookings] = useState([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetchDashboardStats();
+    fetchDashboard();
   }, []);
 
-  const fetchDashboardStats = async () => {
+  const fetchDashboard = async () => {
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch('/api/customer/dashboard', {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
+      const fy = localStorage.getItem('financialYear');
+      const headers = {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+        ...(fy ? { 'X-Financial-Year': fy } : {}),
+      };
 
-      const data = await response.json();
-      
-      if (data.success) {
-        setDashboardStats({
-          totalRequests: data.data.stats?.totalBookings || 0,
-          pendingRequests: data.data.stats?.activeBookings || 0,
-          confirmedRequests: data.data.stats?.totalBookings || 0,
-          totalPayments: data.data.financialSummary?.totalReceived || 0
-        });
-        setFinancialSummary(data.data.financialSummary || null);
+      const res = await fetch('/api/customer/dashboard', { headers });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success) {
+          const s = data.data.stats || {};
+          const f = data.data.financialSummary || {};
+          setStats({
+            totalBookings: s.totalBookings || 0,
+            pendingBookings: s.activeBookings || s.pendingBookings || 0,
+            confirmedBookings: s.confirmedBookings || 0,
+            totalBilled: f.totalBilled || 0,
+            outstandingAmount: f.outstandingAmount || 0,
+          });
+        }
       }
-    } catch (error) {
-      console.error('Dashboard stats fetch error:', error);
+
+      // Fetch recent bookings
+      const bkRes = await fetch('/api/customer/bookings?limit=5', { headers });
+      if (bkRes.ok) {
+        const bkData = await bkRes.json();
+        if (bkData.success) {
+          setRecentBookings((bkData.data?.bookings || []).slice(0, 5));
+        }
+      }
+    } catch (err) {
+      console.error('Dashboard fetch error:', err);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleNavigation = (path) => {
-    navigate(path);
+  const getStatusLabel = (s) => {
+    const map = { DRF: 'Draft', REQUESTED: 'Pending', PND: 'Pending', CNF: 'Confirmed', CAN: 'Cancelled', CLOSED: 'Closed' };
+    return map[s] || s || '—';
   };
 
-  const quickActions = [
-    {
-      title: 'New Booking Request',
-      description: 'Submit a new travel booking',
-      icon: '🎫',
-      color: '#3498db',
-      onClick: () => handleNavigation('/customer/booking/new')
-    },
-    {
-      title: 'My Requests',
-      description: 'View all your booking requests',
-      icon: '📋',
-      color: '#e74c3c',
-      onClick: () => handleNavigation('/customer/bookings')
-    },
-    {
-      title: 'My Payments',
-      description: 'Check payment status',
-      icon: '💰',
-      color: '#2ecc71',
-      onClick: () => handleNavigation('/customer/bills-payments')
-    },
-    {
-      title: 'My Profile',
-      description: 'Manage your account',
-      icon: '👤',
-      color: '#9b59b6',
-      onClick: () => handleNavigation('/customer/profile')
-    }
-  ];
+  const userName = user
+    ? `${user.us_fname || ''} ${user.us_lname || ''}`.trim() || user.us_email || 'Customer'
+    : 'Customer';
 
   if (loading) {
     return (
-      <div className="modern-customer-dashboard loading">
-        <div className="loading-spinner">Loading...</div>
+      <div className="erp-admin-container">
+        <div className="erp-menu-bar">
+          <div className="erp-menu-item">YatraSathi Customer Portal</div>
+          <div className="erp-user-info">Loading…</div>
+        </div>
+        <div className="erp-main-content" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div>Loading dashboard…</div>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="modern-customer-dashboard">
-      <div className="dashboard-header">
-        <div className="welcome-section">
-          <h1>Welcome to YatraSathi</h1>
-          <p>Manage your travel bookings with ease</p>
-        </div>
+    <div className="erp-admin-container">
+      {/* ── Menu Bar ── */}
+      <div className="erp-menu-bar">
+        <div className="erp-menu-item active" onClick={() => navigate('/customer/dashboard')}>Dashboard</div>
+        <div className="erp-menu-item" onClick={() => navigate('/customer/booking/new')}>New Booking</div>
+        <div className="erp-menu-item" onClick={() => navigate('/customer/bookings')}>My Bookings</div>
+        <div className="erp-menu-item" onClick={() => navigate('/customer/bills-payments')}>Bills & Payments</div>
+        <div className="erp-menu-item" onClick={() => navigate('/customer/master-passengers')}>Passenger List</div>
+        <div className="erp-menu-item" onClick={() => navigate('/customer/profile')}>Profile</div>
+        <div className="erp-user-info">{userName.toUpperCase()} 👤</div>
       </div>
 
-      <div className="stats-grid">
-        <div className="stat-card">
-          <div className="stat-icon" style={{ backgroundColor: '#3498db' }}>
-            <span className="icon">🎫</span>
-          </div>
-          <div className="stat-info">
-            <h3>{dashboardStats.totalRequests}</h3>
-            <p>Total Requests</p>
-          </div>
-        </div>
-
-        <div className="stat-card">
-          <div className="stat-icon" style={{ backgroundColor: '#e74c3c' }}>
-            <span className="icon">⏳</span>
-          </div>
-          <div className="stat-info">
-            <h3>{dashboardStats.pendingRequests}</h3>
-            <p>Pending</p>
-          </div>
-        </div>
-
-        <div className="stat-card">
-          <div className="stat-icon" style={{ backgroundColor: '#2ecc71' }}>
-            <span className="icon">✅</span>
-          </div>
-          <div className="stat-info">
-            <h3>{dashboardStats.confirmedRequests}</h3>
-            <p>Confirmed</p>
-          </div>
-        </div>
-
-        <div className="stat-card">
-          <div className="stat-icon" style={{ backgroundColor: '#f39c12' }}>
-            <span className="icon">💰</span>
-          </div>
-          <div className="stat-info">
-            <h3>₹{dashboardStats.totalPayments}</h3>
-            <p>Payments</p>
-          </div>
-        </div>
+      {/* ── Toolbar ── */}
+      <div className="erp-toolbar">
+        <button className="erp-button" onClick={() => navigate('/customer/booking/new')}>
+          + New Booking
+        </button>
+        <div className="erp-tool-separator" />
+        <button className="erp-button" onClick={() => navigate('/customer/bookings')}>My Bookings</button>
+        <button className="erp-button" onClick={() => navigate('/customer/bills-payments')}>Bills & Payments</button>
+        <button className="erp-button" onClick={() => navigate('/customer/master-passengers')}>Passenger List</button>
+        <div className="erp-tool-separator" />
+        <button className="erp-button" onClick={fetchDashboard}>Refresh</button>
       </div>
 
-      {/* Customer Ledger Summary Card */}
-      {financialSummary && (
-        <div className="ledger-summary-section">
-          <h2>Financial Ledger Summary</h2>
-          <div className="glass-ledger-card">
-            <div className="ledger-card-header">
-              <h3 className="ledger-card-title">
-                <span>💳</span> Account Status
-              </h3>
-              <span className="ledger-card-badge">
-                {financialSummary.outstandingAmount > 0 ? 'Outstanding Balance' : 'Account Settled'}
-              </span>
-            </div>
-            
-            <div className="ledger-grid">
-              <div className="ledger-item">
-                <span className="ledger-item-label">Total Billing</span>
-                <span className="ledger-item-value">₹{parseFloat(financialSummary.totalBilled || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-              </div>
-              <div className="ledger-item">
-                <span className="ledger-item-label">Total Payments</span>
-                <span className="ledger-item-value">₹{parseFloat(financialSummary.totalReceived || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-              </div>
-              <div className="ledger-item">
-                <span className="ledger-item-label">Outstanding Amount</span>
-                <span className={`ledger-item-value ${financialSummary.outstandingAmount > 0 ? 'outstanding' : ''}`}>
-                  ₹{parseFloat(financialSummary.outstandingAmount || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                </span>
-              </div>
-              <div className="ledger-item">
-                <span className="ledger-item-label">Advance Credit</span>
-                <span className={`ledger-item-value ${financialSummary.advanceAmount > 0 ? 'advance' : ''}`}>
-                  ₹{parseFloat(financialSummary.advanceAmount || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                </span>
-              </div>
-            </div>
+      {/* ── Main Content ── */}
+      <div className="erp-main-content" style={{ flexDirection: 'column', overflowY: 'auto', padding: '8px' }}>
 
-            {(financialSummary.lastBillDate || financialSummary.lastPaymentDate) && (
-              <div className="ledger-card-footer">
-                {financialSummary.lastBillDate && (
-                  <div className="ledger-footer-info">
-                    <span>📅</span> 
-                    <span><strong>Last Bill:</strong> {new Date(financialSummary.lastBillDate).toLocaleDateString(undefined, { dateStyle: 'medium' })}</span>
-                  </div>
-                )}
-                {financialSummary.lastPaymentDate && (
-                  <div className="ledger-footer-info">
-                    <span>💰</span> 
-                    <span><strong>Last Payment:</strong> {new Date(financialSummary.lastPaymentDate).toLocaleDateString(undefined, { dateStyle: 'medium' })}</span>
-                  </div>
-                )}
+        {/* ── Summary Stats ── */}
+        <div style={{ display: 'flex', gap: '8px', marginBottom: '8px', flexWrap: 'wrap' }}>
+          {[
+            { label: 'Total Bookings', value: stats.totalBookings, color: '#4169E1' },
+            { label: 'Pending', value: stats.pendingBookings, color: '#e67e22' },
+            { label: 'Confirmed', value: stats.confirmedBookings, color: '#27ae60' },
+            { label: 'Total Billed', value: `₹${parseFloat(stats.totalBilled || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`, color: '#8e44ad' },
+            { label: 'Outstanding', value: `₹${parseFloat(stats.outstandingAmount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`, color: '#c0392b' },
+          ].map((item) => (
+            <div key={item.label} className="erp-panel" style={{ flex: '1 1 160px', minWidth: '140px' }}>
+              <div className="erp-panel-header" style={{ backgroundColor: item.color, fontSize: '11px' }}>
+                {item.label}
               </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      <div className="quick-actions-section">
-        <h2>Quick Actions</h2>
-        <div className="quick-actions-grid">
-          {quickActions.map((action, index) => (
-            <div 
-              key={index}
-              className="action-card"
-              style={{ borderLeftColor: action.color }}
-              onClick={action.onClick}
-            >
-              <div className="action-icon" style={{ backgroundColor: action.color + '20' }}>
-                <span style={{ color: action.color }}>{action.icon}</span>
-              </div>
-              <div className="action-content">
-                <h3>{action.title}</h3>
-                <p>{action.description}</p>
-              </div>
-              <div className="action-arrow">
-                <span>→</span>
+              <div style={{ padding: '8px 12px', fontSize: '18px', fontWeight: 'bold', color: item.color, textAlign: 'center' }}>
+                {item.value}
               </div>
             </div>
           ))}
         </div>
-      </div>
 
-      <div className="recent-activity-section">
-        <h2>Recent Activity</h2>
-        <div className="activity-list">
-          <div className="activity-item">
-            <div className="activity-icon">🎫</div>
-            <div className="activity-content">
-              <h4>New Booking Request</h4>
-              <p>Successfully submitted your booking request</p>
-              <span className="activity-time">2 hours ago</span>
-            </div>
+        {/* ── Recent Bookings ── */}
+        <div className="erp-panel" style={{ marginBottom: '8px' }}>
+          <div className="erp-panel-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span>Recent Bookings</span>
+            <button
+              className="erp-button"
+              style={{ fontSize: '10px', padding: '2px 8px', marginLeft: '8px' }}
+              onClick={() => navigate('/customer/bookings')}
+            >
+              View All →
+            </button>
           </div>
-          <div className="activity-item">
-            <div className="activity-icon">✅</div>
-            <div className="activity-content">
-              <h4>Booking Confirmed</h4>
-              <p>Your booking has been confirmed</p>
-              <span className="activity-time">1 day ago</span>
+          {recentBookings.length === 0 ? (
+            <div style={{ padding: '16px', textAlign: 'center', color: '#808080', fontSize: '12px' }}>
+              No bookings yet.{' '}
+              <span
+                style={{ color: '#4169E1', cursor: 'pointer', textDecoration: 'underline' }}
+                onClick={() => navigate('/customer/booking/new')}
+              >
+                Create your first booking
+              </span>
             </div>
-          </div>
-          <div className="activity-item">
-            <div className="activity-icon">💰</div>
-            <div className="activity-content">
-              <h4>Payment Received</h4>
-              <p>Payment has been processed successfully</p>
-              <span className="activity-time">3 days ago</span>
+          ) : (
+            <div className="erp-grid-container" style={{ maxHeight: '200px', overflowY: 'auto' }}>
+              <table className="erp-table" style={{ width: '100%' }}>
+                <thead>
+                  <tr>
+                    <th>From</th>
+                    <th>To</th>
+                    <th>Date</th>
+                    <th>Passengers</th>
+                    <th>Status</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {recentBookings.map((bk, i) => (
+                    <tr
+                      key={bk.bk_bkid}
+                      className={i % 2 === 0 ? 'erp-row-even' : 'erp-row-odd'}
+                      style={{ cursor: 'pointer' }}
+                      onDoubleClick={() => navigate(`/customer/bookings/${bk.bk_bkid}`)}
+                    >
+                      <td>{bk.bk_fromst || bk.bk_from || '—'}</td>
+                      <td>{bk.bk_tost || bk.bk_to || '—'}</td>
+                      <td>{bk.bk_trvldt ? new Date(bk.bk_trvldt).toLocaleDateString('en-IN') : '—'}</td>
+                      <td>{bk.bk_pax || bk.totalPassengers || 0}</td>
+                      <td>
+                        <span style={{
+                          display: 'inline-block', padding: '1px 6px',
+                          backgroundColor: bk.bk_status === 'CNF' ? '#27ae60' : bk.bk_status === 'CAN' ? '#c0392b' : '#e67e22',
+                          color: '#fff', fontSize: '10px', fontWeight: 'bold',
+                        }}>
+                          {getStatusLabel(bk.bk_status)}
+                        </span>
+                      </td>
+                      <td>
+                        <button
+                          className="erp-button"
+                          style={{ fontSize: '10px', padding: '1px 6px' }}
+                          onClick={() => navigate(`/customer/bookings/${bk.bk_bkid}`)}
+                        >
+                          View
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
+          )}
+        </div>
+
+        {/* ── Quick Actions ── */}
+        <div className="erp-panel">
+          <div className="erp-panel-header">Quick Actions</div>
+          <div style={{ display: 'flex', gap: '8px', padding: '8px', flexWrap: 'wrap' }}>
+            {[
+              { label: '+ New Booking', path: '/customer/booking/new', title: 'Submit a new travel booking request' },
+              { label: 'My Bookings', path: '/customer/bookings', title: 'View and track your booking requests' },
+              { label: 'Bills & Payments', path: '/customer/bills-payments', title: 'View bills and payment history' },
+              { label: 'Passenger List', path: '/customer/master-passengers', title: 'Manage your saved passenger profiles' },
+              { label: 'My Profile', path: '/customer/profile', title: 'Update your account details' },
+            ].map((a) => (
+              <button
+                key={a.path}
+                className="erp-button erp-primary-button"
+                title={a.title}
+                style={{ minWidth: '140px' }}
+                onClick={() => navigate(a.path)}
+              >
+                {a.label}
+              </button>
+            ))}
           </div>
         </div>
+      </div>
+
+      {/* ── Status Bar ── */}
+      <div className="erp-status-bar">
+        <div className="erp-status-item">Customer Portal</div>
+        <div className="erp-status-item">{userName}</div>
+        <div className="erp-status-item">Bookings: {stats.totalBookings}</div>
+        <div className="erp-status-panel">Ready</div>
       </div>
     </div>
   );

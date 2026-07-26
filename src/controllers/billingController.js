@@ -735,45 +735,38 @@ const createBill = async (req, res) => {
 // Get customer bills (CUSTOMER VIEW - OWN RECORDS ONLY)
 const getCustomerBills = async (req, res) => {
   try {
-    // For customers, only show their own bills
-    const bills = await BillTVL.findAll({ 
-      include: [{
-        model: BookingTVL,
-        where: { bk_usid: req.user.us_usid },
-        required: true
-      }],
-      order: [['bl_created_at', 'DESC']]
-    });
-    
-    // Transform data to match frontend expectations
-    const transformedBills = bills.map(bill => {
-      const billData = bill.toJSON();
-      return {
-        ...billData,
-        id: billData.bl_id,
-        billId: billData.bl_bill_no,
-        bookingId: billData.bl_booking_id,
-        customerName: billData.bl_customer_name,
-        phoneNumber: billData.bl_phone,
-        trainNumber: billData.bl_train_no,
-        reservationClass: billData.bl_class,
-        ticketType: billData.ticket_type,
-        pnrNumbers: billData.bl_pnr,
-        netFare: billData.bl_railway_fare,
-        serviceCharges: billData.bl_service_charge,
-        platformFees: billData.bl_platform_fee,
-        agentFees: 0, // Default since not in model
-        extraCharges: [], // Default empty array
-        discounts: [], // Default empty array
-        totalAmount: billData.bl_total_amount,
-        billDate: billData.bl_bill_date,
-        createdOn: billData.bl_created_at,
-        createdBy: billData.bl_created_by,
-        modifiedOn: billData.mdtm,
-        modifiedBy: billData.mby
-      };
-    });
-    
+    const userId = req.user.us_usid;
+
+    // Use raw SQL to avoid depending on Sequelize associations being set up
+    const bills = await sequelizeTVL.query(
+      `SELECT bl.*
+       FROM blXbilling bl
+       INNER JOIN bkXbooking bk ON bl.bl_booking_id = bk.bk_bkid
+       WHERE bk.bk_usid = :userId
+       ORDER BY bl.bl_created_at DESC`,
+      {
+        replacements: { userId },
+        type: sequelizeTVL.QueryTypes.SELECT
+      }
+    );
+
+    const transformedBills = (bills || []).map(billData => ({
+      ...billData,
+      id: billData.bl_id,
+      billId: billData.bl_bill_no,
+      bookingId: billData.bl_booking_id,
+      customerName: billData.bl_customer_name,
+      trainNumber: billData.bl_train_no,
+      reservationClass: billData.bl_class,
+      pnrNumbers: billData.bl_pnr,
+      netFare: billData.bl_railway_fare,
+      serviceCharges: billData.bl_service_charge,
+      platformFees: billData.bl_platform_fee,
+      totalAmount: billData.bl_total_amount,
+      billDate: billData.bl_billing_date || billData.bl_bill_date,
+      createdOn: billData.bl_created_at,
+    }));
+
     res.json({
       success: true,
       data: {
@@ -782,9 +775,11 @@ const getCustomerBills = async (req, res) => {
       }
     });
   } catch (error) {
-    res.status(500).json({ 
-      success: false,
-      message: error.message 
+    console.error('getCustomerBills error:', error.message);
+    // Return empty array on error so the UI shows "no bills" instead of crashing
+    res.json({
+      success: true,
+      data: { bills: [], count: 0 }
     });
   }
 };

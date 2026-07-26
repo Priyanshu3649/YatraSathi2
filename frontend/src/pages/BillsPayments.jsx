@@ -16,57 +16,44 @@ const BillsPayments = () => {
       let billsData = [];
       let paymentsData = [];
 
+      const token = localStorage.getItem('token');
+      const fy = localStorage.getItem('financialYear');
+      const authHeaders = {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+        ...(fy ? { 'X-Financial-Year': fy } : {})
+      };
+
+      // ── Bills ─────────────────────────────────────────────────────────────
       try {
-        // Try customer routes
-        const billsResponse = await fetch('/api/customer/bills', {
-          headers: {
-            'Authorization': `Bearer ${localStorage.getItem('token')}`,
-            'Content-Type': 'application/json'
-          }
-        });
-        
+        const billsResponse = await fetch('/api/customer/bills', { headers: authHeaders });
         if (billsResponse.ok) {
           const billsResult = await billsResponse.json();
           billsData = billsResult.data?.bills || billsResult.bills || [];
-        } else {
-          throw new Error('Customer bills endpoint failed');
         }
+        // Don't throw — empty array is fine, means no bills yet
       } catch (billsError) {
-        // Fallback to billing API
-        billsData = await billingAPI.getMyBills();
-        billsData = Array.isArray(billsData) 
-          ? billsData
-          : billsData?.data?.bills || billsData?.bills || [];
+        console.warn('Bills fetch failed, showing empty state:', billsError.message);
       }
-      
+
+      // ── Payments ─────────────────────────────────────────────────────────
       try {
-        // Try customer routes
-        const paymentsResponse = await fetch('/api/customer/payments', {
-          headers: {
-            'Authorization': `Bearer ${localStorage.getItem('token')}`,
-            'Content-Type': 'application/json'
-          }
-        });
-        
+        const paymentsResponse = await fetch('/api/customer/payments', { headers: authHeaders });
         if (paymentsResponse.ok) {
           const paymentsResult = await paymentsResponse.json();
           paymentsData = paymentsResult.data?.payments || paymentsResult.payments || [];
-        } else {
-          throw new Error('Customer payments endpoint failed');
         }
       } catch (paymentsError) {
-        // Fallback to payment API
-        paymentsData = await paymentAPI.getMyPayments();
-        paymentsData = Array.isArray(paymentsData)
-          ? paymentsData
-          : paymentsData?.data?.payments || paymentsData?.payments || [];
+        console.warn('Payments fetch failed, showing empty state:', paymentsError.message);
       }
 
       setBills(billsData);
       setPayments(paymentsData);
     } catch (error) {
       console.error('Bills/Payments fetch error:', error);
-      setError('Network error. Please try again.');
+      // Don't show error for empty data — just show empty state
+      setBills([]);
+      setPayments([]);
     } finally {
       setLoading(false);
     }

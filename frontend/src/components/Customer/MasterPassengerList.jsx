@@ -19,7 +19,12 @@ const MasterPassengerList = () => {
     berthPreference: '',
     idType: '',
     idNumber: '',
-    aadhaar: ''
+    aadhaar: '',
+    dob: '',
+    nationality: '',
+    phone: '',
+    email: '',
+    lastBookingRef: ''
   });
 
   // Load passengers
@@ -33,7 +38,7 @@ const MasterPassengerList = () => {
       setError(''); // Clear any previous errors
       const response = await masterPassengerAPI.getMasterPassengers();
       if (response.success) {
-        setPassengers(response.data);
+        setPassengers(response.data || []);
       } else {
         setError(response.message || 'Failed to load passengers');
       }
@@ -64,7 +69,12 @@ const MasterPassengerList = () => {
         berthPreference: formData.berthPreference || null,
         idType: formData.idType || null,
         idNumber: formData.idNumber || null,
-        aadhaar: formData.aadhaar || null
+        aadhaar: formData.aadhaar || null,
+        dob: formData.dob || null,
+        nationality: formData.nationality || null,
+        phone: formData.phone || null,
+        email: formData.email || null,
+        lastBookingRef: formData.lastBookingRef || null
       };
 
       try {
@@ -88,7 +98,12 @@ const MasterPassengerList = () => {
         berthPreference: '',
         idType: '',
         idNumber: '',
-        aadhaar: ''
+        aadhaar: '',
+        dob: '',
+        nationality: '',
+        phone: '',
+        email: '',
+        lastBookingRef: ''
       });
       setShowForm(false);
       loadPassengers();
@@ -107,7 +122,12 @@ const MasterPassengerList = () => {
       berthPreference: passenger.cmp_berthpref || '',
       idType: passenger.cmp_idtype || '',
       idNumber: passenger.cmp_idnumber || '',
-      aadhaar: passenger.cmp_aadhaar || ''
+      aadhaar: passenger.cmp_aadhaar || '',
+      dob: passenger.cmp_dob || '',
+      nationality: passenger.cmp_nationality || '',
+      phone: passenger.cmp_phone || '',
+      email: passenger.cmp_email || '',
+      lastBookingRef: passenger.cmp_last_booking_ref || ''
     });
     setShowForm(true);
   };
@@ -136,7 +156,12 @@ const MasterPassengerList = () => {
       berthPreference: '',
       idType: '',
       idNumber: '',
-      aadhaar: ''
+      aadhaar: '',
+      dob: '',
+      nationality: '',
+      phone: '',
+      email: '',
+      lastBookingRef: ''
     });
   };
 
@@ -159,16 +184,12 @@ const MasterPassengerList = () => {
     return (
       <div className="erp-admin-container">
         <div className="erp-menu-bar">
-          <div className="erp-menu-item">File</div>
-          <div className="erp-menu-item">Edit</div>
-          <div className="erp-menu-item">View</div>
-          <div className="erp-menu-item">Tools</div>
-          <div className="erp-menu-item">Help</div>
+          <div className="erp-menu-item">← Dashboard</div>
+          <div className="erp-menu-item active">Passenger List</div>
+          <div className="erp-user-info">MASTER PASSENGER LIST 👤</div>
         </div>
-        <div className="erp-main-content">
-          <div className="erp-center-content">
-            <div>Loading master passengers...</div>
-          </div>
+        <div className="erp-main-content" style={{ alignItems: 'center', justifyContent: 'center' }}>
+          <div>Loading master passengers...</div>
         </div>
       </div>
     );
@@ -178,11 +199,11 @@ const MasterPassengerList = () => {
     <div className="erp-admin-container">
       {/* Menu Bar */}
       <div className="erp-menu-bar">
-        <div className="erp-menu-item">File</div>
-        <div className="erp-menu-item">Edit</div>
-        <div className="erp-menu-item">View</div>
-        <div className="erp-menu-item">Tools</div>
-        <div className="erp-menu-item">Help</div>
+        <div className="erp-menu-item" onClick={() => navigate('/customer/dashboard')}>← Dashboard</div>
+        <div className="erp-menu-item" onClick={() => navigate('/customer/booking/new')}>New Booking</div>
+        <div className="erp-menu-item" onClick={() => navigate('/customer/bookings')}>My Bookings</div>
+        <div className="erp-menu-item active">Passenger List</div>
+        <div className="erp-user-info">MASTER PASSENGER LIST 👤</div>
       </div>
 
       {/* Main Content */}
@@ -191,10 +212,10 @@ const MasterPassengerList = () => {
           {/* Toolbar */}
           <div className="erp-toolbar">
             <button 
-              className="erp-button" 
+              className="erp-button erp-primary-button"
               onClick={() => setShowForm(true)}
             >
-              New Passenger
+              + New Passenger
             </button>
             <div className="erp-tool-separator"></div>
             <button 
@@ -203,11 +224,19 @@ const MasterPassengerList = () => {
             >
               Refresh
             </button>
+            <div className="erp-tool-separator"></div>
+            <button 
+              className="erp-button"
+              onClick={() => navigate('/customer/booking/new')}
+              title="Start a booking — saved passengers can be picked from within the booking form"
+            >
+              Book a Ticket →
+            </button>
             <button 
               className="erp-button" 
               onClick={() => navigate('/customer/dashboard')}
             >
-              Back to Dashboard
+              Dashboard
             </button>
           </div>
 
@@ -280,6 +309,66 @@ const MasterPassengerList = () => {
                   </div>
                   
                   <div className="erp-form-row">
+                    <div className="erp-form-group">
+                      <label className="erp-form-label">Date of Birth:</label>
+                      <input
+                        type="date"
+                        name="dob"
+                        value={formData.dob}
+                        onChange={handleInputChange}
+                        className="erp-form-input"
+                      />
+                    </div>
+                    <div className="erp-form-group">
+                      <label className="erp-form-label">Nationality:</label>
+                      <input
+                        type="text"
+                        name="nationality"
+                        value={formData.nationality}
+                        onChange={handleInputChange}
+                        className="erp-form-input"
+                        placeholder="e.g. Indian"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="erp-form-row">
+                    <div className="erp-form-group">
+                      <label className="erp-form-label">Phone:</label>
+                      <input
+                        type="text"
+                        name="phone"
+                        value={formData.phone}
+                        onChange={handleInputChange}
+                        className="erp-form-input"
+                        placeholder="Enter phone number"
+                      />
+                    </div>
+                    <div className="erp-form-group">
+                      <label className="erp-form-label">Email:</label>
+                      <input
+                        type="email"
+                        name="email"
+                        value={formData.email}
+                        onChange={handleInputChange}
+                        className="erp-form-input"
+                        placeholder="Enter email address"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="erp-form-row">
+                    <div className="erp-form-group">
+                      <label className="erp-form-label">Last Booking Ref:</label>
+                      <input
+                        type="text"
+                        name="lastBookingRef"
+                        value={formData.lastBookingRef}
+                        onChange={handleInputChange}
+                        className="erp-form-input"
+                        placeholder="Enter booking reference"
+                      />
+                    </div>
                     <div className="erp-form-group">
                       <label className="erp-form-label">Berth Preference:</label>
                       <select
@@ -382,11 +471,12 @@ const MasterPassengerList = () => {
                     <thead>
                       <tr>
                         <th>Name</th>
-                        <th>Age</th>
+                        <th>Age / DOB</th>
                         <th>Gender</th>
-                        <th>ID Type</th>
-                        <th>ID Number</th>
-                        <th>Berth Preference</th>
+                        <th>Nationality</th>
+                        <th>Contact</th>
+                        <th>ID Info</th>
+                        <th>Last Booking</th>
                         <th>Status</th>
                         <th>Actions</th>
                       </tr>
@@ -400,11 +490,21 @@ const MasterPassengerList = () => {
                           <td>
                             {passenger.cmp_firstname} {passenger.cmp_lastname}
                           </td>
-                          <td>{passenger.cmp_age}</td>
+                          <td>
+                            {passenger.cmp_age}
+                            {passenger.cmp_dob && <div style={{ fontSize: '0.8em', color: '#666' }}>({passenger.cmp_dob})</div>}
+                          </td>
                           <td>{getGenderDisplay(passenger.cmp_gender)}</td>
-                          <td>{passenger.cmp_idtype || '-'}</td>
-                          <td>{maskIdNumber(passenger.cmp_idnumber) || '-'}</td>
-                          <td>{passenger.cmp_berthpref || 'No Preference'}</td>
+                          <td>{passenger.cmp_nationality || '-'}</td>
+                          <td>
+                            {passenger.cmp_phone && <div>{passenger.cmp_phone}</div>}
+                            {passenger.cmp_email && <div style={{ fontSize: '0.8em', color: '#666' }}>{passenger.cmp_email}</div>}
+                          </td>
+                          <td>
+                            {passenger.cmp_idtype && <div>{passenger.cmp_idtype}: {maskIdNumber(passenger.cmp_idnumber)}</div>}
+                            {passenger.cmp_aadhaar && <div style={{ fontSize: '0.8em', color: '#666' }}>Aadhaar: {maskIdNumber(passenger.cmp_aadhaar)}</div>}
+                          </td>
+                          <td>{passenger.cmp_last_booking_ref || '-'}</td>
                           <td>
                             <span className={`erp-status-badge ${passenger.cmp_active ? 'erp-status-active' : 'erp-status-inactive'}`}>
                               {passenger.cmp_active ? 'Active' : 'Inactive'}
