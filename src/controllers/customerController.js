@@ -151,15 +151,15 @@ const customerController = {
           {
             model: User,
             as: 'user',
-            attributes: ['us_usid', 'us_fname', 'us_lname', 'us_email', 'us_mobile']
+            attributes: ['us_usid', 'us_fname', 'us_lname', 'us_email', 'us_phone']
           }
         ],
         where: {
           [Op.or]: [
-            { cu_company: { [Op.like]: `%${q}%` } },
+            { cu_custno: { [Op.like]: `%${q}%` } },
             { '$user.us_fname$': { [Op.like]: `%${q}%` } },
             { '$user.us_lname$': { [Op.like]: `%${q}%` } },
-            { '$user.us_mobile$': { [Op.like]: `%${q}%` } }
+            { '$user.us_phone$': { [Op.like]: `%${q}%` } }
           ]
         },
         limit: 20
@@ -185,7 +185,7 @@ const customerController = {
           {
             model: User,
             as: 'user',
-            attributes: ['us_usid', 'us_fname', 'us_lname', 'us_email', 'us_mobile']
+            attributes: ['us_usid', 'us_fname', 'us_lname', 'us_email', 'us_phone']
           }
         ]
       });
@@ -213,8 +213,8 @@ const customerController = {
           {
             model: User,
             as: 'user',
-            attributes: ['us_usid', 'us_fname', 'us_lname', 'us_email', 'us_mobile'],
-            where: { us_mobile: phoneNumber }
+            attributes: ['us_usid', 'us_fname', 'us_lname', 'us_email', 'us_phone'],
+            where: { us_phone: phoneNumber }
           }
         ]
       });
@@ -247,7 +247,7 @@ const customerController = {
             {
               model: User,
               as: 'user',
-              attributes: ['us_usid', 'us_fname', 'us_lname', 'us_email', 'us_mobile']
+              attributes: ['us_usid', 'us_fname', 'us_lname', 'us_email', 'us_phone']
             }
           ]
         });

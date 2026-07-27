@@ -981,8 +981,9 @@ const Billing = () => {
       
       if (response.ok) {
         const data = await response.json();
-        if (data.success && data.data && data.data.bookings && data.data.bookings.length > 0) {
-          return data.data.bookings[0].bk_bkid;
+        const draftList = Array.isArray(data.data) ? data.data : (data.data?.bookings || []);
+        if (data.success && draftList.length > 0) {
+          return draftList[0].bk_bkid;
         }
       }
       

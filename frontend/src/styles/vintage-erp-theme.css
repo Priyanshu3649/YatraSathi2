@@ -607,6 +607,7 @@ a.erp-button {
   max-height: 90vh;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
 }
 
 .erp-modal-title {
@@ -635,6 +636,10 @@ a.erp-button {
 .erp-modal-body {
   padding: 12px;
   overflow-y: auto;
+  overflow-x: hidden;
+  flex: 1;
+  min-height: 0;
+  max-height: calc(90vh - 120px);
 }
 
 .erp-modal-footer {

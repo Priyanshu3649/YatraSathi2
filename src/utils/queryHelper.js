@@ -5,6 +5,35 @@ const { Op } = require('sequelize');
  */
 class QueryHelper {
   /**
+   * Normalize status code strings to database enum values
+   * @param {String} status 
+   * @returns {String} Normalized DB status enum value
+   */
+  normalizeStatus(status) {
+    if (!status || typeof status !== 'string') return status;
+    const s = status.toUpperCase().trim();
+    const statusMap = {
+      'DRAFT': 'DRF',
+      'DRF': 'DRF',
+      'CONFIRMED': 'CNF',
+      'CNF': 'CNF',
+      'CANCELLED': 'CAN',
+      'CANCELED': 'CAN',
+      'CAN': 'CAN',
+      'PENDING': 'PND',
+      'REQUESTED': 'PND',
+      'PND': 'PND',
+      'PAID': 'PAD',
+      'PAD': 'PAD',
+      'FINAL': 'FNL',
+      'FNL': 'FNL',
+      'INACTIVE': 'INA',
+      'INA': 'INA'
+    };
+    return statusMap[s] || status;
+  }
+
+  /**
    * Build Sequelize where clause based on query parameters
    * @param {Object} query - Express request query
    * @param {Object} filterMap - Mapping of query keys to DB columns
@@ -37,7 +66,7 @@ class QueryHelper {
 
     // 3. Status Filtering
     if (query.status && filterMap.statusColumn) {
-      where[filterMap.statusColumn] = query.status;
+      where[filterMap.statusColumn] = this.normalizeStatus(query.status);
     }
 
     // 4. Search (Customer Name, Phone, Entry No)
@@ -48,7 +77,7 @@ class QueryHelper {
     }
 
     // 5. Additional custom filters from filterMap.customFilters
-    const processedKeys = ['page', 'limit', 'sortBy', 'sortOrder', 'search', 'startDate', 'endDate', 'minAmount', 'maxAmount'];
+    const processedKeys = ['page', 'limit', 'sortBy', 'sortOrder', 'search', 'status', 'startDate', 'endDate', 'minAmount', 'maxAmount'];
     
     if (filterMap.customFilters) {
       Object.keys(filterMap.customFilters).forEach(key => {

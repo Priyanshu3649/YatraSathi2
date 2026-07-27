@@ -1,4 +1,4 @@
-const { UserTVL, EmployeeTVL, BookingTVL, PaymentTVL, Customer, CorporateCustomer, Account, User, Employee, BillTVL, ForensicAuditLog } = require('../models');
+const { UserTVL, EmployeeTVL, BookingTVL, StationTVL, PaymentTVL, Customer, CorporateCustomer, Account, User, Employee, BillTVL, ForensicAuditLog } = require('../models');
 const { Op } = require('sequelize');
 
 /**
@@ -298,24 +298,69 @@ const getEmployeeDashboard = async (req, res) => {
 const getCustomerDashboard = async (req, res) => {
   try {
     const userId = req.user.us_usid;
+    const userPhone = (req.user.us_phone || '').replace(/\D/g, '');
+    const userOrConditions = [
+      { bk_usid: userId }
+    ];
+    if (userPhone && userPhone.length >= 10) {
+      userOrConditions.push({ bk_phonenumber: userPhone });
+    }
 
     // Get customer bookings
     const bookings = await BookingTVL.findAll({
-      where: { bk_usid: userId },
+      where: { 
+        [Op.or]: userOrConditions,
+        bk_status: { [Op.ne]: 'INA' }
+      },
       order: [['edtm', 'DESC']],
       limit: 5
     });
 
     const totalBookings = await BookingTVL.count({
-      where: { bk_usid: userId }
+      where: { 
+        [Op.or]: userOrConditions,
+        bk_status: { [Op.ne]: 'INA' }
+      }
+    });
+
+    // Batch fetch station information
+    const stationCodes = [...new Set([
+      ...bookings.map(b => b.bk_fromst),
+      ...bookings.map(b => b.bk_tost)
+    ])];
+    
+    const stations = await StationTVL.findAll({
+      where: {
+        st_stcode: { [Op.in]: stationCodes }
+      }
+    });
+    
+    const stationMap = {};
+    stations.forEach(station => {
+      stationMap[station.st_stcode] = station.st_stname || station.st_stcode;
+    });
+
+    const transformedBookings = bookings.map(booking => {
+      const fromStationName = stationMap[booking.bk_fromst] || booking.bk_fromst || 'Unknown';
+      const toStationName = stationMap[booking.bk_tost] || booking.bk_tost || 'Unknown';
+      
+      return {
+        ...booking.toJSON(),
+        bk_from: fromStationName,
+        bk_to: toStationName,
+        bk_fromst: booking.bk_fromst,
+        bk_tost: booking.bk_tost,
+        bk_travelldate: booking.bk_trvldt,
+        bk_travelclass: booking.bk_class
+      };
     });
 
     const dashboardData = {
       stats: {
         totalBookings,
-        recentBookings: bookings.length
+        recentBookings: transformedBookings.length
       },
-      recentBookings: bookings
+      recentBookings: transformedBookings
     };
 
     res.json({ success: true, data: dashboardData });

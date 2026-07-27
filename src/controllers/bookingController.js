@@ -26,6 +26,13 @@ function convertUserIdToInt(userId) {
   return 1;
 }
 
+function extractStationCode(str) {
+  if (!str) return 'NDLS';
+  const match = str.match(/\(([^)]+)\)/);
+  if (match) return match[1].trim().toUpperCase().slice(0, 10);
+  return str.trim().toUpperCase().slice(0, 10);
+}
+
 // Create a new booking request
 const createBooking = async (req, res) => {
   console.time("BOOKING_SAVE_TOTAL");
@@ -46,6 +53,9 @@ const createBooking = async (req, res) => {
       internalCustomerId, // May be null for new customers
       status // Accept status from request
     } = req.body;
+
+    const fromStCode = extractStationCode(fromStation);
+    const toStCode = extractStationCode(toStation);
     
     // MANDATORY: Validate phone number
     if (!phoneNumber) {
@@ -91,6 +101,20 @@ const createBooking = async (req, res) => {
       await sequelize.query('SET FOREIGN_KEY_CHECKS = 0', { transaction });
       
       let customerId = internalCustomerId;
+      
+      // If customer is creating their own booking request, assign customerId to req.user.us_usid directly
+      const isCustomerUser = req.user && (
+        (req.user.us_usertype || '').toLowerCase() === 'customer' || 
+        req.user.us_roid === 'CUS' || 
+        (req.user.us_usid || '').startsWith('CUS')
+      );
+      
+      if (!customerId && isCustomerUser) {
+        customerId = req.user.us_usid;
+        if (cleanPhone && (!req.user.us_phone || req.user.us_phone === '')) {
+          await UserTVL.update({ us_phone: cleanPhone }, { where: { us_usid: req.user.us_usid }, transaction });
+        }
+      }
       
       // MANDATORY: Atomic customer creation if customer doesn't exist
       if (!customerId) {
@@ -197,8 +221,8 @@ const createBooking = async (req, res) => {
         bk_usid: customerId, // Use resolved customer ID
         bk_customername: customerName.trim(), // Store customer name for quick access
         bk_phonenumber: cleanPhone, // Store phone number for quick access
-        bk_fromst: fromStation,
-        bk_tost: toStation,
+        bk_fromst: fromStCode,
+        bk_tost: toStCode,
         bk_trvldt: travelDate,
         bk_class: travelClass,
         bk_quota: req.body.bk_quota || 'GENERAL', // ✓ Add quota field with default
@@ -241,7 +265,7 @@ const createBooking = async (req, res) => {
           // Use the Sequelize model for bulk creation
           await Passenger.bulkCreate(passengerDataBatch, { 
             transaction,
-            userId: req.user.us_usid  // Pass userId for audit hooks
+            userId: convertUserIdToInt(req.user.us_usid)  // Convert to integer for BookingTVL audit hooks
           });
         }
         console.timeEnd("BOOKING_CREATE_PASSENGERS");
@@ -317,11 +341,23 @@ const createBooking = async (req, res) => {
 const getCustomerBookings = async (req, res) => {
   try {
     const { limit, offset, page } = queryHelper.getPaginationOptions(req.query);
-    const order = queryHelper.getSortingOptions(req.query, 'bk_reqdt', 'DESC');
+    // Sort by edtm (created time) — bk_reqdt may be null for older records
+    const order = [['edtm', 'DESC']];
+    // Support matching by us_usid or user phone number so bookings are always retrieved
+    const userPhone = (req.user.us_phone || '').replace(/\D/g, '');
+    const userOrConditions = [
+      { bk_usid: req.user.us_usid }
+    ];
+    if (req.user.us_usid) {
+      userOrConditions.push({ eby: req.user.us_usid });
+    }
+    if (userPhone && userPhone.length >= 10) {
+      userOrConditions.push({ bk_phonenumber: userPhone });
+    }
     
     const { count, rows: bookings } = await BookingTVL.findAndCountAll({ 
       where: { 
-        bk_usid: req.user.us_usid,
+        [Op.or]: userOrConditions,
         bk_status: { [Op.ne]: 'INA' } // Exclude inactive bookings
       },
       order,
@@ -337,7 +373,7 @@ const getCustomerBookings = async (req, res) => {
     const passengerCountResults = await Passenger.findAll({
       attributes: ['ps_bkid', [Sequelize.fn('COUNT', Sequelize.col('ps_psid')), 'count']],
       where: {
-        ps_bkid: { [Sequelize.Op.in]: bookingIds },
+        ps_bkid: { [Op.in]: bookingIds },
         ps_active: 1
       },
       group: ['ps_bkid']
@@ -355,7 +391,7 @@ const getCustomerBookings = async (req, res) => {
     
     const stations = await Station.findAll({
       where: {
-        st_stcode: { [Sequelize.Op.in]: stationCodes }
+        st_stcode: { [Op.in]: stationCodes }
       }
     });
     
@@ -384,7 +420,20 @@ const getCustomerBookings = async (req, res) => {
       };
     });
     
-    res.json(queryHelper.formatPaginatedResponse(count, transformedBookings, page, limit));
+    res.json({
+      success: true,
+      data: {
+        bookings: transformedBookings,
+        pagination: {
+          currentPage: page,
+          totalPages: Math.ceil(count / limit) || 1,
+          totalRecords: count,
+          pageSize: limit,
+          hasNext: page < Math.ceil(count / limit),
+          hasPrev: page > 1
+        }
+      }
+    });
   } catch (error) {
     console.error('Get customer bookings error:', error);
     res.status(500).json({ 
@@ -420,13 +469,22 @@ const getAllBookings = async (req, res) => {
     const checkRoidAdmin = (req.user.us_roid || '').toLowerCase() === 'admin' || req.user.us_roid === 'ADM';
     const isAuthorizedEmployee = allowedRoles.includes(req.user.us_roid) || checkAdmin || checkRoidAdmin;
     
+    console.log('[getAllBookings Debug]', { 
+      us_roid: req.user.us_roid, 
+      us_usertype: req.user.us_usertype, 
+      isAuthorizedEmployee,
+      us_usid: req.user.us_usid
+    });
+    
     if (!isAuthorizedEmployee) {
       // For non-employee users, return their own bookings
       where.bk_usid = req.user.us_usid;
     }
     
-    // Exclude inactive bookings
-    where.bk_status = { [Op.ne]: 'INA' };
+    // Exclude inactive bookings unless a specific status filter is requested
+    if (!where.bk_status) {
+      where.bk_status = { [Op.ne]: 'INA' };
+    }
 
     const { count, rows: bookings } = await BookingTVL.findAndCountAll({
       where,
@@ -443,7 +501,7 @@ const getAllBookings = async (req, res) => {
     const passengerCountResults = await Passenger.findAll({
       attributes: ['ps_bkid', [Sequelize.fn('COUNT', Sequelize.col('ps_psid')), 'count']],
       where: {
-        ps_bkid: { [Sequelize.Op.in]: bookingIds },
+        ps_bkid: { [Op.in]: bookingIds },
         ps_active: 1
       },
       group: ['ps_bkid']
@@ -461,7 +519,7 @@ const getAllBookings = async (req, res) => {
     
     const stations = await Station.findAll({
       where: {
-        st_stcode: { [Sequelize.Op.in]: stationCodes }
+        st_stcode: { [Op.in]: stationCodes }
       }
     });
     
@@ -504,21 +562,24 @@ const getBookingById = async (req, res) => {
   try {
     const booking = await BookingTVL.findOne({
       where: {
-        bk_bkid: req.params.id,
-        bk_status: { [Sequelize.Op.ne]: 'INA' } // Exclude inactive bookings
+        bk_bkid: req.params.id || req.params.bookingId,
+        bk_status: { [Op.ne]: 'INA' } // Exclude inactive bookings
       }
     });
     
     // Check if booking exists
     if (!booking) {
-      return res.status(404).json({ message: 'Booking not found' });
+      return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Booking not found' } });
     }
     
     // Check if user has permission to view this booking
-    if (req.user.us_roid !== 'ADM' && 
-        booking.bk_usid !== req.user.us_usid &&
-        (booking.bk_agent && booking.bk_agent !== req.user.us_usid)) {
-      return res.status(403).json({ message: 'Access denied' });
+    const allowedRoles = ['AGT', 'ACC', 'HR', 'CC', 'MKT', 'MGT', 'ADM'];
+    const isEmployeeOrAdmin = allowedRoles.includes(req.user.us_roid) || req.user.us_usertype === 'admin';
+    const userPhone = (req.user.us_phone || '').replace(/\D/g, '');
+    const isOwner = booking.bk_usid === req.user.us_usid || (userPhone && userPhone.length >= 10 && booking.bk_phonenumber === userPhone);
+
+    if (!isEmployeeOrAdmin && !isOwner) {
+      return res.status(403).json({ success: false, error: { code: 'FORBIDDEN', message: 'Access denied' } });
     }
     
     // Import Passenger model to get passenger count
@@ -544,9 +605,13 @@ const getBookingById = async (req, res) => {
       bk_pax: passengerCount  // Override with actual passenger count from passenger table
     };
     
-    res.json(transformedBooking);
+    res.json({
+      success: true,
+      data: transformedBooking
+    });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    console.error('Get booking by ID error:', error);
+    res.status(500).json({ success: false, error: { code: 'SERVER_ERROR', message: error.message } });
   }
 };
 
@@ -604,7 +669,7 @@ const updateBooking = async (req, res) => {
       // Always update modified by field
       updateData.mby = mby || req.user.us_usid;
       // Standard audit fields — always server-side, never from frontend
-      updateData.modified_by = req.user.us_usid;
+      updateData.modified_by = convertUserIdToInt(req.user.us_usid);
       updateData.modified_on = new Date();
       
       console.log('Updating booking with data:', updateData);
@@ -623,7 +688,7 @@ const updateBooking = async (req, res) => {
           { 
             where: { ps_bkid: booking.bk_bkid }, 
             transaction,
-            userId: req.user.us_usid  // Pass userId for audit hooks
+            userId: convertUserIdToInt(req.user.us_usid)  // Convert to integer for BookingTVL audit hooks
           }
         );
         
@@ -649,7 +714,7 @@ const updateBooking = async (req, res) => {
           // Batch insert for better performance
           await Passenger.bulkCreate(passengerDataBatch, { 
             transaction,
-            userId: req.user.us_usid  // Pass userId for audit hooks
+            userId: convertUserIdToInt(req.user.us_usid)  // Convert to integer for BookingTVL audit hooks
           });
         }
       }
@@ -715,7 +780,7 @@ const cancelBooking = async (req, res) => {
       bk_status: 'CAN',
       mby: req.user.us_usid 
     }, {
-      userId: req.user.us_usid  // Pass userId for audit hooks
+      userId: convertUserIdToInt(req.user.us_usid)  // Convert to integer for BookingTVL audit hooks
     });
     
     // Forensic Audit: CANCEL
@@ -768,7 +833,7 @@ const deleteBooking = async (req, res) => {
         mdtm: new Date()
       }, { 
         transaction,
-        userId: req.user.us_usid  // Pass userId for audit hooks
+        userId: convertUserIdToInt(req.user.us_usid)  // Convert to integer for BookingTVL audit hooks
       });
       
       // Log the soft deletion for audit purposes
@@ -823,7 +888,7 @@ const assignBooking = async (req, res) => {
       bk_agent: employeeId,
       mby: req.user.us_usid 
     }, {
-      userId: req.user.us_usid  // Pass userId for audit hooks
+      userId: convertUserIdToInt(req.user.us_usid)  // Convert to integer for BookingTVL audit hooks
     });
     
     res.json(booking);
@@ -858,7 +923,7 @@ const approveBooking = async (req, res) => {
       bk_status: 'PND',
       mby: req.user.us_usid 
     }, {
-      userId: req.user.us_usid  // Pass userId for audit hooks
+      userId: convertUserIdToInt(req.user.us_usid)  // Convert to integer for BookingTVL audit hooks
     });
     
     res.json(booking);
@@ -906,7 +971,7 @@ const confirmBooking = async (req, res) => {
       bk_status: 'CNF',
       mby: req.user.us_usid 
     }, {
-      userId: req.user.us_usid  // Pass userId for audit hooks
+      userId: convertUserIdToInt(req.user.us_usid)  // Convert to integer for BookingTVL audit hooks
     });
     
     // Create PNR record
@@ -1014,7 +1079,7 @@ const confirmBooking = async (req, res) => {
       entered_by: req.user.us_usid,
       entered_on: new Date()
     }, {
-      userId: req.user.us_usid // Pass userId for hooks
+      userId: convertUserIdToInt(req.user.us_usid) // Convert to integer for BookingTVL audit hooks
     });
     
     // Update booking status to CONFIRMED and mark as billed
@@ -1024,7 +1089,7 @@ const confirmBooking = async (req, res) => {
       mby: req.user.us_usid,
       mdtm: new Date()
     }, {
-      userId: req.user.us_usid  // Pass userId for audit hooks
+      userId: convertUserIdToInt(req.user.us_usid)  // Convert to integer for BookingTVL audit hooks
     });
     
     // Update passenger records with the billing number
@@ -1125,11 +1190,13 @@ const getBookingPassengers = async (req, res) => {
     }
     
     // Check if user has permission to view this booking
-    const isAdmin = req.user.us_roid === 'ADM';
-    const isOwner = booking.bk_usid === req.user.us_usid;
+    const allowedRoles = ['AGT', 'ACC', 'HR', 'CC', 'MKT', 'MGT', 'ADM'];
+    const isEmployeeOrAdmin = allowedRoles.includes(req.user.us_roid) || req.user.us_usertype === 'admin';
+    const userPhone = (req.user.us_phone || '').replace(/\D/g, '');
+    const isOwner = booking.bk_usid === req.user.us_usid || (userPhone && userPhone.length >= 10 && booking.bk_phonenumber === userPhone);
     const isAgent = booking.bk_agent === req.user.us_usid;
     
-    if (!isAdmin && !isOwner && !isAgent) {
+    if (!isEmployeeOrAdmin && !isOwner && !isAgent) {
       return res.status(403).json({ 
         success: false,
         error: { code: 'FORBIDDEN', message: 'Access denied' } 
@@ -1428,7 +1495,7 @@ const updateBookingStatus = async (req, res) => {
       mby: req.user.us_usid,
       mdtm: new Date()
     }, {
-      userId: req.user.us_usid  // Pass userId for audit hooks
+      userId: convertUserIdToInt(req.user.us_usid)  // Convert to integer for BookingTVL audit hooks
     });
     
     res.json({ 

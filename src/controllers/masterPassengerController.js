@@ -1,257 +1,279 @@
-const { CustomerMasterPassenger } = require('../models');
+const { MasterPassengerTVL, CustomerTVL } = require('../models');
+const { Op } = require('sequelize');
+const { sequelizeTVL } = require('../../config/db');
 
-/**
- * Get all master passengers for a customer
- */
-const getCustomerMasterPassengers = async (req, res) => {
-  try {
-    const customerId = req.user.us_usid;
-    
-    const passengers = await CustomerMasterPassenger.findAll({
-      where: {
-        cmp_cuid: customerId,
-        cmp_active: 1
-      },
-      order: [['cmp_created_at', 'DESC']]
-    });
-    
-    res.json({
-      success: true,
-      data: passengers
-    });
-  } catch (error) {
-    console.error('Get master passengers error:', error);
-    res.status(500).json({
-      success: false,
-      message: error.message || 'Failed to fetch master passengers'
-    });
+// Generate unique master passenger ID
+const generateMasterPassengerId = async () => {
+  const lastPassenger = await MasterPassengerTVL.findOne({
+    order: [['mp_mpid', 'DESC']],
+    raw: true
+  });
+  
+  if (!lastPassenger) {
+    return 'MP00001';
   }
+  
+  const numPart = parseInt(lastPassenger.mp_mpid.substring(2)) || 0;
+  return 'MP' + String(numPart + 1).padStart(5, '0');
 };
 
-/**
- * Create a new master passenger
- */
-const createMasterPassenger = async (req, res) => {
-  try {
-    const customerId = req.user.us_usid;
-    const {
-      firstName,
-      lastName,
-      age,
-      gender,
-      berthPreference,
-      idType,
-      idNumber,
-      aadhaar,
-      dob,
-      nationality,
-      phone,
-      email,
-      lastBookingRef
-    } = req.body;
-    
-    // Validate required fields
-    if (!firstName || !age || !gender) {
-      return res.status(400).json({
-        success: false,
-        message: 'First name, age, and gender are required'
-      });
-    }
-    
-    // Generate passenger ID
-    const passengerId = `CMP${Date.now()}${Math.floor(Math.random() * 1000)}`;
-    
-    const passenger = await CustomerMasterPassenger.create({
-      cmp_cmpid: passengerId,
-      cmp_cuid: customerId,
-      cmp_firstname: firstName,
-      cmp_lastname: lastName || null,
-      cmp_age: parseInt(age),
-      cmp_gender: gender,
-      cmp_berthpref: berthPreference || null,
-      cmp_idtype: idType || null,
-      cmp_idnumber: idNumber || null,
-      cmp_aadhaar: aadhaar || null,
-      cmp_dob: dob || null,
-      cmp_nationality: nationality || null,
-      cmp_phone: phone || null,
-      cmp_email: email || null,
-      cmp_last_booking_ref: lastBookingRef || null,
-      cmp_active: 1,
-      cmp_created_by: customerId,
-      cmp_modified_by: customerId
-    });
-    
-    res.status(201).json({
-      success: true,
-      message: 'Master passenger created successfully',
-      data: passenger
-    });
-  } catch (error) {
-    console.error('Create master passenger error:', error);
-    res.status(500).json({
-      success: false,
-      message: error.message || 'Failed to create master passenger'
-    });
-  }
-};
-
-/**
- * Update a master passenger
- */
-const updateMasterPassenger = async (req, res) => {
-  try {
-    const customerId = req.user.us_usid;
-    const { id } = req.params;
-    const {
-      firstName,
-      lastName,
-      age,
-      gender,
-      berthPreference,
-      idType,
-      idNumber,
-      aadhaar,
-      dob,
-      nationality,
-      phone,
-      email,
-      lastBookingRef,
-      active
-    } = req.body;
-    
-    // Find the passenger
-    const passenger = await CustomerMasterPassenger.findOne({
-      where: {
-        cmp_cmpid: id,
-        cmp_cuid: customerId
+const masterPassengerController = {
+  /**
+   * GET /api/master-passengers
+   * Get all master passengers for logged-in customer
+   */
+  getAllMasterPassengers: async (req, res) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ success: false, error: 'Unauthorized' });
       }
-    });
-    
-    if (!passenger) {
-      return res.status(404).json({
-        success: false,
-        message: 'Master passenger not found'
-      });
-    }
-    
-    // Update passenger data
-    const updateData = {};
-    if (firstName !== undefined) updateData.cmp_firstname = firstName;
-    if (lastName !== undefined) updateData.cmp_lastname = lastName;
-    if (age !== undefined) updateData.cmp_age = parseInt(age);
-    if (gender !== undefined) updateData.cmp_gender = gender;
-    if (berthPreference !== undefined) updateData.cmp_berthpref = berthPreference;
-    if (idType !== undefined) updateData.cmp_idtype = idType;
-    if (idNumber !== undefined) updateData.cmp_idnumber = idNumber;
-    if (aadhaar !== undefined) updateData.cmp_aadhaar = aadhaar;
-    if (dob !== undefined) updateData.cmp_dob = dob;
-    if (nationality !== undefined) updateData.cmp_nationality = nationality;
-    if (phone !== undefined) updateData.cmp_phone = phone;
-    if (email !== undefined) updateData.cmp_email = email;
-    if (lastBookingRef !== undefined) updateData.cmp_last_booking_ref = lastBookingRef;
-    if (active !== undefined) updateData.cmp_active = active ? 1 : 0;
-    
-    updateData.cmp_modified_by = customerId;
-    
-    await passenger.update(updateData);
-    
-    res.json({
-      success: true,
-      message: 'Master passenger updated successfully',
-      data: passenger
-    });
-  } catch (error) {
-    console.error('Update master passenger error:', error);
-    res.status(500).json({
-      success: false,
-      message: error.message || 'Failed to update master passenger'
-    });
-  }
-};
 
-/**
- * Delete (deactivate) a master passenger
- */
-const deleteMasterPassenger = async (req, res) => {
-  try {
-    const customerId = req.user.us_usid;
-    const { id } = req.params;
-    
-    // Find the passenger
-    const passenger = await CustomerMasterPassenger.findOne({
-      where: {
-        cmp_cmpid: id,
-        cmp_cuid: customerId
+      const userId = req.user.us_usid;
+
+      // Get customer record for this user
+      const customer = await CustomerTVL.findOne({
+        where: { cu_usid: userId },
+        raw: true
+      });
+
+      if (!customer) {
+        return res.status(403).json({ success: false, error: 'Customer record not found' });
       }
-    });
-    
-    if (!passenger) {
-      return res.status(404).json({
-        success: false,
-        message: 'Master passenger not found'
-      });
-    }
-    
-    // Soft delete by setting active to 0
-    await passenger.update({
-      cmp_active: 0,
-      cmp_modified_by: customerId
-    });
-    
-    res.json({
-      success: true,
-      message: 'Master passenger deactivated successfully'
-    });
-  } catch (error) {
-    console.error('Delete master passenger error:', error);
-    res.status(500).json({
-      success: false,
-      message: error.message || 'Failed to deactivate master passenger'
-    });
-  }
-};
 
-/**
- * Get a single master passenger
- */
-const getMasterPassengerById = async (req, res) => {
-  try {
-    const customerId = req.user.us_usid;
-    const { id } = req.params;
-    
-    const passenger = await CustomerMasterPassenger.findOne({
-      where: {
-        cmp_cmpid: id,
-        cmp_cuid: customerId,
-        cmp_active: 1
+      // Fetch all active master passengers for this customer
+      const passengers = await MasterPassengerTVL.findAll({
+        where: { 
+          mp_usid: userId,
+          mp_active: 1
+        },
+        order: [['edtm', 'DESC']],
+        raw: true
+      });
+
+      res.json({
+        success: true,
+        data: passengers.map(p => ({
+          id: p.mp_mpid,
+          name: p.mp_name,
+          dateOfBirth: p.mp_dob,
+          gender: p.mp_gender,
+          birthPreference: p.mp_birthpref,
+          createdAt: p.edtm,
+          updatedAt: p.mdtm
+        }))
+      });
+    } catch (error) {
+      console.error('Get master passengers error:', error);
+      res.status(500).json({ success: false, error: error.message });
+    }
+  },
+
+  /**
+   * GET /api/master-passengers/:id
+   * Get single master passenger by ID
+   */
+  getMasterPassengerById: async (req, res) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ success: false, error: 'Unauthorized' });
       }
-    });
-    
-    if (!passenger) {
-      return res.status(404).json({
-        success: false,
-        message: 'Master passenger not found'
+
+      const { id } = req.params;
+      const userId = req.user.us_usid;
+
+      const passenger = await MasterPassengerTVL.findOne({
+        where: { 
+          mp_mpid: id,
+          mp_usid: userId
+        },
+        raw: true
       });
+
+      if (!passenger) {
+        return res.status(404).json({ success: false, error: 'Master passenger not found' });
+      }
+
+      res.json({
+        success: true,
+        data: {
+          id: passenger.mp_mpid,
+          name: passenger.mp_name,
+          dateOfBirth: passenger.mp_dob,
+          gender: passenger.mp_gender,
+          birthPreference: passenger.mp_birthpref,
+          createdAt: passenger.edtm,
+          updatedAt: passenger.mdtm
+        }
+      });
+    } catch (error) {
+      console.error('Get master passenger error:', error);
+      res.status(500).json({ success: false, error: error.message });
     }
-    
-    res.json({
-      success: true,
-      data: passenger
-    });
-  } catch (error) {
-    console.error('Get master passenger error:', error);
-    res.status(500).json({
-      success: false,
-      message: error.message || 'Failed to fetch master passenger'
-    });
+  },
+
+  /**
+   * POST /api/master-passengers
+   * Create new master passenger
+   */
+  createMasterPassenger: async (req, res) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ success: false, error: 'Unauthorized' });
+      }
+
+      const { name, dateOfBirth, gender, birthPreference } = req.body;
+      const userId = req.user.us_usid;
+
+      // Validate required fields
+      if (!name || !dateOfBirth || !gender) {
+        return res.status(400).json({
+          success: false,
+          error: 'Name, Date of Birth, and Gender are required'
+        });
+      }
+
+      // Validate gender
+      if (!['M', 'F', 'O'].includes(gender)) {
+        return res.status(400).json({
+          success: false,
+          error: 'Gender must be M, F, or O'
+        });
+      }
+
+      // Generate ID
+      const mpId = await generateMasterPassengerId();
+
+      // Create master passenger
+      const passenger = await MasterPassengerTVL.create({
+        mp_mpid: mpId,
+        mp_usid: userId,
+        mp_name: name,
+        mp_dob: dateOfBirth,
+        mp_gender: gender,
+        mp_birthpref: birthPreference || null,
+        mp_active: 1,
+        eby: userId,
+        mby: userId
+      });
+
+      res.status(201).json({
+        success: true,
+        message: 'Master passenger created successfully',
+        data: {
+          id: passenger.mp_mpid,
+          name: passenger.mp_name,
+          dateOfBirth: passenger.mp_dob,
+          gender: passenger.mp_gender,
+          birthPreference: passenger.mp_birthpref,
+          createdAt: passenger.edtm
+        }
+      });
+    } catch (error) {
+      console.error('Create master passenger error:', error);
+      res.status(500).json({ success: false, error: error.message });
+    }
+  },
+
+  /**
+   * PUT /api/master-passengers/:id
+   * Update master passenger
+   */
+  updateMasterPassenger: async (req, res) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ success: false, error: 'Unauthorized' });
+      }
+
+      const { id } = req.params;
+      const { name, dateOfBirth, gender, birthPreference } = req.body;
+      const userId = req.user.us_usid;
+
+      // Check if passenger exists and belongs to this user
+      const passenger = await MasterPassengerTVL.findOne({
+        where: { 
+          mp_mpid: id,
+          mp_usid: userId
+        }
+      });
+
+      if (!passenger) {
+        return res.status(404).json({ success: false, error: 'Master passenger not found' });
+      }
+
+      // Validate gender if provided
+      if (gender && !['M', 'F', 'O'].includes(gender)) {
+        return res.status(400).json({
+          success: false,
+          error: 'Gender must be M, F, or O'
+        });
+      }
+
+      // Update fields
+      if (name) passenger.mp_name = name;
+      if (dateOfBirth) passenger.mp_dob = dateOfBirth;
+      if (gender) passenger.mp_gender = gender;
+      if (birthPreference !== undefined) passenger.mp_birthpref = birthPreference;
+      passenger.mby = userId;
+
+      await passenger.save();
+
+      res.json({
+        success: true,
+        message: 'Master passenger updated successfully',
+        data: {
+          id: passenger.mp_mpid,
+          name: passenger.mp_name,
+          dateOfBirth: passenger.mp_dob,
+          gender: passenger.mp_gender,
+          birthPreference: passenger.mp_birthpref,
+          updatedAt: passenger.mdtm
+        }
+      });
+    } catch (error) {
+      console.error('Update master passenger error:', error);
+      res.status(500).json({ success: false, error: error.message });
+    }
+  },
+
+  /**
+   * DELETE /api/master-passengers/:id
+   * Delete (soft delete) master passenger
+   */
+  deleteMasterPassenger: async (req, res) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ success: false, error: 'Unauthorized' });
+      }
+
+      const { id } = req.params;
+      const userId = req.user.us_usid;
+
+      // Check if passenger exists and belongs to this user
+      const passenger = await MasterPassengerTVL.findOne({
+        where: { 
+          mp_mpid: id,
+          mp_usid: userId
+        }
+      });
+
+      if (!passenger) {
+        return res.status(404).json({ success: false, error: 'Master passenger not found' });
+      }
+
+      // Soft delete
+      passenger.mp_active = 0;
+      passenger.mby = userId;
+      await passenger.save();
+
+      res.json({
+        success: true,
+        message: 'Master passenger deleted successfully'
+      });
+    } catch (error) {
+      console.error('Delete master passenger error:', error);
+      res.status(500).json({ success: false, error: error.message });
+    }
   }
 };
 
-module.exports = {
-  getCustomerMasterPassengers,
-  createMasterPassenger,
-  updateMasterPassenger,
-  deleteMasterPassenger,
-  getMasterPassengerById
-};
+module.exports = masterPassengerController;

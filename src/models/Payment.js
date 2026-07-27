@@ -46,6 +46,16 @@ const Payment = sequelize.define('pyXpayment', {
     allowNull: true,
     comment: 'Customer phone'
   },
+
+  py_cusid: {
+    type: DataTypes.STRING(15),
+    allowNull: true,
+    comment: 'Customer ID (FK to cuXcustomer.cu_cusid)',
+    references: {
+      model: 'cuXcustomer',
+      key: 'cu_cusid'
+    }
+  },
   
   py_amount: {
     type: DataTypes.DECIMAL(15, 2),
@@ -64,6 +74,18 @@ const Payment = sequelize.define('pyXpayment', {
     type: DataTypes.STRING(100),
     allowNull: true,
     comment: 'Bank account name'
+  },
+
+  py_payment_mode: {
+    type: DataTypes.STRING(50),
+    allowNull: true,
+    comment: 'Payment mode (Cash, Bank, UPI, etc.)'
+  },
+
+  py_narration: {
+    type: DataTypes.STRING(200),
+    allowNull: true,
+    comment: 'Narration / description'
   },
   
   py_balance: {
@@ -207,6 +229,13 @@ Payment.associate = function(models) {
     foreignKey: 'py_created_by',
     targetKey: 'us_usid',
     as: 'creator'
+  });
+  
+  // Associate with Customer via py_cusid
+  Payment.belongsTo(models.CustomerTVL || models.Customer, {
+    foreignKey: 'py_cusid',
+    targetKey: 'cu_cusid',
+    as: 'customer'
   });
 };
 

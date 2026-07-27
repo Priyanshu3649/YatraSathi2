@@ -38,12 +38,15 @@ const MasterPassengerList = () => {
       setError(''); // Clear any previous errors
       const response = await masterPassengerAPI.getMasterPassengers();
       if (response.success) {
-        setPassengers(response.data || []);
+        const passengersData = Array.isArray(response.data) ? response.data : (response.data?.passengers || []);
+        setPassengers(passengersData);
       } else {
         setError(response.message || 'Failed to load passengers');
+        setPassengers([]); // Ensure state is always an array
       }
     } catch (err) {
       setError(err.message || 'Failed to load passengers');
+      setPassengers([]); // Ensure state is always an array on error
       console.error('Load passengers error:', err);
     } finally {
       setLoading(false);
@@ -484,7 +487,7 @@ const MasterPassengerList = () => {
                     <tbody>
                       {passengers.map((passenger, index) => (
                         <tr 
-                          key={passenger.cmp_cmpid} 
+                          key={passenger.cmp_cmpid || passenger.ml_mlid || passenger.id || index} 
                           className={index % 2 === 0 ? 'erp-row-even' : 'erp-row-odd'}
                         >
                           <td>

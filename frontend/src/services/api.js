@@ -389,8 +389,18 @@ export const bookingAPI = {
 
   // Get all bookings for current user
   getMyBookings: async (params = {}) => {
+    const userStr = localStorage.getItem('user');
+    let isCustomer = false;
+    try {
+      const u = JSON.parse(userStr || '{}');
+      if (u.us_usertype === 'customer' || u.us_roid === 'CUS' || u.userType === 'customer') {
+        isCustomer = true;
+      }
+    } catch (_) {}
+
     const queryParams = new URLSearchParams(params).toString();
-    const url = queryParams ? `${API_BASE_URL}/bookings/my-bookings?${queryParams}` : `${API_BASE_URL}/bookings/my-bookings`;
+    const baseUrl = isCustomer ? `${API_BASE_URL}/customer/bookings` : `${API_BASE_URL}/bookings/my-bookings`;
+    const url = queryParams ? `${baseUrl}?${queryParams}` : baseUrl;
     const response = await fetch(url, {
       method: 'GET',
       headers: getHeaders(true)
@@ -438,15 +448,33 @@ export const bookingAPI = {
 
   // Get booking by ID
   getBookingById: async (id) => {
-    const response = await fetch(`${API_BASE_URL}/bookings/${id}`, {
+    const userStr = localStorage.getItem('user');
+    let isCustomer = false;
+    try {
+      const u = JSON.parse(userStr || '{}');
+      if (u.us_usertype === 'customer' || u.us_roid === 'CUS' || u.userType === 'customer') {
+        isCustomer = true;
+      }
+    } catch (_) {}
+
+    const primaryUrl = isCustomer ? `${API_BASE_URL}/customer/bookings/${id}` : `${API_BASE_URL}/bookings/${id}`;
+    let response = await fetch(primaryUrl, {
       method: 'GET',
       headers: getHeaders(true)
     });
 
+    if (!response.ok && isCustomer) {
+      // Fallback to general bookings endpoint if customer endpoint returned 404
+      response = await fetch(`${API_BASE_URL}/bookings/${id}`, {
+        method: 'GET',
+        headers: getHeaders(true)
+      });
+    }
+
     const data = await response.json();
 
     if (!response.ok) {
-      throw new Error(data.message || 'Failed to get booking');
+      throw new Error(data.message || data.error?.message || 'Failed to get booking');
     }
 
     return data;
@@ -678,17 +706,12 @@ export const paymentAPI = {
 
   // Get all payments (admin and employees)
   getAllPayments: async (params = {}) => {
-    const userRole = getUserRole();
-
-    // Use employee-specific endpoint for employee roles
-    const isEmployee = ['AGT', 'ACC', 'HR', 'CC', 'MKT', 'MGT', 'ADM'].includes(userRole);
+    // Always use /api/payments for Payment Vouchers (pyXpayment table)
+    // Employee-specific filtering is handled on the backend via auth/permissions
     const queryParams = new URLSearchParams(params).toString();
-    const baseUrl = isEmployee
-      ? `${API_BASE_URL}/employee/payments`
+    const url = queryParams 
+      ? `${API_BASE_URL}/payments?${queryParams}` 
       : `${API_BASE_URL}/payments`;
-    const url = queryParams
-      ? `${baseUrl}?${queryParams}`
-      : baseUrl;
 
     const response = await fetch(url, {
       method: 'GET',

@@ -80,30 +80,32 @@ const getCustomerDetails = async (req, res) => {
           attributes: ['us_fname', 'us_lname', 'us_email', 'us_phone', 'us_aadhaar',
             'us_addr1', 'us_city', 'us_state', 'us_pin', 'us_roid', 'us_active', 'us_edtm']
         }],
-        where: { [Op.or]: [{ cu_cusid: customerId }, { cu_usid: customerId }, { cu_custno: customerId }] }
+        where: { [Op.or]: [{ cu_cusid: customerId }, { cu_usid: customerId }, { cu_custno: customerId }] },
+        raw: false
       });
       if (cust) {
+        const custObj = cust.toJSON ? cust.toJSON() : cust;
         customer = {
-          id: cust.cu_usid,
-          customerId: cust.cu_custno,
-          name: cust.user ? `${cust.user.us_fname || ''} ${cust.user.us_lname || ''}`.trim() : '',
-          email: cust.user?.us_email || '',
-          phone: cust.user?.us_phone || '',
-          customerType: cust.cu_custtype || 'Individual',
-          company: cust.cu_compid || '',
-          gstNumber: cust.cu_gstno || '',
-          panNumber: cust.cu_panno || '',
-          creditLimit: parseFloat(cust.cu_creditlimit) || 0,
-          creditDays: cust.cu_creditdays || 0,
-          discount: cust.cu_discount || 0,
-          active: cust.cu_active,
-          address: cust.user?.us_addr1 || '',
-          city: cust.user?.us_city || '',
-          state: cust.user?.us_state || '',
+          id: custObj.cu_usid,
+          customerId: custObj.cu_custno,
+          name: custObj.user ? `${custObj.user.us_fname || ''} ${custObj.user.us_lname || ''}`.trim() : '',
+          email: custObj.user?.us_email || '',
+          phone: custObj.user?.us_phone || '',
+          customerType: custObj.cu_custtype || 'Individual',
+          company: custObj.cu_compid || '',
+          gstNumber: custObj.cu_gstno || '',
+          panNumber: custObj.cu_panno || '',
+          creditLimit: parseFloat(custObj.cu_creditlimit) || 0,
+          creditDays: custObj.cu_creditdays || 0,
+          discount: custObj.cu_discount || 0,
+          active: custObj.cu_active,
+          address: custObj.user?.us_addr1 || '',
+          city: custObj.user?.us_city || '',
+          state: custObj.user?.us_state || '',
           country: 'India',
-          pin: cust.user?.us_pin || '',
-          aadhaar: cust.user?.us_aadhaar || '',
-          createdAt: cust.user?.us_edtm || null
+          pin: custObj.user?.us_pin || '',
+          aadhaar: custObj.user?.us_aadhaar || '',
+          createdAt: custObj.user?.us_edtm || null
         };
       }
     } catch (err) {
@@ -248,32 +250,36 @@ const getCustomerDetails = async (req, res) => {
         raw: true
       });
       for (const bk of bookings) {
-        const passengerCount = await Passenger.count({ where: { ps_bkid: bk.bk_bkid, ps_active: 1 } });
-        // Check if this booking has an associated bill
-        const billCount = await Bill.count({ where: { bl_booking_id: bk.bk_bkid } });
-        let fromName = bk.bk_fromst || '', toName = bk.bk_tost || '';
         try {
-          const [fromSt] = await sequelizeTVL.query(
-            `SELECT st_stname FROM stXstation WHERE st_stid = :id LIMIT 1`,
-            { replacements: { id: bk.bk_fromst }, type: QueryTypes.SELECT }
-          );
-          const [toSt] = await sequelizeTVL.query(
-            `SELECT st_stname FROM stXstation WHERE st_stid = :id LIMIT 1`,
-            { replacements: { id: bk.bk_tost }, type: QueryTypes.SELECT }
-          );
-          if (fromSt) fromName = fromSt.st_stname || fromName;
-          if (toSt) toName = toSt.st_stname || toName;
-        } catch (_) { /* keep codes */ }
-        recentBookings.push({
-          id: bk.bk_bkid,
-          bookingNo: bk.bk_bkno,
-          date: bk.bk_trvldt || bk.edtm,
-          from: fromName,
-          to: toName,
-          passengers: passengerCount,
-          status: bk.bk_status,
-          hasBilling: billCount > 0
-        });
+          const passengerCount = await Passenger.count({ where: { ps_bkid: bk.bk_bkid, ps_active: 1 } });
+          // Check if this booking has an associated bill
+          const billCount = await Bill.count({ where: { bl_booking_id: bk.bk_bkid } });
+          let fromName = bk.bk_fromst || '', toName = bk.bk_tost || '';
+          try {
+            const [fromSt] = await sequelizeTVL.query(
+              `SELECT st_stname FROM stXstation WHERE st_stid = :id LIMIT 1`,
+              { replacements: { id: bk.bk_fromst }, type: QueryTypes.SELECT }
+            );
+            const [toSt] = await sequelizeTVL.query(
+              `SELECT st_stname FROM stXstation WHERE st_stid = :id LIMIT 1`,
+              { replacements: { id: bk.bk_tost }, type: QueryTypes.SELECT }
+            );
+            if (fromSt) fromName = fromSt.st_stname || fromName;
+            if (toSt) toName = toSt.st_stname || toName;
+          } catch (_) { /* keep codes */ }
+          recentBookings.push({
+            id: bk.bk_bkid,
+            bookingNo: bk.bk_bkno,
+            date: bk.bk_trvldt || bk.edtm,
+            from: fromName,
+            to: toName,
+            passengers: passengerCount,
+            status: bk.bk_status,
+            hasBilling: billCount > 0
+          });
+        } catch (bookingErr) {
+          console.error('Failed to process booking:', bookingErr.message);
+        }
       }
     } catch (err) {
       console.error('CustomerDetails: recent bookings failed:', err.message);

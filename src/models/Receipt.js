@@ -48,7 +48,7 @@ const Receipt = sequelize.define('rcReceipt', {
   },
   
   rc_payment_mode: {
-    type: DataTypes.ENUM('Cash', 'Bank', 'Cheque', 'Online'),
+    type: DataTypes.ENUM('Cash', 'Bank', 'Cheque', 'Online', 'UPI', 'NEFT', 'RTGS', 'IMPS', 'Bank Transfer', 'Credit Card', 'Debit Card'),
     allowNull: false,
     defaultValue: 'Cash',
     comment: 'Payment mode'

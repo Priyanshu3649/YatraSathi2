@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useEffect, useCallback } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { bookingAPI } from '../services/api';
 import Modal from '../components/Modal';
 import '../styles/my-bookings.css';
@@ -9,33 +9,19 @@ const MyBookings = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const navigate = useNavigate();
+  const location = useLocation();
 
-  useEffect(() => {
-    fetchBookings();
-  }, []);
-
-  const fetchBookings = async () => {
+  const fetchBookings = useCallback(async () => {
     try {
+      setLoading(true);
+      setError('');
       // Use the bookingAPI service which calls /api/bookings/my-bookings
       const data = await bookingAPI.getMyBookings();
       
-      console.log('Fetched bookings data:', data); // Debug log
-      
       if (data.success) {
-        const bookingsData = data.data.bookings || [];
-        console.log('Bookings array:', bookingsData); // Debug log
-        
-        // Log first booking to see structure
-        if (bookingsData.length > 0) {
-          console.log('First booking structure:', bookingsData[0]);
-          console.log('Date fields:', {
-            bk_jdate: bookingsData[0].bk_jdate,
-            bk_trvldt: bookingsData[0].bk_trvldt,
-            bk_travelldate: bookingsData[0].bk_travelldate,
-            booking_travel_date: bookingsData[0].booking_travel_date
-          });
-        }
-        
+        const bookingsData = Array.isArray(data.data) 
+          ? data.data 
+          : (data.data?.bookings || []);
         setBookings(bookingsData);
       } else {
         setError(data.error?.message || 'Failed to load bookings');
@@ -46,7 +32,12 @@ const MyBookings = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
+
+  // Fetch on mount and whenever navigating back to this page
+  useEffect(() => {
+    fetchBookings();
+  }, [fetchBookings, location.key]);
 
   const getStatusColor = (status) => {
     const statusColors = {
@@ -294,7 +285,7 @@ const MyBookings = () => {
                             if (window.confirm('Are you sure you want to cancel this booking?')) {
                               try {
                                 await bookingAPI.cancelBooking(booking.bk_bkid);
-                                // Refresh the bookings list
+                                // Refresh list from server to get accurate status
                                 fetchBookings();
                               } catch (error) {
                                 console.error('Error cancelling booking:', error);

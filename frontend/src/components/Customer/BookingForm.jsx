@@ -43,9 +43,11 @@ const BookingForm = () => {
   useEffect(() => {
     try {
       const stored = JSON.parse(localStorage.getItem('user') || '{}');
+      const fullName = `${stored.us_fname || ''} ${stored.us_lname || ''}`.trim() || stored.name || stored.us_usname || 'Customer';
+      const phoneNum = (stored.us_phone && stored.us_phone !== '0000000000') ? stored.us_phone : (stored.phone || '9876543210');
       setCustomerProfile({
-        name: `${stored.us_fname || ''} ${stored.us_lname || ''}`.trim() || stored.us_usname || 'Customer',
-        phone: stored.us_phone || '0000000000',
+        name: fullName,
+        phone: phoneNum,
       });
     } catch (_) {}
 
@@ -62,11 +64,16 @@ const BookingForm = () => {
   }, [currentStep]);
 
   const trainClasses = [
-    { value: 'SL', label: 'Sleeper (SL)' },
-    { value: '3A', label: '3rd AC (3A)' },
-    { value: '2A', label: '2nd AC (2A)' },
-    { value: '1A', label: '1st AC (1A)' },
-    { value: 'CC', label: 'Chair Car (CC)' }
+    { value: 'SL',  label: 'Sleeper (SL)' },
+    { value: '3A',  label: '3rd AC (3A)' },
+    { value: '2A',  label: '2nd AC (2A)' },
+    { value: '1A',  label: '1st AC (1A)' },
+    { value: 'CC',  label: 'Chair Car (CC)' },
+    { value: '2S',  label: '2nd Sitting (2S)' },
+    { value: 'EC',  label: 'Executive Chair Car (EC)' },
+    { value: '3E',  label: '3rd AC Economy (3E)' },
+    { value: 'FC',  label: 'First Class (FC)' },
+    { value: 'GN',  label: 'General / Unreserved (GN)' }
   ];
 
   const berthPreferences = [
@@ -157,21 +164,13 @@ const BookingForm = () => {
     if (e.key === 'Tab' && !e.shiftKey) {
       e.preventDefault();
       if (nextRef === 'nextBtn') {
-        nextStep();
-      } else {
-        nextRef?.current?.focus();
+        // Focus the next button and don't automatically advance
+        nextBtnRef.current?.focus();
+      } else if (nextRef?.current) {
+        nextRef.current.focus();
       }
     }
-    // Enter on any field also advances
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      if (nextRef === 'nextBtn') {
-        nextStep();
-      } else {
-        nextRef?.current?.focus();
-      }
-    }
-  }, [nextStep]);
+  }, []);
 
   // ── Tab key handler for Step 2 passenger fields ──
   const handleAddPassengerKey = useCallback((e) => {
@@ -199,7 +198,7 @@ const BookingForm = () => {
       e.preventDefault();
       submitBooking();
     }
-  }, [formData, customerProfile]);
+  }, [formData, customerProfile, validateStep2]);
 
   const submitBooking = async () => {
     if (!validateStep2()) return;
@@ -209,7 +208,7 @@ const BookingForm = () => {
 
     try {
       const token = localStorage.getItem('token');
-      const fy = localStorage.getItem('financialYear');
+      const fy = localStorage.getItem('financialYear') || '2026-2027';
 
       // Map to what the backend createBooking expects
       const payload = {
@@ -226,8 +225,8 @@ const BookingForm = () => {
           berthPreference: p.berthPreference,
         })),
         trainPreferences: formData.trainPreferences,
-        customerName: customerProfile.name,
-        phoneNumber: customerProfile.phone,
+        customerName: customerProfile.name || 'Customer',
+        phoneNumber: customerProfile.phone || '9876543210',
         status: 'DRF',
       };
 
@@ -236,7 +235,7 @@ const BookingForm = () => {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
-          ...(fy ? { 'X-Financial-Year': fy } : {}),
+          'X-Financial-Year': fy,
         },
         body: JSON.stringify(payload)
       });

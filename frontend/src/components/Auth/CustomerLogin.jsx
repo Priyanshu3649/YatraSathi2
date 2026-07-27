@@ -1,5 +1,7 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../../contexts/AuthContext';
+import { sessionAPI } from '../../services/api';
 import '../../styles/erp-auth-theme.css';
 
 const CustomerLogin = () => {
@@ -10,6 +12,7 @@ const CustomerLogin = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const navigate = useNavigate();
+  const { login, selectFinancialYear } = useAuth();
 
   // Keyboard navigation
   const emailRef = useRef(null);
@@ -45,6 +48,21 @@ const CustomerLogin = () => {
     });
   };
 
+  const pickCurrentFY = (fyList, serverCurrentFY) => {
+    if (serverCurrentFY && fyList.find(f => f.fy_name === serverCurrentFY)) {
+      return serverCurrentFY;
+    }
+    const today = new Date();
+    const year = today.getFullYear();
+    const month = today.getMonth() + 1;
+    const startYear = month >= 4 ? year : year - 1;
+    const endYear = (startYear + 1) % 100;
+    const label = `${startYear}-${String(endYear).padStart(2, '0')}`;
+    const match = fyList.find(f => f.fy_name === label);
+    if (match) return match.fy_name;
+    return fyList[fyList.length - 1]?.fy_name || null;
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
@@ -62,15 +80,45 @@ const CustomerLogin = () => {
       const data = await response.json();
 
       if (response.ok) {
+        const token = data.token || data.data?.token;
+        const rawUser = data.user || data.data?.user || data;
+        
+        const userObject = {
+          us_usid: rawUser.id || rawUser.us_usid || data.id,
+          us_fname: rawUser.name || rawUser.us_fname || data.name || 'Customer',
+          us_email: rawUser.email || rawUser.us_email || data.email,
+          us_phone: rawUser.phone || rawUser.us_phone || '',
+          us_usertype: rawUser.us_usertype || 'customer',
+          us_roid: rawUser.role || rawUser.us_roid || 'CUS',
+          userType: 'customer',
+          role: 'CUS'
+        };
+
         // Store token and user data
-        localStorage.setItem('token', data.token);
-        localStorage.setItem('user', JSON.stringify({
-          id: data.id,
-          name: data.name,
-          email: data.email,
-          userType: data.us_usertype
-        }));
-        localStorage.setItem('sessionId', data.sessionId);
+        localStorage.setItem('token', token);
+        localStorage.setItem('user', JSON.stringify(userObject));
+        if (data.sessionId || data.data?.sessionId) {
+          localStorage.setItem('sessionId', data.sessionId || data.data?.sessionId);
+        }
+
+        // Fetch available FYs and auto-select current FY
+        try {
+          const fyRes = await sessionAPI.getAvailableYears();
+          const fyList = (fyRes.success && fyRes.data?.length > 0) ? fyRes.data : [];
+          const chosenFY = pickCurrentFY(fyList, fyRes.currentFY);
+
+          if (chosenFY) {
+            await sessionAPI.selectYear(chosenFY);
+            localStorage.setItem('financialYear', chosenFY);
+            if (typeof selectFinancialYear === 'function') selectFinancialYear(chosenFY);
+          }
+        } catch (fyErr) {
+          console.warn('FY selection during customer login fallback:', fyErr.message);
+        }
+
+        if (typeof login === 'function') {
+          login(token, userObject);
+        }
 
         // Redirect to customer dashboard
         navigate('/customer/dashboard');

@@ -60,6 +60,36 @@ async function setupViews() {
         continue;
       }
 
+      // Drop foreign keys referencing constant tables (views) first
+      try {
+        const [fks] = await connection.query(`
+          SELECT 
+            TABLE_NAME, 
+            CONSTRAINT_NAME,
+            REFERENCED_TABLE_NAME
+          FROM 
+            information_schema.KEY_COLUMN_USAGE 
+          WHERE 
+            TABLE_SCHEMA = ? 
+            AND REFERENCED_TABLE_NAME IS NOT NULL
+        `, [dbName]);
+
+        const fksToDrop = fks.filter(fk => CONSTANT_TABLES.includes(fk.REFERENCED_TABLE_NAME) || CONSTANT_TABLES.map(t => t.toLowerCase()).includes(fk.REFERENCED_TABLE_NAME.toLowerCase()));
+        if (fksToDrop.length > 0) {
+          console.log(`  Removing ${fksToDrop.length} foreign key constraints referencing master tables...`);
+          for (const fk of fksToDrop) {
+            try {
+              await connection.query(`ALTER TABLE \`${dbName}\`.\`${fk.TABLE_NAME}\` DROP FOREIGN KEY \`${fk.CONSTRAINT_NAME}\``);
+              console.log(`    ✅ Removed FK ${fk.CONSTRAINT_NAME} from ${fk.TABLE_NAME}`);
+            } catch (fkErr) {
+              console.log(`    ⚠️ Could not drop FK ${fk.CONSTRAINT_NAME}: ${fkErr.message}`);
+            }
+          }
+        }
+      } catch (err) {
+        console.warn(`  ⚠️ Failed to check/drop foreign keys: ${err.message}`);
+      }
+
       // Process each constant table
       for (const table of CONSTANT_TABLES) {
         try {

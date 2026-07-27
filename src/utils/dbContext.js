@@ -15,10 +15,11 @@ const cacheFYs = async () => {
   try {
     // Lazily require sequelize to avoid circular dependencies
     const { sequelize } = require('../../config/db');
+    const masterDb = process.env.DB_NAME_TVL || 'YATRASATHI_MASTER';
     
-    // Fetch active financial years from current database context
+    // Fetch active financial years from master database context
     const rows = await sequelize.query(
-      'SELECT fy_label AS fy_name, db_name AS fy_dbname FROM financial_years WHERE is_active = 1',
+      `SELECT fy_label AS fy_name, db_name AS fy_dbname FROM \`${masterDb}\`.financial_years WHERE is_active = 1`,
       { type: sequelize.QueryTypes.SELECT }
     );
     
@@ -47,6 +48,7 @@ const getDbNameForFY = async (fy) => {
 const checkUserFYPermission = async (userId, fy) => {
   try {
     const { sequelize } = require('../../config/db');
+    const masterDb = process.env.DB_NAME_TVL || 'YATRASATHI_MASTER';
     
     // First, check if the user is an admin. Admins have access to all financial years.
     const [user] = await sequelize.query(
@@ -58,10 +60,22 @@ const checkUserFYPermission = async (userId, fy) => {
       return true;
     }
 
-    // Otherwise, check explicit mapping in user_financial_years
+    // Customers automatically get access to the current financial year (2026-27)
+    if (user && user.us_usertype === 'customer') {
+      // Check if requested FY is the current FY (2026-27)
+      const [currentFY] = await sequelize.query(
+        `SELECT 1 FROM \`${masterDb}\`.financial_years WHERE fy_label = ? AND is_active = 1`,
+        { replacements: [fy], type: sequelize.QueryTypes.SELECT }
+      );
+      if (currentFY) {
+        return true; // Auto-grant customers access to active FY
+      }
+    }
+
+    // For employees/others, check explicit mapping in user_financial_years
     const rows = await sequelize.query(
-      `SELECT 1 FROM user_financial_years ufy
-       JOIN financial_years fy ON ufy.ufy_fyid = fy.fy_id
+      `SELECT 1 FROM \`${masterDb}\`.user_financial_years ufy
+       JOIN \`${masterDb}\`.financial_years fy ON ufy.ufy_fyid = fy.fy_id
        WHERE ufy.ufy_usid = ? AND fy.fy_label = ? AND fy.is_active = 1`,
       { replacements: [userId, fy], type: sequelize.QueryTypes.SELECT }
     );

@@ -92,8 +92,10 @@ const canEditBooking = async (req, res, next) => {
         });
       }
 
-      // Check if customer owns this booking
-      if (booking.bk_usid !== userId) {
+      // Check if customer owns this booking (by user ID or phone number)
+      const userPhone = (req.user.us_phone || '').replace(/\D/g, '');
+      const isOwner = booking.bk_usid === userId || (userPhone && userPhone.length >= 10 && booking.bk_phonenumber === userPhone);
+      if (!isOwner) {
         return res.status(403).json({
           success: false,
           error: { code: 'FORBIDDEN', message: 'Access denied. You can only edit your own bookings.' }
@@ -173,8 +175,10 @@ const canViewBooking = async (req, res, next) => {
         });
       }
 
-      // Check if customer owns this booking
-      if (booking.bk_usid !== userId) {
+      // Check if customer owns this booking (by user ID or phone number)
+      const userPhone = (req.user.us_phone || '').replace(/\D/g, '');
+      const isOwner = booking.bk_usid === userId || (userPhone && userPhone.length >= 10 && booking.bk_phonenumber === userPhone);
+      if (!isOwner) {
         return res.status(403).json({
           success: false,
           error: { code: 'FORBIDDEN', message: 'Access denied. You can only view your own bookings.' }
@@ -243,8 +247,10 @@ const canCancelBooking = async (req, res, next) => {
         });
       }
 
-      // Check if customer owns this booking
-      if (booking.bk_usid !== userId) {
+      // Check if customer owns this booking (by user ID or phone number)
+      const userPhone = (req.user.us_phone || '').replace(/\D/g, '');
+      const isOwner = booking.bk_usid === userId || (userPhone && userPhone.length >= 10 && booking.bk_phonenumber === userPhone);
+      if (!isOwner) {
         return res.status(403).json({
           success: false,
           error: { code: 'FORBIDDEN', message: 'Access denied. You can only cancel your own bookings.' }

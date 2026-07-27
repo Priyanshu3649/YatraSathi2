@@ -41,6 +41,7 @@ const BillingMaster = require('./BillingMaster');
 const PassengerTVL = require('./PassengerTVL');
 const MasterPassengerList = require('./MasterPassengerList');
 const CustomerMasterPassenger = require('./CustomerMasterPassenger');
+const MasterPassengerTVL = require('./MasterPassengerTVL');
 const ReportTemplate = require('./ReportTemplate');
 const Contra = require('./Contra');
 const Receipt = require('./Receipt');
@@ -98,7 +99,9 @@ Customer.hasMany(CustomerContact, { foreignKey: 'cc_usid', sourceKey: 'cu_usid' 
 Customer.hasMany(Booking, { foreignKey: 'bk_usid', sourceKey: 'cu_usid', as: 'bookings' });
 Customer.hasMany(Account, { foreignKey: 'ac_usid', sourceKey: 'cu_usid' });
 Customer.hasMany(ServiceCharge, { foreignKey: 'customer_id', sourceKey: 'cu_usid' });
+Customer.hasMany(MasterPassengerTVL, { foreignKey: 'mp_usid', sourceKey: 'cu_usid', as: 'masterPassengers' });
 ServiceCharge.belongsTo(Customer, { foreignKey: 'customer_id', targetKey: 'cu_usid' });
+MasterPassengerTVL.belongsTo(Customer, { foreignKey: 'mp_usid', targetKey: 'cu_usid', as: 'customer' });
 
 // CorporateCustomer associations
 CorporateCustomer.belongsTo(User, { foreignKey: 'cu_usid', targetKey: 'us_usid' });
@@ -225,6 +228,8 @@ console.log('✅ BillTVL associations defined');
 
 // Payment, Contra, Receipt, and Journal associations
 Payment.belongsTo(User, { foreignKey: 'py_created_by', targetKey: 'us_usid', as: 'creator' });
+Payment.belongsTo(CustomerTVL, { foreignKey: 'py_cusid', targetKey: 'cu_cusid', as: 'customer' });
+CustomerTVL.hasMany(Payment, { foreignKey: 'py_cusid', sourceKey: 'cu_cusid', as: 'payments' });
 Contra.belongsTo(User, { foreignKey: 'ct_created_by', targetKey: 'us_usid', as: 'creator' });
 Receipt.belongsTo(User, { foreignKey: 'rc_created_by', targetKey: 'us_usid', as: 'creator' });
 Journal.belongsTo(User, { foreignKey: 'je_created_by', targetKey: 'us_usid', as: 'creator' });
@@ -302,6 +307,7 @@ module.exports = {
   YearEndClosingTVL,
   PassengerTVL,
   MasterPassengerList,
+  MasterPassengerTVL,
   CustomerMasterPassenger,
   ReportTemplate,
   Contra,

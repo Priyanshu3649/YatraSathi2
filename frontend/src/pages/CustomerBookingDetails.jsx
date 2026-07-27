@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { bookingAPI } from '../services/api';
 import '../styles/customer-booking-details.css';
 
 const CustomerBookingDetails = () => {
@@ -15,24 +16,20 @@ const CustomerBookingDetails = () => {
 
   const fetchBookingDetails = async () => {
     try {
-      const token = localStorage.getItem('token');
-      const response = await fetch(`/api/customer/bookings/${bookingId}`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
+      setLoading(true);
+      setError('');
+      const data = await bookingAPI.getBookingById(bookingId);
 
-      const data = await response.json();
+      const bkRecord = (data && data.success && data.data) ? data.data : (data?.data || data);
 
-      if (data.success) {
-        setBooking(data.data);
+      if (bkRecord && (bkRecord.bk_bkid || bkRecord.id)) {
+        setBooking(bkRecord);
       } else {
-        setError(data.error?.message || 'Failed to load booking details');
+        setError(data.error?.message || data.message || 'Failed to load booking details');
       }
-    } catch (error) {
-      console.error('Booking details fetch error:', error);
-      setError('Network error. Please try again.');
+    } catch (err) {
+      console.error('Booking details fetch error:', err);
+      setError(err.message || 'Network error. Failed to load booking details.');
     } finally {
       setLoading(false);
     }

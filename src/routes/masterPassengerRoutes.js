@@ -1,34 +1,24 @@
 const express = require('express');
-const {
-  getCustomerMasterPassengers,
-  createMasterPassenger,
-  updateMasterPassenger,
-  deleteMasterPassenger,
-  getMasterPassengerById
-} = require('../controllers/masterPassengerController');
-const authMiddleware = require('../middleware/authMiddleware');
-
 const router = express.Router();
+const auth = require('../middleware/authMiddleware');
+const masterPassengerController = require('../controllers/masterPassengerController');
 
-// Apply authentication middleware to all routes
-router.use(authMiddleware);
+// All routes require authentication
+router.use(auth);
 
-// Check if user is a customer
-router.use((req, res, next) => {
-  if (req.user.us_roid !== 'CUS') {
-    return res.status(403).json({ 
-      success: false, 
-      error: { code: 'FORBIDDEN', message: 'Access denied. Customer role required.' } 
-    });
-  }
-  next();
-});
+// GET all master passengers for logged-in customer
+router.get('/', masterPassengerController.getAllMasterPassengers);
 
-// Master passenger routes
-router.get('/', getCustomerMasterPassengers);
-router.post('/', createMasterPassenger);
-router.get('/:id', getMasterPassengerById);
-router.put('/:id', updateMasterPassenger);
-router.delete('/:id', deleteMasterPassenger);
+// GET single master passenger by ID
+router.get('/:id', masterPassengerController.getMasterPassengerById);
+
+// POST create new master passenger
+router.post('/', masterPassengerController.createMasterPassenger);
+
+// PUT update master passenger
+router.put('/:id', masterPassengerController.updateMasterPassenger);
+
+// DELETE soft delete master passenger
+router.delete('/:id', masterPassengerController.deleteMasterPassenger);
 
 module.exports = router;

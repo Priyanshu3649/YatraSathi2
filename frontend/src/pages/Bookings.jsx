@@ -282,6 +282,8 @@ const Bookings = () => {
         paginationData = response?.data?.pagination || response?.pagination || null;
       }
       
+      console.log('fetchBookings result:', { isEmployee, bookingsArrayLength: bookingsArray?.length, bookingsArrayIsArray: Array.isArray(bookingsArray) });
+      
       // Safety check for arrays
       bookingsArray = Array.isArray(bookingsArray) ? bookingsArray : [];
       
@@ -429,17 +431,23 @@ const Bookings = () => {
       // PERFORMANCE OPTIMIZATION: Instead of refetching all bookings, 
       // just update the local state with the new/updated booking
       // Handle both response structures: { data: booking } or direct booking object
-      const savedBookingData = savedBooking.data || savedBooking;
+      // Backend createBooking returns { success, data: { bk_bkid, ... } }
+      // Backend updateBooking returns { success, data: { bk_bkid, ... } } or the booking directly
+      const savedBookingData = savedBooking?.data?.data || savedBooking?.data || savedBooking;
       
       if (selectedBooking) {
-        // Update existing booking in the list
+        // Update existing booking in the list, then do a full refresh to get accurate data
         setBookings(prev => prev.map(booking => 
-          booking.bk_bkid === savedBookingData.bk_bkid ? savedBookingData : booking
+          booking.bk_bkid === savedBookingData.bk_bkid ? { ...booking, ...savedBookingData } : booking
         ));
-} else {
-        // Add new booking to the list
-        setBookings(prev => [savedBookingData, ...prev]);
-}
+      } else {
+        // Prepend new booking, then refresh the list from server for accuracy
+        if (savedBookingData && savedBookingData.bk_bkid) {
+          setBookings(prev => [savedBookingData, ...prev]);
+        }
+        // Always do a fresh fetch after creation to ensure list is accurate
+        setTimeout(() => fetchBookings(), 300);
+      }
       
       // Show success message
       announceToScreenReader('Booking saved successfully');
@@ -457,7 +465,7 @@ const Bookings = () => {
       // Reset the saving flag
       isSavingRef.current = false;
     }
-  }, [formData, passengerList, selectedBooking, user?.us_name, fetchBookings, validatePhoneNumber]);
+  }, [formData, passengerList, selectedBooking, user?.us_name, fetchBookings, validatePhoneNumber, normalizeStatus]);
   
   // Store the handleSave function in the ref
   useEffect(() => {
@@ -776,10 +784,10 @@ const Bookings = () => {
             // PERFORMANCE OPTIMIZATION: Update local state instead of refetching all bookings
             setBookings(prev => prev.map(booking => 
               booking.bk_bkid === record.bk_bkid 
-                ? { ...booking, bk_status: 'CANCELLED' }
+                ? { ...booking, bk_status: 'CAN' }
                 : booking
             ));
-announceToScreenReader('Booking cancelled successfully');
+            announceToScreenReader('Booking cancelled successfully');
           }
           break;
           

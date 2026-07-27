@@ -151,8 +151,28 @@ class PaymentController {
         py_customer_phone, 
         py_amount, 
         py_ref_number, 
-        py_bank_account 
+        py_bank_account,
+        py_payment_mode,
+        py_narration
       } = req.body;
+
+      // Import customer management utility
+      const { getOrCreateCustomer, linkPaymentToCustomer } = require('../utils/customerManagement');
+      
+      // Get or create customer by name + phone combination
+      let customer = null;
+      if (py_customer_name && py_customer_phone) {
+        try {
+          customer = await getOrCreateCustomer(
+            py_customer_name,
+            py_customer_phone,
+            req.user.us_usid
+          );
+        } catch (customerError) {
+          console.error('Warning: Could not create/find customer:', customerError.message);
+          // Continue without customer link if automatic creation fails
+        }
+      }
       
       // Generate entry number
       const entryNo = this.generateEntryNo('PY');
@@ -178,9 +198,12 @@ class PaymentController {
         py_entry_type,
         py_customer_name,
         py_customer_phone,
+        py_cusid: customer ? customer.cu_cusid : null,  // Link to customer if available
         py_amount: amount,
         py_ref_number,
         py_bank_account,
+        py_payment_mode: py_payment_mode || null,
+        py_narration: py_narration || null,
         py_balance: balance,
         py_total_credit: totalCredit,
         py_total_debit: totalDebit,
@@ -199,12 +222,19 @@ class PaymentController {
       Audit.logAction({ module: Audit.MODULES.PAYMENT, recordId: payment.py_pymtid,
         action: Audit.ACTIONS.INSERT, req, fieldName: 'py_amount',
         oldValue: null, newValue: String(payment.py_amount) });
+      if (customer) {
+        Audit.logAction({ module: Audit.MODULES.PAYMENT, recordId: payment.py_pymtid,
+          action: Audit.ACTIONS.INSERT, req, fieldName: 'py_cusid',
+          oldValue: null, newValue: customer.cu_cusid });
+      }
       // ───────────────────────────────────────────────────────────────
 
       res.status(201).json({
         success: true,
         data: payment,
-        message: 'Payment created successfully'
+        message: customer 
+          ? `Payment created successfully and linked to ${customer ? 'new' : 'existing'} customer`
+          : 'Payment created successfully (customer auto-linking not available)'
       });
       
     } catch (error) {

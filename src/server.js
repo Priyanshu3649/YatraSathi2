@@ -35,17 +35,34 @@ const { run: runInDbContext, getDbNameForFY, cacheFYs } = require('./utils/dbCon
 // Populates initial financial year cache on startup
 cacheFYs();
 
-// Global middleware to handle financial year database switching context
+// Global middleware to handle financial year database switching context.
+// Accounting tables (payments, receipts, journal) always live in the MASTER db
+// so we skip the context switch for those routes.
+// Customer-facing routes also use the master TVL database directly.
+const MASTER_ONLY_PATHS = [
+  '/api/payments',
+  '/api/receipts',
+  '/api/journal',
+  '/api/contra',
+  '/api/accounting',
+  '/api/profile',
+  '/api/auth',       // Auth is always master DB
+  '/api/security',
+  '/api/session',
+];
 app.use(async (req, res, next) => {
   const fy = req.header('X-Financial-Year');
   if (fy) {
-    try {
-      const dbName = await getDbNameForFY(fy);
-      if (dbName) {
-        return runInDbContext(dbName, next);
+    const isMasterOnly = MASTER_ONLY_PATHS.some(p => req.path.startsWith(p));
+    if (!isMasterOnly) {
+      try {
+        const dbName = await getDbNameForFY(fy);
+        if (dbName) {
+          return runInDbContext(dbName, next);
+        }
+      } catch (err) {
+        console.error('Error resolving database name for financial year:', err.message);
       }
-    } catch (err) {
-      console.error('Error resolving database name for financial year:', err.message);
     }
   }
   next();

@@ -36,9 +36,11 @@ const auth = async (req, res, next) => {
 
     req.user = user;
 
-    // Validate financial year permission if header is provided
+    // Validate financial year permission if header is provided.
+    // Customers always have access to the current active FY - skip the check entirely for them.
+    // Admins and employees still get their permission checked.
     const fy = req.header('X-Financial-Year');
-    if (fy) {
+    if (fy && user.us_usertype !== 'customer') {
       const dbContext = require('../utils/dbContext');
       const hasPermission = await dbContext.checkUserFYPermission(user.us_usid, fy);
       if (!hasPermission) {

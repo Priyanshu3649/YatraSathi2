@@ -13,7 +13,7 @@ router.get('/:id', receiptController.getReceiptById);
 router.post('/', [
   body('rc_customer_name').notEmpty().withMessage('Customer name is required'),
   body('rc_amount').isFloat({ min: 0 }).withMessage('Amount must be a positive number'),
-  body('rc_payment_mode').isIn(['Cash', 'Bank', 'Cheque', 'Online']).withMessage('Invalid payment mode')
+  body('rc_payment_mode').isIn(['Cash', 'Bank', 'Cheque', 'Online', 'UPI', 'NEFT', 'RTGS', 'IMPS', 'Bank Transfer', 'Credit Card', 'Debit Card']).withMessage('Invalid payment mode')
 ], receiptController.createReceipt);
 router.put('/:id', receiptController.updateReceipt);
 router.delete('/:id', receiptController.deleteReceipt);

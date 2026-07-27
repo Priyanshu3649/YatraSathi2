@@ -26,6 +26,7 @@ router.get('/dashboard', (req, res, next) => {
 // ── Customer bookings ─────────────────────────────────────────────────────────
 router.post('/bookings', bookingController.createBooking);
 router.get('/bookings', bookingController.getCustomerBookings);
+router.get('/bookings/:id/passengers', bookingController.getBookingPassengers);
 router.get('/bookings/:id', bookingController.getBookingById);
 
 // ── Customer bills ────────────────────────────────────────────────────────────

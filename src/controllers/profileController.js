@@ -39,7 +39,7 @@ const getUserProfile = async (req, res) => {
     // Add role-specific data based on user type
     if (user.us_usertype === 'employee') {
       // Fetch employee-specific data
-      let employee;
+      let employee = null;
       
       try {
         // Try TVL first
@@ -47,7 +47,7 @@ const getUserProfile = async (req, res) => {
           where: { em_usid: user.us_usid }
         });
       } catch (tvLError) {
-        console.log('TVL Employee model not available, trying regular model');
+        console.log('TVL Employee model not available, trying regular model:', tvLError.message);
         try {
           // If TVL fails, try regular Employee table
           employee = await Employee.findOne({ 
@@ -60,7 +60,7 @@ const getUserProfile = async (req, res) => {
       }
       
       if (employee) {
-        const empData = employee.toJSON();
+        const empData = employee.toJSON ? employee.toJSON() : employee;
         profileData = {
           ...profileData,
           photo: empData.em_photo || empData.us_photo || user.us_photo,
@@ -88,7 +88,7 @@ const getUserProfile = async (req, res) => {
       }
     } else if (user.us_usertype === 'customer') {
       // Fetch customer-specific data
-      let customer;
+      let customer = null;
       
       try {
         // Try TVL first
@@ -96,7 +96,7 @@ const getUserProfile = async (req, res) => {
           where: { cu_usid: user.us_usid }
         });
       } catch (tvLError) {
-        console.log('TVL Customer model not available, trying regular model');
+        console.log('TVL Customer model not available, trying regular model:', tvLError.message);
         try {
           // If TVL fails, try regular Customer table
           customer = await Customer.findOne({ 
@@ -109,7 +109,7 @@ const getUserProfile = async (req, res) => {
       }
       
       if (customer) {
-        const custData = customer.toJSON();
+        const custData = customer.toJSON ? customer.toJSON() : customer;
         profileData = {
           ...profileData,
           photo: custData.cu_photo || user.us_photo,
@@ -152,7 +152,7 @@ const getUserProfile = async (req, res) => {
     console.error('Error in getUserProfile:', error);
     res.status(500).json({ 
       success: false, 
-      error: { code: 'SERVER_ERROR', message: error.message } 
+      error: { code: 'SERVER_ERROR', message: 'Failed to get profile' } 
     });
   }
 };
