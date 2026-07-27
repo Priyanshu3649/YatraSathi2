@@ -459,12 +459,56 @@ const BookingForm = () => {
           <i className="fas fa-plus"></i>
           Add Another Passenger
         </button>
-        {masterPassengers.length > 0 && (
-          <span style={{ marginLeft: '8px', fontSize: '12px', color: '#666' }}>
-            — or pick from <strong>Passenger List</strong> page to pre-fill
-          </span>
-        )}
       </div>
+
+      {masterPassengers.length > 0 && (
+        <div className="master-passenger-list-section" style={{ marginTop: '20px', padding: '15px', backgroundColor: '#f9f9f9', borderRadius: '8px', border: '1px solid #eee' }}>
+          <h4 style={{ marginTop: 0, marginBottom: '10px', fontSize: '14px', color: '#333' }}>Saved Passengers (Master List)</h4>
+          <div className="master-passenger-cards" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', gap: '10px' }}>
+            {masterPassengers.map(mp => (
+              <div key={mp.id} className="master-passenger-card" style={{ backgroundColor: '#fff', padding: '10px', borderRadius: '6px', border: '1px solid #ddd', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div style={{ fontSize: '13px' }}>
+                  <strong>{mp.name}</strong>
+                  <div style={{ color: '#666', marginTop: '2px' }}>
+                    {mp.gender === 'M' ? 'Male' : mp.gender === 'F' ? 'Female' : 'Other'}, 
+                    {mp.dateOfBirth ? ` DOB: ${mp.dateOfBirth}` : ''}
+                  </div>
+                </div>
+                <button 
+                  type="button"
+                  style={{ padding: '5px 10px', fontSize: '12px', backgroundColor: '#2e7d32', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
+                  onClick={() => {
+                    const dob = new Date(mp.dateOfBirth);
+                    const age = Math.abs(new Date(Date.now() - dob.getTime()).getUTCFullYear() - 1970);
+                    
+                    const newPassenger = {
+                      name: mp.name,
+                      age: isNaN(age) ? '' : age.toString(),
+                      gender: mp.gender,
+                      berthPreference: mp.birthPreference || 'NO_PREF'
+                    };
+
+                    setFormData(prev => {
+                      const currentPassengers = [...prev.passengers];
+                      const last = currentPassengers[currentPassengers.length - 1];
+                      if (!last.name && !last.age) {
+                        // Replace empty last row
+                        currentPassengers[currentPassengers.length - 1] = newPassenger;
+                      } else {
+                        // Append new row
+                        currentPassengers.push(newPassenger);
+                      }
+                      return { ...prev, passengers: currentPassengers };
+                    });
+                  }}
+                >
+                  <i className="fas fa-plus"></i> Add
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 

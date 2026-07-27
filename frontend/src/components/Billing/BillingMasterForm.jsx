@@ -17,6 +17,7 @@ const BillingMasterForm = ({
   const [stationBoys, setStationBoys] = useState([]);
   const [isOpen, setIsOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  const [focusedIndex, setFocusedIndex] = useState(-1);
 
   // Fetch active station boys on mount
   useEffect(() => {
@@ -282,6 +283,7 @@ const BillingMasterForm = ({
                 const val = e.target.value;
                 setSearchTerm(val);
                 setIsOpen(true);
+                setFocusedIndex(-1);
                 onChange({
                   ...formData,
                   stationBoy: val,
@@ -301,6 +303,7 @@ const BillingMasterForm = ({
                     });
                     setSearchTerm(match.name);
                   }
+                  setFocusedIndex(-1);
                 }, 200);
               }}
               disabled={!isEditing}
@@ -308,7 +311,34 @@ const BillingMasterForm = ({
               onKeyDown={(e) => {
                 if (e.key === 'Escape') {
                   setIsOpen(false);
+                  setFocusedIndex(-1);
                   e.target.blur();
+                } else if (e.key === 'ArrowDown') {
+                  e.preventDefault();
+                  if (!isOpen) setIsOpen(true);
+                  const filtered = stationBoys.filter(sb => sb.name.toLowerCase().includes(searchTerm.toLowerCase()));
+                  setFocusedIndex(prev => (prev < filtered.length - 1 ? prev + 1 : prev));
+                } else if (e.key === 'ArrowUp') {
+                  e.preventDefault();
+                  setFocusedIndex(prev => (prev > 0 ? prev - 1 : 0));
+                } else if (e.key === 'Enter') {
+                  if (isOpen && focusedIndex >= 0) {
+                    e.preventDefault();
+                    const filtered = stationBoys.filter(sb => sb.name.toLowerCase().includes(searchTerm.toLowerCase()));
+                    if (filtered[focusedIndex]) {
+                      const selected = filtered[focusedIndex];
+                      onChange({
+                        ...formData,
+                        stationBoy: selected.name,
+                        stationBoyId: selected.id
+                      });
+                      setSearchTerm(selected.name);
+                      setIsOpen(false);
+                      setFocusedIndex(-1);
+                    }
+                  } else {
+                    handleKeyDown(e, 'stationBoy');
+                  }
                 } else {
                   handleKeyDown(e, 'stationBoy');
                 }
@@ -329,7 +359,7 @@ const BillingMasterForm = ({
               }}>
                 {stationBoys
                   .filter(sb => sb.name.toLowerCase().includes(searchTerm.toLowerCase()))
-                  .map(sb => (
+                  .map((sb, index) => (
                     <div
                       key={sb.id}
                       className="erp-dropdown-item"
@@ -337,7 +367,9 @@ const BillingMasterForm = ({
                         padding: '6px 10px',
                         cursor: 'pointer',
                         color: '#333',
-                        borderBottom: '1px solid #eee'
+                        borderBottom: '1px solid #eee',
+                        backgroundColor: focusedIndex === index ? '#f0f0f0' : 'transparent',
+                        fontWeight: focusedIndex === index ? 'bold' : 'normal'
                       }}
                       onMouseDown={() => {
                         onChange({
@@ -347,6 +379,7 @@ const BillingMasterForm = ({
                         });
                         setSearchTerm(sb.name);
                         setIsOpen(false);
+                        setFocusedIndex(-1);
                       }}
                     >
                       {sb.name}

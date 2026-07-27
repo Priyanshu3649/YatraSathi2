@@ -12,19 +12,11 @@ const MasterPassengerList = () => {
   const [showForm, setShowForm] = useState(false);
   const [editingPassenger, setEditingPassenger] = useState(null);
   const [formData, setFormData] = useState({
-    firstName: '',
-    lastName: '',
+    name: '',
     age: '',
-    gender: '',
-    berthPreference: '',
-    idType: '',
-    idNumber: '',
-    aadhaar: '',
     dob: '',
-    nationality: '',
-    phone: '',
-    email: '',
-    lastBookingRef: ''
+    gender: '',
+    berthPreference: ''
   });
 
   // Load passengers
@@ -35,18 +27,18 @@ const MasterPassengerList = () => {
   const loadPassengers = async () => {
     try {
       setLoading(true);
-      setError(''); // Clear any previous errors
+      setError('');
       const response = await masterPassengerAPI.getMasterPassengers();
       if (response.success) {
         const passengersData = Array.isArray(response.data) ? response.data : (response.data?.passengers || []);
         setPassengers(passengersData);
       } else {
         setError(response.message || 'Failed to load passengers');
-        setPassengers([]); // Ensure state is always an array
+        setPassengers([]);
       }
     } catch (err) {
       setError(err.message || 'Failed to load passengers');
-      setPassengers([]); // Ensure state is always an array on error
+      setPassengers([]);
       console.error('Load passengers error:', err);
     } finally {
       setLoading(false);
@@ -64,49 +56,32 @@ const MasterPassengerList = () => {
     e.preventDefault();
     
     try {
+      if (!formData.age && !formData.dob) {
+        setError('Please provide either Age or Date of Birth');
+        return;
+      }
+
       const passengerData = {
-        firstName: formData.firstName,
-        lastName: formData.lastName || null,
-        age: parseInt(formData.age),
+        name: formData.name,
+        age: formData.age ? parseInt(formData.age) : null,
+        dateOfBirth: formData.dob || null,
         gender: formData.gender,
-        berthPreference: formData.berthPreference || null,
-        idType: formData.idType || null,
-        idNumber: formData.idNumber || null,
-        aadhaar: formData.aadhaar || null,
-        dob: formData.dob || null,
-        nationality: formData.nationality || null,
-        phone: formData.phone || null,
-        email: formData.email || null,
-        lastBookingRef: formData.lastBookingRef || null
+        berthPreference: formData.berthPreference || null
       };
 
-      try {
-        if (editingPassenger) {
-          await masterPassengerAPI.updateMasterPassenger(editingPassenger.cmp_cmpid, passengerData);
-          setEditingPassenger(null);
-        } else {
-          await masterPassengerAPI.createMasterPassenger(passengerData);
-        }
-      } catch (err) {
-        setError(err.message || 'Operation failed');
-        return; // Stop execution if API call fails
+      if (editingPassenger) {
+        await masterPassengerAPI.updateMasterPassenger(editingPassenger.id, passengerData);
+        setEditingPassenger(null);
+      } else {
+        await masterPassengerAPI.createMasterPassenger(passengerData);
       }
       
-      // Reset form
       setFormData({
-        firstName: '',
-        lastName: '',
+        name: '',
         age: '',
-        gender: '',
-        berthPreference: '',
-        idType: '',
-        idNumber: '',
-        aadhaar: '',
         dob: '',
-        nationality: '',
-        phone: '',
-        email: '',
-        lastBookingRef: ''
+        gender: '',
+        berthPreference: ''
       });
       setShowForm(false);
       loadPassengers();
@@ -117,20 +92,20 @@ const MasterPassengerList = () => {
 
   const handleEdit = (passenger) => {
     setEditingPassenger(passenger);
+    
+    // Calculate approximate age if only DOB is available
+    let age = '';
+    if (passenger.dateOfBirth) {
+      const dobDate = new Date(passenger.dateOfBirth);
+      age = Math.abs(new Date(Date.now() - dobDate.getTime()).getUTCFullYear() - 1970).toString();
+    }
+
     setFormData({
-      firstName: passenger.cmp_firstname,
-      lastName: passenger.cmp_lastname || '',
-      age: passenger.cmp_age.toString(),
-      gender: passenger.cmp_gender,
-      berthPreference: passenger.cmp_berthpref || '',
-      idType: passenger.cmp_idtype || '',
-      idNumber: passenger.cmp_idnumber || '',
-      aadhaar: passenger.cmp_aadhaar || '',
-      dob: passenger.cmp_dob || '',
-      nationality: passenger.cmp_nationality || '',
-      phone: passenger.cmp_phone || '',
-      email: passenger.cmp_email || '',
-      lastBookingRef: passenger.cmp_last_booking_ref || ''
+      name: passenger.name || '',
+      age: age,
+      dob: passenger.dateOfBirth || '',
+      gender: passenger.gender || '',
+      berthPreference: passenger.birthPreference || ''
     });
     setShowForm(true);
   };
@@ -138,7 +113,7 @@ const MasterPassengerList = () => {
   const handleDelete = async (passengerId) => {
     if (window.confirm('Are you sure you want to deactivate this passenger?')) {
       try {
-        setError(''); // Clear any previous errors
+        setError('');
         await masterPassengerAPI.deleteMasterPassenger(passengerId);
         loadPassengers();
       } catch (err) {
@@ -152,19 +127,11 @@ const MasterPassengerList = () => {
     setShowForm(false);
     setEditingPassenger(null);
     setFormData({
-      firstName: '',
-      lastName: '',
+      name: '',
       age: '',
-      gender: '',
-      berthPreference: '',
-      idType: '',
-      idNumber: '',
-      aadhaar: '',
       dob: '',
-      nationality: '',
-      phone: '',
-      email: '',
-      lastBookingRef: ''
+      gender: '',
+      berthPreference: ''
     });
   };
 
@@ -175,12 +142,6 @@ const MasterPassengerList = () => {
       case 'O': return 'Other';
       default: return gender;
     }
-  };
-
-  const maskIdNumber = (idNumber) => {
-    if (!idNumber) return '';
-    if (idNumber.length <= 4) return idNumber;
-    return '****' + idNumber.slice(-4);
   };
 
   if (loading) {
@@ -243,7 +204,7 @@ const MasterPassengerList = () => {
             </button>
           </div>
 
-          {/* Form Section (when adding/editing) */}
+          {/* Form Section */}
           {showForm && (
             <div className="erp-form-section">
               <div className="section-header">
@@ -257,41 +218,16 @@ const MasterPassengerList = () => {
                 )}
                 <form onSubmit={handleSubmit}>
                   <div className="erp-form-row">
-                    <div className="erp-form-group">
-                      <label className="erp-form-label required">First Name:</label>
+                    <div className="erp-form-group" style={{ flex: 2 }}>
+                      <label className="erp-form-label required">Full Name:</label>
                       <input
                         type="text"
-                        name="firstName"
-                        value={formData.firstName}
+                        name="name"
+                        value={formData.name}
                         onChange={handleInputChange}
                         required
                         className="erp-form-input"
-                      />
-                    </div>
-                    <div className="erp-form-group">
-                      <label className="erp-form-label">Last Name:</label>
-                      <input
-                        type="text"
-                        name="lastName"
-                        value={formData.lastName}
-                        onChange={handleInputChange}
-                        className="erp-form-input"
-                      />
-                    </div>
-                  </div>
-                  
-                  <div className="erp-form-row">
-                    <div className="erp-form-group">
-                      <label className="erp-form-label required">Age:</label>
-                      <input
-                        type="number"
-                        name="age"
-                        value={formData.age}
-                        onChange={handleInputChange}
-                        required
-                        min="1"
-                        max="120"
-                        className="erp-form-input"
+                        placeholder="Enter passenger's full name"
                       />
                     </div>
                     <div className="erp-form-group">
@@ -313,7 +249,20 @@ const MasterPassengerList = () => {
                   
                   <div className="erp-form-row">
                     <div className="erp-form-group">
-                      <label className="erp-form-label">Date of Birth:</label>
+                      <label className="erp-form-label">Age (or provide DOB):</label>
+                      <input
+                        type="number"
+                        name="age"
+                        value={formData.age}
+                        onChange={handleInputChange}
+                        min="1"
+                        max="120"
+                        className="erp-form-input"
+                        placeholder="Age in years"
+                      />
+                    </div>
+                    <div className="erp-form-group">
+                      <label className="erp-form-label">Date of Birth (or provide Age):</label>
                       <input
                         type="date"
                         name="dob"
@@ -323,57 +272,7 @@ const MasterPassengerList = () => {
                       />
                     </div>
                     <div className="erp-form-group">
-                      <label className="erp-form-label">Nationality:</label>
-                      <input
-                        type="text"
-                        name="nationality"
-                        value={formData.nationality}
-                        onChange={handleInputChange}
-                        className="erp-form-input"
-                        placeholder="e.g. Indian"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="erp-form-row">
-                    <div className="erp-form-group">
-                      <label className="erp-form-label">Phone:</label>
-                      <input
-                        type="text"
-                        name="phone"
-                        value={formData.phone}
-                        onChange={handleInputChange}
-                        className="erp-form-input"
-                        placeholder="Enter phone number"
-                      />
-                    </div>
-                    <div className="erp-form-group">
-                      <label className="erp-form-label">Email:</label>
-                      <input
-                        type="email"
-                        name="email"
-                        value={formData.email}
-                        onChange={handleInputChange}
-                        className="erp-form-input"
-                        placeholder="Enter email address"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="erp-form-row">
-                    <div className="erp-form-group">
-                      <label className="erp-form-label">Last Booking Ref:</label>
-                      <input
-                        type="text"
-                        name="lastBookingRef"
-                        value={formData.lastBookingRef}
-                        onChange={handleInputChange}
-                        className="erp-form-input"
-                        placeholder="Enter booking reference"
-                      />
-                    </div>
-                    <div className="erp-form-group">
-                      <label className="erp-form-label">Berth Preference:</label>
+                      <label className="erp-form-label">Berth Preference (Optional):</label>
                       <select
                         name="berthPreference"
                         value={formData.berthPreference}
@@ -387,47 +286,6 @@ const MasterPassengerList = () => {
                         <option value="SIDE_LOWER">Side Lower</option>
                         <option value="SIDE_UPPER">Side Upper</option>
                       </select>
-                    </div>
-                    <div className="erp-form-group">
-                      <label className="erp-form-label">ID Type:</label>
-                      <select
-                        name="idType"
-                        value={formData.idType}
-                        onChange={handleInputChange}
-                        className="erp-form-input"
-                      >
-                        <option value="">Select ID Type</option>
-                        <option value="AADHAAR">Aadhaar</option>
-                        <option value="PAN">PAN Card</option>
-                        <option value="PASSPORT">Passport</option>
-                        <option value="DRIVING_LICENSE">Driving License</option>
-                        <option value="VOTER_ID">Voter ID</option>
-                      </select>
-                    </div>
-                  </div>
-                  
-                  <div className="erp-form-row">
-                    <div className="erp-form-group">
-                      <label className="erp-form-label">ID Number:</label>
-                      <input
-                        type="text"
-                        name="idNumber"
-                        value={formData.idNumber}
-                        onChange={handleInputChange}
-                        className="erp-form-input"
-                      />
-                    </div>
-                    <div className="erp-form-group">
-                      <label className="erp-form-label">Aadhaar (12 digits):</label>
-                      <input
-                        type="text"
-                        name="aadhaar"
-                        value={formData.aadhaar}
-                        onChange={handleInputChange}
-                        maxLength="12"
-                        pattern="[0-9]{12}"
-                        className="erp-form-input"
-                      />
                     </div>
                   </div>
                   
@@ -473,63 +331,54 @@ const MasterPassengerList = () => {
                   <table className="erp-table">
                     <thead>
                       <tr>
-                        <th>Name</th>
+                        <th>Full Name</th>
                         <th>Age / DOB</th>
                         <th>Gender</th>
-                        <th>Nationality</th>
-                        <th>Contact</th>
-                        <th>ID Info</th>
-                        <th>Last Booking</th>
-                        <th>Status</th>
+                        <th>Berth Preference</th>
                         <th>Actions</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {passengers.map((passenger, index) => (
-                        <tr 
-                          key={passenger.cmp_cmpid || passenger.ml_mlid || passenger.id || index} 
-                          className={index % 2 === 0 ? 'erp-row-even' : 'erp-row-odd'}
-                        >
-                          <td>
-                            {passenger.cmp_firstname} {passenger.cmp_lastname}
-                          </td>
-                          <td>
-                            {passenger.cmp_age}
-                            {passenger.cmp_dob && <div style={{ fontSize: '0.8em', color: '#666' }}>({passenger.cmp_dob})</div>}
-                          </td>
-                          <td>{getGenderDisplay(passenger.cmp_gender)}</td>
-                          <td>{passenger.cmp_nationality || '-'}</td>
-                          <td>
-                            {passenger.cmp_phone && <div>{passenger.cmp_phone}</div>}
-                            {passenger.cmp_email && <div style={{ fontSize: '0.8em', color: '#666' }}>{passenger.cmp_email}</div>}
-                          </td>
-                          <td>
-                            {passenger.cmp_idtype && <div>{passenger.cmp_idtype}: {maskIdNumber(passenger.cmp_idnumber)}</div>}
-                            {passenger.cmp_aadhaar && <div style={{ fontSize: '0.8em', color: '#666' }}>Aadhaar: {maskIdNumber(passenger.cmp_aadhaar)}</div>}
-                          </td>
-                          <td>{passenger.cmp_last_booking_ref || '-'}</td>
-                          <td>
-                            <span className={`erp-status-badge ${passenger.cmp_active ? 'erp-status-active' : 'erp-status-inactive'}`}>
-                              {passenger.cmp_active ? 'Active' : 'Inactive'}
-                            </span>
-                          </td>
-                          <td>
-                            <button 
-                              className="erp-button erp-small-button"
-                              onClick={() => handleEdit(passenger)}
-                            >
-                              Edit
-                            </button>
-                            <button 
-                              className="erp-button erp-small-button erp-button-danger"
-                              onClick={() => handleDelete(passenger.cmp_cmpid)}
-                              disabled={!passenger.cmp_active}
-                            >
-                              Deactivate
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
+                      {passengers.map((passenger, index) => {
+                        let displayAge = '';
+                        if (passenger.dateOfBirth) {
+                          const dobDate = new Date(passenger.dateOfBirth);
+                          displayAge = 'DOB: ' + passenger.dateOfBirth;
+                        } else {
+                          displayAge = 'Age: ' + passenger.age;
+                        }
+                        
+                        return (
+                          <tr 
+                            key={passenger.id || index} 
+                            className={index % 2 === 0 ? 'erp-row-even' : 'erp-row-odd'}
+                          >
+                            <td>
+                              <strong>{passenger.name}</strong>
+                            </td>
+                            <td>
+                              {displayAge}
+                            </td>
+                            <td>{getGenderDisplay(passenger.gender)}</td>
+                            <td>{passenger.birthPreference || 'No Preference'}</td>
+                            <td>
+                              <button 
+                                className="erp-button erp-small-button"
+                                onClick={() => handleEdit(passenger)}
+                                style={{ marginRight: '5px' }}
+                              >
+                                Edit
+                              </button>
+                              <button 
+                                className="erp-button erp-small-button erp-button-danger"
+                                onClick={() => handleDelete(passenger.id)}
+                              >
+                                Delete
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>

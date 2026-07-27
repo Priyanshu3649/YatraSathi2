@@ -17,6 +17,11 @@ const MasterPassengerTVL = sequelizeTVL.define('mpXmasterpassenger', {
       key: 'us_usid'
     }
   },
+  mp_email: {
+    type: DataTypes.STRING(120),
+    allowNull: true,
+    field: 'mp_email'
+  },
   mp_name: {
     type: DataTypes.STRING(100),
     allowNull: false,

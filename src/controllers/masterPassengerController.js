@@ -28,22 +28,12 @@ const masterPassengerController = {
         return res.status(401).json({ success: false, error: 'Unauthorized' });
       }
 
-      const userId = req.user.us_usid;
+      const userEmail = req.user.us_email;
 
-      // Get customer record for this user
-      const customer = await CustomerTVL.findOne({
-        where: { cu_usid: userId },
-        raw: true
-      });
-
-      if (!customer) {
-        return res.status(403).json({ success: false, error: 'Customer record not found' });
-      }
-
-      // Fetch all active master passengers for this customer
+      // Fetch all active master passengers for this user's email
       const passengers = await MasterPassengerTVL.findAll({
         where: { 
-          mp_usid: userId,
+          mp_email: userEmail,
           mp_active: 1
         },
         order: [['edtm', 'DESC']],
@@ -79,12 +69,12 @@ const masterPassengerController = {
       }
 
       const { id } = req.params;
-      const userId = req.user.us_usid;
+      const userEmail = req.user.us_email;
 
       const passenger = await MasterPassengerTVL.findOne({
         where: { 
           mp_mpid: id,
-          mp_usid: userId
+          mp_email: userEmail
         },
         raw: true
       });
@@ -121,15 +111,31 @@ const masterPassengerController = {
         return res.status(401).json({ success: false, error: 'Unauthorized' });
       }
 
-      const { name, dateOfBirth, gender, birthPreference } = req.body;
+      const { name, dateOfBirth, age, gender, berthPreference, ...extraneousFields } = req.body;
+      const userEmail = req.user.us_email;
       const userId = req.user.us_usid;
 
-      // Validate required fields
-      if (!name || !dateOfBirth || !gender) {
+      // Strict validation: Reject unauthorized fields
+      if (Object.keys(extraneousFields).length > 0) {
+        console.log('400 ERROR: Extraneous fields:', extraneousFields);
+        return res.status(400).json({ success: false, error: 'Unauthorized fields in payload' });
+      }
+
+      // Validate required fields (Name, Gender, and either DOB or Age)
+      if (!name || (!dateOfBirth && !age) || !gender) {
+        console.log('400 ERROR: Missing fields. name:', name, 'dob:', dateOfBirth, 'age:', age, 'gender:', gender);
         return res.status(400).json({
           success: false,
-          error: 'Name, Date of Birth, and Gender are required'
+          error: 'Name, Gender, and either Date of Birth or Age are required'
         });
+      }
+
+      // Calculate DOB from age if not provided
+      let dobToSave = dateOfBirth;
+      if (!dobToSave && age) {
+        const d = new Date();
+        d.setFullYear(d.getFullYear() - parseInt(age));
+        dobToSave = d.toISOString().split('T')[0];
       }
 
       // Validate gender
@@ -147,10 +153,11 @@ const masterPassengerController = {
       const passenger = await MasterPassengerTVL.create({
         mp_mpid: mpId,
         mp_usid: userId,
+        mp_email: userEmail,
         mp_name: name,
-        mp_dob: dateOfBirth,
+        mp_dob: dobToSave,
         mp_gender: gender,
-        mp_birthpref: birthPreference || null,
+        mp_birthpref: berthPreference || null,
         mp_active: 1,
         eby: userId,
         mby: userId
@@ -185,14 +192,19 @@ const masterPassengerController = {
       }
 
       const { id } = req.params;
-      const { name, dateOfBirth, gender, birthPreference } = req.body;
+      const { name, dateOfBirth, age, gender, berthPreference, ...extraneousFields } = req.body;
+      const userEmail = req.user.us_email;
       const userId = req.user.us_usid;
 
-      // Check if passenger exists and belongs to this user
+      if (Object.keys(extraneousFields).length > 0) {
+        return res.status(400).json({ success: false, error: 'Unauthorized fields in payload' });
+      }
+
+      // Check if passenger exists and belongs to this user via email
       const passenger = await MasterPassengerTVL.findOne({
         where: { 
           mp_mpid: id,
-          mp_usid: userId
+          mp_email: userEmail
         }
       });
 
@@ -210,9 +222,15 @@ const masterPassengerController = {
 
       // Update fields
       if (name) passenger.mp_name = name;
-      if (dateOfBirth) passenger.mp_dob = dateOfBirth;
+      if (dateOfBirth) {
+        passenger.mp_dob = dateOfBirth;
+      } else if (age) {
+        const d = new Date();
+        d.setFullYear(d.getFullYear() - parseInt(age));
+        passenger.mp_dob = d.toISOString().split('T')[0];
+      }
       if (gender) passenger.mp_gender = gender;
-      if (birthPreference !== undefined) passenger.mp_birthpref = birthPreference;
+      if (berthPreference !== undefined) passenger.mp_birthpref = berthPreference;
       passenger.mby = userId;
 
       await passenger.save();
@@ -246,13 +264,14 @@ const masterPassengerController = {
       }
 
       const { id } = req.params;
+      const userEmail = req.user.us_email;
       const userId = req.user.us_usid;
 
-      // Check if passenger exists and belongs to this user
+      // Check if passenger exists and belongs to this user via email
       const passenger = await MasterPassengerTVL.findOne({
         where: { 
           mp_mpid: id,
-          mp_usid: userId
+          mp_email: userEmail
         }
       });
 
