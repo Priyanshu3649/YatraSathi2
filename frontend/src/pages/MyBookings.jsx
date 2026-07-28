@@ -103,6 +103,28 @@ const MyBookings = () => {
     }
   };
 
+  const handleSyncPnr = async (pnr) => {
+    try {
+      setLoading(true);
+      const res = await fetch(`http://localhost:5004/api/pnrs/${pnr}/sync`, { method: 'POST' });
+      const data = await res.json();
+      if (data.success) {
+        alert(data.message + '\nNew Status: ' + data.status);
+        fetchBookings(); // Refresh the list to show the new status if available
+      } else {
+        if (data.error === 'API_LIMIT_REACHED') {
+          alert(`⏱️ ${data.message}\nWe strictly limit manual syncs to conserve API costs. This PNR has reached its absolute maximum limit of 5 total synchronizations.`);
+        } else {
+          alert('Sync Error: ' + data.message);
+        }
+      }
+    } catch (err) {
+      alert('Network error while syncing PNR.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleViewDetails = (bookingId) => {
     navigate(`/customer/bookings/${bookingId}`);
   };
@@ -270,6 +292,16 @@ const MyBookings = () => {
                     </td>
                     <td className="pnr">
                       {booking.bk_pnr || booking.pnr_number || '—'}
+                      {(booking.bk_pnr || booking.pnr_number) && (
+                        <button 
+                          onClick={() => handleSyncPnr(booking.bk_pnr || booking.pnr_number)}
+                          className="btn-sm btn-outline"
+                          style={{ marginLeft: '10px', fontSize: '0.8rem', padding: '2px 8px' }}
+                          title="Sync PNR Status from IRCTC"
+                        >
+                          Sync
+                        </button>
+                      )}
                     </td>
                     <td className="actions">
                       <button 

@@ -271,6 +271,41 @@ const createBooking = async (req, res) => {
         console.timeEnd("BOOKING_CREATE_PASSENGERS");
       }
       
+      // Advance Payment Handling
+      if (req.body.advanceAmount && parseFloat(req.body.advanceAmount) > 0) {
+        console.time("BOOKING_ADVANCE_PAYMENT");
+        const advanceAmount = parseFloat(req.body.advanceAmount);
+        const CustomerLedgerService = require('../services/CustomerLedgerService');
+        const Payment = require('../models/PaymentTVL');
+        
+        const receiptNo = `RCT-${Date.now().toString().slice(-6)}-${Math.floor(Math.random() * 1000)}`;
+        const receipt = await Payment.create({
+          pm_receipt_no: receiptNo,
+          pm_date: new Date(),
+          pm_customer_id: customerId,
+          pm_amount: advanceAmount,
+          pm_mode: 'CASH',
+          pm_reference: 'Advance at Booking',
+          pm_notes: `Advance payment for Booking ${booking.bk_bkno}`,
+          pm_booking_id: booking.bk_bkid,
+          eby: req.user.us_usid,
+          mby: req.user.us_usid
+        }, { transaction, userId: convertUserIdToInt(req.user.us_usid) });
+        
+        await CustomerLedgerService.writeLedgerEntry({
+          customerId: customerId,
+          type: 'RECEIPT',
+          amount: advanceAmount,
+          referenceId: receipt.pm_id,
+          referenceType: 'PAYMENT',
+          referenceNo: receipt.pm_receipt_no,
+          description: `Advance Receipt for Booking ${booking.bk_bkno}`,
+          userId: req.user.us_usid,
+          transaction: transaction
+        });
+        console.timeEnd("BOOKING_ADVANCE_PAYMENT");
+      }
+      
       // Commit the transaction
       console.time("BOOKING_COMMIT_TRANSACTION");
       await transaction.commit();

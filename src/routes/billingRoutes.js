@@ -14,7 +14,9 @@ const {
   getCustomerLedger,
   getCustomerBalance,
   getBillingStats,
-  getCancellationHistory
+  getCancellationHistory,
+  splitBill,
+  mergeBill
 } = require('../controllers/billingController');
 const { getBillingByBookingId } = require('../controllers/billingIntegrationController');
 const authMiddleware = require('../middleware/authMiddleware');
@@ -26,6 +28,7 @@ router.use(authMiddleware);
 
 // Specific routes first (more specific paths)
 router.post('/', createBill);
+router.post('/merge', mergeBill);
 router.get('/my-bills', getCustomerBills);
 router.get('/search', searchBills);
 router.get('/cancellations/history', getCancellationHistory);
@@ -44,10 +47,14 @@ router.get('/', getAllBills);
 router.get('/stats', getBillingStats);
 
 // Parameterized routes last (less specific paths)
+// Parameterized action routes before standard CRUD
+router.put('/:id/finalize', finalizeBill);
+router.post('/:id/cancel', cancelBill);
+router.post('/:id/split', splitBill);
+
+// Standard CRUD wildcard routes last
 router.get('/:id', getBillById);
 router.put('/:id', updateBill);
-router.put('/:id/finalize', finalizeBill);
 router.delete('/:id', deleteBill);
-router.post('/:id/cancel', cancelBill);
 
 module.exports = router;

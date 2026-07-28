@@ -244,7 +244,7 @@ const BillingMasterForm = ({
 
           {/* Customer Phone Number */}
           <div className="field">
-            <label className="label">Customer Phone Number *</label>
+            <label className="label">Customer Phone Number</label>
             <input
               type="text"
               className="erp-input"
@@ -257,20 +257,22 @@ const BillingMasterForm = ({
             />
           </div>
 
-          {/* Phone Number */}
+          {/* Special ID (Optional tracking reference) */}
           <div className="field">
-            <label className="label">Phone Number *</label>
+            <label className="label">Special ID</label>
             <input
               type="text"
               className="erp-input"
-              value={formData.customerPhone || ''}
-              onChange={(e) => handleChange('customerPhone', e.target.value)}
+              placeholder="e.g. Corporate Ref, Dept Code"
+              value={formData.specialId || ''}
+              onChange={(e) => handleChange('specialId', e.target.value)}
               disabled={!isEditing}
-              onFocus={() => handleFocus('customerPhone')}
-              onBlur={(e) => handleBlur('customerPhone', e.target.value)}
-              onKeyDown={(e) => handleKeyDown(e, 'customerPhone')}
+              onFocus={() => handleFocus('specialId')}
+              onBlur={(e) => handleBlur('specialId', e.target.value)}
+              onKeyDown={(e) => handleKeyDown(e, 'specialId')}
             />
           </div>
+
 
           {/* Station Boy */}
           <div className="field" style={{ position: 'relative' }}>
@@ -599,21 +601,6 @@ const BillingMasterForm = ({
           </div>
 
           <div className="field">
-            <label className="label">Platform Fees</label>
-            <input
-              type="number"
-              step="0.01"
-              className="erp-input"
-              value={formatCurrency(formData.platformFee)}
-              onChange={(e) => handleChange('platformFee', e.target.value)}
-              disabled={!isEditing}
-              onFocus={() => handleFocus('platformFee')}
-              onBlur={(e) => handleBlur('platformFee', e.target.value)}
-              onKeyDown={(e) => handleKeyDown(e, 'platformFee')}
-            />
-          </div>
-
-          <div className="field">
             <label className="label">Service Charge</label>
             <input
               type="number"
@@ -644,17 +631,57 @@ const BillingMasterForm = ({
           </div>
 
           <div className="field">
-            <label className="label">Cancellation Charges</label>
+            <label className="label">PNR Status</label>
+            <input
+              type="text"
+              className="erp-input"
+              value={formData.status || 'CNF'}
+              onChange={(e) => handleChange('status', e.target.value)}
+              disabled={!isEditing}
+            />
+          </div>
+
+          <div className="field">
+            <label className="label">Coach</label>
+            <input
+              type="text"
+              className="erp-input"
+              value={formData.coach || 'B6'}
+              onChange={(e) => handleChange('coach', e.target.value)}
+              disabled={!isEditing}
+            />
+          </div>
+
+          <div className="field">
+            <label className="label">Berth No</label>
             <input
               type="number"
-              step="0.01"
               className="erp-input"
-              value={formatCurrency(formData.cancellationCharge)}
-              onChange={(e) => handleChange('cancellationCharge', e.target.value)}
+              value={formData.berthNo || '28'}
+              onChange={(e) => handleChange('berthNo', e.target.value)}
               disabled={!isEditing}
-              onFocus={() => handleFocus('cancellationCharge')}
-              onBlur={(e) => handleBlur('cancellationCharge', e.target.value)}
-              onKeyDown={(e) => handleKeyDown(e, 'cancellationCharge')}
+            />
+          </div>
+
+          <div className="field">
+            <label className="label">Berth Code</label>
+            <input
+              type="text"
+              className="erp-input"
+              value={formData.berthCode || 'LB'}
+              onChange={(e) => handleChange('berthCode', e.target.value)}
+              disabled={!isEditing}
+            />
+          </div>
+
+          <div className="field">
+            <label className="label">Seat Details</label>
+            <input
+              type="text"
+              className="erp-input"
+              value={formData.details || 'CNF/B6/28/LB'}
+              onChange={(e) => handleChange('details', e.target.value)}
+              disabled={!isEditing}
             />
           </div>
 
@@ -717,7 +744,23 @@ const BillingMasterForm = ({
               disabled={!isEditing}
               onFocus={() => handleFocus('discount')}
               onBlur={(e) => handleBlur('discount', e.target.value)}
-              onKeyDown={(e) => handleKeyDown(e, 'discount', true)}
+              onKeyDown={(e) => handleKeyDown(e, 'discount')}
+            />
+          </div>
+
+          <div className="field">
+            <label className="label">Advance Payment (₹)</label>
+            <input
+              type="number"
+              step="0.01"
+              className="erp-input"
+              placeholder="e.g. 5000"
+              value={formatCurrency(formData.advanceAmount)}
+              onChange={(e) => handleChange('advanceAmount', e.target.value)}
+              disabled={!isEditing}
+              onFocus={() => handleFocus('advanceAmount')}
+              onBlur={(e) => handleBlur('advanceAmount', e.target.value)}
+              onKeyDown={(e) => handleKeyDown(e, 'advanceAmount', true)} // Mark as last field before readonly total
             />
           </div>
 

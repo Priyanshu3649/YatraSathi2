@@ -11,15 +11,21 @@ const BookingForm = () => {
     journeyDate: new Date(new Date().setDate(new Date().getDate() + 1)).toISOString().split('T')[0],
     trainClass: 'SL',
     trainPreferences: [],
-    passengers: [
-      { name: '', age: '', gender: 'M', berthPreference: 'NO_PREF' }
-    ]
+    passengers: [],
+    advanceAmount: ''
   });
+  const [activePassenger, setActivePassenger] = useState({ name: '', age: '', gender: 'M', berthPreference: 'NO_PREF' });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [customerProfile, setCustomerProfile] = useState({ name: '', phone: '' });
   const [masterPassengers, setMasterPassengers] = useState([]);
   const navigate = useNavigate();
+
+  const calculateAge = (dob) => {
+    if (!dob) return '';
+    const diff = Date.now() - new Date(dob).getTime();
+    return Math.abs(new Date(diff).getUTCFullYear() - 1970).toString();
+  };
 
   // ── Step 1 refs ──
   const fromRef = useRef(null);
@@ -90,28 +96,63 @@ const BookingForm = () => {
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
-  const handlePassengerChange = (index, field, value) => {
-    const updatedPassengers = [...formData.passengers];
-    updatedPassengers[index][field] = value;
-    setFormData(prev => ({ ...prev, passengers: updatedPassengers }));
+    const handleActivePassengerChange = (e) => {
+    const { name, value } = e.target;
+    setActivePassenger(prev => ({ ...prev, [name]: value }));
   };
 
-  const addPassenger = () => {
+  const commitActivePassenger = () => {
+    if (!activePassenger.name || !activePassenger.age) {
+      setError('Please fill in name and age before adding to the list.');
+      nameRef.current?.focus();
+      return false;
+    }
+    const age = parseInt(activePassenger.age);
+    if (isNaN(age) || age < 1 || age > 120) {
+      setError('Please enter a valid age.');
+      return false;
+    }
+    setError('');
     setFormData(prev => ({
       ...prev,
-      passengers: [...prev.passengers, { name: '', age: '', gender: 'M', berthPreference: 'NO_PREF' }]
+      passengers: [...prev.passengers, activePassenger]
     }));
-    // Focus will move to the new passenger's name field
+    setActivePassenger({ name: '', age: '', gender: 'M', berthPreference: 'NO_PREF' });
     setTimeout(() => nameRef.current?.focus(), 60);
+    return true;
+  };
+
+  const addMasterPassengerToGrid = (passenger) => {
+    let pref = 'NO_PREF';
+    const validPrefs = ['NO_PREF', 'LOWER', 'MIDDLE', 'UPPER', 'SIDE_LOWER', 'SIDE_UPPER'];
+    if (passenger.mp_birthpref && validPrefs.includes(passenger.mp_birthpref)) {
+      pref = passenger.mp_birthpref;
+    }
+    setFormData(prev => ({
+      ...prev,
+      passengers: [
+        ...prev.passengers,
+        {
+          name: passenger.mp_name,
+          age: passenger.mp_dob ? calculateAge(passenger.mp_dob) : (passenger.mp_age || ''),
+          gender: passenger.mp_gender || 'M',
+          berthPreference: pref
+        }
+      ]
+    }));
   };
 
   const removePassenger = (index) => {
-    if (formData.passengers.length > 1) {
-      setFormData(prev => ({
-        ...prev,
-        passengers: prev.passengers.filter((_, i) => i !== index)
-      }));
-    }
+    setFormData(prev => ({
+      ...prev,
+      passengers: prev.passengers.filter((_, i) => i !== index)
+    }));
+  };
+
+  const editPassenger = (index) => {
+    setActivePassenger(formData.passengers[index]);
+    removePassenger(index);
+    setTimeout(() => nameRef.current?.focus(), 60);
   };
 
   const validateStep1 = () => {
@@ -135,17 +176,16 @@ const BookingForm = () => {
   };
 
   const validateStep2 = () => {
-    for (let i = 0; i < formData.passengers.length; i++) {
-      const passenger = formData.passengers[i];
-      if (!passenger.name || !passenger.age) {
-        setError(`Please fill in details for passenger ${i + 1}`);
-        return false;
-      }
-      const age = parseInt(passenger.age);
-      if (isNaN(age) || age < 1 || age > 120) {
-        setError(`Please enter a valid age for passenger ${i + 1}`);
-        return false;
-      }
+    // Ensure either we have committed passengers or the active one is valid and committed
+    if (activePassenger.name || activePassenger.age) {
+      if (!commitActivePassenger()) return false;
+      return true; // if commit succeeds, we have at least 1 passenger
+    }
+    
+    if (formData.passengers.length === 0) {
+      setError('Please add at least one passenger.');
+      nameRef.current?.focus();
+      return false;
     }
     return true;
   };
@@ -173,24 +213,19 @@ const BookingForm = () => {
   }, []);
 
   // ── Tab key handler for Step 2 passenger fields ──
-  const handleAddPassengerKey = useCallback((e) => {
+  const handleAddPassengerKey = (e) => {
     if (e.key === 'Enter') {
       e.preventDefault();
-      // Validate last passenger before adding
-      const last = formData.passengers[formData.passengers.length - 1];
-      if (!last.name || !last.age) {
-        setError('Please fill in name and age before adding another passenger.');
-        nameRef.current?.focus();
-        return;
-      }
-      setError('');
-      addPassenger();
+      commitActivePassenger();
     } else if (e.key === 'Tab' && !e.shiftKey) {
-      // Tab on "Add Another Passenger" → go to next step
       e.preventDefault();
-      nextStep();
+      if (activePassenger.name || activePassenger.age) {
+        commitActivePassenger();
+      } else {
+        nextStep();
+      }
     }
-  }, [formData.passengers, nextStep]);
+  };
 
   // ── Submit button key handler ──
   const handleSubmitKey = useCallback((e) => {
@@ -227,6 +262,7 @@ const BookingForm = () => {
         trainPreferences: formData.trainPreferences,
         customerName: customerProfile.name || 'Customer',
         phoneNumber: customerProfile.phone || '9876543210',
+        advanceAmount: formData.advanceAmount ? parseFloat(formData.advanceAmount) : 0,
         status: 'DRF',
       };
 
@@ -347,61 +383,25 @@ const BookingForm = () => {
     </div>
   );
 
-  const lastIdx = formData.passengers.length - 1;
-
+  
   const renderStep2 = () => (
     <div className="booking-step">
       <h3>Passenger Details</h3>
 
-      {/* Confirmed (non-last) passengers shown as read-only cards */}
-      {formData.passengers.slice(0, lastIdx).map((passenger, index) => (
-        <div key={index} className="passenger-card">
-          <div className="passenger-header">
-            <div className="passenger-title">
-              <h4>Passenger {index + 1}</h4>
-            </div>
-            <button type="button" onClick={() => removePassenger(index)} className="remove-passenger" title="Remove Passenger">
-              <i className="fas fa-times"></i> Remove
-            </button>
-          </div>
-          <div className="passenger-details-grid">
-            <div className="passenger-field"><label>Full Name</label><input type="text" value={passenger.name} onChange={(e) => handlePassengerChange(index, 'name', e.target.value)} /></div>
-            <div className="passenger-field"><label>Age</label><input type="number" value={passenger.age} onChange={(e) => handlePassengerChange(index, 'age', e.target.value)} min="1" max="120" /></div>
-            <div className="passenger-field"><label>Gender</label>
-              <select value={passenger.gender} onChange={(e) => handlePassengerChange(index, 'gender', e.target.value)}>
-                <option value="M">Male</option><option value="F">Female</option><option value="O">Other</option>
-              </select>
-            </div>
-            <div className="passenger-field"><label>Berth Preference</label>
-              <select value={passenger.berthPreference} onChange={(e) => handlePassengerChange(index, 'berthPreference', e.target.value)}>
-                {berthPreferences.map(pref => <option key={pref.value} value={pref.value}>{pref.label}</option>)}
-              </select>
-            </div>
-          </div>
-        </div>
-      ))}
-
-      {/* Current (last) passenger — keyboard-navigable */}
-      <div className="passenger-card">
-        <div className="passenger-header">
-          <div className="passenger-title"><h4>Passenger {lastIdx + 1}</h4></div>
-          {formData.passengers.length > 1 && (
-            <button type="button" onClick={() => removePassenger(lastIdx)} className="remove-passenger">
-              <i className="fas fa-times"></i> Remove
-            </button>
-          )}
-        </div>
+      {/* Active Form */}
+      <div className="vintage-active-form">
+        <h4>Add New Passenger</h4>
         <div className="passenger-details-grid">
           <div className="passenger-field">
             <label>Full Name</label>
             <input
               ref={nameRef}
               type="text"
-              value={formData.passengers[lastIdx].name}
-              onChange={(e) => handlePassengerChange(lastIdx, 'name', e.target.value)}
+              name="name"
+              value={activePassenger.name}
+              onChange={handleActivePassengerChange}
               onKeyDown={(e) => { if (e.key === 'Tab' && !e.shiftKey) { e.preventDefault(); ageRef.current?.focus(); } }}
               placeholder="Enter full name"
-              required
               autoFocus
             />
           </div>
@@ -410,21 +410,22 @@ const BookingForm = () => {
             <input
               ref={ageRef}
               type="number"
-              value={formData.passengers[lastIdx].age}
-              onChange={(e) => handlePassengerChange(lastIdx, 'age', e.target.value)}
+              name="age"
+              value={activePassenger.age}
+              onChange={handleActivePassengerChange}
               onKeyDown={(e) => { if (e.key === 'Tab' && !e.shiftKey) { e.preventDefault(); genderRef.current?.focus(); } }}
               placeholder="Age"
               min="1"
               max="120"
-              required
             />
           </div>
           <div className="passenger-field">
             <label>Gender</label>
             <select
               ref={genderRef}
-              value={formData.passengers[lastIdx].gender}
-              onChange={(e) => handlePassengerChange(lastIdx, 'gender', e.target.value)}
+              name="gender"
+              value={activePassenger.gender}
+              onChange={handleActivePassengerChange}
               onKeyDown={(e) => { if (e.key === 'Tab' && !e.shiftKey) { e.preventDefault(); berthRef.current?.focus(); } }}
             >
               <option value="M">Male</option>
@@ -436,9 +437,10 @@ const BookingForm = () => {
             <label>Berth Preference</label>
             <select
               ref={berthRef}
-              value={formData.passengers[lastIdx].berthPreference}
-              onChange={(e) => handlePassengerChange(lastIdx, 'berthPreference', e.target.value)}
-              onKeyDown={(e) => { if (e.key === 'Tab' && !e.shiftKey) { e.preventDefault(); addPassengerRef.current?.focus(); } }}
+              name="berthPreference"
+              value={activePassenger.berthPreference}
+              onChange={handleActivePassengerChange}
+              onKeyDown={handleAddPassengerKey}
             >
               {berthPreferences.map(pref => (
                 <option key={pref.value} value={pref.value}>{pref.label}</option>
@@ -446,63 +448,65 @@ const BookingForm = () => {
             </select>
           </div>
         </div>
+        <div className="add-passenger-btn-container">
+          <button type="button" onClick={commitActivePassenger} className="vintage-btn vintage-btn-primary">
+            + Add Another Passenger
+          </button>
+        </div>
       </div>
 
-      <div className="passenger-actions">
-        <button
-          ref={addPassengerRef}
-          type="button"
-          onClick={addPassenger}
-          onKeyDown={handleAddPassengerKey}
-          className="add-passenger"
-        >
-          <i className="fas fa-plus"></i>
-          Add Another Passenger
-        </button>
-      </div>
+      {/* Grid View for Committed Passengers */}
+      {formData.passengers.length > 0 && (
+        <div className="vintage-table-container">
+          <table className="vintage-table">
+            <thead>
+              <tr>
+                <th>S.No.</th>
+                <th>Name</th>
+                <th>Age</th>
+                <th>Gender</th>
+                <th>Berth Pref</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {formData.passengers.map((p, i) => (
+                <tr key={i}>
+                  <td>{i + 1}</td>
+                  <td>{p.name}</td>
+                  <td>{p.age}</td>
+                  <td>{p.gender === 'M' ? 'Male' : (p.gender === 'F' ? 'Female' : 'Other')}</td>
+                  <td>{berthPreferences.find(b => b.value === p.berthPreference)?.label || p.berthPreference}</td>
+                  <td>
+                    <div className="grid-actions">
+                      <button type="button" onClick={() => editPassenger(i)} className="grid-action-btn edit">Edit</button>
+                      <span>|</span>
+                      <button type="button" onClick={() => removePassenger(i)} className="grid-action-btn delete">Remove</button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
 
       {masterPassengers.length > 0 && (
-        <div className="master-passenger-list-section" style={{ marginTop: '20px', padding: '15px', backgroundColor: '#f9f9f9', borderRadius: '8px', border: '1px solid #eee' }}>
-          <h4 style={{ marginTop: 0, marginBottom: '10px', fontSize: '14px', color: '#333' }}>Saved Passengers (Master List)</h4>
-          <div className="master-passenger-cards" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', gap: '10px' }}>
-            {masterPassengers.map(mp => (
-              <div key={mp.id} className="master-passenger-card" style={{ backgroundColor: '#fff', padding: '10px', borderRadius: '6px', border: '1px solid #ddd', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <div style={{ fontSize: '13px' }}>
-                  <strong>{mp.name}</strong>
-                  <div style={{ color: '#666', marginTop: '2px' }}>
-                    {mp.gender === 'M' ? 'Male' : mp.gender === 'F' ? 'Female' : 'Other'}, 
-                    {mp.dateOfBirth ? ` DOB: ${mp.dateOfBirth}` : ''}
-                  </div>
+        <div className="vintage-master-list">
+          <h4>Saved Passengers (Master List)</h4>
+          <div className="vintage-master-cards">
+            {masterPassengers.map((mp, idx) => (
+              <div key={idx} className="vintage-master-card">
+                <div className="vintage-master-card-info">
+                  <strong>{mp.mp_name || mp.name}</strong><br/>
+                  {mp.mp_dob ? `Age: ${calculateAge(mp.mp_dob)}` : (mp.mp_age ? `Age: ${mp.mp_age}` : '')} | {mp.mp_gender || mp.gender}
                 </div>
                 <button 
-                  type="button"
-                  style={{ padding: '5px 10px', fontSize: '12px', backgroundColor: '#2e7d32', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
-                  onClick={() => {
-                    const dob = new Date(mp.dateOfBirth);
-                    const age = Math.abs(new Date(Date.now() - dob.getTime()).getUTCFullYear() - 1970);
-                    
-                    const newPassenger = {
-                      name: mp.name,
-                      age: isNaN(age) ? '' : age.toString(),
-                      gender: mp.gender,
-                      berthPreference: mp.birthPreference || 'NO_PREF'
-                    };
-
-                    setFormData(prev => {
-                      const currentPassengers = [...prev.passengers];
-                      const last = currentPassengers[currentPassengers.length - 1];
-                      if (!last.name && !last.age) {
-                        // Replace empty last row
-                        currentPassengers[currentPassengers.length - 1] = newPassenger;
-                      } else {
-                        // Append new row
-                        currentPassengers.push(newPassenger);
-                      }
-                      return { ...prev, passengers: currentPassengers };
-                    });
-                  }}
+                  type="button" 
+                  className="vintage-btn"
+                  onClick={() => addMasterPassengerToGrid(mp)}
                 >
-                  <i className="fas fa-plus"></i> Add
+                  + Add
                 </button>
               </div>
             ))}
@@ -532,6 +536,23 @@ const BookingForm = () => {
               <span>{passenger.age} years, {passenger.gender === 'M' ? 'Male' : passenger.gender === 'F' ? 'Female' : 'Other'}, {berthPreferences.find(b => b.value === passenger.berthPreference)?.label}</span>
             </div>
           ))}
+        </div>
+
+        <div className="summary-section">
+          <h4>Advance Payment</h4>
+          <div className="form-group full-width">
+            <label>Advance Payment Amount (₹)</label>
+            <input
+              type="number"
+              name="advanceAmount"
+              value={formData.advanceAmount}
+              onChange={handleInputChange}
+              placeholder="Enter advance amount paid by customer (if any)"
+              className="wide-input"
+              min="0"
+              style={{ marginTop: '5px' }}
+            />
+          </div>
         </div>
       </div>
     </div>

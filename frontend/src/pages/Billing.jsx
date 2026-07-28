@@ -13,7 +13,7 @@ import '../styles/vintage-admin-panel.css';
 import '../styles/dynamic-admin-panel.css';
 import '../styles/vintage-erp-global.css';
 import '../styles/bookings.css';
-import '../dense.css';
+
 
 // Add inline styles for keyboard navigation and compact form layout
 const keyboardNavigationStyles = `
@@ -195,6 +195,7 @@ const Billing = () => {
   const [showBillDetails, setShowBillDetails] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
   const [previewBill, setPreviewBill] = useState(null);
+  const [selectedBillIdsForMerge, setSelectedBillIdsForMerge] = useState([]);
   
   // Editing state (MOVED TO TOP to avoid TDZ)
   const [isEditing, setIsEditing] = useState(false);
@@ -1155,6 +1156,33 @@ const Billing = () => {
     }
   };
 
+  const handleSplitBill = async (billId, count) => {
+    try {
+      await billingAPI.splitBill(billId, count);
+      alert('Bill split successfully');
+      fetchBills();
+    } catch (error) {
+      setError(error.message);
+    }
+  };
+
+  const handleMergeBills = async () => {
+    if (selectedBillIdsForMerge.length < 2) {
+      alert('Please select at least 2 valid bills to merge by checking the checkboxes in the table.');
+      return;
+    }
+
+    try {
+      await billingAPI.mergeBills(selectedBillIdsForMerge);
+      alert('Bills merged successfully');
+      setSelectedBillIdsForMerge([]);
+      setSelectedBill(null);
+      fetchBills();
+    } catch (error) {
+      setError(error.message);
+    }
+  };
+
   const handleCancelBill = () => {
     if (selectedBill) {
       if (selectedBill.status === 'CANCELLED' || selectedBill.bl_status === 'CANCELLED') {
@@ -1689,6 +1717,16 @@ const Billing = () => {
           }
         }} title="Delete" disabled={!selectedBill || selectedBill.bl_status === 'CANCELLED'}>Delete</button>
         <button className="erp-button" onClick={handleCancelBill} title="Cancel Bill (F6)" disabled={!selectedBill || selectedBill.bl_status === 'CANCELLED' || selectedBill.status === 'CANCELLED'}>Cancel Bill</button>
+        <div className="erp-tool-separator"></div>
+        <button className="erp-button" onClick={() => {
+          if (selectedBill) {
+            const count = window.prompt('Split this bill into how many parts?', '2');
+            if (count && parseInt(count) >= 2) handleSplitBill(selectedBill.id || selectedBill.bl_id, parseInt(count));
+          } else {
+            alert('Please select a bill to split');
+          }
+        }} title="Split Bill" disabled={!selectedBill || selectedBill.bl_is_split}>Split</button>
+        <button className="erp-button" onClick={handleMergeBills} title="Merge Bills">Merge</button>
         <button className="erp-button" style={{ background: '#2e7d32', color: '#fff' }} onClick={() => {
           if (selectedBill) {
             const billId = selectedBill.id || selectedBill.bl_id;
@@ -1711,16 +1749,6 @@ const Billing = () => {
         }} title="Record payment against selected bill" disabled={!selectedBill}>Record Payment</button>
         <div className="erp-tool-separator"></div>
         <button className="erp-button" onClick={handleSave} disabled={!isEditing}>Save</button>
-        <button className="erp-button" onClick={fetchBills} title="Refresh">Refresh</button>
-        <div className="erp-tool-separator"></div>
-        <button className="erp-button" onClick={() => {
-          if (selectedBill) {
-            // Export bill functionality
-            handleExportBill(selectedBill.id);
-          } else {
-            alert('Please select a bill to export');
-          }
-        }} title="Export" disabled={!selectedBill}>Export</button>
         {selectedBill ? (
           <Link
             className="erp-button"
@@ -1740,17 +1768,6 @@ const Billing = () => {
             Print
           </button>
         )}
-        <Link className="erp-button" to="/billing/cancellations" title="Cancellation history">
-          Cancellations
-        </Link>
-        <button
-          className="erp-button"
-          onClick={() => { setActiveView(activeView === 'ledger' ? 'list' : 'ledger'); setLedgerCustomerId(null); setLedgerCustomerName(''); }}
-          style={activeView === 'ledger' ? { background: '#8b7355', color: '#fff' } : {}}
-          title="Customer Ledger"
-        >
-          Ledger
-        </button>
         
         <div style={{ flex: 1 }}></div>
         <div style={{ fontWeight: 'bold', fontSize: '12px' }}>
@@ -1817,7 +1834,7 @@ const Billing = () => {
                 type="date" 
                 name="billDate" 
                 className="erp-input" 
-                value={formData.billDate || ''} 
+                value={formData.billDate ? String(formData.billDate).substring(0, 10) : ''} 
                 onChange={(e) => setFormData({...formData, billDate: e.target.value})}
                 disabled={!isEditing}
               />
@@ -2000,7 +2017,7 @@ const Billing = () => {
                 type="date" 
                 name="journeyDate" 
                 className="erp-input" 
-                value={formData.journeyDate || ''}
+                value={formData.journeyDate ? String(formData.journeyDate).substring(0, 10) : ''}
                 onChange={(e) => setFormData({...formData, journeyDate: e.target.value})}
                 disabled={!isEditing}
                 readOnly={billingMode === 'generate'}
@@ -2098,16 +2115,15 @@ const Billing = () => {
                 tabIndex={5}
                 onKeyDown={(e) => handleEnhancedTabNavigation(e, 'serviceCharges')}
               />
-              <label className="erp-form-label">Platform Fees</label>
+              <label className="erp-form-label">PNR Status</label>
               <input 
-                type="number" 
-                name="platformFees" 
+                type="text" 
+                name="status" 
                 className="erp-input" 
-                value={formData.platformFees || ''} 
-                onChange={(e) => setFormData({...formData, platformFees: e.target.value})}
+                value={formData.status || 'CNF'} 
+                onChange={(e) => setFormData({...formData, status: e.target.value})}
                 disabled={!isEditing}
                 tabIndex={6}
-                onKeyDown={(e) => handleEnhancedTabNavigation(e, 'platformFees')}
               />
               <label className="erp-form-label">Station Boy Incentive</label>
               <input 
@@ -2123,7 +2139,7 @@ const Billing = () => {
               />
             </div>
             
-            {/* Row 5: Misc Charges, Delivery Charges, Cancellation Charges, GST, Surcharge (5 fields) */}
+            {/* Row 5: Misc Charges, Delivery Charges, GST, PNR Coach, Berth No (5 fields) */}
             <div className="erp-form-row-compact-5">
               <label className="erp-form-label">Misc. Charges</label>
               <input 
@@ -2147,17 +2163,6 @@ const Billing = () => {
                 tabIndex={9}
                 onKeyDown={(e) => handleEnhancedTabNavigation(e, 'deliveryCharges')}
               />
-              <label className="erp-form-label">Cancellation Charges</label>
-              <input 
-                type="number" 
-                name="cancellationCharges" 
-                className="erp-input" 
-                value={formData.cancellationCharges || ''} 
-                onChange={(e) => setFormData({...formData, cancellationCharges: e.target.value})}
-                disabled={!isEditing}
-                tabIndex={10}
-                onKeyDown={(e) => handleEnhancedTabNavigation(e, 'cancellationCharges')}
-              />
               <label className="erp-form-label">GST</label>
               <input 
                 type="number" 
@@ -2166,8 +2171,28 @@ const Billing = () => {
                 value={formData.gst || ''} 
                 onChange={(e) => setFormData({...formData, gst: e.target.value})}
                 disabled={!isEditing}
-                tabIndex={11}
+                tabIndex={10}
                 onKeyDown={(e) => handleEnhancedTabNavigation(e, 'gst')}
+              />
+              <label className="erp-form-label">PNR Coach</label>
+              <input 
+                type="text" 
+                name="coach" 
+                className="erp-input" 
+                value={formData.coach || 'B6'} 
+                onChange={(e) => setFormData({...formData, coach: e.target.value})}
+                disabled={!isEditing}
+                tabIndex={11}
+              />
+              <label className="erp-form-label">PNR Berth No</label>
+              <input 
+                type="number" 
+                name="berthNo" 
+                className="erp-input" 
+                value={formData.berthNo || '28'} 
+                onChange={(e) => setFormData({...formData, berthNo: e.target.value})}
+                disabled={!isEditing}
+                tabIndex={12}
               />
               <label className="erp-form-label">Surcharge</label>
               <input 
@@ -2182,8 +2207,8 @@ const Billing = () => {
               />
             </div>
             
-            {/* Row 6: GST Type, Total Amount, Status, Special Request/Remarks (4 fields) */}
-            <div className="erp-form-row-compact-4">
+            {/* Row 6: GST Type, Total Amount, PNR Berth Code, Seat Details, Status, Special Request (6 fields) */}
+            <div className="erp-form-row-compact-6" style={{ display: 'grid', gridTemplateColumns: 'repeat(6, max-content 1fr)', gap: '4px', alignItems: 'center', marginBottom: '8px' }}>
               <label className="erp-form-label">GST Type</label>
               <select 
                 name="gstType" 
@@ -2208,21 +2233,42 @@ const Billing = () => {
                 disabled={true}
                 tabIndex={-1}
               />
+              <label className="erp-form-label">Berth Code</label>
+              <input 
+                type="text" 
+                name="berthCode" 
+                className="erp-input" 
+                value={formData.berthCode || 'LB'} 
+                onChange={(e) => setFormData({...formData, berthCode: e.target.value})}
+                disabled={!isEditing}
+                tabIndex={14}
+              />
+              <label className="erp-form-label">Seat Details</label>
+              <input 
+                type="text" 
+                name="details" 
+                className="erp-input" 
+                value={formData.details || 'CNF/B6/28/LB'} 
+                onChange={(e) => setFormData({...formData, details: e.target.value})}
+                disabled={!isEditing}
+                tabIndex={15}
+              />
               <label className="erp-form-label">Status</label>
               <select 
                 name="status" 
-                className="erp-input" 
-                value={formData.status || 'DRAFT'} 
+                className="erp-input status-select" 
+                value={formData.status || 'UNPAID'} 
                 onChange={(e) => setFormData({...formData, status: e.target.value})}
                 disabled={!isEditing}
-                tabIndex={14}
+                tabIndex={16}
                 onKeyDown={(e) => handleEnhancedTabNavigation(e, 'status')}
               >
-                <option value="DRAFT">Draft</option>
-                <option value="FINAL">Final</option>
-                <option value="CANCELLED">Cancelled</option>
+                <option value="PAID">PAID</option>
+                <option value="UNPAID">UNPAID</option>
+                <option value="PARTIAL">PARTIAL</option>
+                <option value="CANCELLED">CANCELLED</option>
               </select>
-              <label className="erp-form-label">Special Request/Remarks</label>
+              <label className="erp-form-label">Special Request</label>
               <input 
                 type="text" 
                 name="remarks" 
@@ -2230,8 +2276,8 @@ const Billing = () => {
                 value={formData.remarks || ''} 
                 onChange={(e) => setFormData({...formData, remarks: e.target.value})}
                 disabled={!isEditing}
-                tabIndex={15}
-                placeholder="Enter special requests or remarks"
+                tabIndex={17}
+                placeholder="Enter remarks/special requests"
                 onKeyDown={(e) => handleEnhancedTabNavigation(e, 'remarks')}
               />
             </div>
@@ -2407,8 +2453,9 @@ const Billing = () => {
                 </div>
               )}
             </div>
+
           </div>
-            
+
             {/* Audit Section */}
             <div className="erp-audit-section">
               <div className="erp-audit-row">
@@ -2432,8 +2479,10 @@ const Billing = () => {
             </div>
           </div>
 
+
+
           {/* Data Grid - Scrollable */}
-          <div className="layout-grid-section" style={{ display: 'flex', flexDirection: 'column', flex: 1, height: '100%' }}>
+          <div className="layout-grid-section" style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, height: '100%' }}>
             <div className="erp-panel-header">
               Billing Records
               {isFetching && <span style={{ marginLeft: '10px', fontSize: '10px', color: '#adb5bd', fontWeight: 'normal' }}>fetching…</span>}
@@ -2683,7 +2732,19 @@ const Billing = () => {
                             >
                               <td>
                                 <div style={{ display: 'flex', gap: '4px' }}>
-                                  <input type="checkbox" checked={!!isSelected} onChange={() => {}} />
+                                  <input 
+                                    type="checkbox" 
+                                    checked={selectedBillIdsForMerge.includes(bill.bl_id || bill.id)} 
+                                    onChange={(e) => {
+                                      e.stopPropagation();
+                                      const billId = bill.bl_id || bill.id;
+                                      if (e.target.checked) {
+                                        setSelectedBillIdsForMerge(prev => [...prev, billId]);
+                                      } else {
+                                        setSelectedBillIdsForMerge(prev => prev.filter(item => item !== billId));
+                                      }
+                                    }} 
+                                  />
                                   <button 
                                     className="erp-button small" 
                                     onClick={(e) => {

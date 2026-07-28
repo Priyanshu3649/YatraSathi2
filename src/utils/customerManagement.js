@@ -41,7 +41,8 @@ const generateUserId = () => {
  */
 const generateCustomerEmail = (phone) => {
   const random = Math.floor(Math.random() * 100000).toString().padStart(5, '0');
-  return `customer_${phone}_${random}@phone.customer`;
+  const safePhone = phone || 'unknown';
+  return `customer_${safePhone}_${random}@phone.customer`;
 };
 
 /**
@@ -94,14 +95,14 @@ const createCustomerWithNameAndPhone = async (name, phone, createdByUserId) => {
   const transaction = await sequelizeTVL.transaction();
 
   try {
-    // Validate input
-    if (!name || !phone) {
-      throw new Error('Customer name and phone are required');
+    // Validate input (Phone is now optional)
+    if (!name) {
+      throw new Error('Customer name is required');
     }
 
-    // Clean phone number
-    const cleanPhone = phone.replace(/\D/g, '');
-    if (cleanPhone.length < 10 || cleanPhone.length > 15) {
+    // Clean phone number if provided
+    const cleanPhone = phone ? phone.replace(/\D/g, '') : null;
+    if (cleanPhone && (cleanPhone.length < 10 || cleanPhone.length > 15)) {
       throw new Error('Invalid phone number length (10-15 digits required)');
     }
 

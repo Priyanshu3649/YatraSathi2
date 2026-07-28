@@ -93,6 +93,16 @@ const Receipt = sequelize.define('rcReceipt', {
     allowNull: true,
     comment: 'Entered By User ID'
   },
+  attachment_path: {
+    type: DataTypes.STRING(500),
+    allowNull: true,
+    comment: 'Path to receipt proof image'
+  },
+  attachment_mime: {
+    type: DataTypes.STRING(50),
+    allowNull: true,
+    comment: 'MIME type of receipt proof image'
+  },
   entered_on: {
     type: DataTypes.DATE,
     defaultValue: DataTypes.NOW,

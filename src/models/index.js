@@ -19,8 +19,11 @@ const Pnr = require('./Pnr');
 const PaymentAlloc = require('./PaymentAlloc');
 const PaymentAllocTVL = require('./PaymentAllocTVL');
 const Session = require('./Session');
-const Audit = require('./Audit');
+const StationBoyPayment = require('./StationBoyPayment');
 const Config = require('./Config');
+const ReportTemplate = require('./ReportTemplate');
+const FinancialTransactionRef = require('./FinancialTransactionRef');
+const Audit = require('./Audit');
 const TravelPlan = require('./TravelPlan');
 const BookingTVL = require('./BookingTVL');
 const PaymentTVL = require('./PaymentTVL');
@@ -42,7 +45,6 @@ const PassengerTVL = require('./PassengerTVL');
 const MasterPassengerList = require('./MasterPassengerList');
 const CustomerMasterPassenger = require('./CustomerMasterPassenger');
 const MasterPassengerTVL = require('./MasterPassengerTVL');
-const ReportTemplate = require('./ReportTemplate');
 const Contra = require('./Contra');
 const Receipt = require('./Receipt');
 const Journal = require('./Journal');
@@ -52,7 +54,6 @@ const ServiceChargeDefault = require('./ServiceChargeDefault');
 const PaymentAllocation = require('./PaymentAllocation');
 const CustomerLedger = require('./CustomerLedger');
 const StationBoy = require('./StationBoy');
-const StationBoyPayment = require('./StationBoyPayment');
 
 // Map legacy model variables to active TVL models for backwards-compatibility
 const User = UserTVL;
@@ -254,6 +255,7 @@ StationBoyPayment.belongsTo(StationBoy, { foreignKey: 'station_boy_id', as: 'sta
 
 
 module.exports = {
+  FinancialTransactionRef,
   Company,
   CompanyTVL,
   Role,

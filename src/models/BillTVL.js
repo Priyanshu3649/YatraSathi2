@@ -164,6 +164,16 @@ const BillTVL = sequelizeTVL.define('blXbilling', {
     allowNull: true,
     comment: 'Parent Bill ID'
   },
+  bl_is_merged: {
+    type: DataTypes.TINYINT(1),
+    defaultValue: 0,
+    comment: 'Is Merged Bill'
+  },
+  bl_merged_into_id: {
+    type: DataTypes.BIGINT,
+    allowNull: true,
+    comment: 'ID of the bill this was merged into'
+  },
   bl_created_by: {
     type: DataTypes.INTEGER,
     allowNull: true,

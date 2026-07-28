@@ -460,7 +460,12 @@ const createBill = async (req, res) => {
       billDate,
       billNumber,
       status,
-      remarks
+      remarks,
+      specialId,
+      advanceAmount,
+      paymentMode,
+      paymentReference,
+      enteredBy
     } = req.body;
 
     // Log incoming request data for debugging
@@ -468,9 +473,10 @@ const createBill = async (req, res) => {
       bookingId,
       customerName,
       phoneNumber,
+      specialId,
+      advanceAmount,
       journeyDate,
-      billDate: req.body.billDate,
-      allFields: req.body
+      billDate: req.body.billDate
     });
     
     // Validate bookingId (MANDATORY)
@@ -478,9 +484,13 @@ const createBill = async (req, res) => {
       return res.status(400).json({ message: 'Booking ID is required for billing.' });
     }
     
-    // Validate required fields
-    if (!customerName || !phoneNumber) {
-      return res.status(400).json({ message: 'Customer name and phone number are required.' });
+    // Validate required fields (Phone number is now optional)
+    if (!customerName) {
+      return res.status(400).json({ message: 'Customer name is required.' });
+    }
+    
+    if (!phoneNumber) {
+      console.warn('⚠️ Phone number omitted for customer:', customerName);
     }
     
     // Validate journey date is provided
@@ -602,15 +612,17 @@ const createBill = async (req, res) => {
         bl_discount: discount || 0,
         bl_gst_type: gstType || 'EXCLUSIVE',
         bl_total_amount: finalTotalAmount,
-        bl_created_by: convertUserIdToInt(req.user.us_usid),
+        bl_advance_amount: parseFloat(advanceAmount) || 0,
+        bl_special_id: specialId || null,
+        bl_created_by: enteredBy ? convertUserIdToInt(enteredBy) : convertUserIdToInt(req.user.us_usid),
         // Standard audit fields
-        entered_by: convertUserIdToInt(req.user.us_usid),
+        entered_by: enteredBy ? convertUserIdToInt(enteredBy) : convertUserIdToInt(req.user.us_usid),
         entered_on: new Date(),
         status: 'CNF',
         bl_status: 'CNF'
       }, { 
         transaction,
-        userId: convertUserIdToInt(req.user.us_usid) // Pass userId for hooks
+        userId: enteredBy ? convertUserIdToInt(enteredBy) : convertUserIdToInt(req.user.us_usid) // Pass userId for hooks
       });
       
       // 5. Update Booking Status to CONFIRMED and mark as billed
@@ -622,7 +634,7 @@ const createBill = async (req, res) => {
       }, { transaction });
       
       // 6. Update passenger records with the billing number
-      const { Passenger } = require('../models'); // Import the Passenger model
+      const { Passenger, ptXpayment: PaymentTVL } = require('../models'); // Import models
       try {
         // Update all active passengers for this booking with the billing number
         const [updateResult] = await sequelizeTVL.query(
@@ -645,10 +657,48 @@ const createBill = async (req, res) => {
         console.log(`📊 Updated ${updateResult.affectedRows} passengers with billing number ${billNumber}`);
       } catch (passengerError) {
         console.error('⚠️ Error updating passenger records with billing number:', passengerError);
-        // Don't throw error here as the bill has already been created successfully
-        // The passengers can be updated later if needed
       }
       
+      // 6b. Process explicit Advance Payment received during billing
+      if (advanceAmount && parseFloat(advanceAmount) > 0) {
+         try {
+           const advAmt = parseFloat(advanceAmount);
+           console.log(`💰 Processing explicit advance payment of ₹${advAmt} during bill creation.`);
+           const entryNo = 'ADV-' + Date.now().toString().slice(-6);
+           
+           await PaymentTVL.create({
+             py_entry_no: entryNo,
+             py_date: new Date(),
+             py_entry_type: 'Advance',
+             py_customer_name: customerName,
+             py_customer_phone: phoneNumber || '',
+             py_amount: advAmt,
+             py_payment_mode: paymentMode || 'Cash',
+             py_ref_number: paymentReference || '',
+             py_narration: `Advance received against Bill ${finalBillNumber}`,
+             py_cusid: booking.bk_usid,
+             py_active: 1,
+             entered_by: convertUserIdToInt(req.user.us_usid),
+             entered_on: new Date()
+           }, { transaction });
+           
+           // Insert into Customer Ledger directly as Advance Receipt
+           await CustomerLedgerService.writeLedgerEntry({
+             customerId: booking.bk_usid,
+             entryType: 'RECEIPT',
+             referenceType: 'ADVANCE',
+             referenceId: entryNo,
+             creditAmount: advAmt,
+             remarks: `Advance received at billing time for ${finalBillNumber}`,
+             createdBy: req.user.us_usid
+           }, transaction);
+           
+         } catch (advErr) {
+           console.error('⚠️ Error creating advance payment record:', advErr);
+           throw new Error('Failed to record advance payment. Transaction rolled back.');
+         }
+      }
+
       // YatraSathi Customer Ledger: write BILL entry and auto-adjust advances
       try {
         const customerId = booking.bk_usid;
@@ -743,6 +793,8 @@ const getCustomerBills = async (req, res) => {
        FROM blXbilling bl
        INNER JOIN bkXbooking bk ON bl.bl_booking_id = bk.bk_bkid
        WHERE bk.bk_usid = :userId
+         AND bl.bl_is_merged = 0 
+         AND bl.bl_is_split = 0
        ORDER BY bl.bl_created_at DESC`,
       {
         replacements: { userId },
@@ -803,6 +855,10 @@ const getAllBills = async (req, res) => {
     };
     
     const where = queryHelper.buildWhereClause(req.query, filterMap);
+    
+    // Hide merged and split bills from the list by default
+    where.bl_is_merged = false;
+    where.bl_is_split = false;
 
     // Check permissions
     const usertype = (req.user.us_usertype || req.user.usertype || '').toLowerCase();
@@ -1913,7 +1969,10 @@ const searchBills = async (req, res) => {
     } = req.query;
 
     // Build query conditions
-    let whereConditions = {};
+    let whereConditions = {
+      bl_is_merged: false,
+      bl_is_split: false
+    };
 
     // Status filter
     if (status) {
@@ -2119,8 +2178,161 @@ const getBillingStats = async (req, res) => {
   }
 };
 
+// -----------------------------
+// ADVANCED BILLING OPERATIONS
+// -----------------------------
+
+const splitBill = async (req, res) => {
+  const transaction = await sequelizeTVL.transaction();
+  try {
+    const { id } = req.params;
+    const { splitCount } = req.body;
+    
+    if (!splitCount || splitCount < 2) {
+      throw new Error('Split count must be at least 2');
+    }
+
+    const parentBill = await BillTVL.findByPk(id, { transaction });
+    if (!parentBill) throw new Error('Bill not found');
+    if (parentBill.bl_status === 'CANCELLED' || parentBill.bl_status === 'CAN') throw new Error('Cannot split cancelled bill');
+    if (parentBill.bl_is_split) throw new Error('Bill is already split');
+    
+    const parentTotal = parseFloat(parentBill.bl_total_amount);
+    
+    // Accurate rounding logic to prevent floating point mismatch
+    // Round down to nearest integer (or cents if doing * 100)
+    // Actually we should just calculate exact decimals
+    const baseChildAmount = Math.floor(parentTotal / splitCount);
+    const remainder = parentTotal - (baseChildAmount * splitCount);
+
+    const childBills = [];
+    for (let i = 0; i < splitCount; i++) {
+      const childAmount = i === 0 ? baseChildAmount + remainder : baseChildAmount;
+      
+      const billData = parentBill.toJSON();
+      delete billData.bl_id; // Remove primary key
+      
+      // Use alphabetical suffix: A, B, C...
+      const suffix = String.fromCharCode(65 + i);
+      billData.bl_entry_no = `${parentBill.bl_entry_no}${suffix}`;
+      billData.bl_bill_no = `${parentBill.bl_bill_no}${suffix}`;
+      billData.bl_total_amount = childAmount;
+      billData.bl_parent_bill_id = parentBill.bl_id;
+      billData.bl_is_split = false; // The children themselves are not split
+      
+      // Zero out structural charges so the total adds up cleanly without confusion
+      billData.bl_railway_fare = 0;
+      billData.bl_sb_incentive = 0;
+      billData.bl_service_charge = 0;
+      billData.bl_platform_fee = 0;
+      billData.bl_misc_charges = 0;
+      billData.bl_delivery_charge = 0;
+      billData.bl_gst = 0;
+      billData.bl_surcharge = 0;
+      billData.bl_discount = 0;
+      billData.bl_advance_amount = 0; // Don't duplicate advances
+
+      const childBill = await BillTVL.create(billData, { transaction });
+      childBills.push(childBill);
+    }
+    
+    parentBill.bl_is_split = true;
+    await parentBill.save({ transaction });
+    
+    // Log Forensic Audit
+    Audit.logAction({
+      module: Audit.MODULES.BILLING,
+      recordId: parentBill.bl_id,
+      action: Audit.ACTIONS.UPDATE,
+      req,
+      fieldName: 'bl_is_split',
+      oldValue: false,
+      newValue: true,
+      reason: `Split into ${splitCount} bills`
+    });
+
+    await transaction.commit();
+    res.json({ success: true, message: 'Bill split successfully', childBills });
+  } catch (error) {
+    await transaction.rollback();
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+
+const mergeBill = async (req, res) => {
+  const transaction = await sequelizeTVL.transaction();
+  try {
+    const { billIds } = req.body;
+    if (!billIds || billIds.length < 2) {
+      throw new Error('Must provide at least 2 bill IDs to merge');
+    }
+
+    const bills = await BillTVL.findAll({
+      where: { bl_id: billIds },
+      transaction
+    });
+
+    if (bills.length !== billIds.length) {
+      throw new Error('One or more bills not found');
+    }
+    
+    const customerNames = [...new Set(bills.map(b => b.bl_customer_name))];
+    if (customerNames.length > 1) {
+      throw new Error('Cannot merge bills belonging to different customers');
+    }
+
+    let combinedTotal = 0;
+    bills.forEach(b => {
+      if (b.bl_status === 'CANCELLED' || b.bl_status === 'CAN') throw new Error(`Bill ${b.bl_id} is cancelled`);
+      if (b.bl_is_merged) throw new Error(`Bill ${b.bl_id} is already merged`);
+      combinedTotal += parseFloat(b.bl_total_amount);
+    });
+
+    // Create the master merged bill (inheriting core properties from the first bill)
+    const baseBill = bills[0];
+    const mergedBillData = baseBill.toJSON();
+    delete mergedBillData.bl_id;
+    
+    mergedBillData.bl_entry_no = `MERGED-${Date.now().toString().slice(-6)}`;
+    mergedBillData.bl_bill_no = mergedBillData.bl_entry_no;
+    mergedBillData.bl_total_amount = combinedTotal;
+    mergedBillData.bl_is_merged = false;
+    mergedBillData.bl_is_split = false;
+    mergedBillData.bl_parent_bill_id = null;
+    mergedBillData.bl_advance_amount = 0;
+
+    const mergedBill = await BillTVL.create(mergedBillData, { transaction });
+
+    // Mark children as merged
+    for (const b of bills) {
+      b.bl_is_merged = true;
+      b.bl_merged_into_id = mergedBill.bl_id;
+      await b.save({ transaction });
+      
+      Audit.logAction({
+        module: Audit.MODULES.BILLING,
+        recordId: b.bl_id,
+        action: Audit.ACTIONS.UPDATE,
+        req,
+        fieldName: 'bl_is_merged',
+        oldValue: false,
+        newValue: true,
+        reason: `Merged into ${mergedBill.bl_entry_no}`
+      });
+    }
+
+    await transaction.commit();
+    res.json({ success: true, message: 'Bills merged successfully', mergedBill });
+  } catch (error) {
+    await transaction.rollback();
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+
 module.exports = {
   createBill,
+  splitBill,
+  mergeBill,
   getCustomerBills,
   getAllBills,
   getBillById,

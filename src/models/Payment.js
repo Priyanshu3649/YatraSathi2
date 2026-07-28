@@ -82,6 +82,22 @@ const Payment = sequelize.define('pyXpayment', {
     comment: 'Payment mode (Cash, Bank, UPI, etc.)'
   },
 
+  py_active: {
+    type: DataTypes.TINYINT,
+    defaultValue: 1,
+    comment: 'Active Flag (1=Active, 0=Cancelled)'
+  },
+  attachment_path: {
+    type: DataTypes.STRING(500),
+    allowNull: true,
+    comment: 'Path to payment proof image'
+  },
+  attachment_mime: {
+    type: DataTypes.STRING(50),
+    allowNull: true,
+    comment: 'MIME type of payment proof image'
+  },
+
   py_narration: {
     type: DataTypes.STRING(200),
     allowNull: true,

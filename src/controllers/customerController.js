@@ -39,32 +39,55 @@ const customerController = {
         creditLimit
       } = req.body;
 
-      // Validate required fields
-      if (!firstName || !lastName || !email || !phone || !password) {
+      // Validate required fields (Phone and Email are now optional for flexibility)
+      if (!firstName || !lastName || !password) {
         await transaction.rollback();
         return res.status(400).json({
           success: false,
-          message: 'First name, last name, email, phone, and password are required'
+          message: 'First name, last name, and password are required'
         });
       }
 
-      // Check if email or phone already exists
-      const existingUser = await User.findOne({
-        where: {
-          [Op.or]: [
-            { us_email: email },
-            { us_phone: phone }
-          ]
-        },
-        transaction
-      });
+      const { forceCreate } = req.body;
 
-      if (existingUser) {
-        await transaction.rollback();
-        return res.status(409).json({
-          success: false,
-          message: 'User with this email or phone already exists'
+      // Check if email or phone already exists (if provided)
+      const orConditions = [];
+      if (email) orConditions.push({ us_email: email });
+      if (phone) orConditions.push({ us_phone: phone });
+
+      if (orConditions.length > 0) {
+        const existingUser = await User.findOne({
+          where: { [Op.or]: orConditions },
+          transaction
         });
+
+        if (existingUser) {
+          await transaction.rollback();
+          return res.status(409).json({
+            success: false,
+            message: 'User with this email or phone already exists'
+          });
+        }
+      }
+
+      // Exact Name Matching for Duplicate Warning when Mobile is Missing
+      if (!phone && !forceCreate) {
+        const existingNameMatch = await User.findOne({
+          where: {
+            us_fname: firstName,
+            us_lname: lastName
+          },
+          transaction
+        });
+        
+        if (existingNameMatch) {
+          await transaction.rollback();
+          return res.status(409).json({
+            success: false,
+            requiresConfirmation: true,
+            message: `A customer named ${firstName} ${lastName} already exists. Do you want to create a duplicate?`
+          });
+        }
       }
 
       // Generate unique user ID

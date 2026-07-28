@@ -106,6 +106,16 @@ const Pnr = sequelize.define('pnXpnr', {
     allowNull: true,
     comment: 'Financial Year (for year-end closing)'
   },
+  pn_api_request_count: {
+    type: DataTypes.INTEGER,
+    defaultValue: 0,
+    comment: 'Number of times RailKit API was called for this PNR (Max 2)'
+  },
+  pn_departure_time: {
+    type: DataTypes.DATE,
+    allowNull: true,
+    comment: 'Exact departure time extracted from the first RailKit sync'
+  },
   // Audit fields
   ...BaseModel
 }, {

@@ -1240,6 +1240,32 @@ export const billingAPI = {
     return data;
   },
 
+  // Split a bill
+  splitBill: async (id, splitCount) => {
+    const response = await fetch(`${API_BASE_URL}/billing/${id}/split`, {
+      method: 'POST',
+      headers: getHeaders(true),
+      body: JSON.stringify({ splitCount })
+    });
+
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || 'Failed to split bill');
+    return data;
+  },
+
+  // Merge bills
+  mergeBills: async (billIds) => {
+    const response = await fetch(`${API_BASE_URL}/billing/merge`, {
+      method: 'POST',
+      headers: getHeaders(true),
+      body: JSON.stringify({ billIds })
+    });
+
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || 'Failed to merge bills');
+    return data;
+  },
+
   // Get all bills for current user
   getMyBills: async (params = {}) => {
     const userRole = getUserRole();

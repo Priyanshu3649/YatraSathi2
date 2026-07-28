@@ -1,6 +1,6 @@
 import React from 'react';
 
-const BillList = ({ bills, loading, onEdit, onDelete, onFinalize, onExport, onView, user, selectedBill, onSelect }) => {
+const BillList = ({ bills, loading, onEdit, onDelete, onFinalize, onExport, onView, onSplit, user, selectedBill, onSelect }) => {
   const getStatusClass = (status) => {
     switch (status) {
       case 'DRAFT':
@@ -140,6 +140,21 @@ const BillList = ({ bills, loading, onEdit, onDelete, onFinalize, onExport, onVi
                   title="Export Bill"
                 >
                   Export
+                </button>
+                <button 
+                  className="tool-button" 
+                  onClick={(e) => { 
+                    e.stopPropagation(); 
+                    if (window.confirm('Split this bill into equal parts?')) {
+                      const count = window.prompt('How many parts?', '2');
+                      if (count && parseInt(count) >= 2 && onSplit) {
+                        onSplit(bill.id || bill.billId, parseInt(count));
+                      }
+                    }
+                  }}
+                  title="Split Bill"
+                >
+                  Split
                 </button>
                 {canDelete(bill) && (
                   <button 

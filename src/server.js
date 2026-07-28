@@ -185,7 +185,11 @@ app.use('/api/profile', profileRoutes);
 app.use('/api/accounting', accountingRoutes);
 app.use('/api/passengers', passengerRoutes);
 app.use('/api/health', healthRoutes);
+const pnrRoutes = require('./routes/pnrRoutes');
+const serviceChargeRoutes = require('./routes/serviceChargeRoutes');
 app.use('/api/station-boys', stationBoyRoutes);
+app.use('/api/pnrs', pnrRoutes);
+app.use('/api/service-charge', serviceChargeRoutes);
 
 // 404 handler
 app.use(notFound);
@@ -262,6 +266,10 @@ connectDB().then(async () => {
   // Initialize Real-Time Service
   const RealTimeService = require('./services/realTimeService');
   RealTimeService.init(io);
+
+  // Initialize PNR Sync Cron Jobs
+  const { initCronJobs } = require('./jobs/cronJobs');
+  initCronJobs();
 
   server.on('listening', () => {
     const address = server.address();

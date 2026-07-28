@@ -37,12 +37,20 @@ const BillingMaster = sequelizeTVL.define('billingMaster', {
     allowNull: false
   },
   bl_customer_name: {
-    type: DataTypes.STRING(150),
+    type: DataTypes.STRING(255),
     allowNull: false
   },
   bl_customer_phone: {
     type: DataTypes.STRING(15),
-    allowNull: false
+    allowNull: true
+  },
+  bl_advance_amount: {
+    type: DataTypes.DECIMAL(12, 2),
+    defaultValue: 0
+  },
+  bl_special_id: {
+    type: DataTypes.STRING(100),
+    allowNull: true
   },
   bl_station_boy: {
     type: DataTypes.STRING(100),
@@ -133,6 +141,14 @@ const BillingMaster = sequelizeTVL.define('billingMaster', {
     defaultValue: false
   },
   bl_parent_bill_id: {
+    type: DataTypes.INTEGER,
+    allowNull: true
+  },
+  bl_is_merged: {
+    type: DataTypes.BOOLEAN,
+    defaultValue: false
+  },
+  bl_merged_into_id: {
     type: DataTypes.INTEGER,
     allowNull: true
   },

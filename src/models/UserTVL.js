@@ -17,7 +17,7 @@ const UserTVL = sequelizeTVL.define('usXuser', {
     comment: 'Email'
   },
   us_usname: {
-    type: DataTypes.STRING(100),
+    type: DataTypes.STRING(255),
     allowNull: false,
     defaultValue: '',
     comment: 'User Name'
