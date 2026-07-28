@@ -7,6 +7,8 @@ import useERPFilters from '../hooks/useERPFilters';
 import PaginationControls from '../components/common/PaginationControls';
 import { useKeyboardNavigation } from '../contexts/KeyboardNavigationContext';
 import SaveConfirmationModal from '../components/common/SaveConfirmationModal';
+import SplitBillDialog from '../components/Billing/Dialogs/SplitBillDialog';
+import CancelBillDialog from '../components/Billing/Dialogs/CancelBillDialog';
 import '../styles/vintage-erp-theme.css';
 import '../styles/classic-enterprise-global.css';
 import '../styles/vintage-admin-panel.css';
@@ -203,6 +205,7 @@ const Billing = () => {
   
   // Cancellation modal state
   const [showCancelModal, setShowCancelModal] = useState(false);
+  const [showSplitModal, setShowSplitModal] = useState(false);
   const [isCancelling, setIsCancelling] = useState(false);
   const [cancelError, setCancelError] = useState('');
   const [cancelFormData, setCancelFormData] = useState({
@@ -308,6 +311,7 @@ const Billing = () => {
     billDate: new Date().toISOString().split('T')[0],
     bookingId: '', // Read-only when populated from booking
     subBillNo: '',
+    specialId: '',
     customerName: '',
     phoneNumber: '',
     stationBoy: '',
@@ -359,7 +363,9 @@ const Billing = () => {
       }
     }
     
-    return () => {
+  
+
+  return () => {
       try {
         unregisterForm('billing');
       } catch (error) {
@@ -1158,28 +1164,88 @@ const Billing = () => {
 
   const handleSplitBill = async (billId, count) => {
     try {
-      await billingAPI.splitBill(billId, count);
-      alert('Bill split successfully');
+      const bill = selectedBill;
+      if (!bill) throw new Error('No bill selected');
+
+      const totalAmount = parseFloat(bill.bl_total_amount || bill.totalAmount || 0);
+      const passengers = bill.passengers || [];
+      const passengerCount = passengers.length || parseInt(bill.bl_seats_alloted || bill.seatsAlloted || 0);
+
+      // Distribute amount equally (last split gets the remainder to handle rounding)
+      const baseAmount = Math.floor((totalAmount / count) * 100) / 100;
+      const splits = [];
+      let remainingPassengers = [...passengers];
+      const paxPerSplit = Math.floor(passengerCount / count);
+
+      for (let i = 0; i < count; i++) {
+        const isLast = i === count - 1;
+        const splitAmount = isLast
+          ? Math.round((totalAmount - baseAmount * (count - 1)) * 100) / 100
+          : baseAmount;
+
+        // Assign passengers: take paxPerSplit each, last gets the rest
+        const splitPassengerIds = isLast
+          ? remainingPassengers.map(p => p.id || p.bl_passenger_id)
+          : remainingPassengers.splice(0, paxPerSplit).map(p => p.id || p.bl_passenger_id);
+
+        splits.push({ amount: splitAmount, passengerIds: splitPassengerIds });
+      }
+
+      await billingAPI.splitBill(billId, splits);
+      alert(`Bill successfully split into ${count} parts`);
       fetchBills();
+      setSelectedBill(null);
+      setShowForm(false);
     } catch (error) {
-      setError(error.message);
+      alert(error.message || 'Failed to split bill');
     }
   };
 
   const handleMergeBills = async () => {
+    if (selectedBillIdsForMerge.length < 1) {
+      alert('Please select at least 2 bills to merge by checking the checkboxes in the table.');
+      return;
+    }
     if (selectedBillIdsForMerge.length < 2) {
-      alert('Please select at least 2 valid bills to merge by checking the checkboxes in the table.');
+      alert('Please select at least 2 bills to generate a merged PDF.');
       return;
     }
 
+    // Validate same customer
+    const selectedBillObjects = bills.filter(b => selectedBillIdsForMerge.includes(b.bl_id || b.id));
+    const customerNames = [...new Set(selectedBillObjects.map(b => b.bl_customer_name || b.customerName).filter(Boolean))];
+    if (customerNames.length > 1) {
+      alert('All selected bills must belong to the same customer.');
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `Generate a combined PDF for ${selectedBillIdsForMerge.length} selected bill(s)?\n\nNote: No bills will be modified — this generates a merged printable document only.`
+    );
+    if (!confirmed) return;
+
     try {
-      await billingAPI.mergeBills(selectedBillIdsForMerge);
-      alert('Bills merged successfully');
+      const blob = await billingAPI.mergeBillsPDF(selectedBillIdsForMerge);
+      
+      // Create download link and open PDF
+      const url = URL.createObjectURL(blob);
+      const timestamp = new Date().toISOString().slice(0, 10);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `Merged_Bills_${timestamp}_${selectedBillIdsForMerge.length}bills.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      
+      // Also open in new tab for immediate viewing
+      window.open(url, '_blank');
+      
+      // Cleanup URL after delay
+      setTimeout(() => URL.revokeObjectURL(url), 5000);
+
       setSelectedBillIdsForMerge([]);
-      setSelectedBill(null);
-      fetchBills();
     } catch (error) {
-      setError(error.message);
+      alert(error.message || 'Failed to generate merged PDF');
     }
   };
 
@@ -1665,6 +1731,76 @@ const Billing = () => {
     );
   }
 
+  const handleFetchBooking = async () => {
+    if (!formData.pnrNumbers && !formData.bookingId) {
+      alert('Please enter a PNR number or Booking ID to fetch data');
+      return;
+    }
+    
+    try {
+      const id = formData.pnrNumbers || formData.bookingId;
+      const data = await billingAPI.fetchBookingForBilling(id);
+      
+      setFormData(prev => ({
+        ...prev,
+        bookingId: data.bl_booking_id,
+        pnrNumbers: data.bl_pnr,
+        customerName: data.bl_customer_name || prev.customerName,
+        phoneNumber: data.bl_customer_phone || prev.phoneNumber,
+        fromStation: data.bl_from_station || prev.fromStation,
+        toStation: data.bl_to_station || prev.toStation,
+        trainNumber: data.bl_train_no || prev.trainNumber,
+        reservationClass: data.bl_class || prev.reservationClass,
+        journeyDate: data.bl_journey_date || prev.journeyDate
+      }));
+      alert('Booking data fetched successfully');
+    } catch (error) {
+      console.error('Fetch booking error:', error);
+      alert(error.message || 'Failed to fetch booking data');
+    }
+  };
+
+  const handleSplitBillConfirm = async (splits) => {
+    try {
+      await billingAPI.splitBill(selectedBill.bl_id || selectedBill.id, splits);
+      alert('Bill split successfully');
+      setShowSplitModal(false);
+      fetchBills();
+      setSelectedBill(null);
+      setShowForm(false);
+    } catch (error) {
+      alert(error.message || 'Failed to split bill');
+    }
+  };
+
+  const handleCancelBillConfirm = async (cancelData) => {
+    try {
+      await billingAPI.cancelBill(selectedBill.bl_id || selectedBill.id, cancelData);
+      alert('Bill cancelled successfully');
+      setShowCancelModal(false);
+      fetchBills();
+      setSelectedBill(null);
+      setShowForm(false);
+    } catch (error) {
+      alert(error.message || 'Failed to cancel bill');
+    }
+  };
+
+  const handleToolbarDelete = async () => {
+    if (!selectedBill) return;
+    if (window.confirm('Are you sure you want to delete this bill?')) {
+      try {
+        await billingAPI.deleteBill(selectedBill.bl_id || selectedBill.id);
+        alert('Bill deleted successfully');
+        fetchBills();
+        setSelectedBill(null);
+        setShowForm(false);
+      } catch (error) {
+        alert(error.message || 'Failed to delete bill');
+      }
+    }
+  };
+
   return (
     <div className="erp-admin-container booking-layout">
       {/* Toolbar - Static */}
@@ -1721,12 +1857,15 @@ const Billing = () => {
         <button className="erp-button" onClick={() => {
           if (selectedBill) {
             const count = window.prompt('Split this bill into how many parts?', '2');
-            if (count && parseInt(count) >= 2) handleSplitBill(selectedBill.id || selectedBill.bl_id, parseInt(count));
+            const n = parseInt(count);
+            if (count && n >= 2) handleSplitBill(selectedBill.id || selectedBill.bl_id, n);
           } else {
             alert('Please select a bill to split');
           }
         }} title="Split Bill" disabled={!selectedBill || selectedBill.bl_is_split}>Split</button>
-        <button className="erp-button" onClick={handleMergeBills} title="Merge Bills">Merge</button>
+        <button id="merge-pdf-btn" className="erp-button" onClick={handleMergeBills} title="Generate merged PDF for selected bills (select 2+ with checkboxes)" disabled={selectedBillIdsForMerge.length < 2} style={selectedBillIdsForMerge.length >= 2 ? { background: '#1565c0', color: '#fff' } : {}}>
+          Merge PDF{selectedBillIdsForMerge.length >= 2 ? ` (${selectedBillIdsForMerge.length})` : ''}
+        </button>
         <button className="erp-button" style={{ background: '#2e7d32', color: '#fff' }} onClick={() => {
           if (selectedBill) {
             const billId = selectedBill.id || selectedBill.bl_id;
@@ -1819,8 +1958,8 @@ const Billing = () => {
         <div className="layout-main-column" style={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0, height: '100%' }}>
           {/* Form Panel - Static */}
           <div className="layout-form-section">
-            {/* Row 1: Bill ID, Bill Date, Booking ID, Sub Bill No, Status (5 fields) */}
-            <div className="erp-form-row-compact-5">
+            {/* Row 1: Bill ID, Bill Date, Booking ID, Special ID, Sub Bill No, Status (6 fields) */}
+            <div className="erp-form-row-compact-6" style={{ display: 'grid', gridTemplateColumns: 'repeat(6, max-content 1fr)', gap: '4px', alignItems: 'center', marginBottom: '8px' }}>
               <label className="erp-form-label required">Bill ID</label>
               <input 
                 type="text" 
@@ -1846,6 +1985,15 @@ const Billing = () => {
                 value={formData.bookingId || ''} 
                 readOnly 
                 disabled={true}
+              />
+              <label className="erp-form-label">Special ID</label>
+              <input 
+                type="text" 
+                name="specialId" 
+                className="erp-input" 
+                value={formData.specialId || ''} 
+                onChange={(e) => setFormData({...formData, specialId: e.target.value})}
+                disabled={!isEditing}
               />
               <label className="erp-form-label">Sub Bill No</label>
               <input 
@@ -2064,18 +2212,24 @@ const Billing = () => {
                 <option value="TATKAL">TATKAL</option>
                 <option value="PREMIUM_TATKAL">PREMIUM TATKAL</option>
               </select>
+              
               <label className="erp-form-label required">PNR Number(s)</label>
-              <input 
-                type="text" 
-                name="pnrNumbers" 
-                className="erp-input" 
-                value={formData.pnrNumbers || ''} 
-                onChange={(e) => setFormData({...formData, pnrNumbers: e.target.value})}
-                disabled={!isEditing}
-                tabIndex={2}
-                placeholder="Enter PNR numbers separated by commas"
-                onKeyDown={(e) => handleEnhancedTabNavigation(e, 'pnrNumbers')}
-              />
+              <div style={{ display: 'flex', gap: '4px' }}>
+                <input 
+                  type="text" 
+                  name="pnrNumbers" 
+                  className="erp-input" 
+                  value={formData.pnrNumbers || ''} 
+                  onChange={(e) => setFormData({...formData, pnrNumbers: e.target.value})}
+                  disabled={!isEditing}
+                  tabIndex={2}
+                  placeholder="Enter PNR"
+                  style={{ flex: 1 }}
+                />
+                <button type="button" onClick={handleFetchBooking} disabled={!isEditing} style={{ padding: '0 8px', background: '#f0f0f0', border: '1px solid #ccc', borderRadius: '4px', cursor: 'pointer', whiteSpace: 'nowrap', fontSize: '11px' }}>
+                  Fetch
+                </button>
+              </div>
             </div>
             
             {/* Row 4: Seat(s) Alloted, Railway Fare, Service Charges, Platform Fees, Station Boy Incentive (5 fields) */}
@@ -2926,7 +3080,23 @@ const Billing = () => {
       )}
 
       {/* Save Confirmation Modal */}
-      {showSaveModal && (
+      
+        {showSplitModal && selectedBill && (
+          <SplitBillDialog 
+            bill={selectedBill} 
+            onClose={() => setShowSplitModal(false)} 
+            onConfirm={handleSplitBillConfirm} 
+          />
+        )}
+        {showCancelModal && selectedBill && (
+          <CancelBillDialog 
+            bill={selectedBill} 
+            onClose={() => setShowCancelModal(false)} 
+            onConfirm={handleCancelBillConfirm} 
+          />
+        )}
+
+        {showSaveModal && (
         <SaveConfirmationModal 
           isOpen={true}
           onConfirm={handleSaveConfirmed}

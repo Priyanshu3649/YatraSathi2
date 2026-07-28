@@ -16,7 +16,9 @@ const {
   getBillingStats,
   getCancellationHistory,
   splitBill,
-  mergeBill
+  mergeBill,
+  mergeBillsPDF,
+  fetchBookingForBilling
 } = require('../controllers/billingController');
 const { getBillingByBookingId } = require('../controllers/billingIntegrationController');
 const authMiddleware = require('../middleware/authMiddleware');
@@ -29,6 +31,7 @@ router.use(authMiddleware);
 // Specific routes first (more specific paths)
 router.post('/', createBill);
 router.post('/merge', mergeBill);
+router.post('/merge-pdf', mergeBillsPDF);
 router.get('/my-bills', getCustomerBills);
 router.get('/search', searchBills);
 router.get('/cancellations/history', getCancellationHistory);
@@ -41,6 +44,7 @@ router.get('/customer/:customerId/balance', getCustomerBalance);
 
 // Booking integration routes
 router.get('/booking/:bookingId', getBillingByBookingId);
+router.get('/fetch-booking/:id', fetchBookingForBilling);
 
 // Admin routes
 router.get('/', getAllBills);

@@ -174,6 +174,21 @@ const BillTVL = sequelizeTVL.define('blXbilling', {
     allowNull: true,
     comment: 'ID of the bill this was merged into'
   },
+  super_bill_id: {
+    type: DataTypes.BIGINT,
+    allowNull: true,
+    comment: 'Super Bill ID for combined printing'
+  },
+  bl_special_id: {
+    type: DataTypes.STRING(100),
+    allowNull: true,
+    comment: 'Special Tracking ID for Client Organizations'
+  },
+  is_deleted: {
+    type: DataTypes.TINYINT(1),
+    defaultValue: 0,
+    comment: 'Soft delete flag (0=Active, 1=Deleted)'
+  },
   bl_created_by: {
     type: DataTypes.INTEGER,
     allowNull: true,
@@ -247,6 +262,11 @@ const BillTVL = sequelizeTVL.define('blXbilling', {
   is_cancelled: {
     type: DataTypes.TINYINT(1),
     defaultValue: 0
+  },
+  cancellation_data: {
+    type: DataTypes.JSON,
+    allowNull: true,
+    comment: 'Nested object for cancellation form data'
   },
   cancellation_date: {
     type: DataTypes.DATE,

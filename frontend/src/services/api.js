@@ -1241,18 +1241,17 @@ export const billingAPI = {
   },
 
   // Split a bill
-  splitBill: async (id, splitCount) => {
+  splitBill: async (id, splits) => {
     const response = await fetch(`${API_BASE_URL}/billing/${id}/split`, {
       method: 'POST',
       headers: getHeaders(true),
-      body: JSON.stringify({ splitCount })
+      body: JSON.stringify({ splits })
     });
 
     const data = await response.json();
     if (!response.ok) throw new Error(data.error || 'Failed to split bill');
     return data;
   },
-
   // Merge bills
   mergeBills: async (billIds) => {
     const response = await fetch(`${API_BASE_URL}/billing/merge`, {
@@ -1264,6 +1263,32 @@ export const billingAPI = {
     const data = await response.json();
     if (!response.ok) throw new Error(data.error || 'Failed to merge bills');
     return data;
+  },
+  // Generate a combined PDF for selected bills (READ-ONLY — no DB changes)
+  mergeBillsPDF: async (billIds) => {
+    const response = await fetch(`${API_BASE_URL}/billing/merge-pdf`, {
+      method: 'POST',
+      headers: getHeaders(true),
+      body: JSON.stringify({ billIds })
+    });
+
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      throw new Error(err.error || 'Failed to generate merged PDF');
+    }
+
+    // Return as blob for download/print
+    return response.blob();
+  },
+
+
+  fetchBookingForBilling: async (id) => {
+    const response = await fetch(`${API_BASE_URL}/billing/fetch-booking/${id}`, {
+      headers: getHeaders()
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.message || 'Failed to fetch booking');
+    return data.data;
   },
 
   // Get all bills for current user
