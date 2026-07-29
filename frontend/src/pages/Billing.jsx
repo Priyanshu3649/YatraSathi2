@@ -270,21 +270,17 @@ const Billing = () => {
   // MANDATORY: Define business logic field order (MEMOIZED) - MATCHES REQUIRED KEYBOARD NAVIGATION SEQUENCE
   const fieldOrder = useMemo(() => [
     'stationBoy',
-    'trainNumber',
+    'specialId',
     'pnrNumbers',
-    'seatsAlloted',
     'railwayFare',
     'serviceCharges',
-    'platformFees',
     'stationBoyIncentive',
     'miscCharges',
     'deliveryCharges',
-    'cancellationCharges',
+    'gstType',
     'gst',
     'surcharge',
-    'gstType',
-    'status',
-    'remarks'
+    'enteredBy'
   ], []);
   
   const [stationBoys, setStationBoys] = useState([]);
@@ -319,6 +315,8 @@ const Billing = () => {
     fromStation: '',
     toStation: '',
     journeyDate: '',
+    journeyTime: '',
+    pnrStatus: '',
     trainNumber: '',
     reservationClass: '3A',
     ticketType: 'NORMAL',
@@ -333,6 +331,7 @@ const Billing = () => {
     cancellationCharges: '',
     gst: '',
     surcharge: '',
+    enteredBy: '',
     gstType: 'EXCLUSIVE',
     totalAmount: 0, // Auto-calculated and rounded off
     passengerList: [],
@@ -1437,7 +1436,8 @@ const Billing = () => {
       deliveryCharges: '',
       cancellationCharges: '',
       gst: '',
-      surcharge: '',
+    surcharge: '',
+    enteredBy: '',
       discount: '',
       gstType: 'EXCLUSIVE',
       amountReceived: '',
@@ -1519,7 +1519,7 @@ const Billing = () => {
     
     try {
       // Check if we're at the last field (remarks)
-      if (currentFieldName === 'remarks' && !event.shiftKey && isEditing) {
+      if (currentFieldName === 'enteredBy' && !event.shiftKey && isEditing) {
         setShowSaveModal(true);
         return true;
       }
@@ -1730,6 +1730,15 @@ const Billing = () => {
       </div>
     );
   }
+
+    const handlePnrKeyDown = (e) => {
+    if (e.key === 'Enter' || e.key === 'Tab') {
+      if (formData.pnrNumbers && formData.pnrNumbers.length === 10) {
+        handleFetchBooking();
+      }
+      handleEnhancedTabNavigation(e, 'pnrNumbers');
+    }
+  };
 
   const handleFetchBooking = async () => {
     if (!formData.pnrNumbers && !formData.bookingId) {
@@ -1957,257 +1966,60 @@ const Billing = () => {
         {/* Center Content */}
         <div className="layout-main-column" style={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0, height: '100%' }}>
           {/* Form Panel - Static */}
+          
           <div className="layout-form-section">
-            {/* Row 1: Bill ID, Bill Date, Booking ID, Special ID, Sub Bill No, Status (6 fields) */}
+            {/* Row 1 */}
             <div className="erp-form-row-compact-6" style={{ display: 'grid', gridTemplateColumns: 'repeat(6, max-content 1fr)', gap: '4px', alignItems: 'center', marginBottom: '8px' }}>
-              <label className="erp-form-label required">Bill ID</label>
-              <input 
-                type="text" 
-                className="erp-input" 
-                value={formData.id || ''} 
-                readOnly 
-                disabled={!isEditing}
-              />
-              <label className="erp-form-label required">Bill Date</label>
-              <input 
-                type="date" 
-                name="billDate" 
-                className="erp-input" 
-                value={formData.billDate ? String(formData.billDate).substring(0, 10) : ''} 
-                onChange={(e) => setFormData({...formData, billDate: e.target.value})}
-                disabled={!isEditing}
-              />
-              <label className="erp-form-label required">Booking ID</label>
-              <input 
-                type="text" 
-                name="bookingId" 
-                className="erp-input" 
-                value={formData.bookingId || ''} 
-                readOnly 
-                disabled={true}
-              />
-              <label className="erp-form-label">Special ID</label>
-              <input 
-                type="text" 
-                name="specialId" 
-                className="erp-input" 
-                value={formData.specialId || ''} 
-                onChange={(e) => setFormData({...formData, specialId: e.target.value})}
-                disabled={!isEditing}
-              />
-              <label className="erp-form-label">Sub Bill No</label>
-              <input 
-                type="text" 
-                name="subBillNo" 
-                className="erp-input" 
-                value={formData.subBillNo || ''} 
-                onChange={(e) => setFormData({...formData, subBillNo: e.target.value})}
-                disabled={!isEditing}
-              />
-              <label className="erp-form-label">Status</label>
-              <input 
-                type="text" 
-                className={`erp-input status-${(formData.status || 'DRAFT').toLowerCase()}`} 
-                value={formData.status || 'DRAFT'} 
-                readOnly 
-                disabled={true}
-                style={{ fontWeight: 'bold' }}
-              />
-            </div>
-            
-            {/* Row 2: Customer Name, Phone Number, Station Boy Name, From Station, To Station (5 fields) */}
-            <div className="erp-form-row-compact-5">
-              <label className="erp-form-label required">Customer Name</label>
-              <input 
-                type="text" 
-                name="customerName" 
-                className="erp-input" 
-                value={formData.customerName || ''} 
-                onChange={(e) => setFormData({...formData, customerName: e.target.value})}
-                disabled={!isEditing}
-                readOnly={billingMode === 'generate'}
-                tabIndex={billingMode === 'generate' ? -1 : 0}
-                placeholder="Enter customer name"
-              />
-              <label className="erp-form-label required">Phone Number</label>
-              <input 
-                type="text" 
-                name="phoneNumber" 
-                className="erp-input" 
-                value={formData.phoneNumber || ''} 
-                onChange={(e) => setFormData({...formData, phoneNumber: e.target.value})}
-                disabled={!isEditing}
-                readOnly={billingMode === 'generate'}
-                tabIndex={billingMode === 'generate' ? -1 : 1}
-                placeholder="Enter phone number"
-              />
               <label className="erp-form-label">Station Boy Name</label>
               <div style={{ position: 'relative', width: '100%' }}>
-                <input 
-                  type="text" 
-                  name="stationBoy" 
-                  className="erp-input" 
-                  value={sbSearchTerm}
-                  onChange={(e) => {
-                    const val = e.target.value;
-                    setSbSearchTerm(val);
-                    setSbDropdownOpen(true);
-                    setFormData({
-                      ...formData,
-                      stationBoy: val,
-                      stationBoyId: ''
-                    });
-                  }}
-                  onFocus={() => isEditing && setSbDropdownOpen(true)}
-                  onBlur={() => {
-                    setTimeout(() => {
-                      setSbDropdownOpen(false);
-                      const match = stationBoys.find(sb => sb.name.toLowerCase() === sbSearchTerm.toLowerCase());
-                      if (match) {
-                        setFormData(prev => ({
-                          ...prev,
-                          stationBoy: match.name,
-                          stationBoyId: match.id
-                        }));
-                        setSbSearchTerm(match.name);
-                      }
-                    }, 200);
-                  }}
-                  disabled={!isEditing}
-                  tabIndex={0}
-                  placeholder="Enter or select station boy"
-                  onKeyDown={(e) => {
-                    if (e.key === 'Escape') {
-                      setSbDropdownOpen(false);
-                      e.target.blur();
-                    } else {
-                      handleEnhancedTabNavigation(e, 'stationBoy');
-                    }
-                  }}
-                />
+                <input type="text" name="stationBoy" className="erp-input" value={sbSearchTerm} onChange={(e) => { const val = e.target.value; setSbSearchTerm(val); setSbDropdownOpen(true); setFormData({...formData, stationBoy: val, stationBoyId: ''}); }} onFocus={() => isEditing && setSbDropdownOpen(true)} onBlur={() => { setTimeout(() => { setSbDropdownOpen(false); const match = stationBoys.find(sb => sb.name.toLowerCase() === sbSearchTerm.toLowerCase()); if (match) { setFormData(prev => ({...prev, stationBoy: match.name, stationBoyId: match.id})); setSbSearchTerm(match.name); } }, 200); }} disabled={!isEditing} onKeyDown={(e) => { if (e.key === 'Escape') { setSbDropdownOpen(false); e.target.blur(); } else { handleEnhancedTabNavigation(e, 'stationBoy'); } }} placeholder="Enter or select station boy" />
                 {sbDropdownOpen && isEditing && (
-                  <div className="erp-dropdown-menu" style={{
-                    position: 'absolute',
-                    top: '100%',
-                    left: 0,
-                    right: 0,
-                    backgroundColor: '#fff',
-                    border: '1px solid #ccc',
-                    maxHeight: '150px',
-                    overflowY: 'auto',
-                    zIndex: 1000,
-                    boxShadow: '0 4px 8px rgba(0,0,0,0.1)'
-                  }}>
-                    {stationBoys
-                      .filter(sb => sb.name.toLowerCase().includes(sbSearchTerm.toLowerCase()))
-                      .map(sb => (
-                        <div
-                          key={sb.id}
-                          className="erp-dropdown-item"
-                          style={{
-                            padding: '6px 10px',
-                            cursor: 'pointer',
-                            color: '#333',
-                            borderBottom: '1px solid #eee'
-                          }}
-                          onMouseDown={() => {
-                            setFormData(prev => ({
-                              ...prev,
-                              stationBoy: sb.name,
-                              stationBoyId: sb.id
-                            }));
-                            setSbSearchTerm(sb.name);
-                            setSbDropdownOpen(false);
-                          }}
-                        >
-                          {sb.name}
-                        </div>
-                      ))
-                    }
-                    {stationBoys.filter(sb => sb.name.toLowerCase().includes(sbSearchTerm.toLowerCase())).length === 0 && (
-                      <div style={{ padding: '6px 10px', color: '#999', fontSize: '12px' }}>
-                        No matching station boy found
-                      </div>
-                    )}
+                  <div className="erp-dropdown-menu" style={{ position: 'absolute', top: '100%', left: 0, right: 0, backgroundColor: '#fff', border: '1px solid #ccc', maxHeight: '150px', overflowY: 'auto', zIndex: 1000 }}>
+                    {stationBoys.filter(sb => sb.name.toLowerCase().includes(sbSearchTerm.toLowerCase())).map(sb => (
+                      <div key={sb.id} className="erp-dropdown-item" style={{ padding: '6px 10px', cursor: 'pointer', borderBottom: '1px solid #eee' }} onMouseDown={() => { setFormData(prev => ({...prev, stationBoy: sb.name, stationBoyId: sb.id})); setSbSearchTerm(sb.name); setSbDropdownOpen(false); }}>{sb.name}</div>
+                    ))}
                   </div>
                 )}
               </div>
-              <label className="erp-form-label required">From Station</label>
-              <input 
-                type="text" 
-                name="fromStation" 
-                className="erp-input" 
-                value={formData.fromStation || ''}
-                onChange={(e) => setFormData({...formData, fromStation: e.target.value})}
-                disabled={!isEditing}
-                readOnly={billingMode === 'generate'}
-                tabIndex={billingMode === 'generate' ? -1 : 3}
-                placeholder="Enter from station"
-              />
-              <label className="erp-form-label required">To Station</label>
-              <input 
-                type="text" 
-                name="toStation" 
-                className="erp-input" 
-                value={formData.toStation || ''}
-                onChange={(e) => setFormData({...formData, toStation: e.target.value})}
-                disabled={!isEditing}
-                readOnly={billingMode === 'generate'}
-                tabIndex={billingMode === 'generate' ? -1 : 4}
-                placeholder="Enter to station"
-              />
+              
+              <label className="erp-form-label">Special ID</label>
+              <input type="text" name="specialId" className="erp-input" value={formData.specialId || ''} onChange={(e) => setFormData({...formData, specialId: e.target.value})} disabled={!isEditing} onKeyDown={(e) => handleEnhancedTabNavigation(e, 'specialId')} />
+              
+              <label className="erp-form-label required">Bill ID</label>
+              <input type="text" className="erp-input" value={formData.id || ''} readOnly disabled={!isEditing} />
             </div>
-            
-            {/* Row 3: Journey Date, Train Number, Reservation Class, Ticket Type, PNR Number (5 fields) */}
+
+            {/* Row 2 */}
             <div className="erp-form-row-compact-5">
-              <label className="erp-form-label required">Journey Date</label>
-              <input 
-                type="date" 
-                name="journeyDate" 
-                className="erp-input" 
-                value={formData.journeyDate ? String(formData.journeyDate).substring(0, 10) : ''}
-                onChange={(e) => setFormData({...formData, journeyDate: e.target.value})}
-                disabled={!isEditing}
-                readOnly={billingMode === 'generate'}
-                tabIndex={billingMode === 'generate' ? -1 : 5}
-              />
-              <label className="erp-form-label required">Train Number</label>
-              <input 
-                type="text" 
-                name="trainNumber" 
-                className="erp-input" 
-                value={formData.trainNumber || ''} 
-                onChange={(e) => setFormData({...formData, trainNumber: e.target.value})}
-                disabled={!isEditing}
-                tabIndex={1}
-                placeholder="Enter train number"
-                onKeyDown={(e) => handleEnhancedTabNavigation(e, 'trainNumber')}
-              />
-              <label className="erp-form-label required">Reservation Class</label>
-              <select 
-                name="reservationClass" 
-                className="erp-input" 
-                value={formData.reservationClass || '3A'} 
-                onChange={(e) => setFormData({...formData, reservationClass: e.target.value})}
-                disabled={!isEditing || billingMode === 'generate'}
-                tabIndex={billingMode === 'generate' ? -1 : 6}
-              >
-                <option value="SL">SL</option>
-                <option value="3A">3A</option>
-                <option value="2A">2A</option>
-                <option value="1A">1A</option>
-                <option value="CC">CC</option>
-                <option value="EC">EC</option>
-              </select>
+              <label className="erp-form-label">Sub Bill No</label>
+              <input type="text" name="subBillNo" className="erp-input" value={formData.subBillNo || ''} onChange={(e) => setFormData({...formData, subBillNo: e.target.value})} disabled={!isEditing} />
+              
+              <label className="erp-form-label required">Bill Date</label>
+              <input type="date" name="billDate" className="erp-input" value={formData.billDate ? String(formData.billDate).substring(0, 10) : ''} onChange={(e) => setFormData({...formData, billDate: e.target.value})} disabled={!isEditing} />
+              
+              <label className="erp-form-label required">Booking ID</label>
+              <input type="text" name="bookingId" className="erp-input" value={formData.bookingId || ''} readOnly disabled={true} />
+              
+              <label className="erp-form-label">Status</label>
+              <input type="text" className={`erp-input status-${(formData.status || 'DRAFT').toLowerCase()}`} value={formData.status || 'DRAFT'} readOnly disabled={true} style={{ fontWeight: 'bold' }} />
+              
+              <label className="erp-form-label required">Customer Name</label>
+              <input type="text" name="customerName" className="erp-input" value={formData.customerName || ''} onChange={(e) => setFormData({...formData, customerName: e.target.value})} disabled={!isEditing} readOnly={billingMode === 'generate'} />
+            </div>
+
+            {/* Row 3 */}
+            <div className="erp-form-row-compact-5">
+              <label className="erp-form-label required">Phone Number</label>
+              <input type="text" name="phoneNumber" className="erp-input" value={formData.phoneNumber || ''} onChange={(e) => setFormData({...formData, phoneNumber: e.target.value})} disabled={!isEditing} readOnly={billingMode === 'generate'} />
+              
+              <label className="erp-form-label required">From Station</label>
+              <input type="text" name="fromStation" className="erp-input" value={formData.fromStation || ''} onChange={(e) => setFormData({...formData, fromStation: e.target.value})} disabled={!isEditing} readOnly={billingMode === 'generate'} />
+              
+              <label className="erp-form-label required">To Station</label>
+              <input type="text" name="toStation" className="erp-input" value={formData.toStation || ''} onChange={(e) => setFormData({...formData, toStation: e.target.value})} disabled={!isEditing} readOnly={billingMode === 'generate'} />
+              
               <label className="erp-form-label required">Ticket Type</label>
-              <select 
-                name="ticketType" 
-                className="erp-input" 
-                value={formData.ticketType || 'NORMAL'} 
-                onChange={(e) => setFormData({...formData, ticketType: e.target.value})}
-                disabled={!isEditing || billingMode === 'generate'}
-                tabIndex={billingMode === 'generate' ? -1 : 7}
-              >
+              <select name="ticketType" className="erp-input" value={formData.ticketType || 'NORMAL'} onChange={(e) => setFormData({...formData, ticketType: e.target.value})} disabled={!isEditing || billingMode === 'generate'}>
                 <option value="NORMAL">NORMAL</option>
                 <option value="TATKAL">TATKAL</option>
                 <option value="PREMIUM_TATKAL">PREMIUM TATKAL</option>
@@ -2215,266 +2027,108 @@ const Billing = () => {
               
               <label className="erp-form-label required">PNR Number(s)</label>
               <div style={{ display: 'flex', gap: '4px' }}>
-                <input 
-                  type="text" 
-                  name="pnrNumbers" 
-                  className="erp-input" 
-                  value={formData.pnrNumbers || ''} 
-                  onChange={(e) => setFormData({...formData, pnrNumbers: e.target.value})}
-                  disabled={!isEditing}
-                  tabIndex={2}
-                  placeholder="Enter PNR"
-                  style={{ flex: 1 }}
-                />
-                <button type="button" onClick={handleFetchBooking} disabled={!isEditing} style={{ padding: '0 8px', background: '#f0f0f0', border: '1px solid #ccc', borderRadius: '4px', cursor: 'pointer', whiteSpace: 'nowrap', fontSize: '11px' }}>
-                  Fetch
-                </button>
+                <input type="text" name="pnrNumbers" className="erp-input" value={formData.pnrNumbers || ''} onChange={(e) => setFormData({...formData, pnrNumbers: e.target.value})} disabled={!isEditing} placeholder="Enter PNR" style={{ flex: 1 }} onKeyDown={handlePnrKeyDown} />
+                <button type="button" onClick={handleFetchBooking} disabled={!isEditing} style={{ padding: '0 8px', background: '#f0f0f0', border: '1px solid #ccc', borderRadius: '4px', cursor: 'pointer', whiteSpace: 'nowrap', fontSize: '11px' }}>Fetch</button>
               </div>
             </div>
-            
-            {/* Row 4: Seat(s) Alloted, Railway Fare, Service Charges, Platform Fees, Station Boy Incentive (5 fields) */}
+
+            {/* Row 4 */}
             <div className="erp-form-row-compact-5">
-              <label className="erp-form-label">Seat(s) Alloted</label>
-              <input 
-                type="text" 
-                name="seatsAlloted" 
-                className="erp-input" 
-                value={formData.seatsAlloted || ''}
-                onChange={(e) => setFormData({...formData, seatsAlloted: e.target.value})}
-                disabled={!isEditing}
-                tabIndex={3}
-                placeholder="Enter seats alloted"
-                onKeyDown={(e) => handleEnhancedTabNavigation(e, 'seatsAlloted')}
-              />
               <label className="erp-form-label">Railway Fare</label>
-              <input 
-                type="number" 
-                name="railwayFare" 
-                className="erp-input" 
-                value={formData.railwayFare || ''} 
-                onChange={(e) => setFormData({...formData, railwayFare: e.target.value})}
-                disabled={!isEditing}
-                tabIndex={4}
-                placeholder="Enter railway fare"
-                onKeyDown={(e) => handleEnhancedTabNavigation(e, 'railwayFare')}
-              />
+              <input type="number" name="railwayFare" className="erp-input" value={formData.railwayFare || ''} onChange={(e) => setFormData({...formData, railwayFare: e.target.value})} disabled={!isEditing} onKeyDown={(e) => handleEnhancedTabNavigation(e, 'railwayFare')} />
+              
               <label className="erp-form-label">Service Charges</label>
-              <input 
-                type="number" 
-                name="serviceCharges" 
-                className="erp-input" 
-                value={formData.serviceCharges || ''} 
-                onChange={(e) => setFormData({...formData, serviceCharges: e.target.value})}
-                disabled={!isEditing}
-                tabIndex={5}
-                onKeyDown={(e) => handleEnhancedTabNavigation(e, 'serviceCharges')}
-              />
-              <label className="erp-form-label">PNR Status</label>
-              <input 
-                type="text" 
-                name="status" 
-                className="erp-input" 
-                value={formData.status || 'CNF'} 
-                onChange={(e) => setFormData({...formData, status: e.target.value})}
-                disabled={!isEditing}
-                tabIndex={6}
-              />
+              <input type="number" name="serviceCharges" className="erp-input" value={formData.serviceCharges || ''} onChange={(e) => setFormData({...formData, serviceCharges: e.target.value})} disabled={!isEditing} onKeyDown={(e) => handleEnhancedTabNavigation(e, 'serviceCharges')} />
+              
               <label className="erp-form-label">Station Boy Incentive</label>
-              <input 
-                type="number" 
-                name="stationBoyIncentive" 
-                className="erp-input" 
-                value={formData.stationBoyIncentive || ''} 
-                onChange={(e) => setFormData({...formData, stationBoyIncentive: e.target.value})}
-                disabled={!isEditing}
-                tabIndex={7}
-                placeholder="Enter station boy incentive"
-                onKeyDown={(e) => handleEnhancedTabNavigation(e, 'stationBoyIncentive')}
-              />
-            </div>
-            
-            {/* Row 5: Misc Charges, Delivery Charges, GST, PNR Coach, Berth No (5 fields) */}
-            <div className="erp-form-row-compact-5">
+              <input type="number" name="stationBoyIncentive" className="erp-input" value={formData.stationBoyIncentive || ''} onChange={(e) => setFormData({...formData, stationBoyIncentive: e.target.value})} disabled={!isEditing} onKeyDown={(e) => handleEnhancedTabNavigation(e, 'stationBoyIncentive')} />
+              
               <label className="erp-form-label">Misc. Charges</label>
-              <input 
-                type="number" 
-                name="miscCharges" 
-                className="erp-input" 
-                value={formData.miscCharges || ''} 
-                onChange={(e) => setFormData({...formData, miscCharges: e.target.value})}
-                disabled={!isEditing}
-                tabIndex={8}
-                onKeyDown={(e) => handleEnhancedTabNavigation(e, 'miscCharges')}
-              />
+              <input type="number" name="miscCharges" className="erp-input" value={formData.miscCharges || ''} onChange={(e) => setFormData({...formData, miscCharges: e.target.value})} disabled={!isEditing} onKeyDown={(e) => handleEnhancedTabNavigation(e, 'miscCharges')} />
+              
               <label className="erp-form-label">Delivery Charges</label>
-              <input 
-                type="number" 
-                name="deliveryCharges" 
-                className="erp-input" 
-                value={formData.deliveryCharges || ''} 
-                onChange={(e) => setFormData({...formData, deliveryCharges: e.target.value})}
-                disabled={!isEditing}
-                tabIndex={9}
-                onKeyDown={(e) => handleEnhancedTabNavigation(e, 'deliveryCharges')}
-              />
-              <label className="erp-form-label">GST</label>
-              <input 
-                type="number" 
-                name="gst" 
-                className="erp-input" 
-                value={formData.gst || ''} 
-                onChange={(e) => setFormData({...formData, gst: e.target.value})}
-                disabled={!isEditing}
-                tabIndex={10}
-                onKeyDown={(e) => handleEnhancedTabNavigation(e, 'gst')}
-              />
-              <label className="erp-form-label">PNR Coach</label>
-              <input 
-                type="text" 
-                name="coach" 
-                className="erp-input" 
-                value={formData.coach || 'B6'} 
-                onChange={(e) => setFormData({...formData, coach: e.target.value})}
-                disabled={!isEditing}
-                tabIndex={11}
-              />
-              <label className="erp-form-label">PNR Berth No</label>
-              <input 
-                type="number" 
-                name="berthNo" 
-                className="erp-input" 
-                value={formData.berthNo || '28'} 
-                onChange={(e) => setFormData({...formData, berthNo: e.target.value})}
-                disabled={!isEditing}
-                tabIndex={12}
-              />
-              <label className="erp-form-label">Surcharge</label>
-              <input 
-                type="number" 
-                name="surcharge" 
-                className="erp-input" 
-                value={formData.surcharge || ''} 
-                onChange={(e) => setFormData({...formData, surcharge: e.target.value})}
-                disabled={!isEditing}
-                tabIndex={12}
-                onKeyDown={(e) => handleEnhancedTabNavigation(e, 'surcharge')}
-              />
+              <input type="number" name="deliveryCharges" className="erp-input" value={formData.deliveryCharges || ''} onChange={(e) => setFormData({...formData, deliveryCharges: e.target.value})} disabled={!isEditing} onKeyDown={(e) => handleEnhancedTabNavigation(e, 'deliveryCharges')} />
             </div>
-            
-            {/* Row 6: GST Type, Total Amount, PNR Berth Code, Seat Details, Status, Special Request (6 fields) */}
-            <div className="erp-form-row-compact-6" style={{ display: 'grid', gridTemplateColumns: 'repeat(6, max-content 1fr)', gap: '4px', alignItems: 'center', marginBottom: '8px' }}>
+
+            {/* Row 5 */}
+            <div className="erp-form-row-compact-5">
               <label className="erp-form-label">GST Type</label>
-              <select 
-                name="gstType" 
-                className="erp-input" 
-                value={formData.gstType || 'EXCLUSIVE'} 
-                onChange={(e) => setFormData({...formData, gstType: e.target.value})}
-                disabled={!isEditing}
-                tabIndex={13}
-                onKeyDown={(e) => handleEnhancedTabNavigation(e, 'gstType')}
-              >
+              <select name="gstType" className="erp-input" value={formData.gstType || ''} onChange={(e) => setFormData({...formData, gstType: e.target.value})} disabled={!isEditing} onKeyDown={(e) => handleEnhancedTabNavigation(e, 'gstType')}>
+                <option value="">Select GST Type</option>
                 <option value="EXCLUSIVE">EXCLUSIVE</option>
                 <option value="INCLUSIVE">INCLUSIVE</option>
                 <option value="C">C</option>
               </select>
-              <label className="erp-form-label">Total Amount</label>
-              <input 
-                type="number" 
-                name="totalAmount" 
-                className="erp-input" 
-                value={formData.totalAmount ? Number(formData.totalAmount).toFixed(2) : '0.00'} 
-                readOnly 
-                disabled={true}
-                tabIndex={-1}
-              />
-              <label className="erp-form-label">Berth Code</label>
-              <input 
-                type="text" 
-                name="berthCode" 
-                className="erp-input" 
-                value={formData.berthCode || 'LB'} 
-                onChange={(e) => setFormData({...formData, berthCode: e.target.value})}
-                disabled={!isEditing}
-                tabIndex={14}
-              />
-              <label className="erp-form-label">Seat Details</label>
-              <input 
-                type="text" 
-                name="details" 
-                className="erp-input" 
-                value={formData.details || 'CNF/B6/28/LB'} 
-                onChange={(e) => setFormData({...formData, details: e.target.value})}
-                disabled={!isEditing}
-                tabIndex={15}
-              />
-              <label className="erp-form-label">Status</label>
-              <select 
-                name="status" 
-                className="erp-input status-select" 
-                value={formData.status || 'UNPAID'} 
-                onChange={(e) => setFormData({...formData, status: e.target.value})}
-                disabled={!isEditing}
-                tabIndex={16}
-                onKeyDown={(e) => handleEnhancedTabNavigation(e, 'status')}
-              >
-                <option value="PAID">PAID</option>
-                <option value="UNPAID">UNPAID</option>
-                <option value="PARTIAL">PARTIAL</option>
-                <option value="CANCELLED">CANCELLED</option>
+              
+              <label className="erp-form-label">GST</label>
+              <input type="number" name="gst" className="erp-input" value={formData.gst || ''} onChange={(e) => setFormData({...formData, gst: e.target.value})} disabled={!isEditing} onKeyDown={(e) => handleEnhancedTabNavigation(e, 'gst')} />
+              
+              <label className="erp-form-label">Surcharge</label>
+              <input type="number" name="surcharge" className="erp-input" value={formData.surcharge || ''} onChange={(e) => setFormData({...formData, surcharge: e.target.value})} disabled={!isEditing} onKeyDown={(e) => handleEnhancedTabNavigation(e, 'surcharge')} />
+              
+              <label className="erp-form-label">Entered By</label>
+              <input type="text" name="enteredBy" className="erp-input" value={formData.enteredBy || ''} onChange={(e) => setFormData({...formData, enteredBy: e.target.value})} disabled={!isEditing} onKeyDown={(e) => handleEnhancedTabNavigation(e, 'enteredBy')} />
+              
+              <label className="erp-form-label required">Journey Date</label>
+              <input type="date" name="journeyDate" className="erp-input" value={formData.journeyDate ? String(formData.journeyDate).substring(0, 10) : ''} onChange={(e) => setFormData({...formData, journeyDate: e.target.value})} disabled={!isEditing} readOnly={billingMode === 'generate'} />
+            </div>
+
+            {/* Row 6 */}
+            <div className="erp-form-row-compact-5">
+              <label className="erp-form-label">Journey Time</label>
+              <input type="time" name="journeyTime" className="erp-input" value={formData.journeyTime || ''} onChange={(e) => setFormData({...formData, journeyTime: e.target.value})} disabled={!isEditing} />
+              
+              <label className="erp-form-label required">Train Number</label>
+              <input type="text" name="trainNumber" className="erp-input" value={formData.trainNumber || ''} onChange={(e) => setFormData({...formData, trainNumber: e.target.value})} disabled={!isEditing} />
+              
+              <label className="erp-form-label required">Reservation Class</label>
+              <select name="reservationClass" className="erp-input" value={formData.reservationClass || '3A'} onChange={(e) => setFormData({...formData, reservationClass: e.target.value})} disabled={!isEditing || billingMode === 'generate'}>
+                <option value="SL">SL</option>
+                <option value="3A">3A</option>
+                <option value="2A">2A</option>
+                <option value="1A">1A</option>
+                <option value="CC">CC</option>
+                <option value="EC">EC</option>
               </select>
+              
+              <label className="erp-form-label">Seat(s) Allocated</label>
+              <input type="text" name="seatsAlloted" className="erp-input" value={formData.seatsAlloted || ''} onChange={(e) => setFormData({...formData, seatsAlloted: e.target.value})} disabled={!isEditing} />
+              
+              <label className="erp-form-label">PNR Status</label>
+              <input type="text" name="pnrStatus" className="erp-input" value={formData.pnrStatus || ''} onChange={(e) => setFormData({...formData, pnrStatus: e.target.value})} disabled={!isEditing} />
+            </div>
+
+            {/* Row 7 */}
+            <div className="erp-form-row-compact-5">
+              <label className="erp-form-label">PNR Coach</label>
+              <input type="text" name="coach" className="erp-input" value={formData.coach || ''} onChange={(e) => setFormData({...formData, coach: e.target.value})} disabled={!isEditing} />
+              
+              <label className="erp-form-label">PNR Berth No</label>
+              <input type="number" name="berthNo" className="erp-input" value={formData.berthNo || ''} onChange={(e) => setFormData({...formData, berthNo: e.target.value})} disabled={!isEditing} />
+              
               <label className="erp-form-label">Special Request</label>
-              <input 
-                type="text" 
-                name="remarks" 
-                className="erp-input" 
-                value={formData.remarks || ''} 
-                onChange={(e) => setFormData({...formData, remarks: e.target.value})}
-                disabled={!isEditing}
-                tabIndex={17}
-                placeholder="Enter remarks/special requests"
-                onKeyDown={(e) => handleEnhancedTabNavigation(e, 'remarks')}
-              />
+              <input type="text" name="remarks" className="erp-input" value={formData.remarks || ''} onChange={(e) => setFormData({...formData, remarks: e.target.value})} disabled={!isEditing} />
+              
+              <label className="erp-form-label">Total Amount</label>
+              <input type="number" name="totalAmount" className="erp-input" value={formData.totalAmount ? Number(formData.totalAmount).toFixed(2) : '0.00'} readOnly disabled={true} style={{ fontWeight: 'bold', fontSize: '14px', background: '#e8f5e9' }} />
+              
+              <div></div><div></div>
             </div>
             
-            {/* Row 7: Cancellation Charges & Refund (Only visible when cancelled) */}
+            {/* Cancellation Charges */}
             {(formData.status === 'CANCELLED' || selectedBill?.bl_status === 'CANCELLED') && (
               <div className="erp-form-row-compact-4" style={{ background: '#fff3cd', padding: '4px', border: '1px solid #ffeeba', borderRadius: '4px', marginTop: '10px' }}>
                 <label className="erp-form-label" style={{ color: '#856404', fontWeight: 'bold' }}>Railway Cancel Charge</label>
-                <input 
-                  type="number" 
-                  className="erp-input" 
-                  value={selectedBill?.bl_railway_cancellation_charge || 0} 
-                  readOnly 
-                  disabled={true}
-                />
+                <input type="number" className="erp-input" value={selectedBill?.bl_railway_cancellation_charge || 0} readOnly disabled={true} />
                 <label className="erp-form-label" style={{ color: '#856404', fontWeight: 'bold' }}>Agent Cancel Charge</label>
-                <input 
-                  type="number" 
-                  className="erp-input" 
-                  value={selectedBill?.bl_agent_cancellation_charge || 0} 
-                  readOnly 
-                  disabled={true}
-                />
+                <input type="number" className="erp-input" value={selectedBill?.bl_agent_cancellation_charge || 0} readOnly disabled={true} />
                 <label className="erp-form-label" style={{ color: '#d32f2f', fontWeight: 'bold' }}>Total Cancel Charge</label>
-                <input 
-                  type="number" 
-                  className="erp-input" 
-                  value={selectedBill?.total_cancel_charges || 0} 
-                  readOnly 
-                  disabled={true}
-                  style={{ color: '#d32f2f', fontWeight: 'bold' }}
-                />
+                <input type="number" className="erp-input" value={selectedBill?.total_cancel_charges || 0} readOnly disabled={true} style={{ color: '#d32f2f', fontWeight: 'bold' }} />
                 <label className="erp-form-label" style={{ color: '#2e7d32', fontWeight: 'bold' }}>Refund Amount</label>
-                <input 
-                  type="number" 
-                  className="erp-input" 
-                  value={selectedBill?.refund_amount || 0} 
-                  readOnly 
-                  disabled={true}
-                  style={{ color: '#2e7d32', fontWeight: 'bold' }}
-                />
+                <input type="number" className="erp-input" value={selectedBill?.refund_amount || 0} readOnly disabled={true} style={{ color: '#2e7d32', fontWeight: 'bold' }} />
               </div>
             )}
+            
             
             {/* Passenger List - Expandable Section */}
             <div className="layout-grid-container">

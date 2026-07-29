@@ -1284,7 +1284,7 @@ export const billingAPI = {
 
   fetchBookingForBilling: async (id) => {
     const response = await fetch(`${API_BASE_URL}/billing/fetch-booking/${id}`, {
-      headers: getHeaders()
+      headers: getHeaders(true)
     });
     const data = await response.json();
     if (!response.ok) throw new Error(data.message || 'Failed to fetch booking');
