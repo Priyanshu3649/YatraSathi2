@@ -265,12 +265,21 @@ const ServiceChargeManager = () => {
 
                 <label className="form-label">Travel Class</label>
                 <select name="travel_class" value={formData.travel_class} onChange={handleInputChange} className="form-input">
-                  <option value="SL">Sleeper (SL)</option>
-                  <option value="3A">3rd AC (3A)</option>
-                  <option value="2A">2nd AC (2A)</option>
-                  <option value="1A">1st AC (1A)</option>
-                  <option value="CC">Chair Car (CC)</option>
-                  <option value="2S">Second Sitting (2S)</option>
+                  <option value="SL">SL - Sleeper Class</option>
+                  <option value="2S">2S - Second Seating</option>
+                  <option value="3A">3A - Third AC</option>
+                  <option value="3E">3E - Third AC Economy</option>
+                  <option value="2A">2A - Second AC</option>
+                  <option value="1A">1A - First AC</option>
+                  <option value="CC">CC - AC Chair Car</option>
+                  <option value="EC">EC - Executive Class</option>
+                  <option value="EA">EA - Executive Anubhuti</option>
+                  <option value="FC">FC - First Class</option>
+                  <option value="VS">VS - Vistadome Non AC</option>
+                  <option value="CH">CH - Chair Car High Capacity</option>
+                  <option value="HS">HS - Sleeper High Capacity</option>
+                  <option value="VC">VC - Vistadome CC</option>
+                  <option value="VA">VA - Vistadome AC</option>
                 </select>
 
                 <label className="form-label">Charge Mode</label>

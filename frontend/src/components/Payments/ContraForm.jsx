@@ -291,6 +291,18 @@ const ContraForm = ({ onBack }) => {
     handleRecordSelect(paymentRecords[newIndex]);
   }, [paymentRecords, selectedRecord, handleRecordSelect]);
 
+  // Scroll selected row into view
+  useEffect(() => {
+    if (selectedRecord) {
+      setTimeout(() => {
+        const selectedRow = document.querySelector('.selected-row');
+        if (selectedRow) {
+          selectedRow.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
+      }, 50);
+    }
+  }, [selectedRecord]);
+
   // Keyboard navigation handler
   useEffect(() => {
     const handleKeyDown = (e) => {

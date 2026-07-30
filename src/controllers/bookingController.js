@@ -275,34 +275,45 @@ const createBooking = async (req, res) => {
       if (req.body.advanceAmount && parseFloat(req.body.advanceAmount) > 0) {
         console.time("BOOKING_ADVANCE_PAYMENT");
         const advanceAmount = parseFloat(req.body.advanceAmount);
+        const paymentMode = req.body.paymentMode || 'Cash';
+        const paymentReference = req.body.paymentReference || '';
         const CustomerLedgerService = require('../services/CustomerLedgerService');
-        const Payment = require('../models/PaymentTVL');
+        const { Receipt } = require('../models');
         
-        const receiptNo = `RCT-${Date.now().toString().slice(-6)}-${Math.floor(Math.random() * 1000)}`;
-        const receipt = await Payment.create({
-          pm_receipt_no: receiptNo,
-          pm_date: new Date(),
-          pm_customer_id: customerId,
-          pm_amount: advanceAmount,
-          pm_mode: 'CASH',
-          pm_reference: 'Advance at Booking',
-          pm_notes: `Advance payment for Booking ${booking.bk_bkno}`,
-          pm_booking_id: booking.bk_bkid,
-          eby: req.user.us_usid,
-          mby: req.user.us_usid
-        }, { transaction, userId: convertUserIdToInt(req.user.us_usid) });
-        
-        await CustomerLedgerService.writeLedgerEntry({
-          customerId: customerId,
-          type: 'RECEIPT',
-          amount: advanceAmount,
-          referenceId: receipt.pm_id,
-          referenceType: 'PAYMENT',
-          referenceNo: receipt.pm_receipt_no,
-          description: `Advance Receipt for Booking ${booking.bk_bkno}`,
-          userId: req.user.us_usid,
-          transaction: transaction
-        });
+        try {
+          const rcEntryNo = 'RC' + Date.now().toString().slice(-9);
+          const paymentAccountName = 'Bank';
+
+          const receipt = await Receipt.create({
+            rc_entry_no: rcEntryNo,
+            rc_date: new Date(),
+            rc_customer_name: customerName,
+            rc_customer_phone: cleanPhone || '',
+            rc_amount: advanceAmount,
+            rc_payment_mode: paymentMode,
+            rc_ref_number: paymentReference,
+            rc_bank_account: paymentAccountName,
+            rc_narration: `Advance payment for Booking ${booking.bk_bkno}`,
+            rc_created_by: String(req.user.us_usid),
+            rc_status: 'Active',
+            entered_by: String(req.user.us_usid)
+          });
+          
+          await CustomerLedgerService.writeLedgerEntry({
+            customerId: customerId,
+            type: 'RECEIPT',
+            amount: advanceAmount,
+            referenceId: receipt.rc_rcid, // Use receipt ID
+            referenceType: 'PAYMENT',
+            referenceNo: receipt.rc_entry_no,
+            description: `Advance Receipt for Booking ${booking.bk_bkno}`,
+            userId: req.user.us_usid,
+            transaction: transaction
+          });
+          console.log(`✅ Official Receipt ${rcEntryNo} generated for Advance Payment`);
+        } catch (receiptErr) {
+          console.error('⚠️ Failed to generate Receipt for Advance Payment (non-fatal):', receiptErr);
+        }
         console.timeEnd("BOOKING_ADVANCE_PAYMENT");
       }
       

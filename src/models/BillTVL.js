@@ -169,6 +169,21 @@ const BillTVL = sequelizeTVL.define('blXbilling', {
     allowNull: true,
     comment: 'UTR or Reference Number for Advance Payment'
   },
+  bl_bill_type: {
+    type: DataTypes.ENUM('PRIMARY', 'CANCELLED_SPLIT'),
+    defaultValue: 'PRIMARY',
+    comment: 'Type of bill (PRIMARY or CANCELLED_SPLIT)'
+  },
+  bl_passenger_ids: {
+    type: DataTypes.JSON,
+    allowNull: true,
+    comment: 'Array of active passenger IDs (ps_psid) included in this bill'
+  },
+  split_audit_log: {
+    type: DataTypes.JSON,
+    allowNull: true,
+    comment: 'Immutable log of split events and references to newly created bills'
+  },
   bl_is_split: {
     type: DataTypes.TINYINT(1),
     defaultValue: 0,

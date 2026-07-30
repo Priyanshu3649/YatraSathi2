@@ -134,6 +134,9 @@ const Bookings = () => {
     travelClass: '3A',
     berthPreference: '',
     quotaType: '',
+    advanceAmount: '',
+    paymentMode: 'Cash',
+    paymentReference: '',
     remarks: '',
     status: 'DRF',
     createdBy: user?.us_name || 'system',
@@ -402,6 +405,11 @@ const Bookings = () => {
         // Passenger data for backend processing
         passengerList: activePassengers, // Only include valid passengers
         
+        // Send advance payment details for backend processing
+        advanceAmount: formData.advanceAmount,
+        paymentMode: formData.paymentMode,
+        paymentReference: formData.paymentReference,
+        
         // Audit fields (match BookingTVL model)
         mby: user?.us_name || 'system', // Modified by
         
@@ -493,6 +501,9 @@ const Bookings = () => {
       travelDate: tomorrowStr, // Default to tomorrow
       travelClass: '3A',
       quotaType: 'TQ', // Default to Tatkal quota
+      advanceAmount: '',
+      paymentMode: 'Cash',
+      paymentReference: '',
       pnrNumber: '', // NEW: PNR field
       remarks: '',
       status: 'DRF', // ✓ Use DRF as default (database compatible)
@@ -526,6 +537,7 @@ const Bookings = () => {
   
   // Ref for quota type select element
   const quotaTypeRef = useRef(null);
+  const travelClassRef = useRef(null);
   
   // Enhanced save confirmation handler - commits to database before form reset (MOVED AFTER handleNew)
   const handleSaveConfirmed = useCallback(async () => {
@@ -689,9 +701,13 @@ const Bookings = () => {
       toStation: record.toStation?.st_stname || record.bk_tostation || record.bk_tost || '',
       travelDate: record.bk_trvldt ? new Date(record.bk_trvldt).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
       travelClass: record.bk_class || record.bk_travelclass || '3A',
+      berthPreference: record.berthPreference || record.bk_berthpref || '',
       quotaType: mapQuotaValueToFrontend(record.quotaType || record.bk_quotatype || record.bk_quota || ''),
+      advanceAmount: record.advanceAmount || '',
+      paymentMode: record.paymentMode || 'Cash',
+      paymentReference: record.paymentReference || '',
       pnrNumber: record.pnrNumber || record.bk_pnr || '', // NEW: PNR field
-      remarks: record.bk_remarks || '',
+      remarks: record.remarks || record.bk_remarks || '',
       status: record.bk_status || 'DRAFT',
       createdBy: record.createdBy || record.bk_createdby || 'system',
       createdOn: record.createdOn || record.bk_createdon || new Date().toISOString(),
@@ -1740,8 +1756,9 @@ setSelectedBooking(null); // Clear selection after deletion
                     onKeyDown={(e) => handleEnhancedTabNavigation(e, 'travelDate')}
                     disabled={!isEditing}
                   />
-                  <label className="erp-form-label">Class</label>
-                  <select
+                  <label className="erp-form-label required">Class</label>
+                  <select 
+                    ref={travelClassRef}
                     name="travelClass"
                     data-field="travelClass"
                     className="erp-input"
@@ -1751,14 +1768,24 @@ setSelectedBooking(null); // Clear selection after deletion
                     onKeyDown={(e) => handleEnhancedTabNavigation(e, 'travelClass')}
                     disabled={!isEditing}
                   >
-                    <option value="SL">Sleeper (SL)</option>
-                    <option value="3A">3rd AC (3A)</option>
-                    <option value="2A">2nd AC (2A)</option>
-                    <option value="1A">1st AC (1A)</option>
-                    <option value="CC">Chair Car (CC)</option>
+                    <option value="SL">SL - Sleeper Class</option>
+                    <option value="2S">2S - Second Seating</option>
+                    <option value="3A">3A - Third AC</option>
+                    <option value="3E">3E - Third AC Economy</option>
+                    <option value="2A">2A - Second AC</option>
+                    <option value="1A">1A - First AC</option>
+                    <option value="CC">CC - AC Chair Car</option>
+                    <option value="EC">EC - Executive Class</option>
+                    <option value="EA">EA - Executive Anubhuti</option>
+                    <option value="FC">FC - First Class</option>
+                    <option value="VS">VS - Vistadome Non AC</option>
+                    <option value="CH">CH - Chair Car High Capacity</option>
+                    <option value="HS">HS - Sleeper High Capacity</option>
+                    <option value="VC">VC - Vistadome CC</option>
+                    <option value="VA">VA - Vistadome AC</option>
                   </select>
                   <label className="erp-form-label">Quota</label>
-                  <select
+                  <select 
                     ref={quotaTypeRef}
                     name="quotaType"
                     data-field="quotaType"
@@ -1769,10 +1796,61 @@ setSelectedBooking(null); // Clear selection after deletion
                     onKeyDown={(e) => handleEnhancedTabNavigation(e, 'quotaType')}
                     disabled={!isEditing}
                   >
-                    <option value="GN">General</option>
-                    <option value="TQ">Tatkal</option>
-                    <option value="LD">Ladies</option>
+                    <option value="GN">GN - General</option>
+                    <option value="TQ">TQ - Tatkal</option>
+                    <option value="LD">LD - Ladies</option>
+                    <option value="SS">SS - Senior Citizen</option>
+                    <option value="PT">PT - Premium Tatkal</option>
+                    <option value="DF">DF - Defence</option>
+                    <option value="FT">FT - Foreign Tourist</option>
+                    <option value="LB">LB - Lower Berth</option>
+                    <option value="YU">YU - Yuva</option>
+                    <option value="DP">DP - Duty Pass</option>
+                    <option value="HP">HP - Handicapped</option>
+                    <option value="PH">PH - Parliament House</option>
                   </select>
+              </div>
+
+              {/* Row 3: Advance Payment Details */}
+              <div className="erp-form-row-compact-5">
+                  <label className="erp-form-label">Advance Amount (₹)</label>
+                  <input
+                    type="number"
+                    name="advanceAmount"
+                    className="erp-input"
+                    value={formData.advanceAmount}
+                    onChange={handleInputChange}
+                    onKeyDown={(e) => handleEnhancedTabNavigation(e, 'advanceAmount')}
+                    disabled={!isEditing}
+                    min="0"
+                  />
+                  <label className="erp-form-label">Payment Mode</label>
+                  <select
+                    name="paymentMode"
+                    className="erp-input"
+                    value={formData.paymentMode}
+                    onChange={handleInputChange}
+                    onKeyDown={(e) => handleEnhancedTabNavigation(e, 'paymentMode')}
+                    disabled={!isEditing}
+                  >
+                    <option value="Cash">Cash</option>
+                    <option value="UPI">UPI</option>
+                    <option value="Bank Transfer">Bank Transfer</option>
+                    <option value="Cheque">Cheque</option>
+                    <option value="Credit Card">Credit Card</option>
+                    <option value="Debit Card">Debit Card</option>
+                  </select>
+                  <label className="erp-form-label">Ref / UTR No</label>
+                  <input
+                    type="text"
+                    name="paymentReference"
+                    className="erp-input"
+                    value={formData.paymentReference}
+                    onChange={handleInputChange}
+                    onKeyDown={(e) => handleEnhancedTabNavigation(e, 'paymentReference')}
+                    disabled={!isEditing}
+                    placeholder="Transaction ID"
+                  />
               </div>
 
               {/* Passenger Section */}

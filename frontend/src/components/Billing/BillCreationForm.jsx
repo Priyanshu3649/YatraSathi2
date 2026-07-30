@@ -269,11 +269,21 @@ const BillCreationForm = ({ onCancel, onSubmit, user, error, setError }) => {
           onChange={handleInputChange}
           className="form-input"
         >
-          <option value="SL">Sleeper</option>
-          <option value="3A">3rd AC</option>
-          <option value="2A">2nd AC</option>
-          <option value="1A">1st AC</option>
-          <option value="CC">Chair Car</option>
+          <option value="SL">SL - Sleeper Class</option>
+          <option value="2S">2S - Second Seating</option>
+          <option value="3A">3A - Third AC</option>
+          <option value="3E">3E - Third AC Economy</option>
+          <option value="2A">2A - Second AC</option>
+          <option value="1A">1A - First AC</option>
+          <option value="CC">CC - AC Chair Car</option>
+          <option value="EC">EC - Executive Class</option>
+          <option value="EA">EA - Executive Anubhuti</option>
+          <option value="FC">FC - First Class</option>
+          <option value="VS">VS - Vistadome Non AC</option>
+          <option value="CH">CH - Chair Car High Capacity</option>
+          <option value="HS">HS - Sleeper High Capacity</option>
+          <option value="VC">VC - Vistadome CC</option>
+          <option value="VA">VA - Vistadome AC</option>
         </select>
 
         <label htmlFor="ticketType" className="form-label">Ticket Type</label>

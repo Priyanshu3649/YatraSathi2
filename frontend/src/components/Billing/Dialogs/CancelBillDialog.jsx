@@ -7,19 +7,68 @@ const CancelBillDialog = ({ bill, onClose, onConfirm }) => {
   const [selectedPassengerIds, setSelectedPassengerIds] = useState([]);
   const [error, setError] = useState('');
 
-  const passengers = bill?.passengers || [];
+  const passengers = bill?.passengerList || bill?.passengers || [];
   const originalTotal = parseFloat(bill?.bl_total_amount || 0);
   
   const railChg = parseFloat(railwayCharges) || 0;
   const agentChg = parseFloat(agentCharges) || 0;
   const totalCharges = railChg + agentChg;
-  const refundAmount = Math.max(0, originalTotal - totalCharges);
+  
+  const totalPax = passengers.length || 1;
+  const selectedPax = selectedPassengerIds.length;
+  const baseRefund = (originalTotal / totalPax) * selectedPax;
+  const refundAmount = Math.max(0, baseRefund - totalCharges);
 
   const handlePassengerToggle = (passId) => {
     setSelectedPassengerIds(prev => 
       prev.includes(passId) ? prev.filter(p => p !== passId) : [...prev, passId]
     );
   };
+
+  const dialogRef = React.useRef(null);
+
+  React.useEffect(() => {
+    if (dialogRef.current) {
+      const inputs = dialogRef.current.querySelectorAll('input, textarea, button');
+      if (inputs.length > 0) inputs[0].focus();
+    }
+  }, []);
+
+  React.useEffect(() => {
+    const handleGlobalKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        onClose();
+      } else if (e.key === 'Enter') {
+        const activeTag = document.activeElement?.tagName?.toLowerCase();
+        if (activeTag === 'textarea' || activeTag === 'button') {
+          return;
+        }
+        if (!(totalCharges > baseRefund || selectedPassengerIds.length === 0)) {
+           e.preventDefault();
+           handleConfirm();
+        }
+      } else if (e.key === 'Tab') {
+        if (!dialogRef.current) return;
+        const focusableElements = dialogRef.current.querySelectorAll(
+          'input:not([disabled]), textarea:not([disabled]), button:not([disabled])'
+        );
+        if (focusableElements.length === 0) return;
+        
+        const firstElement = focusableElements[0];
+        const lastElement = focusableElements[focusableElements.length - 1];
+
+        if (e.shiftKey && document.activeElement === firstElement) {
+          e.preventDefault();
+          lastElement.focus();
+        } else if (!e.shiftKey && document.activeElement === lastElement) {
+          e.preventDefault();
+          firstElement.focus();
+        }
+      }
+    };
+    window.addEventListener('keydown', handleGlobalKeyDown);
+    return () => window.removeEventListener('keydown', handleGlobalKeyDown);
+  }, [onClose, totalCharges, baseRefund, selectedPassengerIds]);
 
   const handleSelectAll = () => {
     if (selectedPassengerIds.length === passengers.length) {
@@ -34,8 +83,8 @@ const CancelBillDialog = ({ bill, onClose, onConfirm }) => {
       setError('Please select at least one passenger to cancel.');
       return;
     }
-    if (totalCharges > originalTotal) {
-      setError('Total cancellation charges cannot exceed original bill amount.');
+    if (totalCharges > baseRefund) {
+      setError('Total cancellation charges cannot exceed the refundable amount for the selected passengers.');
       return;
     }
 
@@ -49,7 +98,7 @@ const CancelBillDialog = ({ bill, onClose, onConfirm }) => {
 
   return (
     <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 }}>
-      <div style={{ background: '#fff', padding: '24px', borderRadius: '8px', width: '500px', maxHeight: '90vh', overflowY: 'auto' }}>
+      <div ref={dialogRef} style={{ background: '#fff', padding: '24px', borderRadius: '8px', width: '500px', maxHeight: '90vh', overflowY: 'auto' }}>
         <h3 style={{ marginTop: 0, color: '#d32f2f' }}>Cancel Bill: {bill?.bl_bill_no || bill?.bl_entry_no}</h3>
         
         {error && <div style={{ color: 'red', marginBottom: '16px', padding: '8px', background: '#ffebee', borderRadius: '4px', fontSize: '14px' }}>{error}</div>}
@@ -60,11 +109,15 @@ const CancelBillDialog = ({ bill, onClose, onConfirm }) => {
             <strong>₹{originalTotal.toFixed(2)}</strong>
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+            <span>Base Refund (for {selectedPax} selected):</span>
+            <strong>₹{baseRefund.toFixed(2)}</strong>
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
             <span>Total Cancellation Charges:</span>
             <strong style={{ color: '#d32f2f' }}>₹{totalCharges.toFixed(2)}</strong>
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px solid #ccc', paddingTop: '8px', marginTop: '8px' }}>
-            <span>Refundable Amount:</span>
+            <span>Final Refundable Amount:</span>
             <strong style={{ color: '#388e3c' }}>₹{refundAmount.toFixed(2)}</strong>
           </div>
         </div>
@@ -75,7 +128,9 @@ const CancelBillDialog = ({ bill, onClose, onConfirm }) => {
             type="number" 
             value={railwayCharges}
             onChange={(e) => setRailwayCharges(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter' && !(totalCharges > baseRefund || selectedPassengerIds.length === 0)) handleConfirm(); }}
             style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ccc' }}
+            tabIndex={0}
             min="0"
           />
         </div>
@@ -86,7 +141,9 @@ const CancelBillDialog = ({ bill, onClose, onConfirm }) => {
             type="number" 
             value={agentCharges}
             onChange={(e) => setAgentCharges(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter' && !(totalCharges > baseRefund || selectedPassengerIds.length === 0)) handleConfirm(); }}
             style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ccc' }}
+            tabIndex={0}
             min="0"
           />
         </div>
@@ -111,7 +168,9 @@ const CancelBillDialog = ({ bill, onClose, onConfirm }) => {
                     type="checkbox" 
                     checked={selectedPassengerIds.includes(p.id)}
                     onChange={() => handlePassengerToggle(p.id)}
+                    onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handlePassengerToggle(p.id); } }}
                     style={{ marginRight: '8px' }}
+                    tabIndex={0}
                   />
                   {p.name}
                 </label>
@@ -127,6 +186,7 @@ const CancelBillDialog = ({ bill, onClose, onConfirm }) => {
             onChange={(e) => setReason(e.target.value)}
             style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ccc', minHeight: '60px' }}
             placeholder="Enter reason for cancellation..."
+            tabIndex={0}
           />
         </div>
 
@@ -134,14 +194,14 @@ const CancelBillDialog = ({ bill, onClose, onConfirm }) => {
           <button onClick={onClose} style={{ padding: '8px 16px', border: '1px solid #ccc', background: '#fff', borderRadius: '4px', cursor: 'pointer' }}>Cancel</button>
           <button 
             onClick={handleConfirm} 
-            disabled={totalCharges > originalTotal || selectedPassengerIds.length === 0}
+            disabled={totalCharges > baseRefund || selectedPassengerIds.length === 0}
             style={{ 
               padding: '8px 16px', 
               border: 'none', 
-              background: (totalCharges > originalTotal || selectedPassengerIds.length === 0) ? '#ccc' : '#d32f2f', 
+              background: (totalCharges > baseRefund || selectedPassengerIds.length === 0) ? '#ccc' : '#d32f2f', 
               color: '#fff', 
               borderRadius: '4px', 
-              cursor: (totalCharges > originalTotal || selectedPassengerIds.length === 0) ? 'not-allowed' : 'pointer' 
+              cursor: (totalCharges > baseRefund || selectedPassengerIds.length === 0) ? 'not-allowed' : 'pointer' 
             }}
           >
             Confirm Cancellation

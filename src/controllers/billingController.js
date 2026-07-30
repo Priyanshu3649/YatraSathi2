@@ -518,11 +518,13 @@ const createBill = async (req, res) => {
         throw new Error('Cannot generate bill for cancelled booking');
       }
 
-      // 2b. Count passengers for service charge calculation
-      const passengerCount = await PassengerTVL.count({ 
+      // 2b. Find passengers for service charge calculation and assignment
+      const passengersResult = await PassengerTVL.findAll({ 
         where: { ps_bkid: bookingId, ps_active: 1 }, 
         transaction 
-      }) || 1;
+      });
+      const passengerCount = passengersResult.length || 1;
+      const activePassengerIds = passengersResult.map(p => p.ps_psid);
 
       // 2c. Resolve Service Charge automatically
       const resolvedServiceCharge = await serviceChargeService.getServiceCharge({
@@ -606,6 +608,7 @@ const createBill = async (req, res) => {
         bl_surcharge: surcharge || 0,
         bl_discount: discount || 0,
         bl_gst_type: gstType || 'EXCLUSIVE',
+        bl_passenger_ids: activePassengerIds,
         bl_total_amount: finalTotalAmount,
         bl_advance_amount: parseFloat(advanceAmount) || 0,
         bl_payment_mode: paymentMode || null,
@@ -677,41 +680,43 @@ const createBill = async (req, res) => {
            const finYear = `${now.getFullYear()}-${now.getFullYear()+1}`;
            const period = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2, '0')}`;
            
-           await PaymentTVL.create({
-             pt_custid: getNumericId(booking.bk_usid),
-             pt_totalamt: advAmt,
-             pt_amount: advAmt,
-             pt_status: 'RECEIVED',
-             pt_verification_status: 'VERIFIED',
-             pt_acid: 1, // Default account
-             pt_mode: paymentMode || 'Cash',
-             pt_refno: paymentReference || entryNo,
-             pt_paydt: now,
-             pt_rcvdt: now,
-             pt_allocatedamt: advAmt, // Pre-allocated to this bill
-             pt_finyear: finYear,
-             pt_period: period,
-             pt_bkid: bookingId,
-             pt_remarks: `Advance received against Bill ${finalBillNumber}`,
-             eby: req.user.us_usid,
-             edtm: now,
-             mdtm: now
+           // Generate Receipt Number
+           const [maxReceipt] = await sequelizeTVL.query('SELECT MAX(CAST(SUBSTRING(rc_entry_no, 3) AS UNSIGNED)) as max_no FROM rcXreceipt', { transaction });
+           const nextReceiptNo = 'RC' + ((maxReceipt[0].max_no || 0) + 1).toString().padStart(6, '0');
+
+           const validModes = ['Cash', 'Bank', 'Cheque', 'Online', 'UPI', 'NEFT', 'RTGS', 'IMPS', 'Bank Transfer', 'Credit Card', 'Debit Card'];
+           const safePaymentMode = validModes.includes(paymentMode) ? paymentMode : 'Cash';
+
+           const newReceipt = await Receipt.create({
+             rc_entry_no: nextReceiptNo,
+             rc_date: now,
+             rc_customer_name: booking.bk_customer_name || 'Customer',
+             rc_customer_phone: booking.bk_contact || '',
+             rc_amount: advAmt,
+             rc_payment_mode: safePaymentMode,
+             rc_ref_number: paymentReference || '',
+             rc_bank_account: req.body.paymentAccount || 'Bank',
+             rc_narration: `Advance payment from ${booking.bk_customer_name || 'Customer'}`,
+             rc_created_by: String(req.user?.us_usid || 1),
+             rc_status: 'Active',
+             eby: req.user?.us_usid || 1,
+             edtm: now
            }, { transaction });
            
            // Insert into Customer Ledger directly as Advance Receipt
            await CustomerLedgerService.writeLedgerEntry({
              customerId: booking.bk_usid,
-             entryType: 'RECEIPT',
+             entryType: 'PAYMENT',
              referenceType: 'ADVANCE',
-             referenceId: entryNo,
+             referenceId: newReceipt.rc_rcid || 0,
              creditAmount: advAmt,
              remarks: `Advance received at billing time for ${finalBillNumber}`,
-             createdBy: req.user.us_usid
+             createdBy: req.user?.us_usid || 1
            }, transaction);
            
          } catch (advErr) {
            console.error('⚠️ Error creating advance payment record:', advErr);
-           throw new Error('Failed to record advance payment. Transaction rolled back.');
+           throw new Error('Failed to record advance payment: ' + advErr.message);
          }
       }
 
@@ -2513,6 +2518,24 @@ const fetchBookingForBilling = async (req, res) => {
       }))
     };
     
+    try {
+      const { Receipt } = require('../models');
+      const advanceReceipt = await Receipt.findOne({
+        where: {
+          rc_narration: {
+            [Op.like]: `%Advance payment for Booking ${booking.bk_bkno}%`
+          }
+        }
+      });
+      if (advanceReceipt) {
+        data.advanceAmount = advanceReceipt.rc_amount;
+        data.paymentMode = advanceReceipt.rc_payment_mode;
+        data.paymentReference = advanceReceipt.rc_ref_number;
+      }
+    } catch (err) {
+      console.error('Error fetching advance receipt:', err);
+    }
+    
     res.json({ success: true, data });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
@@ -2757,22 +2780,33 @@ const cancelBillV2 = async (req, res) => {
     
     const bill = await BillTVL.findByPk(id, { transaction });
     if (!bill) throw new Error('Bill not found');
-    if (bill.status !== 'OPEN' && bill.status !== 'FINAL') {
-      throw new Error('Only active bills can be cancelled');
+    const billStatus = bill.bl_status || bill.status;
+    if (billStatus === 'CANCELLED' || billStatus === 'CAN' || bill.is_cancelled === 1) {
+      throw new Error('Bill is already cancelled');
     }
     
+    const passengersResult = await PassengerTVL.findAll({
+      where: { ps_bkid: bill.bl_booking_id },
+      transaction
+    });
+    const totalPassengers = passengersResult.length || 1;
+    const isPartial = cancelledPassengers.length < totalPassengers;
+
     const railChg = parseFloat(railwayCharges) || 0;
     const agentChg = parseFloat(agentCharges) || 0;
     const totalCancel = railChg + agentChg;
-    const originalTotal = parseFloat(bill.bl_total_amount);
+    const originalTotal = parseFloat(bill.bl_total_amount) || 0;
     
-    if (totalCancel > originalTotal) {
-      throw new Error('Cancellation charges cannot exceed original bill amount');
+    const baseRefund = totalPassengers > 0 ? (originalTotal / totalPassengers) * (cancelledPassengers.length || 0) : 0;
+    
+    if (totalCancel > baseRefund) {
+      throw new Error('Cancellation charges cannot exceed the refundable amount for the selected passengers');
     }
     
-    const refundAmount = originalTotal - totalCancel;
+    const refundAmount = Math.max(0, baseRefund - totalCancel);
 
     const cancelData = {
+      isPartial,
       railwayCharges: railChg,
       agentCharges: agentChg,
       totalCancelCharges: totalCancel,
@@ -2781,21 +2815,81 @@ const cancelBillV2 = async (req, res) => {
       reason
     };
 
-    bill.status = 'CANCELLED';
-    bill.bl_status = 'CANCELLED';
-    bill.is_cancelled = 1;
-    bill.cancellation_data = cancelData;
-    bill.bl_railway_cancellation_charge = railChg;
-    bill.bl_agent_cancellation_charge = agentChg;
-    bill.total_cancel_charges = totalCancel;
-    bill.refund_amount = refundAmount;
-    bill.is_deleted = 1; 
+    // 1. Update existing bill (reduce proportional baseRefund)
+    const activePassengers = Array.isArray(bill.bl_passenger_ids) 
+      ? bill.bl_passenger_ids 
+      : passengersResult.map(p => p.ps_psid);
     
+    const remainingPassengers = activePassengers.filter(id => !cancelledPassengers.includes(id));
+    
+    const splitCount = Array.isArray(bill.split_audit_log) ? bill.split_audit_log.length : 0;
+    const subBillSuffix = '-' + String.fromCharCode(65 + splitCount); // -A, -B, -C...
+    const baseBillNo = bill.bl_bill_no.replace(/-[A-Z]$/, ''); // Ensure we don't double suffix
+    const subBillNo = baseBillNo + subBillSuffix;
+
+    const auditLogEntry = {
+      timestamp: new Date(),
+      action: 'SPLIT_CANCELLATION',
+      cancelledPassengers,
+      subBillNo,
+      reducedAmount: baseRefund,
+      cancellationCharges: totalCancel
+    };
+    
+    const newAuditLog = Array.isArray(bill.split_audit_log) ? [...bill.split_audit_log, auditLogEntry] : [auditLogEntry];
+    bill.split_audit_log = newAuditLog;
+
+    bill.cancellation_data = Array.isArray(bill.cancellation_data) ? [...bill.cancellation_data, cancelData] : [cancelData];
+    bill.bl_railway_cancellation_charge = (parseFloat(bill.bl_railway_cancellation_charge) || 0) + railChg;
+    bill.bl_agent_cancellation_charge = (parseFloat(bill.bl_agent_cancellation_charge) || 0) + agentChg;
+    bill.total_cancel_charges = (parseFloat(bill.total_cancel_charges) || 0) + totalCancel;
+    bill.refund_amount = (parseFloat(bill.refund_amount) || 0) + refundAmount;
+    
+    bill.bl_passenger_ids = remainingPassengers;
+    bill.bl_total_amount = originalTotal - baseRefund; // Reduce original bill by cancelled portion
+
+    if (!isPartial || remainingPassengers.length === 0) {
+      bill.status = 'CANCELLED';
+      bill.bl_status = 'CANCELLED';
+      bill.is_cancelled = 1;
+      bill.is_deleted = 1; 
+      bill.bl_total_amount = 0; // If all cancel, primary bill drops to 0
+    }
+
     await bill.save({ transaction });
 
+    // 2. Generate a separate cancellation charge bill (Bill-B)
+    const cancelledBill = await BillTVL.create({
+      bl_entry_no: baseBillNo,
+      bl_bill_no: baseBillNo,
+      bl_sub_bill_no: subBillNo,
+      bl_booking_id: bill.bl_booking_id,
+      bl_billing_date: new Date(),
+      bl_journey_date: bill.bl_journey_date,
+      bl_customer_name: bill.bl_customer_name,
+      bl_customer_phone: bill.bl_customer_phone,
+      bl_station_boy: bill.bl_station_boy,
+      station_boy_id: bill.station_boy_id,
+      bl_from_station: bill.bl_from_station,
+      bl_to_station: bill.bl_to_station,
+      bl_train_no: bill.bl_train_no,
+      bl_class: bill.bl_class,
+      bl_pnr: bill.bl_pnr,
+      bl_railway_fare: 0, 
+      bl_total_amount: totalCancel, // Exclusively contains cancellation charges
+      bl_bill_type: 'CANCELLED_SPLIT',
+      bl_parent_bill_id: bill.bl_id,
+      bl_passenger_ids: cancelledPassengers,
+      status: 'CANCELLED',
+      bl_status: 'CANCELLED',
+      is_cancelled: 1,
+      bl_created_by: req.user?.us_usid || 1
+    }, { transaction });
+
+    // 3. Deactivate cancelled passengers
     if (cancelledPassengers.length > 0) {
       await sequelizeTVL.query(
-        `UPDATE psXpassenger SET bl_bill_no = NULL WHERE ps_psid IN (:passengerIds)`,
+        `UPDATE psXpassenger SET ps_active = 0 WHERE ps_psid IN (:passengerIds)`,
         {
           replacements: { passengerIds: cancelledPassengers },
           transaction
@@ -2803,31 +2897,41 @@ const cancelBillV2 = async (req, res) => {
       );
     }
     
+    // 4. Update Ledger
     try {
-      const customerUsid = bill.bl_usid || bill.bl_customer_id;
-      if (customerUsid && refundAmount > 0) {
-        const lastLedger = await Ledger.findOne({
-          where: { lg_usid: customerUsid },
-          order: [['lg_lgid', 'DESC']],
-          transaction
-        });
-        const openingBal = lastLedger ? parseFloat(lastLedger.lg_closing_bal) || 0 : 0;
-        const closingBal = openingBal + refundAmount;
-        
-        await Ledger.create({
-          lg_usid: customerUsid,
-          lg_date: new Date(),
-          lg_particulars: `Refund for Cancelled Bill ${bill.bl_bill_no}`,
-          lg_credit: refundAmount,
-          lg_debit: 0,
-          lg_opening_bal: openingBal,
-          lg_closing_bal: closingBal,
-          lg_ref_no: bill.bl_bill_no,
-          lg_ref_type: 'BILL_REFUND'
-        }, { transaction });
+      const customerUsid = bill.bl_usid || bill.bl_customer_id || bill.bl_booking_id; // Need to ensure customerId is correct, usually we lookup booking
+      const booking = await BookingTVL.findByPk(bill.bl_booking_id, { transaction });
+      const customerId = booking ? booking.bk_usid : customerUsid;
+      
+      if (customerId) {
+        // A. Credit the customer for the original ticket cost (baseRefund)
+        await CustomerLedgerService.writeLedgerEntry({
+          customerId: customerId,
+          entryType: 'ADJUSTMENT',
+          referenceType: 'BILL_PARTIAL_CANCEL',
+          referenceId: bill.bl_id,
+          creditAmount: baseRefund,
+          debitAmount: 0,
+          remarks: `Partial refund adjustment for cancelled tickets on Bill ${bill.bl_bill_no}`,
+          createdBy: req.user?.us_usid || 1
+        }, transaction);
+
+        // B. Debit the customer for the new cancellation charges bill
+        if (totalCancel > 0) {
+          await CustomerLedgerService.writeLedgerEntry({
+            customerId: customerId,
+            entryType: 'BILL',
+            referenceType: 'CANCEL_CHARGES_BILL',
+            referenceId: cancelledBill.bl_id,
+            creditAmount: 0,
+            debitAmount: totalCancel,
+            remarks: `Cancellation charges for sub-bill ${subBillNo}`,
+            createdBy: req.user?.us_usid || 1
+          }, transaction);
+        }
       }
     } catch (ledgerErr) {
-      console.error('Ledger error on cancel:', ledgerErr);
+      console.error('Ledger error on cancel split:', ledgerErr);
     }
 
     if (typeof Audit !== 'undefined' && Audit.logAction) {
@@ -2843,8 +2947,24 @@ const cancelBillV2 = async (req, res) => {
     await transaction.commit();
     res.json({ success: true, message: 'Bill cancelled successfully', refundAmount });
   } catch (error) {
-    await transaction.rollback();
-    res.status(500).json({ success: false, error: error.message });
+    if (transaction && !transaction.finished) {
+      await transaction.rollback();
+    }
+    console.error('CRITICAL: Error cancelling bill:', error);
+    
+    // If it's a known validation error, return 400 instead of 500
+    const knownErrors = [
+      'At least one passenger must be selected',
+      'Railway and Agent cancellation charges are required',
+      'Bill not found',
+      'Bill is already cancelled',
+      'Cancellation charges cannot exceed'
+    ];
+    
+    const isKnownError = knownErrors.some(msg => error.message.includes(msg));
+    const statusCode = isKnownError ? 400 : 500;
+    
+    res.status(statusCode).json({ success: false, error: error.message, stack: error.stack });
   }
 };
 

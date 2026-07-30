@@ -1609,6 +1609,18 @@ const Billing = () => {
     handleRecordSelect(bills[newIndex]);
   };
 
+  // Scroll selected row into view
+  useEffect(() => {
+    if (selectedBill) {
+      setTimeout(() => {
+        const selectedRow = document.querySelector('.selected-row');
+        if (selectedRow) {
+          selectedRow.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
+      }, 50);
+    }
+  }, [selectedBill]);
+
   // Check if navigation buttons should be disabled
   const isFirstRecord = selectedBill && bills.length > 0 && 
     bills[0].id === selectedBill.id;
@@ -1643,6 +1655,28 @@ const Billing = () => {
         handleCancelSave();
       }
       return;
+    }
+
+    const isInFormField = e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT' || e.target.tagName === 'TEXTAREA';
+    if (!isInFormField && !showForm) {
+      if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        if (bills.length > 0) {
+          const currentIdx = selectedBill ? bills.findIndex(b => (b.id || b.bl_id) === (selectedBill.id || selectedBill.bl_id)) : -1;
+          const newIdx = currentIdx > 0 ? currentIdx - 1 : 0;
+          handleRecordSelect(bills[newIdx]);
+        }
+        return;
+      }
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        if (bills.length > 0) {
+          const currentIdx = selectedBill ? bills.findIndex(b => (b.id || b.bl_id) === (selectedBill.id || selectedBill.bl_id)) : -1;
+          const newIdx = currentIdx < bills.length - 1 ? currentIdx + 1 : bills.length - 1;
+          handleRecordSelect(bills[newIdx]);
+        }
+        return;
+      }
     }
     
     if (!showForm || !isEditing) return;
@@ -1790,7 +1824,10 @@ const Billing = () => {
         toStation: data.bl_to_station !== undefined ? data.bl_to_station : prev.toStation,
         trainNumber: data.bl_train_no !== undefined ? data.bl_train_no : prev.trainNumber,
         reservationClass: data.bl_class || prev.reservationClass,
-        journeyDate: data.bl_journey_date || prev.journeyDate
+        journeyDate: data.bl_journey_date || prev.journeyDate,
+        advance: data.advanceAmount !== undefined ? data.advanceAmount : prev.advance,
+        paymentMode: data.paymentMode !== undefined ? data.paymentMode : prev.paymentMode,
+        referenceNo: data.paymentReference !== undefined ? data.paymentReference : prev.referenceNo
       }));
       alert('Booking data fetched successfully');
     } catch (error) {
@@ -1992,7 +2029,7 @@ const Billing = () => {
           )}
         </div>
       ) : (
-      <div className="layout-content-wrapper" style={{ display: 'flex', height: 'calc(100vh - 110px)', overflow: 'hidden' }}>
+      <div className="layout-content-wrapper" style={{ display: 'flex', flex: 1, minHeight: 0, overflow: 'hidden' }}>
         {/* Center Content */}
         <div className="layout-main-column" style={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0, height: '100%' }}>
           {/* Form Panel - Static */}
@@ -2118,17 +2155,34 @@ const Billing = () => {
             <div className="erp-form-row-compact-5">
               <label className="erp-form-label required">Reservation Class</label>
               <select name="reservationClass" className="erp-input" value={formData.reservationClass || '3A'} onChange={(e) => setFormData({...formData, reservationClass: e.target.value})} disabled={!isEditing || billingMode === 'generate'}>
-                <option value="SL">SL</option>
-                <option value="3A">3A</option>
-                <option value="2A">2A</option>
-                <option value="1A">1A</option>
-                <option value="CC">CC</option>
-                <option value="EC">EC</option>
+                <option value="SL">SL - Sleeper Class</option>
+                <option value="2S">2S - Second Seating</option>
+                <option value="3A">3A - Third AC</option>
+                <option value="3E">3E - Third AC Economy</option>
+                <option value="2A">2A - Second AC</option>
+                <option value="1A">1A - First AC</option>
+                <option value="CC">CC - AC Chair Car</option>
+                <option value="EC">EC - Executive Class</option>
+                <option value="EA">EA - Executive Anubhuti</option>
+                <option value="FC">FC - First Class</option>
+                <option value="VS">VS - Vistadome Non AC</option>
+                <option value="CH">CH - Chair Car High Capacity</option>
+                <option value="HS">HS - Sleeper High Capacity</option>
+                <option value="VC">VC - Vistadome CC</option>
+                <option value="VA">VA - Vistadome AC</option>
               </select>
               <label className="erp-form-label">Seat(s) Allocated</label>
               <input type="text" name="seatsAlloted" className="erp-input" value={formData.seatsAlloted || ''} onChange={(e) => setFormData({...formData, seatsAlloted: e.target.value})} disabled={!isEditing} />
               <label className="erp-form-label">PNR Status</label>
-              <input type="text" name="pnrStatus" className="erp-input" value={formData.pnrStatus || ''} onChange={(e) => setFormData({...formData, pnrStatus: e.target.value})} disabled={!isEditing} />
+              <select name="pnrStatus" className="erp-input" value={formData.pnrStatus || 'CNF'} onChange={(e) => setFormData({...formData, pnrStatus: e.target.value})} disabled={!isEditing}>
+                <option value="CNF">CNF - Confirmed</option>
+                <option value="WL">WL - Waiting List</option>
+                <option value="RAC">RAC - Reservation Against Cancellation</option>
+                <option value="CAN">CAN - Cancelled</option>
+                <option value="PQWL">PQWL - Pooled Quota Waiting List</option>
+                <option value="TQWL">TQWL - Tatkal Quota Waiting List</option>
+                <option value="GNWL">GNWL - General Waiting List</option>
+              </select>
               <label className="erp-form-label">PNR Coach</label>
               <input type="text" name="coach" className="erp-input" value={formData.coach || ''} onChange={(e) => setFormData({...formData, coach: e.target.value})} disabled={!isEditing} />
               <label className="erp-form-label">PNR Berth No</label>
@@ -2330,8 +2384,8 @@ const Billing = () => {
             ) : (
               /* Table fills all space; footer is position:fixed so it always shows */
               <div style={{ flex: 1, display: 'flex', flexDirection: 'column', border: '1px solid var(--erp-border)', background: '#fff', minHeight: 0 }}>
-                {/* Scrollable table — paddingBottom reserves space for the two fixed footer bars */}
-                <div style={{ flex: 1, overflowY: 'auto', overflowX: 'auto', backgroundColor: '#fff', paddingBottom: '58px' }}>
+                {/* Scrollable table */}
+                <div style={{ flex: 1, overflowY: 'auto', overflowX: 'auto', backgroundColor: '#fff', paddingBottom: '60px' }}>
                   <table className="erp-table" style={{ width: '100%', borderCollapse: 'collapse' }}>
                                         <thead style={{ position: 'sticky', top: 0, zIndex: 10, backgroundColor: 'var(--erp-bg-panel)' }}>
                       <tr>
