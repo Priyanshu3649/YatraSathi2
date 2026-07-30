@@ -154,6 +154,21 @@ const BillTVL = sequelizeTVL.define('blXbilling', {
     allowNull: false,
     comment: 'Total Amount'
   },
+  bl_advance_amount: {
+    type: DataTypes.DECIMAL(10, 2),
+    defaultValue: 0.00,
+    comment: 'Advance Amount Received'
+  },
+  bl_payment_mode: {
+    type: DataTypes.STRING(50),
+    allowNull: true,
+    comment: 'Payment Mode for Advance (e.g., CASH, UPI)'
+  },
+  bl_payment_reference: {
+    type: DataTypes.STRING(100),
+    allowNull: true,
+    comment: 'UTR or Reference Number for Advance Payment'
+  },
   bl_is_split: {
     type: DataTypes.TINYINT(1),
     defaultValue: 0,
@@ -190,7 +205,7 @@ const BillTVL = sequelizeTVL.define('blXbilling', {
     comment: 'Soft delete flag (0=Active, 1=Deleted)'
   },
   bl_created_by: {
-    type: DataTypes.INTEGER,
+    type: DataTypes.STRING(30),
     allowNull: true,
     comment: 'Created By User ID'
   },
@@ -201,7 +216,7 @@ const BillTVL = sequelizeTVL.define('blXbilling', {
   },
   // Standard audit fields
   entered_by: {
-    type: DataTypes.INTEGER,
+    type: DataTypes.STRING(30),
     allowNull: true,
     comment: 'User ID who created the record'
   },
@@ -211,7 +226,7 @@ const BillTVL = sequelizeTVL.define('blXbilling', {
     comment: 'Timestamp when record was created'
   },
   modified_by: {
-    type: DataTypes.INTEGER,
+    type: DataTypes.STRING(30),
     allowNull: true,
     comment: 'User ID who last modified the record'
   },
@@ -221,7 +236,7 @@ const BillTVL = sequelizeTVL.define('blXbilling', {
     comment: 'Timestamp when record was last modified'
   },
   closed_by: {
-    type: DataTypes.INTEGER,
+    type: DataTypes.STRING(30),
     allowNull: true,
     comment: 'User ID who closed the record'
   },

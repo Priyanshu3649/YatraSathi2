@@ -185,10 +185,6 @@ export const getNavigationConfig = (user) => {
     navItems.push({ path: '/bookings', label: 'Bookings', allowed: true });
   }
   
-  if (permissions.canViewTravelPlans) {
-    navItems.push({ path: '/travel-plans', label: 'Travel Plans', allowed: true });
-  }
-  
   if (permissions.canViewPayments) {
     navItems.push({ path: '/payments', label: 'Payments', allowed: true });
   }

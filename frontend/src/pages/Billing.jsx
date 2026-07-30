@@ -280,6 +280,10 @@ const Billing = () => {
     'gstType',
     'gst',
     'surcharge',
+    'paymentAccount',
+    'paymentMode',
+    'advanceAmount',
+    'paymentReference',
     'enteredBy'
   ], []);
   
@@ -334,6 +338,10 @@ const Billing = () => {
     enteredBy: '',
     gstType: 'EXCLUSIVE',
     totalAmount: 0, // Auto-calculated and rounded off
+    advanceAmount: '',
+    paymentAccount: 'Bank',
+    paymentMode: '',
+    paymentReference: '',
     passengerList: [],
     remarks: '',
     status: 'DRAFT'
@@ -833,7 +841,11 @@ const Billing = () => {
         // If GST is inclusive, the GST is already included in the subtotal
         taxAmount = (subtotal * currentGstRate) / (100 + currentGstRate);
         grandTotal = subtotal + surcharge;
-      } else { // C type
+      } else if (formData.gstType === 'C') { // C type means zero GST
+        taxAmount = 0;
+        currentGstRate = 0;
+        grandTotal = subtotal + taxAmount + surcharge;
+      } else { 
         taxAmount = (subtotal * currentGstRate) / 100;
         grandTotal = subtotal + taxAmount + surcharge;
       }
@@ -1035,6 +1047,7 @@ const Billing = () => {
       // Create the bill using the booking ID
       const billPayload = {
         bookingId: bookingId,
+        subBillNo: billData.subBillNo || '',
         customerName: billData.customerName || '',
         phoneNumber: billData.phoneNumber || '',
         stationBoy: billData.stationBoy || '',
@@ -1059,6 +1072,10 @@ const Billing = () => {
         discount: billData.discount || 0,
         gstType: billData.gstType || 'EXCLUSIVE',
         totalAmount: billData.totalAmount || 0,
+        advanceAmount: billData.advanceAmount || 0,
+        paymentAccount: billData.paymentAccount || 'Bank',
+        paymentMode: billData.paymentMode || '',
+        paymentReference: billData.paymentReference || '',
         billDate: billData.billDate || new Date().toISOString().split('T')[0],
         status: 'DRAFT',
         remarks: billData.remarks || ''
@@ -1124,6 +1141,10 @@ const Billing = () => {
         discount: billData.discount || 0,
         gstType: billData.gstType || 'EXCLUSIVE',
         totalAmount: billData.totalAmount || 0,
+        advanceAmount: billData.advanceAmount || 0,
+        paymentAccount: billData.paymentAccount || 'Bank',
+        paymentMode: billData.paymentMode || '',
+        paymentReference: billData.paymentReference || '',
         billDate: billData.billDate || new Date().toISOString().split('T')[0],
         status: billData.status || 'DRAFT',
         remarks: billData.remarks || ''
@@ -1362,7 +1383,7 @@ const Billing = () => {
       id: bill.id,
       billDate: bill.billDate || '',
       bookingId: bill.bookingId || '',
-      subBillNo: bill.subBillNo || '',
+      subBillNo: bill.subBillNo || bill.bl_sub_bill_no || (bill.bl_bill_no ? `${bill.bl_bill_no}-A` : (bill.id ? `${bill.id}-A` : '-A')),
       customerName: bill.customerName || '',
       phoneNumber: bill.phoneNumber || '',
       stationBoy: bill.stationBoy || '',
@@ -1392,6 +1413,10 @@ const Billing = () => {
       gstType: bill.gstType || 'EXCLUSIVE',
       amountReceived: bill.amountReceived || '',
       totalAmount: bill.totalAmount || '',
+      advanceAmount: bill.advanceAmount || '',
+      paymentAccount: bill.paymentAccount || 'Bank',
+      paymentMode: bill.paymentMode || '',
+      paymentReference: bill.paymentReference || '',
       status: bill.status || 'DRAFT',
       remarks: bill.remarks || ''
     });
@@ -1414,6 +1439,7 @@ const Billing = () => {
     setSelectedBill(null);
     setFormData({
       customerId: user?.us_usertype === 'customer' ? user.us_usid : '',
+      subBillNo: '-A',
       customerName: '',
       phoneNumber: '',
       stationBoy: '',
@@ -1442,6 +1468,10 @@ const Billing = () => {
       gstType: 'EXCLUSIVE',
       amountReceived: '',
       totalAmount: '',
+      advanceAmount: '',
+      paymentAccount: 'Bank',
+      paymentMode: '',
+      paymentReference: '',
       billDate: new Date().toISOString().split('T')[0],
       status: 'DRAFT',
       remarks: ''
@@ -1754,11 +1784,11 @@ const Billing = () => {
         ...prev,
         bookingId: data.bl_booking_id,
         pnrNumbers: data.bl_pnr,
-        customerName: data.bl_customer_name || prev.customerName,
-        phoneNumber: data.bl_customer_phone || prev.phoneNumber,
-        fromStation: data.bl_from_station || prev.fromStation,
-        toStation: data.bl_to_station || prev.toStation,
-        trainNumber: data.bl_train_no || prev.trainNumber,
+        customerName: data.bl_customer_name !== undefined ? data.bl_customer_name : prev.customerName,
+        phoneNumber: data.bl_customer_phone !== undefined ? data.bl_customer_phone : prev.phoneNumber,
+        fromStation: data.bl_from_station !== undefined ? data.bl_from_station : prev.fromStation,
+        toStation: data.bl_to_station !== undefined ? data.bl_to_station : prev.toStation,
+        trainNumber: data.bl_train_no !== undefined ? data.bl_train_no : prev.trainNumber,
         reservationClass: data.bl_class || prev.reservationClass,
         journeyDate: data.bl_journey_date || prev.journeyDate
       }));
@@ -1968,9 +1998,11 @@ const Billing = () => {
           {/* Form Panel - Static */}
           
           <div className="layout-form-section">
+                        {/* Row 1 */}
             {/* Row 1 */}
-            <div className="erp-form-row-compact-6" style={{ display: 'grid', gridTemplateColumns: 'repeat(6, max-content 1fr)', gap: '4px', alignItems: 'center', marginBottom: '8px' }}>
+            <div className="erp-form-row-compact-5">
               <label className="erp-form-label">Station Boy Name</label>
+              
               <div style={{ position: 'relative', width: '100%' }}>
                 <input type="text" name="stationBoy" className="erp-input" value={sbSearchTerm} onChange={(e) => { const val = e.target.value; setSbSearchTerm(val); setSbDropdownOpen(true); setFormData({...formData, stationBoy: val, stationBoyId: ''}); }} onFocus={() => isEditing && setSbDropdownOpen(true)} onBlur={() => { setTimeout(() => { setSbDropdownOpen(false); const match = stationBoys.find(sb => sb.name.toLowerCase() === sbSearchTerm.toLowerCase()); if (match) { setFormData(prev => ({...prev, stationBoy: match.name, stationBoyId: match.id})); setSbSearchTerm(match.name); } }, 200); }} disabled={!isEditing} onKeyDown={(e) => { if (e.key === 'Escape') { setSbDropdownOpen(false); e.target.blur(); } else { handleEnhancedTabNavigation(e, 'stationBoy'); } }} placeholder="Enter or select station boy" />
                 {sbDropdownOpen && isEditing && (
@@ -1981,77 +2013,61 @@ const Billing = () => {
                   </div>
                 )}
               </div>
-              
               <label className="erp-form-label">Special ID</label>
               <input type="text" name="specialId" className="erp-input" value={formData.specialId || ''} onChange={(e) => setFormData({...formData, specialId: e.target.value})} disabled={!isEditing} onKeyDown={(e) => handleEnhancedTabNavigation(e, 'specialId')} />
-              
               <label className="erp-form-label required">Bill ID</label>
               <input type="text" className="erp-input" value={formData.id || ''} readOnly disabled={!isEditing} />
+              
+              {/* Customer Name spans extra columns for length */}
+              <label className="erp-form-label required">Customer Name</label>
+              <input type="text" name="customerName" className="erp-input" value={formData.customerName || ''} onChange={(e) => setFormData({...formData, customerName: e.target.value})} disabled={!isEditing} readOnly={billingMode === 'generate'} style={{ gridColumn: 'span 3' }} />
             </div>
 
             {/* Row 2 */}
             <div className="erp-form-row-compact-5">
-              <label className="erp-form-label">Sub Bill No</label>
+              <label className="erp-form-label required">Sub Bill No</label>
               <input type="text" name="subBillNo" className="erp-input" value={formData.subBillNo || ''} onChange={(e) => setFormData({...formData, subBillNo: e.target.value})} disabled={!isEditing} />
-              
               <label className="erp-form-label required">Bill Date</label>
               <input type="date" name="billDate" className="erp-input" value={formData.billDate ? String(formData.billDate).substring(0, 10) : ''} onChange={(e) => setFormData({...formData, billDate: e.target.value})} disabled={!isEditing} />
-              
               <label className="erp-form-label required">Booking ID</label>
               <input type="text" name="bookingId" className="erp-input" value={formData.bookingId || ''} readOnly disabled={true} />
-              
               <label className="erp-form-label">Status</label>
               <input type="text" className={`erp-input status-${(formData.status || 'DRAFT').toLowerCase()}`} value={formData.status || 'DRAFT'} readOnly disabled={true} style={{ fontWeight: 'bold' }} />
-              
-              <label className="erp-form-label required">Customer Name</label>
-              <input type="text" name="customerName" className="erp-input" value={formData.customerName || ''} onChange={(e) => setFormData({...formData, customerName: e.target.value})} disabled={!isEditing} readOnly={billingMode === 'generate'} />
+              <label className="erp-form-label required">Phone Number</label>
+              <input type="text" name="phoneNumber" className="erp-input" value={formData.phoneNumber || ''} onChange={(e) => setFormData({...formData, phoneNumber: e.target.value})} disabled={!isEditing} readOnly={billingMode === 'generate'} />
             </div>
 
             {/* Row 3 */}
             <div className="erp-form-row-compact-5">
-              <label className="erp-form-label required">Phone Number</label>
-              <input type="text" name="phoneNumber" className="erp-input" value={formData.phoneNumber || ''} onChange={(e) => setFormData({...formData, phoneNumber: e.target.value})} disabled={!isEditing} readOnly={billingMode === 'generate'} />
-              
               <label className="erp-form-label required">From Station</label>
               <input type="text" name="fromStation" className="erp-input" value={formData.fromStation || ''} onChange={(e) => setFormData({...formData, fromStation: e.target.value})} disabled={!isEditing} readOnly={billingMode === 'generate'} />
-              
               <label className="erp-form-label required">To Station</label>
               <input type="text" name="toStation" className="erp-input" value={formData.toStation || ''} onChange={(e) => setFormData({...formData, toStation: e.target.value})} disabled={!isEditing} readOnly={billingMode === 'generate'} />
-              
               <label className="erp-form-label required">Ticket Type</label>
               <select name="ticketType" className="erp-input" value={formData.ticketType || 'NORMAL'} onChange={(e) => setFormData({...formData, ticketType: e.target.value})} disabled={!isEditing || billingMode === 'generate'}>
                 <option value="NORMAL">NORMAL</option>
                 <option value="TATKAL">TATKAL</option>
                 <option value="PREMIUM_TATKAL">PREMIUM TATKAL</option>
               </select>
-              
               <label className="erp-form-label required">PNR Number(s)</label>
               <div style={{ display: 'flex', gap: '4px' }}>
                 <input type="text" name="pnrNumbers" className="erp-input" value={formData.pnrNumbers || ''} onChange={(e) => setFormData({...formData, pnrNumbers: e.target.value})} disabled={!isEditing} placeholder="Enter PNR" style={{ flex: 1 }} onKeyDown={handlePnrKeyDown} />
                 <button type="button" onClick={handleFetchBooking} disabled={!isEditing} style={{ padding: '0 8px', background: '#f0f0f0', border: '1px solid #ccc', borderRadius: '4px', cursor: 'pointer', whiteSpace: 'nowrap', fontSize: '11px' }}>Fetch</button>
               </div>
+              <label className="erp-form-label">Railway Fare</label>
+              <input type="number" name="railwayFare" className="erp-input" value={formData.railwayFare || ''} onChange={(e) => setFormData({...formData, railwayFare: e.target.value})} disabled={!isEditing} onKeyDown={(e) => handleEnhancedTabNavigation(e, 'railwayFare')} />
             </div>
 
             {/* Row 4 */}
             <div className="erp-form-row-compact-5">
-              <label className="erp-form-label">Railway Fare</label>
-              <input type="number" name="railwayFare" className="erp-input" value={formData.railwayFare || ''} onChange={(e) => setFormData({...formData, railwayFare: e.target.value})} disabled={!isEditing} onKeyDown={(e) => handleEnhancedTabNavigation(e, 'railwayFare')} />
-              
               <label className="erp-form-label">Service Charges</label>
               <input type="number" name="serviceCharges" className="erp-input" value={formData.serviceCharges || ''} onChange={(e) => setFormData({...formData, serviceCharges: e.target.value})} disabled={!isEditing} onKeyDown={(e) => handleEnhancedTabNavigation(e, 'serviceCharges')} />
-              
               <label className="erp-form-label">Station Boy Incentive</label>
               <input type="number" name="stationBoyIncentive" className="erp-input" value={formData.stationBoyIncentive || ''} onChange={(e) => setFormData({...formData, stationBoyIncentive: e.target.value})} disabled={!isEditing} onKeyDown={(e) => handleEnhancedTabNavigation(e, 'stationBoyIncentive')} />
-              
               <label className="erp-form-label">Misc. Charges</label>
               <input type="number" name="miscCharges" className="erp-input" value={formData.miscCharges || ''} onChange={(e) => setFormData({...formData, miscCharges: e.target.value})} disabled={!isEditing} onKeyDown={(e) => handleEnhancedTabNavigation(e, 'miscCharges')} />
-              
               <label className="erp-form-label">Delivery Charges</label>
               <input type="number" name="deliveryCharges" className="erp-input" value={formData.deliveryCharges || ''} onChange={(e) => setFormData({...formData, deliveryCharges: e.target.value})} disabled={!isEditing} onKeyDown={(e) => handleEnhancedTabNavigation(e, 'deliveryCharges')} />
-            </div>
-
-            {/* Row 5 */}
-            <div className="erp-form-row-compact-5">
               <label className="erp-form-label">GST Type</label>
               <select name="gstType" className="erp-input" value={formData.gstType || ''} onChange={(e) => setFormData({...formData, gstType: e.target.value})} disabled={!isEditing} onKeyDown={(e) => handleEnhancedTabNavigation(e, 'gstType')}>
                 <option value="">Select GST Type</option>
@@ -2059,28 +2075,47 @@ const Billing = () => {
                 <option value="INCLUSIVE">INCLUSIVE</option>
                 <option value="C">C</option>
               </select>
-              
+            </div>
+
+            {/* Row 5 */}
+            <div className="erp-form-row-compact-5">
               <label className="erp-form-label">GST</label>
               <input type="number" name="gst" className="erp-input" value={formData.gst || ''} onChange={(e) => setFormData({...formData, gst: e.target.value})} disabled={!isEditing} onKeyDown={(e) => handleEnhancedTabNavigation(e, 'gst')} />
-              
               <label className="erp-form-label">Surcharge</label>
               <input type="number" name="surcharge" className="erp-input" value={formData.surcharge || ''} onChange={(e) => setFormData({...formData, surcharge: e.target.value})} disabled={!isEditing} onKeyDown={(e) => handleEnhancedTabNavigation(e, 'surcharge')} />
-              
-              <label className="erp-form-label">Entered By</label>
-              <input type="text" name="enteredBy" className="erp-input" value={formData.enteredBy || ''} onChange={(e) => setFormData({...formData, enteredBy: e.target.value})} disabled={!isEditing} onKeyDown={(e) => handleEnhancedTabNavigation(e, 'enteredBy')} />
-              
-              <label className="erp-form-label required">Journey Date</label>
-              <input type="date" name="journeyDate" className="erp-input" value={formData.journeyDate ? String(formData.journeyDate).substring(0, 10) : ''} onChange={(e) => setFormData({...formData, journeyDate: e.target.value})} disabled={!isEditing} readOnly={billingMode === 'generate'} />
+              <label className="erp-form-label">Account (Dr/Cr)</label>
+              <select name="paymentAccount" className="erp-input" value={formData.paymentAccount || 'Bank'} onChange={(e) => setFormData({...formData, paymentAccount: e.target.value})} disabled={!isEditing} onKeyDown={(e) => handleEnhancedTabNavigation(e, 'paymentAccount')}>
+                <option value="Bank">Bank</option>
+                <option value="Cash">Cash</option>
+              </select>
+              <label className="erp-form-label">Payment Mode</label>
+              <select name="paymentMode" className="erp-input" value={formData.paymentMode || ''} onChange={(e) => setFormData({...formData, paymentMode: e.target.value})} disabled={!isEditing} onKeyDown={(e) => handleEnhancedTabNavigation(e, 'paymentMode')}>
+                <option value="">Select Mode</option>
+                <option value="CASH">CASH</option>
+                <option value="UPI">UPI</option>
+                <option value="BANK_TRANSFER">BANK TRANSFER</option>
+                <option value="CARD">CARD</option>
+              </select>
+              <label className="erp-form-label">Advance Amount</label>
+              <input type="number" name="advanceAmount" className="erp-input" value={formData.advanceAmount || ''} onChange={(e) => setFormData({...formData, advanceAmount: e.target.value})} disabled={!isEditing} onKeyDown={(e) => handleEnhancedTabNavigation(e, 'advanceAmount')} />
             </div>
 
             {/* Row 6 */}
             <div className="erp-form-row-compact-5">
+              <label className="erp-form-label">UTR/Reference No</label>
+              <input type="text" name="paymentReference" className="erp-input" value={formData.paymentReference || ''} onChange={(e) => setFormData({...formData, paymentReference: e.target.value})} disabled={!isEditing} onKeyDown={(e) => handleEnhancedTabNavigation(e, 'paymentReference')} />
+              <label className="erp-form-label">Entered By</label>
+              <input type="text" name="enteredBy" className="erp-input" value={formData.enteredBy || ''} onChange={(e) => setFormData({...formData, enteredBy: e.target.value})} disabled={!isEditing} onKeyDown={(e) => handleEnhancedTabNavigation(e, 'enteredBy')} />
+              <label className="erp-form-label required">Journey Date</label>
+              <input type="date" name="journeyDate" className="erp-input" value={formData.journeyDate ? String(formData.journeyDate).substring(0, 10) : ''} onChange={(e) => setFormData({...formData, journeyDate: e.target.value})} disabled={!isEditing} readOnly={billingMode === 'generate'} />
               <label className="erp-form-label">Journey Time</label>
               <input type="time" name="journeyTime" className="erp-input" value={formData.journeyTime || ''} onChange={(e) => setFormData({...formData, journeyTime: e.target.value})} disabled={!isEditing} />
-              
               <label className="erp-form-label required">Train Number</label>
               <input type="text" name="trainNumber" className="erp-input" value={formData.trainNumber || ''} onChange={(e) => setFormData({...formData, trainNumber: e.target.value})} disabled={!isEditing} />
-              
+            </div>
+
+            {/* Row 7 */}
+            <div className="erp-form-row-compact-5">
               <label className="erp-form-label required">Reservation Class</label>
               <select name="reservationClass" className="erp-input" value={formData.reservationClass || '3A'} onChange={(e) => setFormData({...formData, reservationClass: e.target.value})} disabled={!isEditing || billingMode === 'generate'}>
                 <option value="SL">SL</option>
@@ -2090,32 +2125,27 @@ const Billing = () => {
                 <option value="CC">CC</option>
                 <option value="EC">EC</option>
               </select>
-              
               <label className="erp-form-label">Seat(s) Allocated</label>
               <input type="text" name="seatsAlloted" className="erp-input" value={formData.seatsAlloted || ''} onChange={(e) => setFormData({...formData, seatsAlloted: e.target.value})} disabled={!isEditing} />
-              
               <label className="erp-form-label">PNR Status</label>
               <input type="text" name="pnrStatus" className="erp-input" value={formData.pnrStatus || ''} onChange={(e) => setFormData({...formData, pnrStatus: e.target.value})} disabled={!isEditing} />
-            </div>
-
-            {/* Row 7 */}
-            <div className="erp-form-row-compact-5">
               <label className="erp-form-label">PNR Coach</label>
               <input type="text" name="coach" className="erp-input" value={formData.coach || ''} onChange={(e) => setFormData({...formData, coach: e.target.value})} disabled={!isEditing} />
-              
               <label className="erp-form-label">PNR Berth No</label>
               <input type="number" name="berthNo" className="erp-input" value={formData.berthNo || ''} onChange={(e) => setFormData({...formData, berthNo: e.target.value})} disabled={!isEditing} />
-              
+            </div>
+
+            {/* Row 8 */}
+            <div className="erp-form-row-compact-5">
               <label className="erp-form-label">Special Request</label>
               <input type="text" name="remarks" className="erp-input" value={formData.remarks || ''} onChange={(e) => setFormData({...formData, remarks: e.target.value})} disabled={!isEditing} />
-              
               <label className="erp-form-label">Total Amount</label>
               <input type="number" name="totalAmount" className="erp-input" value={formData.totalAmount ? Number(formData.totalAmount).toFixed(2) : '0.00'} readOnly disabled={true} style={{ fontWeight: 'bold', fontSize: '14px', background: '#e8f5e9' }} />
-              
+              <label className="erp-form-label">Balance Amount</label>
+              <input type="number" name="balanceAmount" className="erp-input" value={((Number(formData.totalAmount) || 0) - (Number(formData.advanceAmount) || 0)).toFixed(2)} readOnly disabled={true} style={{ fontWeight: 'bold', fontSize: '14px', color: ((Number(formData.totalAmount) || 0) - (Number(formData.advanceAmount) || 0)) > 0 ? '#d32f2f' : '#2e7d32', background: '#fce4e4' }} />
               <div></div><div></div>
-            </div>
-            
-            {/* Cancellation Charges */}
+              <div></div><div></div>
+            </div>\n            \n            {/* Cancellation Charges */}
             {(formData.status === 'CANCELLED' || selectedBill?.bl_status === 'CANCELLED') && (
               <div className="erp-form-row-compact-4" style={{ background: '#fff3cd', padding: '4px', border: '1px solid #ffeeba', borderRadius: '4px', marginTop: '10px' }}>
                 <label className="erp-form-label" style={{ color: '#856404', fontWeight: 'bold' }}>Railway Cancel Charge</label>
@@ -2303,301 +2333,142 @@ const Billing = () => {
                 {/* Scrollable table — paddingBottom reserves space for the two fixed footer bars */}
                 <div style={{ flex: 1, overflowY: 'auto', overflowX: 'auto', backgroundColor: '#fff', paddingBottom: '58px' }}>
                   <table className="erp-table" style={{ width: '100%', borderCollapse: 'collapse' }}>
-                    <thead style={{ position: 'sticky', top: 0, zIndex: 10, backgroundColor: 'var(--erp-bg-panel)' }}>
+                                        <thead style={{ position: 'sticky', top: 0, zIndex: 10, backgroundColor: 'var(--erp-bg-panel)' }}>
                       <tr>
                         <th style={{ width: '30px' }}></th>
-                        <th style={{ width: '100px' }}>Bill ID</th>
-                        <th style={{ width: '100px' }}>Bill Date</th>
-                        <th style={{ width: '100px' }}>Booking ID</th>
-                        <th style={{ width: '100px' }}>Sub bill number</th>
-                        <th style={{ width: '150px' }}>Customer Name</th>
-                        <th style={{ width: '120px' }}>Phone number</th>
-                        <th style={{ width: '120px' }}>Station boy name</th>
-                        <th style={{ width: '120px' }}>From station</th>
-                        <th style={{ width: '120px' }}>To station</th>
-                        <th style={{ width: '100px' }}>Journey date</th>
-                        <th style={{ width: '100px' }}>Train Number</th>
-                        <th style={{ width: '120px' }}>Reservation Class</th>
-                        <th style={{ width: '100px' }}>Ticket Type</th>
-                        <th style={{ width: '150px' }}>PNR Number(s)</th>
-                        <th style={{ width: '100px' }}>Railway Fare</th>
-                        <th style={{ width: '100px' }}>Service Chg</th>
-                        <th style={{ width: '100px' }}>SB Inc.</th>
-                        <th style={{ width: '120px' }}>Status</th>
-                        <th style={{ width: '120px' }}>Total amount</th>
-                        <th style={{ width: '120px' }}>Passenger Count</th>
-                        <th style={{ width: '150px' }}>Special Request/Remarks</th>
+                        <th style={{ width: '80px' }}>Bill ID</th>
+                        <th style={{ width: '80px' }}>Sub Bill No</th>
+                        <th style={{ width: '80px' }}>Bill Date</th>
+                        <th style={{ width: '80px' }}>Booking ID</th>
+                        <th style={{ width: '80px' }}>Status</th>
+                        <th style={{ width: '120px' }}>Customer Name</th>
+                        <th style={{ width: '90px' }}>Phone no</th>
+                        <th style={{ width: '100px' }}>From Station</th>
+                        <th style={{ width: '100px' }}>To Station</th>
+                        <th style={{ width: '80px' }}>Ticket Type</th>
+                        <th style={{ width: '100px' }}>PNR Number</th>
+                        <th style={{ width: '80px' }}>Railway Fare</th>
+                        <th style={{ width: '80px' }}>Service Charge</th>
+                        <th style={{ width: '60px' }}>SBI</th>
+                        <th style={{ width: '80px' }}>Misc Charge</th>
+                        <th style={{ width: '80px' }}>Delivery Charge</th>
+                        <th style={{ width: '80px' }}>GST Type</th>
+                        <th style={{ width: '60px' }}>GST</th>
+                        <th style={{ width: '80px' }}>Surcharge</th>
+                        <th style={{ width: '80px' }}>Journey Date</th>
+                        <th style={{ width: '80px' }}>Journey Time</th>
+                        <th style={{ width: '80px' }}>Train Number</th>
+                        <th style={{ width: '80px' }}>Reservation Class</th>
+                        <th style={{ width: '80px' }}>Seat Allocated</th>
+                        <th style={{ width: '80px' }}>PNR STATUS</th>
+                        <th style={{ width: '60px' }}>Coach</th>
+                        <th style={{ width: '60px' }}>Berth No</th>
+                        <th style={{ width: '120px' }}>Special Request</th>
+                        <th style={{ width: '100px' }}>Station Boy</th>
+                        <th style={{ width: '80px' }}>Special ID</th>
+                        <th style={{ width: '80px' }}>Entered By</th>
+                        <th style={{ width: '90px' }}>Total Amount</th>
                       </tr>
-                      {/* Inline Filter Row */}
                       <tr className="inline-filter-row" style={{ position: 'sticky', top: '24px', zIndex: 10, backgroundColor: '#f0f0f0' }}>
                         <td></td>
-                        <td>
-                          <input
-                            type="text"
-                            className="inline-filter-input"
-                            value={inlineFilters.bl_bill_no || ''}
-                            onChange={(e) => handleInlineFilterChange('bl_bill_no', e.target.value)}
-                            placeholder="Filter Bill ID..."
-                            style={{ width: '100%', padding: '2px', fontSize: '12px' }}
-                          />
-                        </td>
-                        <td>
-                          <input
-                            type="date"
-                            className="inline-filter-input"
-                            value={inlineFilters.bl_billing_date || ''}
-                            onChange={(e) => handleInlineFilterChange('bl_billing_date', e.target.value)}
-                            placeholder="Filter Date..."
-                            style={{ width: '100%', padding: '2px', fontSize: '12px' }}
-                          />
-                        </td>
-                        <td>
-                          <input
-                            type="text"
-                            className="inline-filter-input"
-                            value={inlineFilters.bl_booking_id || ''}
-                            onChange={(e) => handleInlineFilterChange('bl_booking_id', e.target.value)}
-                            placeholder="Filter Booking ID..."
-                            style={{ width: '100%', padding: '2px', fontSize: '12px' }}
-                          />
-                        </td>
-                        <td>
-                          <input
-                            type="text"
-                            className="inline-filter-input"
-                            value={inlineFilters.bl_sub_bill_no || ''}
-                            onChange={(e) => handleInlineFilterChange('bl_sub_bill_no', e.target.value)}
-                            placeholder="Filter Sub Bill No..."
-                            style={{ width: '100%', padding: '2px', fontSize: '12px' }}
-                          />
-                        </td>
-                        <td>
-                          <input
-                            type="text"
-                            className="inline-filter-input"
-                            value={inlineFilters.bl_customer_name || ''}
-                            onChange={(e) => handleInlineFilterChange('bl_customer_name', e.target.value)}
-                            placeholder="Filter Name..."
-                            style={{ width: '100%', padding: '2px', fontSize: '12px' }}
-                          />
-                        </td>
-                        <td>
-                          <input
-                            type="text"
-                            className="inline-filter-input"
-                            value={inlineFilters.bl_customer_phone || ''}
-                            onChange={(e) => handleInlineFilterChange('bl_customer_phone', e.target.value)}
-                            placeholder="Filter Phone..."
-                            style={{ width: '100%', padding: '2px', fontSize: '12px' }}
-                          />
-                        </td>
-                        <td>
-                          <input
-                            type="text"
-                            className="inline-filter-input"
-                            value={inlineFilters.bl_station_boy || ''}
-                            onChange={(e) => handleInlineFilterChange('bl_station_boy', e.target.value)}
-                            placeholder="Filter Station Boy..."
-                            style={{ width: '100%', padding: '2px', fontSize: '12px' }}
-                          />
-                        </td>
-                        <td>
-                          <input
-                            type="text"
-                            className="inline-filter-input"
-                            value={inlineFilters.bl_from_station || ''}
-                            onChange={(e) => handleInlineFilterChange('bl_from_station', e.target.value)}
-                            placeholder="Filter From Station..."
-                            style={{ width: '100%', padding: '2px', fontSize: '12px' }}
-                          />
-                        </td>
-                        <td>
-                          <input
-                            type="text"
-                            className="inline-filter-input"
-                            value={inlineFilters.bl_to_station || ''}
-                            onChange={(e) => handleInlineFilterChange('bl_to_station', e.target.value)}
-                            placeholder="Filter To Station..."
-                            style={{ width: '100%', padding: '2px', fontSize: '12px' }}
-                          />
-                        </td>
-                        <td>
-                          <input
-                            type="date"
-                            className="inline-filter-input"
-                            value={inlineFilters.bl_journey_date || ''}
-                            onChange={(e) => handleInlineFilterChange('bl_journey_date', e.target.value)}
-                            placeholder="Filter Journey Date..."
-                            style={{ width: '100%', padding: '2px', fontSize: '12px' }}
-                          />
-                        </td>
-                        <td>
-                          <input
-                            type="text"
-                            className="inline-filter-input"
-                            value={inlineFilters.bl_train_no || ''}
-                            onChange={(e) => handleInlineFilterChange('bl_train_no', e.target.value)}
-                            placeholder="Filter Train Number..."
-                            style={{ width: '100%', padding: '2px', fontSize: '12px' }}
-                          />
-                        </td>
-                        <td>
-                          <select
-                            className="inline-filter-input"
-                            value={inlineFilters.bl_class || ''}
-                            onChange={(e) => handleInlineFilterChange('bl_class', e.target.value)}
-                            style={{ width: '100%', padding: '2px', fontSize: '12px' }}
-                          >
-                            <option value="">All</option>
-                            <option value="SL">SL</option>
-                            <option value="3A">3A</option>
-                            <option value="2A">2A</option>
-                            <option value="1A">1A</option>
-                            <option value="CC">CC</option>
-                          </select>
-                        </td>
-                        <td>
-                          <select
-                            className="inline-filter-input"
-                            value={inlineFilters.bl_ticket_type || ''}
-                            onChange={(e) => handleInlineFilterChange('bl_ticket_type', e.target.value)}
-                            style={{ width: '100%', padding: '2px', fontSize: '12px' }}
-                          >
-                            <option value="">All</option>
-                            <option value="NORMAL">NORMAL</option>
-                            <option value="TATKAL">TATKAL</option>
-                            <option value="PREMIUM_TATKAL">PREMIUM_TATKAL</option>
-                          </select>
-                        </td>
-                        <td>
-                          <input
-                            type="text"
-                            className="inline-filter-input"
-                            value={inlineFilters.bl_pnr || ''}
-                            onChange={(e) => handleInlineFilterChange('bl_pnr', e.target.value)}
-                            placeholder="Filter PNR Numbers..."
-                            style={{ width: '100%', padding: '2px', fontSize: '12px' }}
-                          />
-                        </td>
-                        <td>
-                          <select
-                            className="inline-filter-input"
-                            value={inlineFilters.bl_status || ''}
-                            onChange={(e) => handleInlineFilterChange('bl_status', e.target.value)}
-                            style={{ width: '100%', padding: '2px', fontSize: '12px' }}
-                          >
-                            <option value="">All</option>
-                            <option value="DRAFT">DRAFT</option>
-                            <option value="FINAL">FINAL</option>
-                            <option value="PAID">PAID</option>
-                            <option value="CANCELLED">CANCELLED</option>
-                          </select>
-                        </td>
-                        <td>
-                          <input
-                            type="number"
-                            className="inline-filter-input"
-                            value={inlineFilters.bl_total_amount || ''}
-                            onChange={(e) => handleInlineFilterChange('bl_total_amount', e.target.value)}
-                            placeholder="Filter Amount..."
-                            style={{ width: '100%', padding: '2px', fontSize: '12px' }}
-                          />
-                        </td>
-                        <td>
-                          <input
-                            type="text"
-                            className="inline-filter-input"
-                            value={inlineFilters.passengerCount || ''}
-                            onChange={(e) => handleInlineFilterChange('passengerCount', e.target.value)}
-                            placeholder="Filter Passengers..."
-                            style={{ width: '100%', padding: '2px', fontSize: '12px' }}
-                          />
-                        </td>
-                        <td>
-                          <input
-                            type="text"
-                            className="inline-filter-input"
-                            value={inlineFilters.bl_remarks || ''}
-                            onChange={(e) => handleInlineFilterChange('bl_remarks', e.target.value)}
-                            placeholder="Filter Remarks..."
-                            style={{ width: '100%', padding: '2px', fontSize: '12px' }}
-                          />
-                        </td>
+                        <td><input type="text" className="inline-filter-input" value={inlineFilters['bl_bill_no'] || ''} onChange={(e) => handleInlineFilterChange('bl_bill_no', e.target.value)} placeholder="Filter..." style={{ width: '100%', padding: '2px', fontSize: '12px' }} /></td>
+                        <td><input type="text" className="inline-filter-input" value={inlineFilters['bl_sub_bill_no'] || ''} onChange={(e) => handleInlineFilterChange('bl_sub_bill_no', e.target.value)} placeholder="Filter..." style={{ width: '100%', padding: '2px', fontSize: '12px' }} /></td>
+                        <td><input type="date" className="inline-filter-input" value={inlineFilters['bl_billing_date'] || ''} onChange={(e) => handleInlineFilterChange('bl_billing_date', e.target.value)} style={{ width: '100%', padding: '2px', fontSize: '12px' }} /></td>
+                        <td><input type="text" className="inline-filter-input" value={inlineFilters['bl_booking_id'] || ''} onChange={(e) => handleInlineFilterChange('bl_booking_id', e.target.value)} placeholder="Filter..." style={{ width: '100%', padding: '2px', fontSize: '12px' }} /></td>
+                        <td><input type="text" className="inline-filter-input" value={inlineFilters['bl_status'] || ''} onChange={(e) => handleInlineFilterChange('bl_status', e.target.value)} placeholder="Filter..." style={{ width: '100%', padding: '2px', fontSize: '12px' }} /></td>
+                        <td><input type="text" className="inline-filter-input" value={inlineFilters['bl_customer_name'] || ''} onChange={(e) => handleInlineFilterChange('bl_customer_name', e.target.value)} placeholder="Filter..." style={{ width: '100%', padding: '2px', fontSize: '12px' }} /></td>
+                        <td><input type="text" className="inline-filter-input" value={inlineFilters['bl_customer_phone'] || ''} onChange={(e) => handleInlineFilterChange('bl_customer_phone', e.target.value)} placeholder="Filter..." style={{ width: '100%', padding: '2px', fontSize: '12px' }} /></td>
+                        <td><input type="text" className="inline-filter-input" value={inlineFilters['bl_from_station'] || ''} onChange={(e) => handleInlineFilterChange('bl_from_station', e.target.value)} placeholder="Filter..." style={{ width: '100%', padding: '2px', fontSize: '12px' }} /></td>
+                        <td><input type="text" className="inline-filter-input" value={inlineFilters['bl_to_station'] || ''} onChange={(e) => handleInlineFilterChange('bl_to_station', e.target.value)} placeholder="Filter..." style={{ width: '100%', padding: '2px', fontSize: '12px' }} /></td>
+                        <td><input type="text" className="inline-filter-input" value={inlineFilters['bl_ticket_type'] || ''} onChange={(e) => handleInlineFilterChange('bl_ticket_type', e.target.value)} placeholder="Filter..." style={{ width: '100%', padding: '2px', fontSize: '12px' }} /></td>
+                        <td><input type="text" className="inline-filter-input" value={inlineFilters['bl_pnr'] || ''} onChange={(e) => handleInlineFilterChange('bl_pnr', e.target.value)} placeholder="Filter..." style={{ width: '100%', padding: '2px', fontSize: '12px' }} /></td>
+                        <td><input type="text" className="inline-filter-input" value={inlineFilters['bl_railway_fare'] || ''} onChange={(e) => handleInlineFilterChange('bl_railway_fare', e.target.value)} placeholder="Filter..." style={{ width: '100%', padding: '2px', fontSize: '12px' }} /></td>
+                        <td><input type="text" className="inline-filter-input" value={inlineFilters['bl_service_charges'] || ''} onChange={(e) => handleInlineFilterChange('bl_service_charges', e.target.value)} placeholder="Filter..." style={{ width: '100%', padding: '2px', fontSize: '12px' }} /></td>
+                        <td><input type="text" className="inline-filter-input" value={inlineFilters['bl_station_boy_incentive'] || ''} onChange={(e) => handleInlineFilterChange('bl_station_boy_incentive', e.target.value)} placeholder="Filter..." style={{ width: '100%', padding: '2px', fontSize: '12px' }} /></td>
+                        <td><input type="text" className="inline-filter-input" value={inlineFilters['bl_misc_charges'] || ''} onChange={(e) => handleInlineFilterChange('bl_misc_charges', e.target.value)} placeholder="Filter..." style={{ width: '100%', padding: '2px', fontSize: '12px' }} /></td>
+                        <td><input type="text" className="inline-filter-input" value={inlineFilters['bl_delivery_charges'] || ''} onChange={(e) => handleInlineFilterChange('bl_delivery_charges', e.target.value)} placeholder="Filter..." style={{ width: '100%', padding: '2px', fontSize: '12px' }} /></td>
+                        <td><input type="text" className="inline-filter-input" value={inlineFilters['bl_gst_type'] || ''} onChange={(e) => handleInlineFilterChange('bl_gst_type', e.target.value)} placeholder="Filter..." style={{ width: '100%', padding: '2px', fontSize: '12px' }} /></td>
+                        <td><input type="text" className="inline-filter-input" value={inlineFilters['bl_gst'] || ''} onChange={(e) => handleInlineFilterChange('bl_gst', e.target.value)} placeholder="Filter..." style={{ width: '100%', padding: '2px', fontSize: '12px' }} /></td>
+                        <td><input type="text" className="inline-filter-input" value={inlineFilters['bl_surcharge'] || ''} onChange={(e) => handleInlineFilterChange('bl_surcharge', e.target.value)} placeholder="Filter..." style={{ width: '100%', padding: '2px', fontSize: '12px' }} /></td>
+                        <td><input type="date" className="inline-filter-input" value={inlineFilters['bl_journey_date'] || ''} onChange={(e) => handleInlineFilterChange('bl_journey_date', e.target.value)} style={{ width: '100%', padding: '2px', fontSize: '12px' }} /></td>
+                        <td><input type="text" className="inline-filter-input" value={inlineFilters['bl_journey_time'] || ''} onChange={(e) => handleInlineFilterChange('bl_journey_time', e.target.value)} placeholder="Filter..." style={{ width: '100%', padding: '2px', fontSize: '12px' }} /></td>
+                        <td><input type="text" className="inline-filter-input" value={inlineFilters['bl_train_number'] || ''} onChange={(e) => handleInlineFilterChange('bl_train_number', e.target.value)} placeholder="Filter..." style={{ width: '100%', padding: '2px', fontSize: '12px' }} /></td>
+                        <td><input type="text" className="inline-filter-input" value={inlineFilters['bl_reservation_class'] || ''} onChange={(e) => handleInlineFilterChange('bl_reservation_class', e.target.value)} placeholder="Filter..." style={{ width: '100%', padding: '2px', fontSize: '12px' }} /></td>
+                        <td><input type="text" className="inline-filter-input" value={inlineFilters['bl_seats_alloted'] || ''} onChange={(e) => handleInlineFilterChange('bl_seats_alloted', e.target.value)} placeholder="Filter..." style={{ width: '100%', padding: '2px', fontSize: '12px' }} /></td>
+                        <td><input type="text" className="inline-filter-input" value={inlineFilters['bl_pnr_status'] || ''} onChange={(e) => handleInlineFilterChange('bl_pnr_status', e.target.value)} placeholder="Filter..." style={{ width: '100%', padding: '2px', fontSize: '12px' }} /></td>
+                        <td><input type="text" className="inline-filter-input" value={inlineFilters['bl_coach'] || ''} onChange={(e) => handleInlineFilterChange('bl_coach', e.target.value)} placeholder="Filter..." style={{ width: '100%', padding: '2px', fontSize: '12px' }} /></td>
+                        <td><input type="text" className="inline-filter-input" value={inlineFilters['bl_berth_no'] || ''} onChange={(e) => handleInlineFilterChange('bl_berth_no', e.target.value)} placeholder="Filter..." style={{ width: '100%', padding: '2px', fontSize: '12px' }} /></td>
+                        <td><input type="text" className="inline-filter-input" value={inlineFilters['bl_remarks'] || ''} onChange={(e) => handleInlineFilterChange('bl_remarks', e.target.value)} placeholder="Filter..." style={{ width: '100%', padding: '2px', fontSize: '12px' }} /></td>
+                        <td><input type="text" className="inline-filter-input" value={inlineFilters['bl_station_boy'] || ''} onChange={(e) => handleInlineFilterChange('bl_station_boy', e.target.value)} placeholder="Filter..." style={{ width: '100%', padding: '2px', fontSize: '12px' }} /></td>
+                        <td><input type="text" className="inline-filter-input" value={inlineFilters['bl_special_id'] || ''} onChange={(e) => handleInlineFilterChange('bl_special_id', e.target.value)} placeholder="Filter..." style={{ width: '100%', padding: '2px', fontSize: '12px' }} /></td>
+                        <td><input type="text" className="inline-filter-input" value={inlineFilters['bl_created_by'] || ''} onChange={(e) => handleInlineFilterChange('bl_created_by', e.target.value)} placeholder="Filter..." style={{ width: '100%', padding: '2px', fontSize: '12px' }} /></td>
+                        <td><input type="text" className="inline-filter-input" value={inlineFilters['bl_total_amount'] || ''} onChange={(e) => handleInlineFilterChange('bl_total_amount', e.target.value)} placeholder="Filter..." style={{ width: '100%', padding: '2px', fontSize: '12px' }} /></td>
                       </tr>
                     </thead>
                     <tbody>
-                      {bills.length === 0 ? (
-                        <tr><td colSpan={19} style={{ textAlign: 'center', padding: '20px' }}>No records found</td></tr>
-                      ) : (
-                        bills.map((bill, idx) => {
-                          const isSelected = selectedBill && selectedBill.id === bill.id;
-                          return (
-                            <tr 
-                              key={bill.id || idx}
-                              className={isSelected ? 'selected' : ''}
-                              onClick={() => handleRecordSelect(bill)}
-                              style={{ cursor: 'pointer' }}
-                            >
-                              <td>
-                                <div style={{ display: 'flex', gap: '4px' }}>
-                                  <input 
-                                    type="checkbox" 
-                                    checked={selectedBillIdsForMerge.includes(bill.bl_id || bill.id)} 
-                                    onChange={(e) => {
-                                      e.stopPropagation();
-                                      const billId = bill.bl_id || bill.id;
-                                      if (e.target.checked) {
-                                        setSelectedBillIdsForMerge(prev => [...prev, billId]);
-                                      } else {
-                                        setSelectedBillIdsForMerge(prev => prev.filter(item => item !== billId));
-                                      }
-                                    }} 
-                                  />
-                                  <button 
-                                    className="erp-button small" 
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      setPreviewBill(bill);
-                                      setShowPreview(true);
-                                    }}
-                                    title="Inline Preview"
-                                    style={{ padding: '0 4px', height: '18px', fontSize: '10px' }}
-                                  >
-                                    👁️
-                                  </button>
-                                </div>
-                              </td>
-                              <td>{bill.bl_bill_no || bill.billNo || bill.id || 'N/A'}</td>
-                              <td>{bill.billDate || 'N/A'}</td>
-                              <td>{bill.bookingId || 'N/A'}</td>
-                              <td>{bill.subBillNo || 'N/A'}</td>
-                              <td>{bill.customerName || 'N/A'}</td>
-                              <td>{bill.phoneNumber || 'N/A'}</td>
-                              <td>{bill.stationBoy || 'N/A'}</td>
-                              <td>{bill.fromStation || 'N/A'}</td>
-                              <td>{bill.toStation || 'N/A'}</td>
-                              <td>{bill.journeyDate || 'N/A'}</td>
-                              <td>{bill.trainNumber || 'N/A'}</td>
-                              <td>{bill.reservationClass || 'N/A'}</td>
-                              <td>{bill.ticketType || 'N/A'}</td>
-                              <td>{bill.pnrNumbers || 'N/A'}</td>
-                              <td style={{ textAlign: 'right' }}>{bill.railwayFare || '0.00'}</td>
-                              <td style={{ textAlign: 'right' }}>{bill.serviceCharges || '0.00'}</td>
-                              <td style={{ textAlign: 'right' }}>{bill.stationBoyIncentive || '0.00'}</td>
-                              <td>
-                                <span className={`erp-status-badge status-${(bill.bl_status || bill.status || 'CNF').toLowerCase()}`}>
-                                  {bill.bl_status || bill.status || 'CNF'}
-                                </span>
-                              </td>
-                              <td style={{ textAlign: 'right', fontWeight: 'bold' }}>{bill.totalAmount ? Number(bill.totalAmount).toFixed(2) : '0.00'}</td>
-                              <td style={{ textAlign: 'center' }}>{bill.passengerList ? bill.passengerList.length : '0'}</td>
-                              <td>{bill.remarks || ''}</td>
-                            </tr>
-                          );
-                        })
+                      {bills.map((bill, index) => (
+                        <tr
+                          key={bill.id || bill.bl_id}
+                          className={`${selectedBill && (selectedBill.id === bill.id || selectedBill.bl_id === bill.bl_id) ? 'selected-row' : ''}`}
+                          onClick={() => handleRecordSelect(bill)}
+                        >
+                          <td onClick={(e) => e.stopPropagation()}>
+                            <input
+                              type="checkbox"
+                              checked={selectedBillIdsForMerge.includes(bill.id || bill.bl_id)}
+                              onChange={(e) => {
+                                const id = bill.id || bill.bl_id;
+                                if (e.target.checked) {
+                                  setSelectedBillIdsForMerge(prev => [...prev, id]);
+                                } else {
+                                  setSelectedBillIdsForMerge(prev => prev.filter(item => item !== id));
+                                }
+                              }}
+                            />
+                          </td>
+                          <td>{bill.bl_bill_no || bill.bill_no || ''}</td>
+                          <td>{bill.bl_sub_bill_no || bill.sub_bill_no || ''}</td>
+                          <td>{bill.bl_billing_date ? new Date(bill.bl_billing_date).toLocaleDateString() : ''}</td>
+                          <td>{bill.bl_booking_id || bill.booking_id || ''}</td>
+                          <td>{bill.bl_status || bill.status || ''}</td>
+                          <td>{bill.bl_customer_name || bill.customer_name || ''}</td>
+                          <td>{bill.bl_customer_phone || bill.customer_phone || ''}</td>
+                          <td>{bill.bl_from_station || bill.from_station || ''}</td>
+                          <td>{bill.bl_to_station || bill.to_station || ''}</td>
+                          <td>{bill.bl_ticket_type || bill.ticket_type || ''}</td>
+                          <td>{bill.bl_pnr || bill.pnr || ''}</td>
+                          <td>{bill.bl_railway_fare || bill.railway_fare || ''}</td>
+                          <td>{bill.bl_service_charges || bill.service_charges || ''}</td>
+                          <td>{bill.bl_station_boy_incentive || bill.station_boy_incentive || ''}</td>
+                          <td>{bill.bl_misc_charges || bill.misc_charges || ''}</td>
+                          <td>{bill.bl_delivery_charges || bill.delivery_charges || ''}</td>
+                          <td>{bill.bl_gst_type || bill.gst_type || ''}</td>
+                          <td>{bill.bl_gst || bill.gst || ''}</td>
+                          <td>{bill.bl_surcharge || bill.surcharge || ''}</td>
+                          <td>{bill.bl_journey_date ? new Date(bill.bl_journey_date).toLocaleDateString() : ''}</td>
+                          <td>{bill.bl_journey_time || bill.journey_time || ''}</td>
+                          <td>{bill.bl_train_number || bill.train_number || ''}</td>
+                          <td>{bill.bl_reservation_class || bill.reservation_class || ''}</td>
+                          <td>{bill.bl_seats_alloted || bill.seats_alloted || ''}</td>
+                          <td>{bill.bl_pnr_status || bill.pnr_status || ''}</td>
+                          <td>{bill.bl_coach || bill.coach || ''}</td>
+                          <td>{bill.bl_berth_no || bill.berth_no || ''}</td>
+                          <td>{bill.bl_remarks || bill.remarks || ''}</td>
+                          <td>{bill.bl_station_boy || bill.station_boy || ''}</td>
+                          <td>{bill.bl_special_id || bill.special_id || ''}</td>
+                          <td>{bill.bl_created_by || bill.created_by || ''}</td>
+                          <td>{bill.bl_total_amount || bill.total_amount || ''}</td>
+                        </tr>
+                      ))}
+                      {bills.length === 0 && (
+                        <tr>
+                          <td colSpan="33" style={{ textAlign: 'center', padding: '20px' }}>
+                            {bills.length === 0 ? 'No billing records found.' : 'No records match the current filters.'}
+                          </td>
+                        </tr>
                       )}
                     </tbody>
-                  </table>
+</table>
                 </div>
                 {/* ── end scrollable table container ── */}
 

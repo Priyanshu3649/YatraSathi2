@@ -48,6 +48,7 @@ import EditTravelPlan from './pages/EditTravelPlan';
 import Billing from './pages/Billing';
 import CancellationHistory from './pages/CancellationHistory';
 import PrintBill from './pages/PrintBill';
+import PrintBooking from './pages/PrintBooking';
 import ServiceChargeManager from './pages/ServiceChargeManager';
 import CustomerDetails from './pages/CustomerDetails';
 import AuditTrail from './pages/AuditTrail';
@@ -207,6 +208,7 @@ function App() {
                         <Route path="/billing/cancellations" element={<RoleBasedRoute requiredModule="billing"><CancellationHistory /></RoleBasedRoute>} />
                         <Route path="/billing" element={<RoleBasedRoute requiredModule="billing"><Billing /></RoleBasedRoute>} />
                         <Route path="/print/bill/:billId" element={<ProtectedRoute><PrintBill /></ProtectedRoute>} />
+                        <Route path="/print/booking/:bookingId" element={<ProtectedRoute><PrintBooking /></ProtectedRoute>} />
                         <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
 
                         {/* Unauthorized Access Route */}

@@ -136,12 +136,12 @@ function drawConsolidatedHeader(doc, payloads) {
 
   // ── CONSOLIDATED INVOICE label ──
   const superBillNo = `CB-${Date.now().toString().slice(-7)}`;
-  const boxX = PW - M - 160;
-  fillRect(doc, boxX, y - 45, 160, 50, CLR.light, CLR.divider);
+  const boxX = PW - M - 200;
+  fillRect(doc, boxX, y - 45, 200, 50, CLR.headerBg, CLR.primary);
+  doc.fontSize(13).font('Helvetica-Bold').fillColor(CLR.primary)
+     .text('CONSOLIDATED BILLING', boxX, y - 35, { width: 200, align: 'center' });
   doc.fontSize(11).font('Helvetica-Bold').fillColor(CLR.accent)
-     .text('CONSOLIDATED BILLING', boxX + 5, y - 35, { width: 150, align: 'center' });
-  doc.fontSize(8.5).font('Helvetica-Bold').fillColor(CLR.primary)
-     .text(`Super Bill No: ${superBillNo}`, boxX + 5, y - 18, { width: 150, align: 'center' });
+     .text(`SUPER BILL NO: ${superBillNo}`, boxX, y - 15, { width: 200, align: 'center' });
 
   y += 12;
   hRule(doc, M, y, CW, CLR.divider);
@@ -310,15 +310,20 @@ async function generateMergedBillsPDF(payloads) {
   }
 
   // ── GRAND TOTAL SECTION ──
-  y = checkPageSpace(doc, y, 120);
+  y = checkPageSpace(doc, y, 140);
   
-  y += 15;
-  fillRect(doc, M, y, CW, 30, CLR.primary, CLR.primary);
-  doc.fontSize(14).font('Helvetica-Bold').fillColor(CLR.white)
-     .text('CONSOLIDATED GRAND TOTAL:', M + 15, y + 8, { width: 300 })
-     .text(fmt(grandTotal), PW - M - 200, y + 8, { width: 185, align: 'right' });
+  y += 20;
+  // Draw a big box with primary color
+  fillRect(doc, M, y, CW, 50, CLR.primary, CLR.black);
   
-  y += 45;
+  doc.fontSize(16).font('Helvetica-Bold').fillColor(CLR.white)
+     .text('CONSOLIDATED GRAND TOTAL:', M + 20, y + 16, { width: 300 });
+  
+  // Big font for grand total
+  doc.fontSize(22).font('Helvetica-Bold').fillColor(CLR.white)
+     .text(fmt(grandTotal), PW - M - 250, y + 12, { width: 230, align: 'right' });
+  
+  y += 70;
 
   // ── QR Code (UPI Pay) & Signature ──
   const qrY = y;

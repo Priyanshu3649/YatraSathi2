@@ -149,17 +149,26 @@ const getAdminDashboard = async (req, res) => {
 
     // ── Section 4: Operational Status ────────────────────────────────────
     let ticketsToday = 0, ticketsMonth = 0, cancelledToday = 0, cancelledMonth = 0;
+    let waitlistedToday = 0, waitlistedMonth = 0, chartsPreparedToday = 0, chartsPreparedMonth = 0;
     try {
       [
         ticketsToday,
         ticketsMonth,
         cancelledToday,
-        cancelledMonth
+        cancelledMonth,
+        waitlistedToday,
+        waitlistedMonth,
+        chartsPreparedToday,
+        chartsPreparedMonth
       ] = await Promise.all([
-        BookingTVL.count({ where: { bk_status: 'CONFIRMED', edtm: { [Op.gte]: startOfToday } } }),
-        BookingTVL.count({ where: { bk_status: 'CONFIRMED', edtm: { [Op.gte]: startOfMonth } } }),
-        BookingTVL.count({ where: { bk_status: 'CANCELLED', edtm: { [Op.gte]: startOfToday } } }),
-        BookingTVL.count({ where: { bk_status: 'CANCELLED', edtm: { [Op.gte]: startOfMonth } } })
+        BookingTVL.count({ where: { bk_status: 'CNF', edtm: { [Op.gte]: startOfToday } } }),
+        BookingTVL.count({ where: { bk_status: 'CNF', edtm: { [Op.gte]: startOfMonth } } }),
+        BookingTVL.count({ where: { bk_status: 'CAN', edtm: { [Op.gte]: startOfToday } } }),
+        BookingTVL.count({ where: { bk_status: 'CAN', edtm: { [Op.gte]: startOfMonth } } }),
+        BookingTVL.count({ where: { bk_status: 'PND', edtm: { [Op.gte]: startOfToday } } }),
+        BookingTVL.count({ where: { bk_status: 'PND', edtm: { [Op.gte]: startOfMonth } } }),
+        BookingTVL.count({ where: { bk_status: 'CNF', bk_trvldt: { [Op.gte]: startOfToday, [Op.lt]: new Date(startOfToday.getTime() + 24*60*60*1000) } } }),
+        BookingTVL.count({ where: { bk_status: 'CNF', bk_trvldt: { [Op.gte]: startOfMonth, [Op.lt]: new Date(startOfToday.getTime() + 24*60*60*1000) } } })
       ]);
     } catch (err) {
       console.error('Dashboard: Operational stats failed:', err.message);
@@ -228,10 +237,10 @@ const getAdminDashboard = async (req, res) => {
         ticketsIssuedThisMonth: ticketsMonth,
         ticketsCancelledToday: cancelledToday,
         ticketsCancelledThisMonth: cancelledMonth,
-        waitlistedPnrsToday: 0,
-        waitlistedPnrsThisMonth: 0,
-        chartsPreparedToday: 0,
-        chartsPreparedThisMonth: 0,
+        waitlistedPnrsToday: waitlistedToday,
+        waitlistedPnrsThisMonth: waitlistedMonth,
+        chartsPreparedToday: chartsPreparedToday,
+        chartsPreparedThisMonth: chartsPreparedMonth,
 
         trends: {
           bookings: { 
@@ -243,6 +252,12 @@ const getAdminDashboard = async (req, res) => {
         }
       },
       recentActivity,
+      alerts: [
+        parseInt(pendingBills[0]?.count || 0) > 0 ? { type: 'critical', message: `${pendingBills[0]?.count} bills pending payment` } : null,
+        parseInt(partialPayments[0]?.count || 0) > 0 ? { type: 'warning', message: `${partialPayments[0]?.count} partial payments pending` } : null,
+        refundsPending > 0 ? { type: 'critical', message: `${refundsPending} refunds pending approval` } : null,
+        waitlistedToday > 0 ? { type: 'warning', message: `${waitlistedToday} waitlisted PNRs today` } : null
+      ].filter(Boolean),
       lastUpdated: new Date().toISOString()
     };
 

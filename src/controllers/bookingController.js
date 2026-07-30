@@ -621,12 +621,13 @@ const getBookingById = async (req, res) => {
     const models = require('../models');
     const Passenger = models.PassengerTVL;
     
-    // Get passenger count for this booking
-    const passengerCount = await Passenger.count({
+    // Get actual passengers for this booking
+    const passengers = await Passenger.findAll({
       where: { 
         ps_bkid: booking.bk_bkid,
-        ps_active: 1  // Only count active passengers
-      }
+        ps_active: 1
+      },
+      raw: true
     });
     
     // Transform data to match frontend expectations
@@ -637,7 +638,14 @@ const getBookingById = async (req, res) => {
       bk_travelldate: booking.bk_trvldt,
       bk_travelclass: booking.bk_class,
       bk_quota: booking.bk_quota,        // ✓ Add quota information
-      bk_pax: passengerCount  // Override with actual passenger count from passenger table
+      bk_pax: passengers.length,         // Override with actual passenger count from passenger table
+      createdAt: booking.bk_reqdt || booking.createdAt,
+      customer: {
+        cs_fname: booking.bk_customername ? booking.bk_customername.split(' ')[0] : '',
+        cs_lname: booking.bk_customername ? booking.bk_customername.split(' ').slice(1).join(' ') : '',
+        cs_phone: booking.bk_phonenumber
+      },
+      passengers: passengers
     };
     
     res.json({

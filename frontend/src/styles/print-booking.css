@@ -1,0 +1,133 @@
+/* Print controls (hidden during printing) */
+.print-booking-container {
+  background: #f5f5f5;
+  min-height: 100vh;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.print-controls {
+  margin-bottom: 20px;
+  display: flex;
+  gap: 15px;
+}
+
+.btn-print {
+  background-color: #2e7d32;
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: bold;
+}
+
+.btn-close {
+  background-color: #d32f2f;
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: bold;
+}
+
+/* Page Layout for A5 */
+.print-page {
+  background: white;
+  width: 148mm;
+  height: 210mm;
+  padding: 15mm;
+  box-shadow: 0 0 10px rgba(0,0,0,0.1);
+  font-family: Arial, sans-serif;
+  color: #333;
+  box-sizing: border-box;
+}
+
+.print-header {
+  text-align: center;
+  border-bottom: 2px solid #333;
+  padding-bottom: 10px;
+  margin-bottom: 15px;
+}
+
+.print-header h2 {
+  margin: 0 0 10px 0;
+  color: #1a237e;
+  font-size: 1.5rem;
+}
+
+.booking-meta {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.85rem;
+}
+
+.print-section {
+  margin-bottom: 15px;
+}
+
+.print-section h3 {
+  margin: 0 0 8px 0;
+  font-size: 1rem;
+  border-bottom: 1px solid #ccc;
+  padding-bottom: 3px;
+  color: #2c3e50;
+}
+
+.details-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  font-size: 0.85rem;
+}
+
+.print-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+
+.print-table th, .print-table td {
+  border: 1px solid #ddd;
+  padding: 4px 8px;
+  text-align: left;
+}
+
+.print-table th {
+  background-color: #f5f5f5;
+  font-weight: bold;
+}
+
+@media print {
+  body {
+    background: white;
+    margin: 0;
+  }
+  
+  .no-print {
+    display: none !important;
+  }
+
+  .print-booking-container {
+    padding: 0;
+    background: white;
+    display: block;
+  }
+
+  .print-page {
+    box-shadow: none;
+    width: 148mm;
+    height: 210mm;
+    padding: 10mm;
+    margin: 0;
+    page-break-after: always;
+  }
+
+  @page {
+    size: A5 portrait;
+    margin: 0;
+  }
+}

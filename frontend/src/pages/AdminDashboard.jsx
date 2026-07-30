@@ -46,6 +46,7 @@ const AdminDashboard = () => {
   const [recentActivity, setRecentActivity] = useState([]);
   const [alerts, setAlerts] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [lastUpdated, setLastUpdated] = useState(new Date());
 
   // Function to fetch dashboard data
@@ -92,9 +93,13 @@ const AdminDashboard = () => {
 
         setRecentActivity(data.recentActivity || []);
         setAlerts(data.alerts || []);
+        setError(null);
+      } else {
+        setError(response.message || 'Failed to fetch dashboard data');
       }
     } catch (error) {
       console.error('Error fetching dashboard data:', error);
+      setError('An error occurred while communicating with the server. Please check your connection.');
     } finally {
       setLoading(false);
       setLastUpdated(new Date());
@@ -147,17 +152,27 @@ const AdminDashboard = () => {
     { name: 'Admin Panel', path: '/admin-panel' }
   ];
 
-  const defaultAlerts = [
-    { type: 'critical', message: 'Bills overdue > 7 days' },
-    { type: 'warning', message: 'Partial payments pending' },
-    { type: 'critical', message: 'Refunds pending approval' },
-    { type: 'warning', message: 'Charts not prepared for today' }
-  ];
-
   if (loading) {
     return (
       <div className="admin-dashboard erp-admin-container">
-        <div className="loading">Loading dashboard...</div>
+        <div className="loading" style={{ padding: '20px', textAlign: 'center', color: '#666' }}>Loading dynamic dashboard data...</div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="admin-dashboard erp-admin-container">
+        <div className="erp-menu-bar">
+          <div className="erp-user-info">USER: {user?.us_name || 'ADMIN'} ⚙</div>
+        </div>
+        <div className="erp-main-content" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', padding: '40px' }}>
+          <div style={{ padding: '20px', border: '1px solid #d32f2f', backgroundColor: '#fce4e4', borderRadius: '4px', textAlign: 'center' }}>
+            <h3 style={{ color: '#d32f2f', marginTop: 0 }}>Dashboard Initialization Failed</h3>
+            <p>{error}</p>
+            <button className="erp-button" onClick={fetchDashboardData} style={{ marginTop: '15px' }}>Retry Connection</button>
+          </div>
+        </div>
       </div>
     );
   }
@@ -332,12 +347,7 @@ const AdminDashboard = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {(recentActivity.length > 0 ? recentActivity : [
-                    { timestamp: '06/01/2026 14:22', module: 'Billing', action: 'Bill Created', reference: 'BILL-10234', user: 'ADM001' },
-                    { timestamp: '06/01/2026 14:15', module: 'Booking', action: 'Booking Confirmed', reference: 'BK-20260106-001', user: 'EMP001' },
-                    { timestamp: '06/01/2026 14:10', module: 'Payment', action: 'Payment Received', reference: 'PYMT-001', user: 'ACC001' },
-                    { timestamp: '06/01/2026 14:05', module: 'Customer', action: 'Customer Added', reference: 'CUS-001', user: 'ADM001' }
-                  ]).map((activity, index) => (
+                  {recentActivity.length > 0 ? recentActivity.map((activity, index) => (
                     <tr key={index}>
                       <td>{activity.timestamp}</td>
                       <td>{activity.module}</td>
@@ -345,7 +355,11 @@ const AdminDashboard = () => {
                       <td>{activity.reference}</td>
                       <td>{activity.user}</td>
                     </tr>
-                  ))}
+                  )) : (
+                    <tr>
+                      <td colSpan="5" style={{ textAlign: 'center', padding: '20px' }}>No recent activity to display.</td>
+                    </tr>
+                  )}
                 </tbody>
               </table>
             </div>
@@ -354,11 +368,15 @@ const AdminDashboard = () => {
           {/* Alerts & Attention Required */}
           <div className="section-header">ALERTS & ATTENTION REQUIRED</div>
           <div className="alerts-section">
-            {(alerts.length > 0 ? alerts : defaultAlerts).map((alert, index) => (
+            {alerts.length > 0 ? alerts.map((alert, index) => (
               <div key={index} className={`alert-item ${alert.type}`}>
                 <span>{alert.message}</span>
               </div>
-            ))}
+            )) : (
+              <div className="alert-item" style={{ backgroundColor: '#e8f5e9', borderLeftColor: '#2e7d32' }}>
+                <span style={{ color: '#2e7d32' }}>All systems operational. No pending alerts.</span>
+              </div>
+            )}
           </div>
 
           {/* Quick Navigation */}

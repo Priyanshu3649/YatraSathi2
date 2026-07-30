@@ -1619,6 +1619,7 @@ setSelectedBooking(null); // Clear selection after deletion
              <button className="erp-button" onClick={() => selectedBooking && handleEdit()} disabled={!selectedBooking} title="Edit (F2)">Edit</button>
              <button className="erp-button" onClick={handleDirectSave} disabled={!isEditing} title="Save (F10)">Save</button>
              <button className="erp-button danger" onClick={() => selectedBooking && handleDelete()} disabled={!selectedBooking} title="Delete (F4)">Delete</button>
+             <button className="erp-button" onClick={() => selectedBooking && window.open(`/print/booking/${selectedBooking.bk_bkid}`, '_blank')} disabled={!selectedBooking} title="Print Booking">🖨️ Print</button>
              <button className="erp-button" onClick={() => setIsEditing(false)} title="Cancel (Esc)">Cancel</button>
              <div className="action-divider" style={{ borderLeft: '1px solid #ccc', margin: '0 8px', height: '20px' }}></div>
              <button className="erp-button" onClick={() => handleNavigation('first')} disabled={isFirstRecord} title="First">|&lt;</button>

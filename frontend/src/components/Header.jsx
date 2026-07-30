@@ -81,7 +81,6 @@ const Header = () => {
                   <>
                     <li><Link to="/dashboard" className={isActive('/dashboard') ? 'active' : ''}>Dashboard</Link></li>
                     <li><Link to="/bookings" className={isActive('/bookings') ? 'active' : ''}>Bookings</Link></li>
-                    <li><Link to="/travel-plans" className={isActive('/travel-plans') ? 'active' : ''}>Travel Plans</Link></li>
                     <li><Link to="/payments" className={isActive('/payments') ? 'active' : ''}>Payments</Link></li>
                     <li><Link to="/billing" className={isActive('/billing') ? 'active' : ''}>Billing</Link></li>
                     <li><Link to="/reports" className={isActive('/reports') ? 'active' : ''}>Reports</Link></li>

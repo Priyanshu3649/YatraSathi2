@@ -26,23 +26,9 @@ function generateJournalEntryNo(prefix) {
 
 // Helper function to convert string user ID to integer for database compatibility
 function convertUserIdToInt(userId) {
-  if (typeof userId === 'number') {
-    return userId;
-  }
-  
-  if (typeof userId === 'string') {
-    // Try to extract numeric part from alphanumeric ID (e.g., 'ADM001' -> 1)
-    const numericPart = userId.match(/\d+/);
-    if (numericPart) {
-      return parseInt(numericPart[0]);
-    }
-    
-    // If no numeric part found, use character codes as fallback
-    return userId.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0) % 1000000; // Limit to reasonable size
-  }
-  
-  // Default fallback
-  return 1;
+  // Since we updated DB columns to VARCHAR(30), we no longer need to strip alphanumeric IDs.
+  // We preserve the full string (e.g., ADM001).
+  return userId ? String(userId) : null;
 }
 
 function parseAmount(value) {
@@ -556,7 +542,14 @@ const createBill = async (req, res) => {
       calculatedTotal += parseFloat(stationBoyIncentive) || 0;
       calculatedTotal += parseFloat(finalServiceCharge) || 0;
       calculatedTotal += parseFloat(platformFees) || 0;
-      calculatedTotal += parseFloat(gst) || 0;
+      
+      // Override GST if type is C
+      let finalGst = parseFloat(gst) || 0;
+      if (gstType === 'C') {
+        finalGst = 0;
+      }
+      calculatedTotal += finalGst;
+      
       calculatedTotal += parseFloat(miscCharges) || 0;
       calculatedTotal += parseFloat(deliveryCharges) || 0;
       calculatedTotal += parseFloat(surcharge) || 0;
@@ -580,7 +573,8 @@ const createBill = async (req, res) => {
         bl_customer_phone: phoneNumber, // Required phone field
         bl_journey_date: journeyDate && journeyDate.trim() ? new Date(journeyDate) : booking.bk_trvldt,
         bl_total_amount: finalTotalAmount,
-        bl_created_by: convertUserIdToInt(req.user.us_usid)
+        bl_created_by: convertUserIdToInt(req.user.us_usid),
+        bl_sub_bill_no: (req.body.subBillNo && req.body.subBillNo !== '-A') ? req.body.subBillNo : `${finalBillNumber}-A`
       });
       
       const bill = await BillTVL.create({
@@ -600,6 +594,7 @@ const createBill = async (req, res) => {
         bl_train_no: trainNumber,
         bl_class: reservationClass,
         bl_pnr: pnrNumbers || '',
+        bl_sub_bill_no: (req.body.subBillNo && req.body.subBillNo !== '-A') ? req.body.subBillNo : `${finalBillNumber}-A`,
         bl_seats_reserved: seatsAlloted || '',
         bl_railway_fare: railwayFare || 0,
         bl_sb_incentive: stationBoyIncentive || 0,
@@ -607,12 +602,14 @@ const createBill = async (req, res) => {
         bl_platform_fee: platformFees || 0,
         bl_misc_charges: miscCharges || 0,
         bl_delivery_charge: deliveryCharges || 0,
-        bl_gst: gst || 0,
+        bl_gst: finalGst,
         bl_surcharge: surcharge || 0,
         bl_discount: discount || 0,
         bl_gst_type: gstType || 'EXCLUSIVE',
         bl_total_amount: finalTotalAmount,
         bl_advance_amount: parseFloat(advanceAmount) || 0,
+        bl_payment_mode: paymentMode || null,
+        bl_payment_reference: paymentReference || null,
         bl_special_id: specialId || null,
         bl_created_by: enteredBy ? convertUserIdToInt(enteredBy) : convertUserIdToInt(req.user.us_usid),
         // Standard audit fields
@@ -629,6 +626,9 @@ const createBill = async (req, res) => {
       await booking.update({
         bk_status: 'CNF',
         bk_billed: 1,
+        bk_pnr: pnrNumbers || booking.bk_pnr,
+        bk_train: trainNumber || booking.bk_train,
+        bk_class: reservationClass || booking.bk_class,
         mby: req.user.us_usid,
         mdtm: new Date()
       }, { transaction });
@@ -666,20 +666,36 @@ const createBill = async (req, res) => {
            console.log(`💰 Processing explicit advance payment of ₹${advAmt} during bill creation.`);
            const entryNo = 'ADV-' + Date.now().toString().slice(-6);
            
+           const getNumericId = (id) => {
+             if (typeof id === 'number') return id;
+             if (!id) return 1;
+             const numStr = String(id).replace(/\D/g, '');
+             return numStr ? parseInt(numStr, 10) : 1;
+           };
+
+           const now = new Date();
+           const finYear = `${now.getFullYear()}-${now.getFullYear()+1}`;
+           const period = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2, '0')}`;
+           
            await PaymentTVL.create({
-             py_entry_no: entryNo,
-             py_date: new Date(),
-             py_entry_type: 'Advance',
-             py_customer_name: customerName,
-             py_customer_phone: phoneNumber || '',
-             py_amount: advAmt,
-             py_payment_mode: paymentMode || 'Cash',
-             py_ref_number: paymentReference || '',
-             py_narration: `Advance received against Bill ${finalBillNumber}`,
-             py_cusid: booking.bk_usid,
-             py_active: 1,
-             entered_by: convertUserIdToInt(req.user.us_usid),
-             entered_on: new Date()
+             pt_custid: getNumericId(booking.bk_usid),
+             pt_totalamt: advAmt,
+             pt_amount: advAmt,
+             pt_status: 'RECEIVED',
+             pt_verification_status: 'VERIFIED',
+             pt_acid: 1, // Default account
+             pt_mode: paymentMode || 'Cash',
+             pt_refno: paymentReference || entryNo,
+             pt_paydt: now,
+             pt_rcvdt: now,
+             pt_allocatedamt: advAmt, // Pre-allocated to this bill
+             pt_finyear: finYear,
+             pt_period: period,
+             pt_bkid: bookingId,
+             pt_remarks: `Advance received against Bill ${finalBillNumber}`,
+             eby: req.user.us_usid,
+             edtm: now,
+             mdtm: now
            }, { transaction });
            
            // Insert into Customer Ledger directly as Advance Receipt
@@ -715,6 +731,33 @@ const createBill = async (req, res) => {
       
       // 7. Commit transaction (ALL operations succeed together)
       await transaction.commit();
+
+      // 7.5 Create official Receipt for Advance Payment if applicable
+      if (advanceAmount && parseFloat(advanceAmount) > 0) {
+        try {
+          const advAmt = parseFloat(advanceAmount);
+          const rcEntryNo = 'RC' + Date.now().toString().slice(-9);
+          const paymentAccountName = req.body.paymentAccount || 'Bank';
+
+          await Receipt.create({
+            rc_entry_no: rcEntryNo,
+            rc_date: billDate ? new Date(billDate) : new Date(),
+            rc_customer_name: customerName,
+            rc_customer_phone: phoneNumber || '',
+            rc_amount: advAmt,
+            rc_payment_mode: paymentMode || 'Cash',
+            rc_ref_number: paymentReference || '',
+            rc_bank_account: paymentAccountName,
+            rc_narration: `Advance payment from ${customerName}`,
+            rc_created_by: String(req.user.us_usid),
+            rc_status: 'Active',
+            entered_by: String(req.user.us_usid)
+          });
+          console.log(`✅ Official Receipt ${rcEntryNo} generated for Advance Payment`);
+        } catch (receiptErr) {
+          console.error('⚠️ Failed to generate Receipt for Advance Payment (non-fatal):', receiptErr);
+        }
+      }
 
       
       console.log(`✅ Bill ${finalBillNumber} created successfully for booking ${bookingId}`);
@@ -815,6 +858,9 @@ const getCustomerBills = async (req, res) => {
       serviceCharges: billData.bl_service_charge,
       platformFees: billData.bl_platform_fee,
       totalAmount: billData.bl_total_amount,
+      advanceAmount: billData.bl_advance_amount,
+      paymentMode: billData.bl_payment_mode,
+      paymentReference: billData.bl_payment_reference,
       billDate: billData.bl_billing_date || billData.bl_bill_date,
       createdOn: billData.bl_created_at,
     }));
@@ -905,7 +951,7 @@ const getAllBills = async (req, res) => {
         BillTVL, 
         where, 
         [], 
-        ['bl_total_amount', 'bl_railway_fare', 'bl_gst'],
+        ['bl_total_amount', 'bl_railway_fare', 'bl_gst', 'bl_service_charge', 'bl_station_boy_incentive'],
         include.map(inc => ({ ...inc, attributes: [] }))
       );
 
@@ -914,6 +960,8 @@ const getAllBills = async (req, res) => {
           totalAmount: parseFloat(aggregateResults[0]?.total_bl_total_amount || 0),
           totalFare: parseFloat(aggregateResults[0]?.total_bl_railway_fare || 0),
           totalGST: parseFloat(aggregateResults[0]?.total_bl_gst || 0),
+          totalServiceCharges: parseFloat(aggregateResults[0]?.total_bl_service_charge || 0),
+          totalSBIncentive: parseFloat(aggregateResults[0]?.total_bl_station_boy_incentive || 0),
           count: parseInt(aggregateResults[0]?.count || count || 0)
         };
       }
@@ -1091,6 +1139,9 @@ const getBillById = async (req, res) => {
       surcharge: billData.bl_surcharge,
       gstType: billData.bl_gst_type,
       totalAmount: billData.bl_total_amount,
+      advanceAmount: billData.bl_advance_amount,
+      paymentMode: billData.bl_payment_mode,
+      paymentReference: billData.bl_payment_reference,
       billDate: billData.bl_billing_date,
       createdOn: billData.bl_created_at,
       createdBy: billData.bl_created_by,
@@ -1223,7 +1274,11 @@ const updateBill = async (req, res) => {
       const sbIncentive = stationBoyIncentive !== undefined ? parseFloat(stationBoyIncentive) : parseFloat(bill.bl_sb_incentive) || 0;
       totalAmount += sbIncentive;
       
-      const gstVal = req.body.gst !== undefined ? parseFloat(req.body.gst) : parseFloat(bill.bl_gst) || 0;
+      let gstVal = req.body.gst !== undefined ? parseFloat(req.body.gst) : parseFloat(bill.bl_gst) || 0;
+      const gstTypeVal = req.body.gstType !== undefined ? req.body.gstType : bill.bl_gst_type;
+      if (gstTypeVal === 'C') {
+        gstVal = 0;
+      }
       totalAmount += gstVal;
 
       const misc = req.body.miscCharges !== undefined ? parseFloat(req.body.miscCharges) : parseFloat(bill.bl_misc_charges) || 0;
@@ -1255,7 +1310,12 @@ const updateBill = async (req, res) => {
       station_boy_incentive_amount: incentiveAmount,
       bl_station_boy: resolvedStationBoy.nameSnapshot || '',
       bl_sb_incentive: incentiveAmount,
+      bl_gst: gstVal, // Update GST with forced 0 for C type
       bl_total_amount: totalAmount,
+      bl_advance_amount: req.body.advanceAmount !== undefined ? parseFloat(req.body.advanceAmount) : parseFloat(bill.bl_advance_amount) || 0,
+      bl_payment_mode: req.body.paymentMode !== undefined ? req.body.paymentMode : bill.bl_payment_mode,
+      bl_payment_reference: req.body.paymentReference !== undefined ? req.body.paymentReference : bill.bl_payment_reference,
+      bl_sub_bill_no: req.body.subBillNo || req.body.bl_sub_bill_no || bill.bl_sub_bill_no,
       bl_modified_by: convertUserIdToInt(req.user.us_usid),
       bl_modified_at: new Date(),
       // Standard audit fields — always server-side, never from frontend
@@ -1346,6 +1406,9 @@ const updateBill = async (req, res) => {
       surcharge: billData.bl_surcharge,
       gstType: billData.bl_gst_type,
       totalAmount: billData.bl_total_amount,
+      advanceAmount: billData.bl_advance_amount,
+      paymentMode: billData.bl_payment_mode,
+      paymentReference: billData.bl_payment_reference,
       billDate: billData.bl_billing_date,
       createdOn: billData.bl_created_at,
       createdBy: billData.bl_created_by,
@@ -1456,6 +1519,9 @@ const finalizeBill = async (req, res) => {
       surcharge: billData.bl_surcharge,
       gstType: billData.bl_gst_type,
       totalAmount: billData.bl_total_amount,
+      advanceAmount: billData.bl_advance_amount,
+      paymentMode: billData.bl_payment_mode,
+      paymentReference: billData.bl_payment_reference,
       billDate: billData.bl_billing_date,
       createdOn: billData.bl_created_at,
       createdBy: billData.bl_created_by,
@@ -2058,6 +2124,9 @@ const searchBills = async (req, res) => {
         surcharge: billData.bl_surcharge,
         gstType: billData.bl_gst_type,
         totalAmount: billData.bl_total_amount,
+        advanceAmount: billData.bl_advance_amount,
+        paymentMode: billData.bl_payment_mode,
+        paymentReference: billData.bl_payment_reference,
         billDate: billData.bl_billing_date,
         createdOn: billData.bl_created_at,
         createdBy: billData.bl_created_by,
@@ -2334,6 +2403,8 @@ const mergeBill = async (req, res) => {
 // --- V2 IMPLEMENTATIONS ---
 const fetchBookingForBilling = async (req, res) => {
   const { BookingTVL, PassengerTVL } = require('../models');
+  const { checkPNRStatus } = require('railkit');
+  
   try {
     const { id } = req.params;
     const isPnr = isNaN(id) || id.length === 10;
@@ -2345,7 +2416,78 @@ const fetchBookingForBilling = async (req, res) => {
       booking = await BookingTVL.findByPk(id);
     }
     
-    if (!booking) {
+    // If not found in local DB, but it is a PNR, try fetching from RailKit
+    if (!booking && isPnr && id.length === 10) {
+      console.log(`PNR ${id} not found locally, fetching from RailKit...`);
+      try {
+        const result = await checkPNRStatus(id);
+        if (result && result.success && result.data) {
+          const d = result.data;
+          
+          let parsedDate = null;
+          if (d.journey && d.journey.dateOfJourney) {
+            const temp = new Date(d.journey.dateOfJourney);
+            if (!isNaN(temp.getTime())) parsedDate = temp;
+          }
+          
+          // Extract primary passenger details for global seat mapping
+          const p1 = d.passengers && d.passengers[0] ? d.passengers[0] : null;
+          const p1Details = p1 ? (p1.current?.details || p1.booking?.details || '') : '';
+          const p1Status = p1 ? (p1.current?.status || p1.booking?.status || '') : '';
+          let coachStr = '', berthStr = '', berthCodeStr = '';
+          if (p1Details) {
+            const parts = p1Details.split(',').map(s => s.trim());
+            if (parts.length >= 1) coachStr = parts[0];
+            if (parts.length >= 2) berthStr = parts[1];
+            if (parts.length >= 3) berthCodeStr = parts[2];
+          }
+          
+          let pnrStatusStr = d.pnrStatus || d.chartStatus || p1Status || '';
+          if (!pnrStatusStr && p1Details.includes('CNF')) pnrStatusStr = 'CNF';
+          if (!pnrStatusStr && p1Details.includes('RAC')) pnrStatusStr = 'RAC';
+          if (!pnrStatusStr && p1Details.includes('WL')) pnrStatusStr = 'WL';
+          
+          return res.status(200).json({
+            success: true,
+            data: {
+              bl_booking_id: null,
+              bl_pnr: id,
+              bl_customer_name: '',
+              bl_customer_phone: '',
+              bl_from_station: d.boardingStation?.code || '',
+              bl_to_station: d.reservationUpTo?.code || '',
+              bl_train_no: d.trainInfo?.trainNo || '',
+              bl_class: d.trainInfo?.class || d.trainInfo?.travelClass || '', // Attempt to parse class
+              bl_journey_date: parsedDate,
+              bl_journeyTime: d.boardingStation?.departureTime || d.journey?.departureTime || d.trainInfo?.departureTime || '',
+              bl_pnrStatus: pnrStatusStr,
+              bl_coach: coachStr,
+              bl_berthNo: berthStr,
+              bl_berthCode: berthCodeStr,
+              bl_details: p1Details,
+              bl_seatsAlloted: d.passengers ? String(d.passengers.length) : '',
+              passengers: (d.passengers || []).map((p, i) => {
+                const details = p.current?.details || p.booking?.details || '';
+                // Try to parse coach/berth from details like "S2, 32"
+                let coach = '', berth = details;
+                if (details.includes(',')) {
+                  [coach, berth] = details.split(',').map(s => s.trim());
+                }
+                return {
+                  id: `new_${i}`,
+                  name: `Passenger ${i+1}`,
+                  coach: coach,
+                  berth: berth
+                };
+              })
+            }
+          });
+        }
+      } catch (err) {
+        console.error('RailKit API fetch failed:', err);
+      }
+      return res.status(404).json({ success: false, message: 'Booking or PNR not found locally or via live API' });
+    } else if (!booking) {
       return res.status(404).json({ success: false, message: 'Booking or PNR not found' });
     }
     
@@ -2356,13 +2498,13 @@ const fetchBookingForBilling = async (req, res) => {
     const data = {
       bl_booking_id: booking.bk_bkid,
       bl_pnr: booking.bk_pnr,
-      bl_customer_name: booking.bk_contact_name || (passengers[0] ? `${passengers[0].ps_fname} ${passengers[0].ps_lname}`.trim() : ''),
-      bl_customer_phone: booking.bk_contact_phone || '',
-      bl_from_station: booking.bk_src || '',
-      bl_to_station: booking.bk_dest || '',
-      bl_train_no: booking.bk_train || '',
+      bl_customer_name: booking.bk_customername || (passengers[0] ? `${passengers[0].ps_fname} ${passengers[0].ps_lname}`.trim() : ''),
+      bl_customer_phone: booking.bk_phonenumber || '',
+      bl_from_station: booking.bk_fromst || '',
+      bl_to_station: booking.bk_tost || '',
+      bl_train_no: '', // Not stored in BookingTVL
       bl_class: booking.bk_class || '',
-      bl_journey_date: booking.bk_date,
+      bl_journey_date: booking.bk_trvldt || booking.bk_reqdt,
       passengers: passengers.map(p => ({
         id: p.ps_psid,
         name: `${p.ps_fname} ${p.ps_lname}`.trim(),
