@@ -85,6 +85,32 @@ const Receipt = sequelize.define('rcReceipt', {
     comment: 'Receipt status'
   },
   
+  is_reconciled: {
+    type: DataTypes.TINYINT(1),
+    defaultValue: 0,
+    comment: 'Is Reconciled'
+  },
+  reconciled_by: {
+    type: DataTypes.INTEGER,
+    allowNull: true,
+    comment: 'Reconciled By User ID'
+  },
+  reconciled_at: {
+    type: DataTypes.DATE,
+    allowNull: true,
+    comment: 'Reconciliation Timestamp'
+  },
+  reconciliation_remarks: {
+    type: DataTypes.TEXT,
+    allowNull: true,
+    comment: 'Reconciliation Remarks'
+  },
+  bank_statement_ref: {
+    type: DataTypes.STRING(100),
+    allowNull: true,
+    comment: 'Bank Statement Reference'
+  },
+  
   // Audit fields from BaseModel
   ...BaseModel,
   

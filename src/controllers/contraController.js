@@ -38,6 +38,14 @@ class ContraController {
         whereClause.ct_status = 'Active';
       }
       
+      // Reconciliation filter
+      const reconciliationStatus = req.query.reconciliationStatus || 'ACTIVE';
+      if (reconciliationStatus === 'ACTIVE') {
+        whereClause.is_reconciled = { [Op.not]: 1 };
+      } else if (reconciliationStatus === 'RECONCILED') {
+        whereClause.is_reconciled = 1;
+      }
+      
       const { count, rows: contras } = await Contra.findAndCountAll({
         where: whereClause,
         include: [{

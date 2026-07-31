@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
-import { bookingAPI, paymentAPI, billingAPI, stationBoyAPI } from '../services/api';
+import { bookingAPI, paymentAPI, billingAPI, stationBoyAPI, reconciliationAPI } from '../services/api';
 import { usePagination } from '../hooks/usePagination';
 import useERPFilters from '../hooks/useERPFilters';
 import PaginationControls from '../components/common/PaginationControls';
@@ -168,6 +168,8 @@ const Billing = () => {
   const [bills, setBills] = useState([]); // Add missing bills state
   const [loading, setLoading] = useState(true);
   const [isFetching, setIsFetching] = useState(false); // background fetch — no table unmount
+  const [selectedReconcileIds, setSelectedReconcileIds] = useState([]);
+  const [isReconciling, setIsReconciling] = useState(false);
   const [error, setError] = useState('');
   const [aggregates, setAggregates] = useState({ 
     totalAmount: 0, 
@@ -1173,6 +1175,55 @@ const Billing = () => {
     }
   };
 
+  const handleHeaderToggleClick = useCallback(() => {
+    const currentStatus = inlineFilters['reconciliationStatus'] || 'ACTIVE';
+    let nextStatus = 'RECONCILED';
+    if (currentStatus === 'RECONCILED') nextStatus = 'ALL';
+    else if (currentStatus === 'ALL') nextStatus = 'ACTIVE';
+    
+    handleInlineFilterChange('reconciliationStatus', nextStatus);
+    setSelectedReconcileIds([]);
+  }, [inlineFilters, handleInlineFilterChange]);
+
+  const handleRowCheckbox = useCallback((id, checked) => {
+    setSelectedReconcileIds(prev => 
+      checked ? [...prev, id] : prev.filter(x => x !== id)
+    );
+  }, []);
+
+  const handleSelectAllCheckbox = useCallback((e) => {
+    if (e.target.checked) {
+      // Select all currently loaded active bills that are PAID or CANCELLED
+      const ids = bills.filter(b => !b.is_reconciled && (b.payment_status === 'PAID' || b.bl_status === 'CANCELLED' || b.status === 'CANCELLED')).map(b => b.id || b.bl_id);
+      setSelectedReconcileIds(ids);
+    } else {
+      setSelectedReconcileIds([]);
+    }
+  }, [bills]);
+
+  const handleReconcile = useCallback(async () => {
+    if (selectedReconcileIds.length === 0) return;
+    
+    setIsReconciling(true);
+    try {
+      await reconciliationAPI.bulkReconcileBills(selectedReconcileIds, 'Reconciled');
+      
+      const currentFilter = inlineFilters['reconciliationStatus'] || 'ACTIVE';
+      if (currentFilter === 'ACTIVE') {
+        setBills(prev => prev.filter(b => !selectedReconcileIds.includes(b.id || b.bl_id)));
+      } else {
+        setBills(prev => prev.map(b => selectedReconcileIds.includes(b.id || b.bl_id) ? { ...b, is_reconciled: 1 } : b));
+      }
+      setSelectedReconcileIds([]);
+      setSelectedBill(null);
+    } catch (error) {
+      console.error('Reconciliation error:', error);
+      setError(error.message || 'Failed to reconcile bills');
+    } finally {
+      setIsReconciling(false);
+    }
+  }, [selectedReconcileIds, inlineFilters]);
+
   const handleFinalizeBill = async (billId) => {
     try {
       await billingAPI.finalizeBill(billId);
@@ -1222,45 +1273,36 @@ const Billing = () => {
   };
 
   const handleMergeBills = async () => {
-    if (selectedBillIdsForMerge.length < 1) {
-      alert('Please select at least 2 bills to merge by checking the checkboxes in the table.');
+    if (selectedReconcileIds.length < 1) {
+      alert('Please select at least 1 bill to generate PDF.');
       return;
     }
-    if (selectedBillIdsForMerge.length < 2) {
-      alert('Please select at least 2 bills to generate a merged PDF.');
-      return;
+    if (selectedReconcileIds.length < 2) {
+      const confirmSingle = window.confirm('Generate PDF for a single bill? Usually this is for merging multiple bills.');
+      if (!confirmSingle) return;
     }
-
-    // Validate same customer
-    const selectedBillObjects = bills.filter(b => selectedBillIdsForMerge.includes(b.bl_id || b.id));
-    const customerNames = [...new Set(selectedBillObjects.map(b => b.bl_customer_name || b.customerName).filter(Boolean))];
-    if (customerNames.length > 1) {
-      alert('All selected bills must belong to the same customer.');
-      return;
-    }
-
-    const confirmed = window.confirm(
-      `Generate a combined PDF for ${selectedBillIdsForMerge.length} selected bill(s)?\n\nNote: No bills will be modified — this generates a merged printable document only.`
-    );
-    if (!confirmed) return;
-
     try {
-      const blob = await billingAPI.mergeBillsPDF(selectedBillIdsForMerge);
+      const selectedBillObjects = bills.filter(b => selectedReconcileIds.includes(b.bl_id || b.id));
+      const customerNames = [...new Set(selectedBillObjects.map(b => (b.bl_customer_name || b.customer_name || '').toLowerCase().trim()).filter(Boolean))];
+      if (customerNames.length > 1) {
+        const confirmMix = window.confirm(`Warning: Selected bills belong to different customers (${customerNames.length} distinct names). Are you sure you want to merge them into one document?`);
+        if (!confirmMix) return;
+      }
       
-      // Create download link and open PDF
-      const url = URL.createObjectURL(blob);
-      const timestamp = new Date().toISOString().slice(0, 10);
+      const confirmMerge = window.confirm(
+      `Generate a combined PDF for ${selectedReconcileIds.length} selected bill(s)?\n\nNote: No bills will be modified — this generates a merged printable document only.`
+      );
+      if (!confirmMerge) return;
+
+      const blob = await billingAPI.mergeBillsPDF(selectedReconcileIds);
+      const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = `Merged_Bills_${timestamp}_${selectedBillIdsForMerge.length}bills.pdf`;
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+      link.download = `Merged_Bills_${timestamp}_${selectedReconcileIds.length}bills.pdf`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
-      
-      // Also open in new tab for immediate viewing
-      window.open(url, '_blank');
-      
-      // Cleanup URL after delay
       setTimeout(() => URL.revokeObjectURL(url), 5000);
 
       setSelectedBillIdsForMerge([]);
@@ -1929,6 +1971,7 @@ const Billing = () => {
           }
         }} title="Delete" disabled={!selectedBill || selectedBill.bl_status === 'CANCELLED'}>Delete</button>
         <button className="erp-button" onClick={handleCancelBill} title="Cancel Bill (F6)" disabled={!selectedBill || selectedBill.bl_status === 'CANCELLED' || selectedBill.status === 'CANCELLED'}>Cancel Bill</button>
+        <button className="erp-button" onClick={handleReconcile} title="Reconcile Bill" disabled={selectedReconcileIds.length === 0 || isReconciling}>{isReconciling ? 'Reconciling...' : 'Reconcile'}</button>
         <div className="erp-tool-separator"></div>
         <button className="erp-button" onClick={() => {
           if (selectedBill) {
@@ -1939,8 +1982,8 @@ const Billing = () => {
             alert('Please select a bill to split');
           }
         }} title="Split Bill" disabled={!selectedBill || selectedBill.bl_is_split}>Split</button>
-        <button id="merge-pdf-btn" className="erp-button" onClick={handleMergeBills} title="Generate merged PDF for selected bills (select 2+ with checkboxes)" disabled={selectedBillIdsForMerge.length < 2} style={selectedBillIdsForMerge.length >= 2 ? { background: '#1565c0', color: '#fff' } : {}}>
-          Merge PDF{selectedBillIdsForMerge.length >= 2 ? ` (${selectedBillIdsForMerge.length})` : ''}
+        <button id="merge-pdf-btn" className="erp-button" onClick={handleMergeBills} title="Generate merged PDF for selected bills (select 2+ with checkboxes)" disabled={selectedReconcileIds.length < 2} style={selectedReconcileIds.length >= 2 ? { background: '#1565c0', color: '#fff' } : {}}>
+          Merge PDF{selectedReconcileIds.length >= 2 ? ` (${selectedReconcileIds.length})` : ''}
         </button>
         <button className="erp-button" style={{ background: '#2e7d32', color: '#fff' }} onClick={() => {
           if (selectedBill) {
@@ -2389,13 +2432,18 @@ const Billing = () => {
                   <table className="erp-table" style={{ width: '100%', borderCollapse: 'collapse' }}>
                                         <thead style={{ position: 'sticky', top: 0, zIndex: 10, backgroundColor: 'var(--erp-bg-panel)' }}>
                       <tr>
-                        <th style={{ width: '30px' }}></th>
-                        <th style={{ width: '80px' }}>Bill ID</th>
+                        <th style={{ width: '70px', textAlign: 'center' }}>
+                          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
+                            <span style={{ fontSize: '9px', fontWeight: 'normal' }}>Select All</span>
+                            <input type="checkbox" onChange={handleSelectAllCheckbox} checked={bills.filter(b => !b.is_reconciled && (b.payment_status === 'PAID' || b.bl_status === 'CANCELLED' || b.status === 'CANCELLED')).length > 0 && selectedReconcileIds.length === bills.filter(b => !b.is_reconciled && (b.payment_status === 'PAID' || b.bl_status === 'CANCELLED' || b.status === 'CANCELLED')).length} />
+                          </div>
+                        </th>
+                        <th style={{ width: '80px', cursor: 'pointer', userSelect: 'none' }} onClick={handleHeaderToggleClick} title="Toggle Active/Reconciled">Bill ID ↕</th>
                         <th style={{ width: '80px' }}>Sub Bill No</th>
-                        <th style={{ width: '80px' }}>Bill Date</th>
+                        <th style={{ width: '80px', cursor: 'pointer', userSelect: 'none' }} onClick={handleHeaderToggleClick} title="Toggle Active/Reconciled">Bill Date ↕</th>
                         <th style={{ width: '80px' }}>Booking ID</th>
                         <th style={{ width: '80px' }}>Status</th>
-                        <th style={{ width: '120px' }}>Customer Name</th>
+                        <th style={{ width: '120px', cursor: 'pointer', userSelect: 'none' }} onClick={handleHeaderToggleClick} title="Toggle Active/Reconciled">Customer Name ↕</th>
                         <th style={{ width: '90px' }}>Phone no</th>
                         <th style={{ width: '100px' }}>From Station</th>
                         <th style={{ width: '100px' }}>To Station</th>
@@ -2424,7 +2472,22 @@ const Billing = () => {
                         <th style={{ width: '90px' }}>Total Amount</th>
                       </tr>
                       <tr className="inline-filter-row" style={{ position: 'sticky', top: '24px', zIndex: 10, backgroundColor: '#f0f0f0' }}>
-                        <td></td>
+                        <td style={{ padding: '2px' }}>
+                          <select
+                            value={inlineFilters['reconciliationStatus'] || 'ACTIVE'}
+                            onChange={(e) => {
+                              handleInlineFilterChange('reconciliationStatus', e.target.value);
+                              setSelectedReconcileIds([]);
+                            }}
+                            className="inline-filter-input"
+                            style={{ width: '100%', padding: '2px', fontSize: '10px', border: '1px solid #ddd', cursor: 'pointer', textAlign: 'center' }}
+                            title="Filter by Reconciliation Status"
+                          >
+                            <option value="ACTIVE">Active</option>
+                            <option value="RECONCILED">Reconciled</option>
+                            <option value="ALL">All Status</option>
+                          </select>
+                        </td>
                         <td><input type="text" className="inline-filter-input" value={inlineFilters['bl_bill_no'] || ''} onChange={(e) => handleInlineFilterChange('bl_bill_no', e.target.value)} placeholder="Filter..." style={{ width: '100%', padding: '2px', fontSize: '12px' }} /></td>
                         <td><input type="text" className="inline-filter-input" value={inlineFilters['bl_sub_bill_no'] || ''} onChange={(e) => handleInlineFilterChange('bl_sub_bill_no', e.target.value)} placeholder="Filter..." style={{ width: '100%', padding: '2px', fontSize: '12px' }} /></td>
                         <td><input type="date" className="inline-filter-input" value={inlineFilters['bl_billing_date'] || ''} onChange={(e) => handleInlineFilterChange('bl_billing_date', e.target.value)} style={{ width: '100%', padding: '2px', fontSize: '12px' }} /></td>
@@ -2463,21 +2526,19 @@ const Billing = () => {
                       {bills.map((bill, index) => (
                         <tr
                           key={bill.id || bill.bl_id}
-                          className={`${selectedBill && (selectedBill.id === bill.id || selectedBill.bl_id === bill.bl_id) ? 'selected-row' : ''}`}
+                          className={`${selectedBill && (selectedBill.id === bill.id || selectedBill.bl_id === bill.bl_id) ? 'selected-row' : ''} ${bill.is_reconciled ? 'reconciled-row' : ''}`}
+                          style={{
+                            opacity: bill.is_reconciled ? 0.6 : 1,
+                            backgroundColor: bill.is_reconciled ? '#f5f5f5' : ''
+                          }}
                           onClick={() => handleRecordSelect(bill)}
                         >
                           <td onClick={(e) => e.stopPropagation()}>
                             <input
                               type="checkbox"
-                              checked={selectedBillIdsForMerge.includes(bill.id || bill.bl_id)}
-                              onChange={(e) => {
-                                const id = bill.id || bill.bl_id;
-                                if (e.target.checked) {
-                                  setSelectedBillIdsForMerge(prev => [...prev, id]);
-                                } else {
-                                  setSelectedBillIdsForMerge(prev => prev.filter(item => item !== id));
-                                }
-                              }}
+                              checked={selectedReconcileIds.includes(bill.id || bill.bl_id)}
+                              onChange={(e) => handleRowCheckbox(bill.id || bill.bl_id, e.target.checked)}
+                              disabled={bill.is_reconciled || (bill.payment_status !== 'PAID' && bill.bl_status !== 'CANCELLED' && bill.status !== 'CANCELLED')}
                             />
                           </td>
                           <td>{bill.bl_bill_no || bill.bill_no || ''}</td>
@@ -2618,6 +2679,18 @@ const Billing = () => {
                 <div style={{ display: 'grid', gridTemplateColumns: '80px 1fr', gap: '6px', alignItems: 'center' }}>
                    <label style={{ fontSize: '11px', textAlign: 'right' }}>Status:</label>
                    <input type="text" className="erp-input inline-filter-input" value={inlineFilters['bl_status']||''} onChange={(e)=>handleInlineFilterChange('bl_status', e.target.value)} />
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '80px 1fr', gap: '6px', alignItems: 'center' }}>
+                   <label style={{ fontSize: '11px', textAlign: 'right' }}>Recon.:</label>
+                   <select 
+                     className="erp-input inline-filter-input" 
+                     value={inlineFilters['reconciliationStatus'] || 'ACTIVE'} 
+                     onChange={(e)=>handleInlineFilterChange('reconciliationStatus', e.target.value)}
+                   >
+                     <option value="ACTIVE">Active (Default)</option>
+                     <option value="RECONCILED">Reconciled</option>
+                     <option value="ALL">All Bills</option>
+                   </select>
                 </div>
                 
                 <div className="section-subtitle" style={{ fontSize: '10px', fontWeight: 'bold', marginTop: '8px', borderTop: '1px solid #eee', paddingTop: '4px' }}>DATE RANGE</div>

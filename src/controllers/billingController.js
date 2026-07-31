@@ -907,6 +907,14 @@ const getAllBills = async (req, res) => {
     
     const where = queryHelper.buildWhereClause(req.query, filterMap);
     
+    // Reconciliation filter
+    const reconciliationStatus = req.query.reconciliationStatus || 'ACTIVE';
+    if (reconciliationStatus === 'ACTIVE') {
+      where.is_reconciled = { [Op.not]: 1 };
+    } else if (reconciliationStatus === 'RECONCILED') {
+      where.is_reconciled = 1;
+    }
+    
     // Hide merged and split bills from the list by default
     where.bl_is_merged = false;
     where.bl_is_split = false;

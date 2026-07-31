@@ -1401,6 +1401,13 @@ const DynamicAdminPanel = ({ initialModule = 'applications' }) => {
             {activeModule === 'customers' ? 'View Details' : 'View Ledger'}
           </button>
         )}
+        {activeModule === 'stationBoys' && (
+          <button className="erp-button" style={{ background: '#d32f2f', color: '#fff' }} onClick={() => {
+            navigate('/admin/station-boys/reconciliation');
+          }}>
+            Reconciliation
+          </button>
+        )}
         <div className="erp-tool-separator"></div>
         <button className="erp-button" onClick={handleExportPDF} disabled={loading} title="Export current view to PDF">Export PDF</button>
         {['employees', 'bookings', 'billings'].includes(activeModule) && (

@@ -5,7 +5,7 @@ import { usePagination } from '../../hooks/usePagination';
 import useERPFilters from '../../hooks/useERPFilters';
 import PaginationControls from '../common/PaginationControls';
 import SaveConfirmationModal from '../common/SaveConfirmationModal';
-import { receiptAPI } from '../../services/api';
+import { receiptAPI, reconciliationAPI } from '../../services/api';
 import { printVoucher } from '../../utils/paymentPrintUtils';
 import '../../styles/vintage-erp-theme.css';
 
@@ -255,6 +255,31 @@ const ReceiptForm = ({ onBack }) => {
     }
   };
 
+  const handleReconcile = async () => {
+    if (!selectedRecord) return;
+    const remarks = window.prompt('Enter reconciliation remarks (optional):', 'Reconciled');
+    if (remarks === null) return;
+    const bankRef = window.prompt('Enter Bank Statement Reference (optional):', '');
+    if (bankRef === null) return;
+
+    try {
+      setLoading(true);
+      await reconciliationAPI.reconcileReceipt(selectedRecord.rc_rcid, remarks, bankRef);
+      setSuccess('Receipt reconciled successfully');
+      // If filtering out active only, deselect
+      if (inlineFilters['reconciliationStatus'] === 'ACTIVE' || !inlineFilters['reconciliationStatus']) {
+        setSelectedRecord(null);
+        handleNew();
+      }
+      fetchReceipts();
+    } catch (err) {
+      console.error('Error reconciling receipt:', err);
+      setError(err.message || 'Failed to reconcile receipt');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleSave = async () => {
     if (!formData.customer_name || !formData.amount || !formData.account_name) {
       setError('Required fields are missing (Customer, Account, Amount)');
@@ -458,11 +483,23 @@ const ReceiptForm = ({ onBack }) => {
         <button className="erp-button" onClick={handleNew} title="New (F2)">New</button>
         <button className="erp-button" onClick={handleEdit} disabled={!selectedRecord || isEditing} title="Edit (F3)">Edit</button>
         <button className="erp-button danger" onClick={handleDelete} disabled={!selectedRecord} title="Delete (F4)">Delete</button>
+        <button className="erp-button" onClick={handleReconcile} disabled={!selectedRecord || selectedRecord.is_reconciled} title="Reconcile Receipt">Reconcile</button>
         <button className="erp-button" onClick={() => printVoucher(selectedRecord, 'receipt')} disabled={!selectedRecord} title="Export to PDF">Export PDF</button>
         <div className="erp-tool-separator"></div>
         <button className="erp-button" onClick={() => setShowSaveModal(true)} disabled={!isEditing} title="Save (F10)">Save</button>
         <button className="erp-button" onClick={handleCancel} disabled={!isEditing} title="Cancel">Cancel</button>
         <button className="erp-button" onClick={fetchReceipts} title="Refresh">Refresh</button>
+        <div className="erp-tool-separator"></div>
+        <select 
+           className="erp-input" 
+           style={{ padding: '2px 8px', fontSize: '11px', width: 'auto' }}
+           value={inlineFilters['reconciliationStatus'] || 'ACTIVE'} 
+           onChange={(e) => handleInlineFilterChange('reconciliationStatus', e.target.value)}
+        >
+           <option value="ACTIVE">Active (Default)</option>
+           <option value="RECONCILED">Reconciled</option>
+           <option value="ALL">All</option>
+        </select>
         <div style={{ flex: 1 }}></div>
         <div style={{ fontWeight: 'bold', fontSize: '12px' }}>
           {isEditing ? (selectedRecord ? 'EDIT MODE' : 'NEW RECORD') : 'READY'} | Total Records: {pagination.totalRecords || receipts.length}

@@ -37,6 +37,22 @@ const StationBoyPayment = sequelizeTVL.define('StationBoyPayment', {
     defaultValue: 'ACTIVE',
     allowNull: false
   },
+  is_reconciled: {
+    type: DataTypes.TINYINT(1),
+    defaultValue: 0
+  },
+  reconciled_by: {
+    type: DataTypes.INTEGER,
+    allowNull: true
+  },
+  reconciled_at: {
+    type: DataTypes.DATE,
+    allowNull: true
+  },
+  reconciliation_remarks: {
+    type: DataTypes.TEXT,
+    allowNull: true
+  },
   created_by: {
     type: DataTypes.INTEGER,
     allowNull: true

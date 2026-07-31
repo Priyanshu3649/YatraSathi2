@@ -214,6 +214,26 @@ const BillTVL = sequelizeTVL.define('blXbilling', {
     allowNull: true,
     comment: 'Special Tracking ID for Client Organizations'
   },
+  is_reconciled: {
+    type: DataTypes.TINYINT(1),
+    defaultValue: 0,
+    comment: 'Is Reconciled'
+  },
+  reconciled_by: {
+    type: DataTypes.INTEGER,
+    allowNull: true,
+    comment: 'Reconciled By User ID'
+  },
+  reconciled_at: {
+    type: DataTypes.DATE,
+    allowNull: true,
+    comment: 'Reconciliation Timestamp'
+  },
+  reconciliation_remarks: {
+    type: DataTypes.TEXT,
+    allowNull: true,
+    comment: 'Reconciliation Remarks'
+  },
   is_deleted: {
     type: DataTypes.TINYINT(1),
     defaultValue: 0,

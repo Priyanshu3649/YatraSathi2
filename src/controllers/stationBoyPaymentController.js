@@ -70,3 +70,48 @@ const createPayment = async (req, res) => {
 module.exports = {
   createPayment
 };
+
+module.exports.getAllPayments = async (req, res) => {
+  try {
+    const { Op } = require('sequelize');
+    const queryHelper = require('../utils/queryHelper');
+    
+    const { limit, offset, page } = queryHelper.getPaginationOptions(req.query);
+    
+    const filterMap = {
+      dateColumn: 'payment_date',
+      amountColumn: 'amount',
+      statusColumn: 'status'
+    };
+    
+    const whereClause = queryHelper.buildWhereClause(req.query, filterMap);
+    
+    if (!req.query.status) {
+      whereClause.status = 'ACTIVE';
+    }
+    
+    const reconciliationStatus = req.query.reconciliationStatus || 'ACTIVE';
+    if (reconciliationStatus === 'ACTIVE') {
+      whereClause.is_reconciled = { [Op.not]: 1 };
+    } else if (reconciliationStatus === 'RECONCILED') {
+      whereClause.is_reconciled = 1;
+    }
+    
+    const { count, rows: payments } = await StationBoyPayment.findAndCountAll({
+      where: whereClause,
+      include: [{
+        model: StationBoy,
+        as: 'station_boy',
+        attributes: ['id', 'name', 'phone']
+      }],
+      order: [['payment_date', 'DESC'], ['id', 'DESC']],
+      limit,
+      offset
+    });
+    
+    res.json(queryHelper.formatPaginatedResponse(count, payments, page, limit));
+  } catch (error) {
+    console.error('Error fetching station boy payments:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+};

@@ -6,7 +6,7 @@ import useERPFilters from '../../hooks/useERPFilters';
 import PaginationControls from '../common/PaginationControls';
 import SaveConfirmationModal from '../common/SaveConfirmationModal';
 import AuditHistoryButton from '../common/AuditHistoryButton';
-import { paymentAPI } from '../../services/api';
+import { paymentAPI, reconciliationAPI } from '../../services/api';
 import { printVoucher } from '../../utils/paymentPrintUtils';
 import '../../styles/vintage-erp-theme.css';
 
@@ -265,6 +265,31 @@ const PaymentForm = ({ onBack }) => {
     }
   };
 
+  const handleReconcile = async () => {
+    if (!selectedRecord) return;
+    const remarks = window.prompt('Enter reconciliation remarks (optional):', 'Reconciled');
+    if (remarks === null) return;
+    const bankRef = window.prompt('Enter Bank Statement Reference (optional):', '');
+    if (bankRef === null) return;
+
+    try {
+      setLoading(true);
+      await reconciliationAPI.reconcilePayment(selectedRecord.py_pymtid, remarks, bankRef);
+      setSuccess('Payment reconciled successfully');
+      // If we are filtering out reconciled, deselect. Otherwise, fetch to update.
+      if (inlineFilters['reconciliationStatus'] === 'ACTIVE' || !inlineFilters['reconciliationStatus']) {
+        setSelectedRecord(null);
+        handleNew();
+      }
+      fetchPayments();
+    } catch (err) {
+      console.error('Error reconciling payment:', err);
+      setError(err.message || 'Failed to reconcile payment');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleSave = async () => {
     if (!formData.customer_name || !formData.amount || !formData.account_name) {
       setError('Required fields are missing (Customer, Account, Amount)');
@@ -469,11 +494,23 @@ const PaymentForm = ({ onBack }) => {
         <button className="erp-button" onClick={handleNew} title="New (F2)">New</button>
         <button className="erp-button" onClick={handleEdit} disabled={!selectedRecord || isEditing} title="Edit (F3)">Edit</button>
         <button className="erp-button danger" onClick={handleDelete} disabled={!selectedRecord} title="Delete (F4)">Delete</button>
+        <button className="erp-button" onClick={handleReconcile} disabled={!selectedRecord || selectedRecord.is_reconciled} title="Reconcile Payment">Reconcile</button>
         <button className="erp-button" onClick={() => printVoucher(selectedRecord, 'payment')} disabled={!selectedRecord} title="Export to PDF">Export PDF</button>
         <div className="erp-tool-separator"></div>
         <button className="erp-button" onClick={() => setShowSaveModal(true)} disabled={!isEditing} title="Save (F10)">Save</button>
         <button className="erp-button" onClick={handleCancel} disabled={!isEditing} title="Cancel">Cancel</button>
         <button className="erp-button" onClick={fetchPayments} title="Refresh">Refresh</button>
+        <div className="erp-tool-separator"></div>
+        <select 
+           className="erp-input" 
+           style={{ padding: '2px 8px', fontSize: '11px', width: 'auto' }}
+           value={inlineFilters['reconciliationStatus'] || 'ACTIVE'} 
+           onChange={(e) => handleInlineFilterChange('reconciliationStatus', e.target.value)}
+        >
+           <option value="ACTIVE">Active (Default)</option>
+           <option value="RECONCILED">Reconciled</option>
+           <option value="ALL">All</option>
+        </select>
         <div style={{ flex: 1 }}></div>
         <div style={{ fontWeight: 'bold', fontSize: '12px' }}>
           {isEditing ? (selectedRecord ? 'EDIT MODE' : 'NEW RECORD') : 'READY'} | Total Records: {pagination.totalRecords || paymentRecords.length}

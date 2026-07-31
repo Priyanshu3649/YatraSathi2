@@ -7,7 +7,7 @@ const {
   deleteStationBoy,
   getActiveStationBoys
 } = require('../controllers/stationBoyController');
-const { createPayment } = require('../controllers/stationBoyPaymentController');
+const { createPayment, getAllPayments } = require('../controllers/stationBoyPaymentController');
 const { getLedger } = require('../controllers/stationBoyLedgerController');
 const authMiddleware = require('../middleware/authMiddleware');
 
@@ -27,6 +27,7 @@ router.put('/:id', updateStationBoy);
 router.delete('/:id', deleteStationBoy);
 
 // Payment entry route
+router.get('/payments', getAllPayments);
 router.post('/:id/payments', createPayment);
 
 // Ledger report route

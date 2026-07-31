@@ -531,6 +531,14 @@ const getAllBookings = async (req, res) => {
     if (!where.bk_status) {
       where.bk_status = { [Op.ne]: 'INA' };
     }
+    
+    // Reconciliation filter
+    const reconciliationStatus = req.query.reconciliationStatus || 'ACTIVE';
+    if (reconciliationStatus === 'ACTIVE') {
+      where.is_reconciled = { [Op.not]: 1 };
+    } else if (reconciliationStatus === 'RECONCILED') {
+      where.is_reconciled = 1;
+    }
 
     const { count, rows: bookings } = await BookingTVL.findAndCountAll({
       where,
@@ -542,37 +550,41 @@ const getAllBookings = async (req, res) => {
     // Batch fetch passenger counts for all bookings
     const bookingIds = bookings.map(booking => booking.bk_bkid);
     const passengerCounts = {};
-    
-    // Get passenger counts in batch
-    const passengerCountResults = await Passenger.findAll({
-      attributes: ['ps_bkid', [Sequelize.fn('COUNT', Sequelize.col('ps_psid')), 'count']],
-      where: {
-        ps_bkid: { [Op.in]: bookingIds },
-        ps_active: 1
-      },
-      group: ['ps_bkid']
-    });
-    
-    passengerCountResults.forEach(result => {
-      passengerCounts[result.ps_bkid] = result.dataValues.count;
-    });
-    
-    // Batch fetch station information
-    const stationCodes = [...new Set([
-      ...bookings.map(b => b.bk_fromst),
-      ...bookings.map(b => b.bk_tost)
-    ])];
-    
-    const stations = await Station.findAll({
-      where: {
-        st_stcode: { [Op.in]: stationCodes }
-      }
-    });
-    
     const stationMap = {};
-    stations.forEach(station => {
-      stationMap[station.st_stcode] = station.st_stname || station.st_stcode;
-    });
+    
+    if (bookingIds.length > 0) {
+      // Get passenger counts in batch
+      const passengerCountResults = await Passenger.findAll({
+        attributes: ['ps_bkid', [Sequelize.fn('COUNT', Sequelize.col('ps_psid')), 'count']],
+        where: {
+          ps_bkid: { [Op.in]: bookingIds },
+          ps_active: 1
+        },
+        group: ['ps_bkid']
+      });
+      
+      passengerCountResults.forEach(result => {
+        passengerCounts[result.ps_bkid] = result.dataValues.count;
+      });
+      
+      // Batch fetch station information
+      const stationCodes = [...new Set([
+        ...bookings.map(b => b.bk_fromst),
+        ...bookings.map(b => b.bk_tost)
+      ])].filter(Boolean);
+      
+      if (stationCodes.length > 0) {
+        const stations = await Station.findAll({
+          where: {
+            st_stcode: { [Op.in]: stationCodes }
+          }
+        });
+        
+        stations.forEach(station => {
+          stationMap[station.st_stcode] = station.st_stname || station.st_stcode;
+        });
+      }
+    }
     
     // Transform data to match frontend expectations with batched data
     const transformedBookings = bookings.map(booking => {

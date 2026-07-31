@@ -108,9 +108,29 @@ const BookingTVL = sequelizeTVL.define('bkXbooking', {
     allowNull: false,
     comment: 'Entered Date Time'
   },
-  eby: {
-    type: DataTypes.STRING(15),
-    allowNull: false,
+  is_reconciled: {
+    type: DataTypes.TINYINT(1),
+    defaultValue: 0,
+    comment: 'Is Reconciled'
+  },
+  reconciled_by: {
+    type: DataTypes.INTEGER,
+    allowNull: true,
+    comment: 'Reconciled By User ID'
+  },
+  reconciled_at: {
+    type: DataTypes.DATE,
+    allowNull: true,
+    comment: 'Reconciliation Timestamp'
+  },
+  reconciliation_remarks: {
+    type: DataTypes.TEXT,
+    allowNull: true,
+    comment: 'Reconciliation Remarks'
+  },
+  entered_by: {
+    type: DataTypes.STRING(30),
+    allowNull: true,
     comment: 'Entered By'
   },
   mdtm: {

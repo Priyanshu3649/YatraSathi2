@@ -2341,6 +2341,17 @@ export const stationBoyAPI = {
     return data;
   },
 
+  getAllPayments: async (params = {}) => {
+    const query = new URLSearchParams(params).toString();
+    const response = await fetch(`${API_BASE_URL}/station-boys/payments?${query}`, {
+      method: 'GET',
+      headers: getHeaders(true)
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.message || 'Failed to fetch station boy payments');
+    return data;
+  },
+
   addPayment: async (id, paymentData) => {
     const response = await fetch(`${API_BASE_URL}/station-boys/${id}/payments`, {
       method: 'POST',
@@ -2481,6 +2492,123 @@ export const sessionAPI = {
 export const getAuditLogs = auditAPI.getAuditLogs;
 export const getAuditLogsByEntity = auditAPI.getAuditLogsByEntity;
 export const getAuditLogById = auditAPI.getAuditLogById;
+export const reconciliationAPI = {
+  bulkReconcileBills: async (ids, remarks) => {
+    const response = await fetch(`${API_BASE_URL}/reconciliation/bills/bulk-reconcile`, {
+      method: 'POST',
+      headers: getHeaders(true),
+      body: JSON.stringify({ ids, remarks })
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error?.message || data.error || 'Failed to bulk reconcile bills');
+    return data;
+  },
+  bulkReconcileBookings: async (bookingIds, remarks) => {
+    const response = await fetch(`${API_BASE_URL}/reconciliation/bookings/bulk-reconcile`, {
+      method: 'POST',
+      headers: getHeaders(true),
+      body: JSON.stringify({ bookingIds, remarks })
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error?.message || data.error || 'Failed to bulk reconcile');
+    return data;
+  },
+  reconcileBooking: async (id, remarks) => {
+    const response = await fetch(`${API_BASE_URL}/reconciliation/bookings/${id}/reconcile`, {
+      method: 'POST',
+      headers: getHeaders(true),
+      body: JSON.stringify({ remarks })
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error?.message || data.error || 'Failed to reconcile');
+    return data;
+  },
+  unreconcileBooking: async (id) => {
+    const response = await fetch(`${API_BASE_URL}/reconciliation/bookings/${id}/unreconcile`, {
+      method: 'POST',
+      headers: getHeaders(true)
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error?.message || data.error || 'Failed to unreconcile');
+    return data;
+  },
+  reconcileBill: async (id, remarks) => {
+    const response = await fetch(`${API_BASE_URL}/reconciliation/bills/${id}/reconcile`, {
+      method: 'POST',
+      headers: getHeaders(true),
+      body: JSON.stringify({ remarks })
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error?.message || data.error || 'Failed to reconcile');
+    return data;
+  },
+  unreconcileBill: async (id) => {
+    const response = await fetch(`${API_BASE_URL}/reconciliation/bills/${id}/unreconcile`, {
+      method: 'POST',
+      headers: getHeaders(true)
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error?.message || data.error || 'Failed to unreconcile');
+    return data;
+  },
+  reconcilePayment: async (id, remarks, bankStatementRef) => {
+    const response = await fetch(`${API_BASE_URL}/reconciliation/payments/${id}/reconcile`, {
+      method: 'POST',
+      headers: getHeaders(true),
+      body: JSON.stringify({ remarks, bankStatementRef })
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error?.message || data.error || 'Failed to reconcile');
+    return data;
+  },
+  unreconcilePayment: async (id) => {
+    const response = await fetch(`${API_BASE_URL}/reconciliation/payments/${id}/unreconcile`, {
+      method: 'POST',
+      headers: getHeaders(true)
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error?.message || data.error || 'Failed to unreconcile');
+    return data;
+  },
+  reconcileReceipt: async (id, remarks, bankStatementRef) => {
+    const response = await fetch(`${API_BASE_URL}/reconciliation/receipts/${id}/reconcile`, {
+      method: 'POST',
+      headers: getHeaders(true),
+      body: JSON.stringify({ remarks, bankStatementRef })
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error?.message || data.error || 'Failed to reconcile');
+    return data;
+  },
+  unreconcileReceipt: async (id) => {
+    const response = await fetch(`${API_BASE_URL}/reconciliation/receipts/${id}/unreconcile`, {
+      method: 'POST',
+      headers: getHeaders(true)
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error?.message || data.error || 'Failed to unreconcile');
+    return data;
+  },
+  reconcileContra: async (id, remarks, bankStatementRef) => {
+    const response = await fetch(`${API_BASE_URL}/reconciliation/contras/${id}/reconcile`, {
+      method: 'POST',
+      headers: getHeaders(true),
+      body: JSON.stringify({ remarks, bankStatementRef })
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error?.message || data.error || 'Failed to reconcile');
+    return data;
+  },
+  unreconcileContra: async (id) => {
+    const response = await fetch(`${API_BASE_URL}/reconciliation/contras/${id}/unreconcile`, {
+      method: 'POST',
+      headers: getHeaders(true)
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error?.message || data.error || 'Failed to unreconcile');
+    return data;
+  }
+};
 
 export default {
   authAPI,
@@ -2498,5 +2626,6 @@ export default {
   journalAPI,
   customerDetailsAPI,
   stationBoyAPI,
-  sessionAPI
+  sessionAPI,
+  reconciliationAPI
 };

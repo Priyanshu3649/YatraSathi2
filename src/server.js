@@ -132,6 +132,7 @@ const accountingRoutes = require('./routes/accountingRoutes');
 const passengerRoutes = require('./routes/passengerRoutes');
 const healthRoutes = require('./routes/healthRoutes');
 const stationBoyRoutes = require('./routes/stationBoyRoutes');
+const reconciliationRoutes = require('./routes/reconciliationRoutes');
 
 // Use routes
 if (process.env.NODE_ENV === 'development') {
@@ -175,6 +176,7 @@ app.use('/api/config', configRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/search', searchRoutes);
 app.use('/api/statistics', statisticsRoutes);
+app.use('/api/reconciliation', reconciliationRoutes);
 app.use('/api/stations', stationRoutes);
 app.use('/api/trains', trainRoutes);
 app.use('/api/company', companyRoutes);

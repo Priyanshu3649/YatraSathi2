@@ -40,7 +40,12 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
-import { bookingAPI } from '../services/api';
+import { 
+  bookingAPI, 
+  customerAPI, 
+  masterPassengerAPI,
+  reconciliationAPI
+} from '../services/api';
 import { usePagination } from '../hooks/usePagination';
 import useERPFilters from '../hooks/useERPFilters';
 import PaginationControls from '../components/common/PaginationControls';
@@ -148,6 +153,8 @@ const Bookings = () => {
   });
   const [passengerList, setPassengerList] = useState([]);
   const [isEditing, setIsEditing] = useState(false);
+  const [selectedReconcileIds, setSelectedReconcileIds] = useState([]);
+  const [isReconciling, setIsReconciling] = useState(false);
   
   // Pagination state - 50 records per page with server-side support
   const {
@@ -1333,7 +1340,56 @@ setSelectedBooking(null); // Clear selection after deletion
         fetchBookings();
       }
     }
-  }, [selectedBooking, fetchBookings, announceToScreenReader]);
+  }, [selectedBooking, fetchBookings]);
+
+  const handleHeaderToggleClick = useCallback(() => {
+    const currentStatus = inlineFilters['reconciliationStatus'] || 'ACTIVE';
+    let nextStatus = 'RECONCILED';
+    if (currentStatus === 'RECONCILED') nextStatus = 'ALL';
+    else if (currentStatus === 'ALL') nextStatus = 'ACTIVE';
+    
+    handleInlineFilterChange('reconciliationStatus', nextStatus);
+    setSelectedReconcileIds([]);
+  }, [inlineFilters, handleInlineFilterChange]);
+
+  const handleRowCheckbox = useCallback((id, checked) => {
+    setSelectedReconcileIds(prev => 
+      checked ? [...prev, id] : prev.filter(x => x !== id)
+    );
+  }, []);
+
+  const handleSelectAllCheckbox = useCallback((e) => {
+    if (e.target.checked) {
+      // Select all currently loaded active bookings that are confirmed or cancelled
+      const ids = bookings.filter(b => !b.is_reconciled && (b.bk_status === 'CNF' || b.bk_status === 'CAN')).map(b => b.bk_bkid);
+      setSelectedReconcileIds(ids);
+    } else {
+      setSelectedReconcileIds([]);
+    }
+  }, [bookings]);
+
+  const handleReconcile = useCallback(async () => {
+    if (selectedReconcileIds.length === 0) return;
+    
+    setIsReconciling(true);
+    try {
+      await reconciliationAPI.bulkReconcileBookings(selectedReconcileIds, 'Reconciled');
+      
+      const currentFilter = inlineFilters['reconciliationStatus'] || 'ACTIVE';
+      if (currentFilter === 'ACTIVE') {
+        setBookings(prev => prev.filter(b => !selectedReconcileIds.includes(b.bk_bkid)));
+      } else {
+        setBookings(prev => prev.map(b => selectedReconcileIds.includes(b.bk_bkid) ? { ...b, is_reconciled: 1 } : b));
+      }
+      setSelectedReconcileIds([]);
+      setSelectedBooking(null);
+    } catch (error) {
+      console.error('Reconciliation error:', error);
+      setError(error.message || 'Failed to reconcile bookings');
+    } finally {
+      setIsReconciling(false);
+    }
+  }, [selectedReconcileIds, inlineFilters]);
 
   const removePassenger = useCallback((id) => {
     if (passengerList.length <= 1) {
@@ -1635,6 +1691,7 @@ setSelectedBooking(null); // Clear selection after deletion
              <button className="erp-button" onClick={() => selectedBooking && handleEdit()} disabled={!selectedBooking} title="Edit (F2)">Edit</button>
              <button className="erp-button" onClick={handleDirectSave} disabled={!isEditing} title="Save (F10)">Save</button>
              <button className="erp-button danger" onClick={() => selectedBooking && handleDelete()} disabled={!selectedBooking} title="Delete (F4)">Delete</button>
+             <button className="erp-button" onClick={handleReconcile} disabled={selectedReconcileIds.length === 0 || isReconciling} title="Reconcile Booking">{isReconciling ? 'Reconciling...' : 'Reconcile'}</button>
              <button className="erp-button" onClick={() => selectedBooking && window.open(`/print/booking/${selectedBooking.bk_bkid}`, '_blank')} disabled={!selectedBooking} title="Print Booking">🖨️ Print</button>
              <button className="erp-button" onClick={() => setIsEditing(false)} title="Cancel (Esc)">Cancel</button>
              <div className="action-divider" style={{ borderLeft: '1px solid #ccc', margin: '0 8px', height: '20px' }}></div>
@@ -2134,10 +2191,15 @@ setSelectedBooking(null); // Clear selection after deletion
                 <table className="erp-table">
                   <thead>
                     <tr>
-                      <th style={{ width: '30px' }}><input type="checkbox" /></th>
-                      <th style={{ width: '80px' }}>ID</th>
-                      <th style={{ width: '100px' }}>Date</th>
-                      <th style={{ width: '150px' }}>Customer</th>
+                      <th style={{ width: '70px', textAlign: 'center' }}>
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
+                          <span style={{ fontSize: '9px', fontWeight: 'normal' }}>Select All</span>
+                          <input type="checkbox" onChange={handleSelectAllCheckbox} checked={bookings.filter(b => !b.is_reconciled && (b.bk_status === 'CNF' || b.bk_status === 'CAN')).length > 0 && selectedReconcileIds.length === bookings.filter(b => !b.is_reconciled && (b.bk_status === 'CNF' || b.bk_status === 'CAN')).length} />
+                        </div>
+                      </th>
+                      <th style={{ width: '80px', cursor: 'pointer', userSelect: 'none' }} onClick={handleHeaderToggleClick} title="Toggle Active/Reconciled">ID ↕</th>
+                      <th style={{ width: '100px', cursor: 'pointer', userSelect: 'none' }} onClick={handleHeaderToggleClick} title="Toggle Active/Reconciled">Date ↕</th>
+                      <th style={{ width: '150px', cursor: 'pointer', userSelect: 'none' }} onClick={handleHeaderToggleClick} title="Toggle Active/Reconciled">Customer ↕</th>
                       <th style={{ width: '100px' }}>Phone</th>
                       <th style={{ width: '50px' }}>Pax</th>
                       <th style={{ width: '100px' }}>From</th>
@@ -2150,7 +2212,22 @@ setSelectedBooking(null); // Clear selection after deletion
                     </tr>
                     {/* Inline Filter Row */}
                     <tr style={{ backgroundColor: '#f8f9fa' }}>
-                      <td><input type="checkbox" disabled style={{ opacity: 0.3 }} /></td>
+                      <td style={{ padding: '2px' }}>
+                        <select
+                          value={inlineFilters['reconciliationStatus'] || 'ACTIVE'}
+                          onChange={(e) => {
+                            handleInlineFilterChange('reconciliationStatus', e.target.value);
+                            setSelectedReconcileIds([]);
+                          }}
+                          className="inline-filter-input"
+                          style={{ width: '100%', padding: '2px', fontSize: '10px', border: '1px solid #ddd', cursor: 'pointer', textAlign: 'center' }}
+                          title="Filter by Reconciliation Status"
+                        >
+                          <option value="ACTIVE">Active</option>
+                          <option value="RECONCILED">Reconciled</option>
+                          <option value="ALL">All Status</option>
+                        </select>
+                      </td>
                       <td>
                         <input 
                           type="text" 
@@ -2283,7 +2360,12 @@ setSelectedBooking(null); // Clear selection after deletion
                         return (
                           <tr 
                             key={record.bk_bkid || record.id || idx}
-                            className={`${isSelected ? 'selected' : ''} ${isHighlighted ? 'highlighted' : ''}`}
+                            className={`${isSelected ? 'selected' : ''} ${isHighlighted ? 'highlighted' : ''} ${record.is_reconciled ? 'reconciled-row' : ''}`}
+                            style={{ 
+                              cursor: 'pointer',
+                              opacity: record.is_reconciled ? 0.6 : 1,
+                              backgroundColor: record.is_reconciled ? '#f5f5f5' : ''
+                            }}
                             onClick={() => {
                               handleRecordSelect(record);
                               setSelectedRecordIndex(idx);
@@ -2299,9 +2381,16 @@ setSelectedBooking(null); // Clear selection after deletion
                             }}
                             onBlur={() => setFocusedOnGrid(false)}
                             tabIndex={0}
-                            style={{ cursor: 'pointer' }}
                           >
-                            <td><input type="checkbox" checked={!!isSelected} onChange={() => {}} /></td>
+                            <td onClick={(e) => e.stopPropagation()}>
+                              <input 
+                                type="checkbox" 
+                                checked={selectedReconcileIds.includes(record.bk_bkid)} 
+                                onChange={(e) => handleRowCheckbox(record.bk_bkid, e.target.checked)} 
+                                disabled={record.is_reconciled || (record.bk_status !== 'CNF' && record.bk_status !== 'CAN')}
+                                title={(record.bk_status !== 'CNF' && record.bk_status !== 'CAN') ? "Only confirmed or cancelled bookings can be reconciled" : ""}
+                              />
+                            </td>
                             <td>{record.bk_bkid}</td>
                             <td>{new Date(record.bk_bookingdt || record.createdOn || new Date()).toLocaleDateString()}</td>
                             <td>{record.customerName || record.bk_customername || 'N/A'}</td>
@@ -2433,6 +2522,18 @@ setSelectedBooking(null); // Clear selection after deletion
                 <div style={{ display: 'grid', gridTemplateColumns: '80px 1fr', gap: '6px', alignItems: 'center' }}>
                    <label style={{ fontSize: '11px', textAlign: 'right' }}>Status:</label>
                    <input type="text" className="erp-input inline-filter-input" value={inlineFilters['bk_status']||''} onChange={(e)=>handleInlineFilterChange('bk_status', e.target.value)} />
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '80px 1fr', gap: '6px', alignItems: 'center' }}>
+                   <label style={{ fontSize: '11px', textAlign: 'right' }}>Recon.:</label>
+                   <select 
+                     className="erp-input inline-filter-input" 
+                     value={inlineFilters['reconciliationStatus'] || 'ACTIVE'} 
+                     onChange={(e)=>handleInlineFilterChange('reconciliationStatus', e.target.value)}
+                   >
+                     <option value="ACTIVE">Active (Default)</option>
+                     <option value="RECONCILED">Reconciled</option>
+                     <option value="ALL">All Bookings</option>
+                   </select>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '4px', gap: '4px' }}>
                     <button onClick={clearFilters} className="erp-button small">Clear (ESC)</button>

@@ -45,6 +45,14 @@ class PaymentController {
         where.py_status = 'Active';
       }
       
+      // Reconciliation filter
+      const reconciliationStatus = req.query.reconciliationStatus || 'ACTIVE';
+      if (reconciliationStatus === 'ACTIVE') {
+        where.is_reconciled = { [Op.not]: 1 };
+      } else if (reconciliationStatus === 'RECONCILED') {
+        where.is_reconciled = 1;
+      }
+      
       const { count, rows: payments } = await Payment.findAndCountAll({
         where,
         include: [{

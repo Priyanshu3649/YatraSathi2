@@ -77,7 +77,7 @@ class QueryHelper {
     }
 
     // 5. Additional custom filters from filterMap.customFilters
-    const processedKeys = ['page', 'limit', 'sortBy', 'sortOrder', 'search', 'status', 'startDate', 'endDate', 'minAmount', 'maxAmount'];
+    const processedKeys = ['page', 'limit', 'sortBy', 'sortOrder', 'search', 'status', 'startDate', 'endDate', 'minAmount', 'maxAmount', 'reconciliationStatus'];
     
     if (filterMap.customFilters) {
       Object.keys(filterMap.customFilters).forEach(key => {

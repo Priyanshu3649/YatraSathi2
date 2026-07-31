@@ -871,6 +871,19 @@ a.erp-button {
   border: 1px solid transparent;
 }
 
+/* Screen Reader Only (Visually Hidden) */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 .status-active { background: #e8f5e9; color: #2e7d32; border-color: #a5d6a7; }
 .status-pending { background: #fff3e0; color: #ef6c00; border-color: #ffe0b2; }
 .status-cancelled { background: #ffebee; color: #c62828; border-color: #ffcdd2; }

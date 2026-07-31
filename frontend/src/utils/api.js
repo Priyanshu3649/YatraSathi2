@@ -135,4 +135,36 @@ export const dashboardAPI = {
   })
 };
 
+export const reconciliationAPI = {
+  reconcileBooking: (id, remarks) => apiRequest(`/reconciliation/bookings/${id}/reconcile`, {
+    method: 'POST',
+    body: JSON.stringify({ remarks })
+  }),
+  unreconcileBooking: (id) => apiRequest(`/reconciliation/bookings/${id}/unreconcile`, {
+    method: 'POST'
+  }),
+  reconcileBill: (id, remarks) => apiRequest(`/reconciliation/bills/${id}/reconcile`, {
+    method: 'POST',
+    body: JSON.stringify({ remarks })
+  }),
+  unreconcileBill: (id) => apiRequest(`/reconciliation/bills/${id}/unreconcile`, {
+    method: 'POST'
+  }),
+  reconcilePayment: (id, remarks, bankStatementRef) => apiRequest(`/reconciliation/payments/${id}/reconcile`, {
+    method: 'POST',
+    body: JSON.stringify({ remarks, bankStatementRef })
+  }),
+  unreconcilePayment: (id) => apiRequest(`/reconciliation/payments/${id}/unreconcile`, {
+    method: 'POST'
+  }),
+  reconcileReceipt: (id, remarks, bankStatementRef) => apiRequest(`/reconciliation/receipts/${id}/reconcile`, {
+    method: 'POST',
+    body: JSON.stringify({ remarks, bankStatementRef })
+  }),
+  unreconcileReceipt: (id) => apiRequest(`/reconciliation/receipts/${id}/unreconcile`, {
+    method: 'POST'
+  })
+};
+
+
 export default apiRequest;
