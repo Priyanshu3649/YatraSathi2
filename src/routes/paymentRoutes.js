@@ -3,6 +3,7 @@ const router = express.Router();
 const paymentController = require('../controllers/paymentController');
 const { body } = require('express-validator');
 const authenticateToken = require('../middleware/authMiddleware');
+const upload = require('../middleware/uploadMiddleware');
 
 // Apply authentication middleware to all routes
 router.use(authenticateToken);
@@ -11,12 +12,14 @@ router.use(authenticateToken);
 router.get('/', paymentController.getAllPayments);
 router.get('/stats', paymentController.getPaymentStats);
 router.get('/:id', paymentController.getPaymentById);
-router.post('/', [
+router.post('/', upload.single('payment_proof'), [
   body('py_entry_type').isIn(['Debit', 'Credit']).withMessage('Invalid entry type'),
   body('py_customer_name').notEmpty().withMessage('Customer name is required'),
   body('py_amount').isFloat({ min: 0 }).withMessage('Amount must be a positive number')
 ], paymentController.createPayment);
-router.put('/:id', paymentController.updatePayment);
+router.put('/:id', upload.single('payment_proof'), paymentController.updatePayment);
 router.delete('/:id', paymentController.deletePayment);
+
+module.exports = router;
 
 module.exports = router;

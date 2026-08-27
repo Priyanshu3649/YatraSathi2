@@ -3,6 +3,7 @@ const { validationResult } = require('express-validator');
 const { Op } = require('sequelize');
 const queryHelper = require('../utils/queryHelper');
 const Audit = require('../services/forensicAuditService');
+const { validateUtrUniqueness, saveUtrReference } = require('../utils/utrValidation');
 
 
 /**
@@ -96,8 +97,25 @@ class JournalController {
         je_amount, 
         je_narration, 
         je_ref_number, 
-        je_voucher_type 
+        je_voucher_type,
+        utr_number
       } = req.body;
+      
+      try {
+        await validateUtrUniqueness(utr_number);
+      } catch (validationErr) {
+        return res.status(400).json({
+          success: false,
+          message: validationErr.message
+        });
+      }
+
+      let attachment_path = null;
+      let attachment_mime = null;
+      if (req.file) {
+        attachment_path = `/uploads/payments/${req.file.filename}`;
+        attachment_mime = req.file.mimetype;
+      }
       
       const entryNo = this.generateEntryNo('JE');
       
@@ -110,12 +128,19 @@ class JournalController {
         je_narration,
         je_ref_number,
         je_voucher_type,
+        utr_number: utr_number || null,
+        attachment_path,
+        attachment_mime,
         je_created_by: req.user.us_usid,
         je_status: 'Active'
       }, {
         ...(req.audit ? req.audit.sequelizeOptions() : {}),
         userId: req.user.us_usid
       });
+      
+      if (utr_number) {
+        await saveUtrReference(utr_number, 'JOURNAL', journal.je_jeid);
+      }
       
       // Forensic Audit: INSERT
       if (req.audit) req.audit.logInsert(journal.toJSON(), { module: 'Journal', recordId: journal.je_jeid });
@@ -157,8 +182,27 @@ class JournalController {
       }
       
       const journalBefore = journal.toJSON();
+      
+      const updateData = { ...req.body };
+      
+      if (updateData.utr_number !== undefined) {
+        try {
+          await validateUtrUniqueness(updateData.utr_number, 'JOURNAL', id);
+        } catch (validationErr) {
+          return res.status(400).json({
+            success: false,
+            message: validationErr.message
+          });
+        }
+      }
+
+      if (req.file) {
+        updateData.attachment_path = `/uploads/payments/${req.file.filename}`;
+        updateData.attachment_mime = req.file.mimetype;
+      }
+      
       const updatedJournal = await journal.update({
-        ...req.body,
+        ...updateData,
         je_modified_by: req.user.us_usid,
         je_modified_dt: new Date(),
         modified_by: req.user.us_usid,
@@ -170,6 +214,11 @@ class JournalController {
       Audit.logFieldChanges(journalBefore, updatedJournal.toJSON(), {
         module: Audit.MODULES.JOURNAL, recordId: journal.je_jeid, req });
       // ───────────────────────────────────────────────────────────────────────
+      
+      if (updatedJournal.utr_number) {
+        await saveUtrReference(updatedJournal.utr_number, 'JOURNAL', updatedJournal.je_jeid);
+      }
+      
       res.json({
         success: true,
         data: updatedJournal,

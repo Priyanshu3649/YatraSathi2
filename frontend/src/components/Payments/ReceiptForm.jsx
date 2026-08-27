@@ -9,7 +9,8 @@ import { receiptAPI, reconciliationAPI } from '../../services/api';
 import { printVoucher } from '../../utils/paymentPrintUtils';
 import '../../styles/vintage-erp-theme.css';
 
-const ReceiptForm = ({ onBack }) => {
+const ReceiptForm = ({ onBack, autoFillData }) => {
+  const [autoFillReadOnly, setAutoFillReadOnly] = useState(false);
   const { user } = useAuth();
   const {
     registerForm,
@@ -19,6 +20,8 @@ const ReceiptForm = ({ onBack }) => {
   } = useKeyboardNavigation();
   
   const [formData, setFormData] = useState({
+    utr_number: '',
+    payment_proof: null,
     receipt_no: '',
     date: new Date().toISOString().split('T')[0],
     type: 'Credit',
@@ -34,11 +37,13 @@ const ReceiptForm = ({ onBack }) => {
 
   const [receipts, setReceipts] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [isEditing, setIsEditing] = useState(true); // Default mode is "New" (showing empty form ready for data entry)
+  const [isEditing, setIsEditing] = useState(true);
   const [selectedRecord, setSelectedRecord] = useState(null);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [showSaveModal, setShowSaveModal] = useState(false);
+  const [selectedIds, setSelectedIds] = useState([]);
+  const [isReconciling, setIsReconciling] = useState(false);
   const [auditData, setAuditData] = useState({
     enteredOn: '',
     enteredBy: '',
@@ -72,7 +77,9 @@ const ReceiptForm = ({ onBack }) => {
     rc_bank_account: '',
     rc_payment_mode: '',
     rc_amount: '',
-    rc_ref_number: ''
+    rc_ref_number: '',
+    rc_narration: '',
+    utr_number: ''
   }, () => {
     setPage(1);
   }, { 
@@ -90,10 +97,24 @@ const ReceiptForm = ({ onBack }) => {
     'amount', 
     'payment_mode', 
     'ref_number', 
-    'narration'
+    'narration',
+    'utr_number',
+    'payment_proof'
   ], []);
 
   // Registry for keyboard navigation
+  useEffect(() => {
+    if (autoFillData) {
+      setFormData(prev => ({
+        ...prev,
+        customer_name: autoFillData.customer_name || prev.customer_name,
+        customer_phone: autoFillData.customer_phone || prev.customer_phone
+      }));
+      setAutoFillReadOnly(true);
+      setIsEditing(true);
+    }
+  }, [autoFillData]);
+
   useEffect(() => {
     registerForm('receipt', fieldOrder);
     setActiveForm('receipt');
@@ -139,14 +160,21 @@ const ReceiptForm = ({ onBack }) => {
   }, [isEditing, selectedRecord, formData.receipt_no, formData.type, generateTempReceiptNo]);
 
   const handleInputChange = (e) => {
-    const { name, value } = e.target;
-    setFormData(prev => {
-      const updated = { ...prev, [name]: value };
-      if (name === 'type' && isEditing && !selectedRecord) {
-        updated.receipt_no = generateTempReceiptNo(value);
-      }
-      return updated;
-    });
+    const { name, value, files } = e.target;
+    if (name === 'payment_proof' && files && files.length > 0) {
+      setFormData(prev => ({
+        ...prev,
+        payment_proof: files[0]
+      }));
+    } else {
+      setFormData(prev => {
+        const updated = { ...prev, [name]: value };
+        if (name === 'type' && isEditing && !selectedRecord) {
+          updated.receipt_no = generateTempReceiptNo(value);
+        }
+        return updated;
+      });
+    }
     setError('');
   };
 
@@ -162,9 +190,11 @@ const ReceiptForm = ({ onBack }) => {
       customer_phone: record.rc_customer_phone || '',
       account_name: record.rc_bank_account || record.account_name || '',
       amount: record.rc_amount || record.amount || '',
-      payment_mode: record.rc_payment_mode || 'Cash',
+      payment_mode: record.rc_payment_mode || record.payment_mode || 'Cash',
       ref_number: record.rc_ref_number || record.ref_number || '',
-      narration: record.rc_narration || record.narration || ''
+      narration: record.rc_narration || record.narration || '',
+      utr_number: record.utr_number || '',
+      payment_proof: null
     });
     setAuditData({
       enteredOn: record.edtm ? new Date(record.edtm).toLocaleString() : '',
@@ -191,7 +221,9 @@ const ReceiptForm = ({ onBack }) => {
       amount: '',
       payment_mode: 'Cash',
       ref_number: '',
-      narration: ''
+      narration: '',
+      utr_number: '',
+      payment_proof: null
     });
     setAuditData({
       enteredOn: new Date().toLocaleString(),
@@ -212,17 +244,19 @@ const ReceiptForm = ({ onBack }) => {
   const handleCancel = () => {
     if (selectedRecord) {
       setFormData({
-        receipt_no: selectedRecord.py_entry_no || '',
-        date: selectedRecord.py_date || selectedRecord.date || '',
-        type: selectedRecord.py_entry_type || 'Credit',
-        customer_name: selectedRecord.py_customer_name || '',
-        customer_id: selectedRecord.py_customer_id || '',
-        customer_phone: selectedRecord.py_customer_phone || '',
-        account_name: selectedRecord.py_bank_account || selectedRecord.account_name || '',
-        amount: selectedRecord.py_amount || selectedRecord.amount || '',
-        payment_mode: selectedRecord.py_payment_mode || 'Cash',
-        ref_number: selectedRecord.py_ref_number || selectedRecord.ref_number || '',
-        narration: selectedRecord.py_narration || selectedRecord.narration || ''
+        receipt_no: selectedRecord.rc_entry_no || '',
+        date: selectedRecord.rc_date || selectedRecord.date || '',
+        type: selectedRecord.rc_entry_type || 'Credit',
+        customer_name: selectedRecord.rc_customer_name || '',
+        customer_id: selectedRecord.rc_customer_id || '',
+        customer_phone: selectedRecord.rc_customer_phone || '',
+        account_name: selectedRecord.rc_bank_account || selectedRecord.account_name || '',
+        amount: selectedRecord.rc_amount || selectedRecord.amount || '',
+        payment_mode: selectedRecord.rc_payment_mode || selectedRecord.payment_mode || 'Cash',
+        ref_number: selectedRecord.rc_ref_number || selectedRecord.ref_number || '',
+        narration: selectedRecord.rc_narration || selectedRecord.narration || '',
+        utr_number: selectedRecord.utr_number || '',
+        payment_proof: null
       });
       setIsEditing(false);
     } else {
@@ -280,6 +314,22 @@ const ReceiptForm = ({ onBack }) => {
     }
   };
 
+  const handleBulkReconcile = async () => {
+    if (selectedIds.length === 0) return;
+    try {
+      setIsReconciling(true);
+      await reconciliationAPI.bulkReconcileReceipts(selectedIds, 'Reconciled');
+      setSuccess(`${selectedIds.length} receipt(s) reconciled successfully`);
+      setSelectedIds([]);
+      fetchReceipts();
+    } catch (err) {
+      console.error('Reconciliation error:', err);
+      setError(err.message || 'Failed to reconcile receipts');
+    } finally {
+      setIsReconciling(false);
+    }
+  };
+
   const handleSave = async () => {
     if (!formData.customer_name || !formData.amount || !formData.account_name) {
       setError('Required fields are missing (Customer, Account, Amount)');
@@ -290,15 +340,20 @@ const ReceiptForm = ({ onBack }) => {
       setLoading(true);
       setError('');
       
-      const payload = {
-        rc_customer_name: formData.customer_name,
-        rc_customer_phone: formData.customer_phone,
-        rc_amount: formData.amount,
-        rc_payment_mode: formData.payment_mode,
-        rc_ref_number: formData.ref_number,
-        rc_bank_account: formData.account_name,
-        rc_narration: formData.narration || `Receipt from ${formData.customer_name}`
-      };
+      const payload = new FormData();
+      payload.append('rc_customer_name', formData.customer_name);
+      payload.append('rc_customer_phone', formData.customer_phone);
+      payload.append('rc_amount', formData.amount);
+      payload.append('rc_payment_mode', formData.payment_mode);
+      payload.append('rc_ref_number', formData.utr_number);
+      payload.append('rc_bank_account', formData.account_name);
+      payload.append('rc_narration', formData.narration || `Receipt from ${formData.customer_name}`);
+      if (formData.utr_number) {
+        payload.append('utr_number', formData.utr_number);
+      }
+      if (formData.payment_proof) {
+        payload.append('payment_proof', formData.payment_proof);
+      }
       
       let response;
       if (selectedRecord) {
@@ -484,6 +539,15 @@ const ReceiptForm = ({ onBack }) => {
         <button className="erp-button" onClick={handleEdit} disabled={!selectedRecord || isEditing} title="Edit (F3)">Edit</button>
         <button className="erp-button danger" onClick={handleDelete} disabled={!selectedRecord} title="Delete (F4)">Delete</button>
         <button className="erp-button" onClick={handleReconcile} disabled={!selectedRecord || selectedRecord.is_reconciled} title="Reconcile Receipt">Reconcile</button>
+        <button
+          className="erp-button"
+          onClick={handleBulkReconcile}
+          disabled={selectedIds.length === 0 || isReconciling}
+          title="Bulk reconcile checked receipts"
+          style={selectedIds.length > 0 ? { background: '#2e7d32', color: '#fff' } : {}}
+        >
+          {isReconciling ? 'Reconciling...' : `Reconcile${selectedIds.length > 0 ? ` (${selectedIds.length})` : ' All'}`}
+        </button>
         <button className="erp-button" onClick={() => printVoucher(selectedRecord, 'receipt')} disabled={!selectedRecord} title="Export to PDF">Export PDF</button>
         <div className="erp-tool-separator"></div>
         <button className="erp-button" onClick={() => setShowSaveModal(true)} disabled={!isEditing} title="Save (F10)">Save</button>
@@ -520,17 +584,13 @@ const ReceiptForm = ({ onBack }) => {
               {/* Row 1: Header Info */}
               <div className="erp-form-row-compact-3">
                 <div className="erp-form-group">
-                  <label className="erp-form-label">Receipt No.</label>
-                  <input type="text" className="erp-input" value={formData.receipt_no} readOnly tabIndex="-1" />
-                </div>
-                <div className="erp-form-group">
                   <label className="erp-form-label">Date</label>
                   <input 
                     type="date" 
                     name="date"
                     className="erp-input" 
                     value={formData.date} 
-                    onChange={handleInputChange}
+                    onChange={handleInputChange} 
                     onFocus={() => handleManualFocus('receipt', 'date')}
                     disabled={!isEditing}
                   />
@@ -546,24 +606,26 @@ const ReceiptForm = ({ onBack }) => {
                     disabled={!isEditing}
                   >
                     <option value="Credit">Credit (Receipt In)</option>
-                    <option value="Debit">Debit (Payment Out)</option>
+                    <option value="Debit">Debit (Refund Out)</option>
                   </select>
+                </div>
+                <div className="erp-form-group" style={{ visibility: 'hidden' }}>
+                   {/* Spacing alignment */}
                 </div>
               </div>
 
-              {/* Row 2: Customer Details */}
               <div className="erp-form-row-compact-2" style={{ marginTop: '10px' }}>
                 <div className="erp-form-group">
-                  <label className="erp-form-label required">Customer Name</label>
+                  <label className="erp-form-label required">Customer / Payee</label>
                   <input 
                     type="text" 
                     name="customer_name"
                     className="erp-input" 
                     value={formData.customer_name} 
                     onChange={handleInputChange} 
-                    placeholder="Search or enter name"
+                    placeholder="Search or enter name" 
                     onFocus={() => handleManualFocus('receipt', 'customer_name')}
-                    disabled={!isEditing}
+                    disabled={!isEditing || (typeof autoFillReadOnly !== 'undefined' && autoFillReadOnly)}
                   />
                 </div>
                 <div className="erp-form-group">
@@ -573,27 +635,27 @@ const ReceiptForm = ({ onBack }) => {
                     name="customer_phone"
                     className="erp-input" 
                     value={formData.customer_phone} 
-                    onChange={handleInputChange}
+                    onChange={handleInputChange} 
                     onFocus={() => handleManualFocus('receipt', 'customer_phone')}
-                    disabled={!isEditing}
+                    disabled={!isEditing || (typeof autoFillReadOnly !== 'undefined' && autoFillReadOnly)}
                   />
                 </div>
               </div>
 
-              {/* Row 3: Account & Amount */}
-              <div className="erp-form-row-compact-2" style={{ marginTop: '10px' }}>
+              <div className="erp-form-row-compact-4" style={{ marginTop: '10px' }}>
                 <div className="erp-form-group">
-                  <label className="erp-form-label required">Account (Dr/Cr)</label>
-                  <input 
-                    type="text" 
+                  <label className="erp-form-label required">Account</label>
+                  <select 
                     name="account_name"
                     className="erp-input" 
                     value={formData.account_name} 
-                    onChange={handleInputChange} 
-                    placeholder="Bank or Cash Account"
+                    onChange={handleInputChange}
                     onFocus={() => handleManualFocus('receipt', 'account_name')}
                     disabled={!isEditing}
-                  />
+                  >
+                    <option value="">Select Account</option>
+                    {accounts.map(acc => <option key={acc} value={acc}>{acc}</option>)}
+                  </select>
                 </div>
                 <div className="erp-form-group">
                   <label className="erp-form-label required">Amount (₹)</label>
@@ -602,18 +664,15 @@ const ReceiptForm = ({ onBack }) => {
                     name="amount"
                     className="erp-input" 
                     value={formData.amount} 
-                    onChange={handleInputChange}
+                    onChange={handleInputChange} 
+                    placeholder="0.00" 
+                    style={{ fontWeight: 'bold' }}
                     onFocus={() => handleManualFocus('receipt', 'amount')}
                     disabled={!isEditing}
-                    style={{ fontWeight: 'bold' }}
                   />
                 </div>
-              </div>
-
-              {/* Row 4: Mode & Ref */}
-              <div className="erp-form-row-compact-2" style={{ marginTop: '10px' }}>
                 <div className="erp-form-group">
-                  <label className="erp-form-label">Payment Mode</label>
+                  <label className="erp-form-label">Mode</label>
                   <select 
                     name="payment_mode"
                     className="erp-input" 
@@ -629,40 +688,58 @@ const ReceiptForm = ({ onBack }) => {
                   </select>
                 </div>
                 <div className="erp-form-group">
-                  <label className="erp-form-label">Ref Number</label>
+                  <label className="erp-form-label">UTR Number</label>
                   <input 
                     type="text" 
-                    name="ref_number"
+                    name="utr_number"
                     className="erp-input" 
-                    value={formData.ref_number} 
-                    onChange={handleInputChange} 
-                    placeholder="UTR/Chq No"
-                    onFocus={() => handleManualFocus('receipt', 'ref_number')}
+                    value={formData.utr_number}
+                    onChange={handleInputChange}
+                    placeholder="Enter UTR if applicable..."
+                    onFocus={() => handleManualFocus('receipt', 'utr_number')}
                     disabled={!isEditing}
                   />
                 </div>
               </div>
-              
-              {/* Row 5: Narration */}
-              <div className="erp-form-group" style={{ marginTop: '10px' }}>
-                <label className="erp-form-label" style={{ display: 'block', textAlign: 'left', marginBottom: '2px' }}>Narration / Remarks</label>
-                <textarea 
-                  name="narration"
-                  className="erp-input" 
-                  style={{ height: '50px', resize: 'none', width: '100%' }}
-                  value={formData.narration}
-                  onChange={handleInputChange}
-                  placeholder="Enter details of transaction..."
-                  onFocus={() => handleManualFocus('receipt', 'narration')}
-                  disabled={!isEditing}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Tab' && !e.shiftKey && isEditing) {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      setShowSaveModal(true);
-                    }
-                  }}
-                />
+
+              <div className="erp-form-row-compact-2" style={{ marginTop: '10px' }}>
+                <div className="erp-form-group">
+                  <label className="erp-form-label" style={{ display: 'block', textAlign: 'left', marginBottom: '2px' }}>Payment Proof (Image)</label>
+                  <input 
+                    type="file" 
+                    name="payment_proof"
+                    className="erp-input" 
+                    onChange={handleInputChange}
+                    onFocus={() => handleManualFocus('receipt', 'payment_proof')}
+                    disabled={!isEditing}
+                    accept="image/*"
+                  />
+                  {selectedRecord?.attachment_path && (
+                    <div style={{ marginTop: '5px', fontSize: '12px' }}>
+                      <a href={selectedRecord.attachment_path} target="_blank" rel="noopener noreferrer">View Current Proof</a>
+                    </div>
+                  )}
+                </div>
+                <div className="erp-form-group">
+                  <label className="erp-form-label" style={{ display: 'block', textAlign: 'left', marginBottom: '2px' }}>Transaction Narration</label>
+                  <textarea 
+                    name="narration"
+                    className="erp-input" 
+                    style={{ height: '50px', resize: 'none', width: '100%' }}
+                    value={formData.narration}
+                    onChange={handleInputChange}
+                    placeholder="Enter specific details for this payment..."
+                    onFocus={() => handleManualFocus('receipt', 'narration')}
+                    disabled={!isEditing}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Tab' && !e.shiftKey && isEditing) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setShowSaveModal(true);
+                      }
+                    }}
+                  />
+                </div>
               </div>
             </div>
             
@@ -694,7 +771,18 @@ const ReceiptForm = ({ onBack }) => {
               <table className="erp-table">
                 <thead style={{ position: 'sticky', top: 0, backgroundColor: '#f5f5f5', zIndex: 1 }}>
                   <tr>
-                    <th style={{ width: '30px' }}><input type="checkbox" disabled style={{ opacity: 0.3 }} /></th>
+                    <th style={{ width: '30px' }}>
+                      <input
+                        type="checkbox"
+                        title="Select all unreconciled"
+                        checked={receipts.filter(r => !r.is_reconciled).length > 0 && selectedIds.length === receipts.filter(r => !r.is_reconciled).length}
+                        onChange={(e) => {
+                          if (e.target.checked) setSelectedIds(receipts.filter(r => !r.is_reconciled).map(r => r.rc_rcid));
+                          else setSelectedIds([]);
+                        }}
+                        disabled={receipts.filter(r => !r.is_reconciled).length === 0}
+                      />
+                    </th>
                     <th style={{ width: '100px' }}>Date</th>
                     <th style={{ width: '120px' }}>Voucher No</th>
                     <th>Customer Name</th>
@@ -706,7 +794,7 @@ const ReceiptForm = ({ onBack }) => {
                   </tr>
                   {/* Inline Filter Row */}
                   <tr style={{ backgroundColor: '#f8f9fa' }}>
-                    <td><input type="checkbox" disabled style={{ opacity: 0.3 }} /></td>
+                    <td style={{ textAlign: 'center', fontSize: '10px', color: '#888' }}>{selectedIds.length > 0 ? `${selectedIds.length}✓` : ''}</td>
                     <td>
                       <input 
                         type="text" 
@@ -793,13 +881,23 @@ const ReceiptForm = ({ onBack }) => {
                   {receipts.length > 0 ? receipts.map((r, i) => {
                     const isSelected = selectedRecord && selectedRecord.rc_rcid === r.rc_rcid;
                     return (
-                      <tr 
+                        <tr 
                         key={r.rc_rcid || i}
-                        className={isSelected ? 'selected' : ''}
+                        className={`${isSelected ? 'selected' : ''} ${r.is_reconciled ? 'reconciled-row' : ''}`}
                         onClick={() => handleRecordSelect(r)}
-                        style={{ cursor: 'pointer' }}
+                        style={{ cursor: 'pointer', opacity: r.is_reconciled ? 0.6 : 1, backgroundColor: r.is_reconciled ? '#f5f5f5' : '' }}
                       >
-                        <td><input type="checkbox" checked={!!isSelected} onChange={() => {}} /></td>
+                        <td onClick={(e) => e.stopPropagation()}>
+                          <input
+                            type="checkbox"
+                            checked={selectedIds.includes(r.rc_rcid)}
+                            onChange={(e) => {
+                              if (e.target.checked) setSelectedIds(prev => [...prev, r.rc_rcid]);
+                              else setSelectedIds(prev => prev.filter(id => id !== r.rc_rcid));
+                            }}
+                            disabled={!!r.is_reconciled}
+                          />
+                        </td>
                         <td>{new Date(r.rc_date || r.date).toLocaleDateString()}</td>
                         <td className="font-bold">{r.rc_entry_no || r.receipt_no}</td>
                         <td>{r.rc_customer_name || r.customer_name}</td>

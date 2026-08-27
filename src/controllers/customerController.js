@@ -10,6 +10,19 @@ const LedgerService = require('../services/LedgerService');
 const BillTVL = require('../models/BillTVL');
 const Payment = require('../models/PaymentTVL');
 const Booking = require('../models/Booking');
+const ServiceCharge = require('../models/ServiceCharge');
+
+// Helper function to convert string user ID to integer for database compatibility
+function convertUserIdToInt(userId) {
+  if (!userId) return null;
+  if (typeof userId === 'number') return userId;
+  if (typeof userId === 'string') {
+    const numericPart = userId.match(/\d+/);
+    if (numericPart) return parseInt(numericPart[0]);
+    return userId.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0) % 1000000;
+  }
+  return null;
+}
 
 const customerController = {
   // Create a new customer (admin only)
@@ -24,36 +37,47 @@ const customerController = {
       }
 
       const {
-        firstName,
-        lastName,
-        email,
+        name,
         phone,
-        password,
-        address,
-        city,
-        state,
-        pincode,
-        customerType,
-        companyName,
-        gstNumber,
-        creditLimit
+        accountGroup,
+        location,
+        opBalance,
+        workingAddress,
+        permanentAddress,
+        status
       } = req.body;
+      
+      // Legacy field mappings for compatibility
+      const customerType = accountGroup;
+      const city = location;
+      const creditLimit = opBalance;
+      const address = workingAddress;
+      const state = permanentAddress;
+      const companyName = name; // fallback
+      const gstNumber = '';
+      
+      // Auto-generate dummy email
+      const email = `dummy-${Date.now()}@system.local`;
 
-      // Validate required fields (Phone and Email are now optional for flexibility)
-      if (!firstName || !lastName || !password) {
+      if (!name || !companyName) {
         await transaction.rollback();
         return res.status(400).json({
           success: false,
-          message: 'First name, last name, and password are required'
+          message: 'Name and Company Name are mandatory fields'
         });
       }
+
+      // Split unified name into first and last name
+      const nameParts = name.trim().split(' ');
+      const firstName = nameParts[0];
+      const lastName = nameParts.slice(1).join(' ') || '';
 
       const { forceCreate } = req.body;
 
       // Check if email or phone already exists (if provided)
       const orConditions = [];
-      if (email) orConditions.push({ us_email: email });
-      if (phone) orConditions.push({ us_phone: phone });
+      if (email && email.trim() !== '') orConditions.push({ us_email: email });
+      if (phone && phone.trim() !== '') orConditions.push({ us_phone: phone });
 
       if (orConditions.length > 0) {
         const existingUser = await User.findOne({
@@ -71,7 +95,7 @@ const customerController = {
       }
 
       // Exact Name Matching for Duplicate Warning when Mobile is Missing
-      if (!phone && !forceCreate) {
+      if ((!phone || phone.trim() === '') && !forceCreate) {
         const existingNameMatch = await User.findOne({
           where: {
             us_fname: firstName,
@@ -85,7 +109,7 @@ const customerController = {
           return res.status(409).json({
             success: false,
             requiresConfirmation: true,
-            message: `A customer named ${firstName} ${lastName} already exists. Do you want to create a duplicate?`
+            message: `A customer named ${name} already exists. Do you want to create a duplicate?`
           });
         }
       }
@@ -94,15 +118,19 @@ const customerController = {
       const userCount = await User.count({ transaction });
       const userId = `CUS${String(userCount + 1).padStart(5, '0')}`;
       
-      // Hash password
-      const hashedPassword = await bcrypt.hash(password, 10);
+      // Auto-generate a dummy email if none provided
+      const finalEmail = (email && email.trim() !== '') ? email : `dummy-${userId}@system.local`;
+      
+      // Auto-generate a password since we removed it from the form
+      const randomPassword = Math.random().toString(36).slice(-8);
+      const hashedPassword = await bcrypt.hash(randomPassword, 10);
 
       // Create user record
       const newUser = await User.create({
         us_usid: userId,
         us_fname: firstName,
         us_lname: lastName,
-        us_email: email,
+        us_email: finalEmail,
         us_phone: phone,
         us_pwd: hashedPassword,
         us_usertype: 'customer',
@@ -128,6 +156,7 @@ const customerController = {
         cu_creditlimit: creditLimit || 0,
         cu_creditused: 0,
         cu_status: 'ACTIVE',
+
         edtm: new Date(),
         eby: req.user.us_usid,
         mdtm: new Date(),

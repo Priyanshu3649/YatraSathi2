@@ -27,6 +27,9 @@ const PaymentSection = () => {
   const [error, setError] = useState('');
   const [mode, setMode] = useState('list'); // 'list', 'form', 'view'
   const [selectedRecord, setSelectedRecord] = useState(null);
+  const [selectedReconcileIds, setSelectedReconcileIds] = useState([]);
+  const [reconciliationFilter, setReconciliationFilter] = useState('ACTIVE');
+  const [reconciling, setReconciling] = useState(false);
 
   // Generate auto-entry number
   useEffect(() => {
@@ -326,26 +329,96 @@ const PaymentSection = () => {
     </div>
   );
 
+  const handleBulkReconcile = async () => {
+    if (selectedReconcileIds.length === 0) return;
+    
+    setReconciling(true);
+    try {
+      // Mocking the real API call for now since records are mock data
+      // const { reconciliationAPI } = await import('../../services/api');
+      // await reconciliationAPI.bulkReconcilePayments(selectedReconcileIds, 'Reconciled from UI');
+      
+      // Update local state to simulate success
+      setRecords(prev => prev.map(r => 
+        selectedReconcileIds.includes(r.id) ? { ...r, is_reconciled: 1 } : r
+      ));
+      setSelectedReconcileIds([]);
+    } catch (err) {
+      console.error(err);
+      setError('Failed to reconcile selected records');
+    } finally {
+      setReconciling(false);
+    }
+  };
+
+  const handleHeaderToggleClick = () => {
+    setReconciliationFilter(prev => {
+      if (prev === 'ACTIVE') return 'RECONCILED';
+      if (prev === 'RECONCILED') return 'ALL';
+      return 'ACTIVE';
+    });
+  };
+
+  const filteredRecords = records.filter(r => {
+    if (reconciliationFilter === 'ACTIVE') return !r.is_reconciled;
+    if (reconciliationFilter === 'RECONCILED') return r.is_reconciled === 1;
+    return true; // ALL
+  });
+
   // Render list view
   const renderList = () => (
     <div className="payment-list">
       <div className="list-header">
         <h3>Payment Records</h3>
-        <button 
-          className="action-button new-button"
-          onClick={() => setMode('form')}
-        >
-          New Payment
-        </button>
+        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+          <select 
+            value={reconciliationFilter} 
+            onChange={(e) => setReconciliationFilter(e.target.value)}
+            style={{ padding: '4px', fontSize: '12px' }}
+          >
+            <option value="ACTIVE">Active Payments</option>
+            <option value="RECONCILED">Reconciled</option>
+            <option value="ALL">All Payments</option>
+          </select>
+          {selectedReconcileIds.length > 0 && (
+            <button 
+              className="action-button save-button" 
+              onClick={handleBulkReconcile}
+              disabled={reconciling}
+            >
+              {reconciling ? 'Reconciling...' : `Reconcile (${selectedReconcileIds.length})`}
+            </button>
+          )}
+          <button 
+            className="action-button new-button"
+            onClick={() => setMode('form')}
+          >
+            New Payment
+          </button>
+        </div>
       </div>
       
       <div className="records-grid">
         <table className="records-table">
           <thead>
             <tr>
-              <th>Entry No</th>
-              <th>Date</th>
-              <th>Customer</th>
+              <th style={{ width: '40px', textAlign: 'center' }}>
+                <input 
+                  type="checkbox" 
+                  checked={filteredRecords.length > 0 && selectedReconcileIds.length === filteredRecords.filter(r => !r.is_reconciled).length}
+                  onChange={(e) => {
+                    if (e.target.checked) {
+                      setSelectedReconcileIds(filteredRecords.filter(r => !r.is_reconciled).map(r => r.id));
+                    } else {
+                      setSelectedReconcileIds([]);
+                    }
+                  }}
+                  disabled={filteredRecords.filter(r => !r.is_reconciled).length === 0}
+                />
+              </th>
+              <th onClick={handleHeaderToggleClick} style={{ cursor: 'pointer', userSelect: 'none' }}>Entry No ↕</th>
+              <th onClick={handleHeaderToggleClick} style={{ cursor: 'pointer', userSelect: 'none' }}>Date ↕</th>
+              <th onClick={handleHeaderToggleClick} style={{ cursor: 'pointer', userSelect: 'none' }}>Customer ↕</th>
               <th>Phone</th>
               <th>Amount</th>
               <th>Type</th>
@@ -353,8 +426,22 @@ const PaymentSection = () => {
             </tr>
           </thead>
           <tbody>
-            {records.map(record => (
-              <tr key={record.id}>
+            {filteredRecords.map(record => (
+              <tr key={record.id} style={{ opacity: record.is_reconciled ? 0.6 : 1, backgroundColor: record.is_reconciled ? '#f9f9f9' : 'inherit' }}>
+                <td style={{ textAlign: 'center' }}>
+                  <input 
+                    type="checkbox"
+                    checked={selectedReconcileIds.includes(record.id)}
+                    onChange={(e) => {
+                      if (e.target.checked) {
+                        setSelectedReconcileIds(prev => [...prev, record.id]);
+                      } else {
+                        setSelectedReconcileIds(prev => prev.filter(id => id !== record.id));
+                      }
+                    }}
+                    disabled={record.is_reconciled === 1}
+                  />
+                </td>
                 <td>{record.entry_no}</td>
                 <td>{record.date}</td>
                 <td>{record.customer_name}</td>

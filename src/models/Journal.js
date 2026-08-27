@@ -58,6 +58,24 @@ const Journal = sequelize.define('jeJournal', {
     allowNull: true,
     comment: 'Reference number'
   },
+
+  utr_number: {
+    type: DataTypes.STRING(100),
+    allowNull: true,
+    comment: 'Global unique UTR number'
+  },
+
+  attachment_path: {
+    type: DataTypes.STRING(500),
+    allowNull: true,
+    comment: 'Path to proof image'
+  },
+
+  attachment_mime: {
+    type: DataTypes.STRING(50),
+    allowNull: true,
+    comment: 'MIME type of proof image'
+  },
   
   je_voucher_type: {
     type: DataTypes.ENUM('Cash', 'Bank', 'Contra', 'Purchase', 'Sales', 'Journal'),
@@ -77,6 +95,27 @@ const Journal = sequelize.define('jeJournal', {
     allowNull: false,
     defaultValue: 'Active',
     comment: 'Journal entry status'
+  },
+  
+  is_reconciled: {
+    type: DataTypes.TINYINT(1),
+    defaultValue: 0,
+    comment: 'Is Reconciled'
+  },
+  reconciled_by: {
+    type: DataTypes.INTEGER,
+    allowNull: true,
+    comment: 'Reconciled By User ID'
+  },
+  reconciled_at: {
+    type: DataTypes.DATE,
+    allowNull: true,
+    comment: 'Reconciliation Timestamp'
+  },
+  reconciliation_remarks: {
+    type: DataTypes.TEXT,
+    allowNull: true,
+    comment: 'Reconciliation Remarks'
   },
   
   // Audit fields from BaseModel

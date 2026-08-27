@@ -19,6 +19,8 @@ const ContraForm = ({ onBack }) => {
   } = useKeyboardNavigation();
   
   const [formData, setFormData] = useState({
+    utr_number: '',
+    payment_proof: null,
     contra_no: '',
     date: new Date().toISOString().split('T')[0],
     from_account: '',
@@ -30,11 +32,13 @@ const ContraForm = ({ onBack }) => {
 
   const [paymentRecords, setPaymentRecords] = useState([]); 
   const [loading, setLoading] = useState(false);
-  const [isEditing, setIsEditing] = useState(true); // Default mode is "New" (showing empty form ready for data entry)
+  const [isEditing, setIsEditing] = useState(true);
   const [selectedRecord, setSelectedRecord] = useState(null);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [showSaveModal, setShowSaveModal] = useState(false);
+  const [selectedIds, setSelectedIds] = useState([]);
+  const [isReconciling, setIsReconciling] = useState(false);
   const [auditData, setAuditData] = useState({
     enteredOn: '',
     enteredBy: '',
@@ -66,7 +70,8 @@ const ContraForm = ({ onBack }) => {
     ct_from_account: '',
     ct_to_account: '',
     ct_amount: '',
-    ct_ref_number: ''
+    ct_ref_number: '',
+    utr_number: ''
   }, () => {
     setPage(1);
   }, { 
@@ -129,8 +134,12 @@ const ContraForm = ({ onBack }) => {
   }, [isEditing, selectedRecord, formData.contra_no, generateTempContraNo]);
 
   const handleInputChange = (e) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
+    const { name, value, files } = e.target;
+    if (name === 'payment_proof' && files && files.length > 0) {
+      setFormData(prev => ({ ...prev, payment_proof: files[0] }));
+    } else {
+      setFormData(prev => ({ ...prev, [name]: value }));
+    }
     setError('');
   };
 
@@ -144,7 +153,9 @@ const ContraForm = ({ onBack }) => {
       to_account: record.ct_to_account || record.to_account || '',
       amount: record.ct_amount || record.amount || '',
       ref_number: record.ct_ref_number || record.ref_number || '',
-      narration: record.ct_narration || record.narration || ''
+      narration: record.ct_narration || record.narration || '',
+      utr_number: record.utr_number || '',
+      payment_proof: null
     });
     setAuditData({
       enteredOn: record.edtm ? new Date(record.edtm).toLocaleString() : '',
@@ -167,7 +178,9 @@ const ContraForm = ({ onBack }) => {
       to_account: '',
       amount: '',
       ref_number: '',
-      narration: ''
+      narration: '',
+      utr_number: '',
+      payment_proof: null
     });
     setAuditData({
       enteredOn: new Date().toLocaleString(),
@@ -194,7 +207,9 @@ const ContraForm = ({ onBack }) => {
         to_account: selectedRecord.py_bank_account || selectedRecord.account_name || '',
         amount: selectedRecord.py_amount || selectedRecord.amount || '',
         ref_number: selectedRecord.py_ref_number || selectedRecord.ref_number || '',
-        narration: selectedRecord.py_narration || selectedRecord.narration || ''
+        narration: selectedRecord.py_narration || selectedRecord.narration || '',
+        utr_number: selectedRecord.utr_number || '',
+        payment_proof: null
       });
       setIsEditing(false);
     } else {
@@ -251,6 +266,22 @@ const ContraForm = ({ onBack }) => {
     }
   };
 
+  const handleBulkReconcile = async () => {
+    if (selectedIds.length === 0) return;
+    try {
+      setIsReconciling(true);
+      await reconciliationAPI.bulkReconcileContra(selectedIds, 'Reconciled');
+      setSuccess(`${selectedIds.length} contra entry/entries reconciled successfully`);
+      setSelectedIds([]);
+      fetchContras();
+    } catch (err) {
+      console.error('Reconciliation error:', err);
+      setError(err.message || 'Failed to reconcile contra entries');
+    } finally {
+      setIsReconciling(false);
+    }
+  };
+
   const handleSave = async () => {
     if (!formData.from_account || !formData.to_account || !formData.amount) {
       setError('Required fields are missing (From Account, To Account, Amount)');
@@ -261,13 +292,18 @@ const ContraForm = ({ onBack }) => {
       setLoading(true);
       setError('');
       
-      const payload = {
-        ct_from_account: formData.from_account,
-        ct_to_account: formData.to_account,
-        ct_amount: formData.amount,
-        ct_ref_number: formData.ref_number,
-        ct_narration: formData.narration || `Contra: ${formData.from_account} to ${formData.to_account}`
-      };
+      const payload = new FormData();
+      payload.append('ct_from_account', formData.from_account);
+      payload.append('ct_to_account', formData.to_account);
+      payload.append('ct_amount', formData.amount);
+      payload.append('ct_ref_number', formData.ref_number);
+      payload.append('ct_narration', formData.narration || `Contra: ${formData.from_account} to ${formData.to_account}`);
+      if (formData.utr_number) {
+        payload.append('utr_number', formData.utr_number);
+      }
+      if (formData.payment_proof) {
+        payload.append('payment_proof', formData.payment_proof);
+      }
 
       let response;
       if (selectedRecord) {
@@ -453,6 +489,15 @@ const ContraForm = ({ onBack }) => {
         <button className="erp-button" onClick={handleEdit} disabled={!selectedRecord || isEditing} title="Edit (F3)">Edit</button>
         <button className="erp-button danger" onClick={handleDelete} disabled={!selectedRecord} title="Delete (F4)">Delete</button>
         <button className="erp-button" onClick={handleReconcile} disabled={!selectedRecord || selectedRecord.is_reconciled} title="Reconcile Contra">Reconcile</button>
+        <button
+          className="erp-button"
+          onClick={handleBulkReconcile}
+          disabled={selectedIds.length === 0 || isReconciling}
+          title="Bulk reconcile checked contra entries"
+          style={selectedIds.length > 0 ? { background: '#2e7d32', color: '#fff' } : {}}
+        >
+          {isReconciling ? 'Reconciling...' : `Reconcile${selectedIds.length > 0 ? ` (${selectedIds.length})` : ' All'}`}
+        </button>
         <button className="erp-button" onClick={() => printVoucher(selectedRecord, 'contra')} disabled={!selectedRecord} title="Export to PDF">Export PDF</button>
         <div className="erp-tool-separator"></div>
         <button className="erp-button" onClick={() => setShowSaveModal(true)} disabled={!isEditing} title="Save (F10)">Save</button>
@@ -486,13 +531,13 @@ const ContraForm = ({ onBack }) => {
               {error && <div className="erp-error-banner" style={{ marginBottom: '10px' }}>{error}</div>}
               {success && <div className="erp-success-banner" style={{ marginBottom: '10px' }}>{success}</div>}
               
-              <div className="erp-form-row-compact-2">
+              <div className="erp-form-row-compact-3">
                 <div className="erp-form-group">
-                  <label className="erp-form-label">Contra No.</label>
-                  <input type="text" className="erp-input" value={formData.contra_no} readOnly tabIndex="-1" />
+                  <label className="erp-form-label">Receipt No</label>
+                  <input type="text" className="erp-input" value={formData.receipt_no} readOnly tabIndex="-1" />
                 </div>
                 <div className="erp-form-group">
-                  <label className="erp-form-label">Voucher Date</label>
+                  <label className="erp-form-label">Date</label>
                   <input 
                     type="date" 
                     name="date"
@@ -503,84 +548,147 @@ const ContraForm = ({ onBack }) => {
                     disabled={!isEditing}
                   />
                 </div>
-              </div>
-
-              <div className="erp-form-row-compact-2" style={{ marginTop: '10px' }}>
                 <div className="erp-form-group">
-                  <label className="erp-form-label required">From Account (Cr)</label>
-                  <input 
-                    type="text" 
-                    name="from_account"
+                  <label className="erp-form-label">Voucher Type</label>
+                  <select 
+                    name="type"
                     className="erp-input" 
-                    value={formData.from_account} 
-                    onChange={handleInputChange} 
-                    placeholder="Source (Cash/Bank)" 
-                    onFocus={() => handleManualFocus('contra', 'from_account')}
+                    value={formData.type} 
+                    onChange={handleInputChange}
+                    onFocus={() => handleManualFocus('contra', 'type')}
                     disabled={!isEditing}
-                  />
-                </div>
-                <div className="erp-form-group">
-                  <label className="erp-form-label required">To Account (Dr)</label>
-                  <input 
-                    type="text" 
-                    name="to_account"
-                    className="erp-input" 
-                    value={formData.to_account} 
-                    onChange={handleInputChange} 
-                    placeholder="Destination (Bank/Cash)" 
-                    onFocus={() => handleManualFocus('contra', 'to_account')}
-                    disabled={!isEditing}
-                  />
+                  >
+                    <option value="Contra">Contra (Bank/Cash Transfer)</option>
+                  </select>
                 </div>
               </div>
 
               <div className="erp-form-row-compact-2" style={{ marginTop: '10px' }}>
                 <div className="erp-form-group">
-                  <label className="erp-form-label required">Transfer Amount (₹)</label>
+                  <label className="erp-form-label required">Customer / Payee</label>
+                  <input 
+                    type="text" 
+                    name="customer_name"
+                    className="erp-input" 
+                    value={formData.customer_name} 
+                    onChange={handleInputChange} 
+                    placeholder="Search or enter name" 
+                    onFocus={() => handleManualFocus('contra', 'customer_name')}
+                    disabled={!isEditing || (typeof autoFillReadOnly !== 'undefined' && autoFillReadOnly)}
+                  />
+                </div>
+                <div className="erp-form-group">
+                  <label className="erp-form-label">Phone Number</label>
+                  <input 
+                    type="text" 
+                    name="customer_phone"
+                    className="erp-input" 
+                    value={formData.customer_phone} 
+                    onChange={handleInputChange} 
+                    onFocus={() => handleManualFocus('contra', 'customer_phone')}
+                    disabled={!isEditing || (typeof autoFillReadOnly !== 'undefined' && autoFillReadOnly)}
+                  />
+                </div>
+              </div>
+
+              <div className="erp-form-row-compact-4" style={{ marginTop: '10px' }}>
+                <div className="erp-form-group">
+                  <label className="erp-form-label required">Account</label>
+                  <select 
+                    name="account_name"
+                    className="erp-input" 
+                    value={formData.account_name} 
+                    onChange={handleInputChange}
+                    onFocus={() => handleManualFocus('contra', 'account_name')}
+                    disabled={!isEditing}
+                  >
+                    <option value="">Select Account</option>
+                    {accounts.map(acc => <option key={acc} value={acc}>{acc}</option>)}
+                  </select>
+                </div>
+                <div className="erp-form-group">
+                  <label className="erp-form-label required">Amount (₹)</label>
                   <input 
                     type="number" 
                     name="amount"
                     className="erp-input" 
                     value={formData.amount} 
                     onChange={handleInputChange} 
+                    placeholder="0.00" 
                     style={{ fontWeight: 'bold' }}
                     onFocus={() => handleManualFocus('contra', 'amount')}
                     disabled={!isEditing}
                   />
                 </div>
                 <div className="erp-form-group">
-                  <label className="erp-form-label">Reference / Chq No.</label>
+                  <label className="erp-form-label">Mode</label>
+                  <select 
+                    name="payment_mode"
+                    className="erp-input" 
+                    value={formData.payment_mode} 
+                    onChange={handleInputChange}
+                    onFocus={() => handleManualFocus('contra', 'payment_mode')}
+                    disabled={!isEditing}
+                  >
+                    <option value="Cash">Cash</option>
+                    <option value="UPI">UPI</option>
+                    <option value="Bank Transfer">Bank Transfer</option>
+                    <option value="Cheque">Cheque</option>
+                  </select>
+                </div>
+                <div className="erp-form-group">
+                  <label className="erp-form-label">UTR Number</label>
                   <input 
                     type="text" 
-                    name="ref_number"
+                    name="utr_number"
                     className="erp-input" 
-                    value={formData.ref_number} 
+                    value={formData.utr_number}
                     onChange={handleInputChange}
-                    onFocus={() => handleManualFocus('contra', 'ref_number')}
+                    placeholder="Enter UTR if applicable..."
+                    onFocus={() => handleManualFocus('contra', 'utr_number')}
                     disabled={!isEditing}
                   />
                 </div>
               </div>
 
-              <div className="erp-form-group" style={{ marginTop: '10px' }}>
-                <label className="erp-form-label" style={{ display: 'block', textAlign: 'left', marginBottom: '2px' }}>Transaction Details</label>
-                <textarea 
-                  name="narration"
-                  className="erp-input" 
-                  value={formData.narration} 
-                  onChange={handleInputChange} 
-                  rows="2" 
-                  style={{ width: '100%', resize: 'none' }}
-                  onFocus={() => handleManualFocus('contra', 'narration')}
-                  disabled={!isEditing}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Tab' && !e.shiftKey && isEditing) {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      setShowSaveModal(true);
-                    }
-                  }}
-                />
+              <div className="erp-form-row-compact-2" style={{ marginTop: '10px' }}>
+                <div className="erp-form-group">
+                  <label className="erp-form-label" style={{ display: 'block', textAlign: 'left', marginBottom: '2px' }}>Payment Proof (Image)</label>
+                  <input 
+                    type="file" 
+                    name="payment_proof"
+                    className="erp-input" 
+                    onChange={handleInputChange}
+                    onFocus={() => handleManualFocus('contra', 'payment_proof')}
+                    disabled={!isEditing}
+                    accept="image/*"
+                  />
+                  {selectedRecord?.attachment_path && (
+                    <div style={{ marginTop: '5px', fontSize: '12px' }}>
+                      <a href={selectedRecord.attachment_path} target="_blank" rel="noopener noreferrer">View Current Proof</a>
+                    </div>
+                  )}
+                </div>
+                <div className="erp-form-group">
+                  <label className="erp-form-label" style={{ display: 'block', textAlign: 'left', marginBottom: '2px' }}>Transaction Narration</label>
+                  <textarea 
+                    name="narration"
+                    className="erp-input" 
+                    style={{ height: '50px', resize: 'none', width: '100%' }}
+                    value={formData.narration}
+                    onChange={handleInputChange}
+                    placeholder="Enter specific details for this payment..."
+                    onFocus={() => handleManualFocus('contra', 'narration')}
+                    disabled={!isEditing}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Tab' && !e.shiftKey && isEditing) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setShowSaveModal(true);
+                      }
+                    }}
+                  />
+                </div>
               </div>
             </div>
             
@@ -612,7 +720,18 @@ const ContraForm = ({ onBack }) => {
               <table className="erp-table">
                 <thead style={{ position: 'sticky', top: 0, backgroundColor: '#f5f5f5', zIndex: 1 }}>
                   <tr>
-                    <th style={{ width: '30px' }}><input type="checkbox" disabled style={{ opacity: 0.3 }} /></th>
+                    <th style={{ width: '30px' }}>
+                      <input
+                        type="checkbox"
+                        title="Select all unreconciled"
+                        checked={paymentRecords.filter(r => !r.is_reconciled).length > 0 && selectedIds.length === paymentRecords.filter(r => !r.is_reconciled).length}
+                        onChange={(e) => {
+                          if (e.target.checked) setSelectedIds(paymentRecords.filter(r => !r.is_reconciled).map(r => r.ct_ctid));
+                          else setSelectedIds([]);
+                        }}
+                        disabled={paymentRecords.filter(r => !r.is_reconciled).length === 0}
+                      />
+                    </th>
                     <th style={{ width: '100px' }}>Date</th>
                     <th style={{ width: '120px' }}>Entry No</th>
                     <th>From Account</th>
@@ -622,7 +741,7 @@ const ContraForm = ({ onBack }) => {
                   </tr>
                   {/* Inline Filter Row */}
                   <tr style={{ backgroundColor: '#f8f9fa' }}>
-                    <td><input type="checkbox" disabled style={{ opacity: 0.3 }} /></td>
+                    <td style={{ textAlign: 'center', fontSize: '10px', color: '#888' }}>{selectedIds.length > 0 ? `${selectedIds.length}✓` : ''}</td>
                     <td>
                       <input 
                         type="text" 
@@ -691,11 +810,21 @@ const ContraForm = ({ onBack }) => {
                     return (
                       <tr 
                         key={r.ct_ctid || i}
-                        className={isSelected ? 'selected' : ''}
+                        className={`${isSelected ? 'selected' : ''} ${r.is_reconciled ? 'reconciled-row' : ''}`}
                         onClick={() => handleRecordSelect(r)}
-                        style={{ cursor: 'pointer' }}
+                        style={{ cursor: 'pointer', opacity: r.is_reconciled ? 0.6 : 1, backgroundColor: r.is_reconciled ? '#f5f5f5' : '' }}
                       >
-                        <td><input type="checkbox" checked={!!isSelected} onChange={() => {}} /></td>
+                        <td onClick={(e) => e.stopPropagation()}>
+                          <input
+                            type="checkbox"
+                            checked={selectedIds.includes(r.ct_ctid)}
+                            onChange={(e) => {
+                              if (e.target.checked) setSelectedIds(prev => [...prev, r.ct_ctid]);
+                              else setSelectedIds(prev => prev.filter(id => id !== r.ct_ctid));
+                            }}
+                            disabled={!!r.is_reconciled}
+                          />
+                        </td>
                         <td>{new Date(r.ct_date || r.date).toLocaleDateString()}</td>
                         <td className="font-bold">{r.ct_entry_no || r.contra_no}</td>
                         <td>{r.ct_from_account || r.from_account}</td>

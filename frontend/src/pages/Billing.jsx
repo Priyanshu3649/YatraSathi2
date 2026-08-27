@@ -294,6 +294,36 @@ const Billing = () => {
   const [sbDropdownOpen, setSbDropdownOpen] = useState(false);
 
   // Fetch active station boys on mount
+  
+  // Enter key redirect to Receipt Form
+  useEffect(() => {
+    const handleGlobalKeyDown = (e) => {
+      if (e.key === 'Enter' && selectedBill) {
+        e.preventDefault();
+        navigate('/payments', { 
+          state: { 
+            view: 'receipt', 
+            autoFill: { 
+              customer_name: selectedBill.customerName, 
+              customer_phone: selectedBill.customerPhone 
+            } 
+          } 
+        });
+      }
+    };
+    
+    // Only attach if no modals are open
+    // Since showPaymentModal doesn't exist, we'll just check if any standard modal class exists in DOM
+    const hasModals = document.querySelector('.modal-overlay') !== null;
+    if (!hasModals) {
+      window.addEventListener('keydown', handleGlobalKeyDown);
+    }
+    
+    return () => {
+      window.removeEventListener('keydown', handleGlobalKeyDown);
+    };
+  }, [selectedBill, navigate]);
+  
   useEffect(() => {
     const fetchActiveStationBoys = async () => {
       try {
@@ -1193,8 +1223,9 @@ const Billing = () => {
 
   const handleSelectAllCheckbox = useCallback((e) => {
     if (e.target.checked) {
-      // Select all currently loaded active bills that are PAID or CANCELLED
-      const ids = bills.filter(b => !b.is_reconciled && (b.payment_status === 'PAID' || b.bl_status === 'CANCELLED' || b.status === 'CANCELLED')).map(b => b.id || b.bl_id);
+      // Select all currently loaded active bills that are CNF, CONFIRMED, PAID, CANCELLED, CAN, or FINAL
+      const allowedStatuses = ['PAID', 'CANCELLED', 'CONFIRMED', 'CNF', 'CAN', 'FINAL'];
+      const ids = bills.filter(b => !b.is_reconciled && (allowedStatuses.includes(b.bl_status) || b.payment_status === 'PAID')).map(b => b.id || b.bl_id);
       setSelectedReconcileIds(ids);
     } else {
       setSelectedReconcileIds([]);
@@ -2435,7 +2466,7 @@ const Billing = () => {
                         <th style={{ width: '70px', textAlign: 'center' }}>
                           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
                             <span style={{ fontSize: '9px', fontWeight: 'normal' }}>Select All</span>
-                            <input type="checkbox" onChange={handleSelectAllCheckbox} checked={bills.filter(b => !b.is_reconciled && (b.payment_status === 'PAID' || b.bl_status === 'CANCELLED' || b.status === 'CANCELLED')).length > 0 && selectedReconcileIds.length === bills.filter(b => !b.is_reconciled && (b.payment_status === 'PAID' || b.bl_status === 'CANCELLED' || b.status === 'CANCELLED')).length} />
+                            <input type="checkbox" onChange={handleSelectAllCheckbox} checked={bills.filter(b => !b.is_reconciled && (['PAID', 'CANCELLED', 'CONFIRMED', 'CNF', 'CAN', 'FINAL'].includes(b.bl_status) || b.payment_status === 'PAID')).length > 0 && selectedReconcileIds.length === bills.filter(b => !b.is_reconciled && (['PAID', 'CANCELLED', 'CONFIRMED', 'CNF', 'CAN', 'FINAL'].includes(b.bl_status) || b.payment_status === 'PAID')).length} />
                           </div>
                         </th>
                         <th style={{ width: '80px', cursor: 'pointer', userSelect: 'none' }} onClick={handleHeaderToggleClick} title="Toggle Active/Reconciled">Bill ID ↕</th>
@@ -2538,7 +2569,7 @@ const Billing = () => {
                               type="checkbox"
                               checked={selectedReconcileIds.includes(bill.id || bill.bl_id)}
                               onChange={(e) => handleRowCheckbox(bill.id || bill.bl_id, e.target.checked)}
-                              disabled={bill.is_reconciled || (bill.payment_status !== 'PAID' && bill.bl_status !== 'CANCELLED' && bill.status !== 'CANCELLED')}
+                              disabled={bill.is_reconciled || (!['PAID', 'CANCELLED', 'CONFIRMED', 'CNF', 'CAN', 'FINAL'].includes(bill.bl_status) && bill.payment_status !== 'PAID')}
                             />
                           </td>
                           <td>{bill.bl_bill_no || bill.bill_no || ''}</td>

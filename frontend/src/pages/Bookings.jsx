@@ -142,6 +142,7 @@ const Bookings = () => {
     advanceAmount: '',
     paymentMode: 'Cash',
     paymentReference: '',
+    utrNumber: '',
     remarks: '',
     status: 'DRF',
     createdBy: user?.us_name || 'system',
@@ -152,6 +153,7 @@ const Bookings = () => {
     closedOn: ''
   });
   const [passengerList, setPassengerList] = useState([]);
+  const [customerSuggestions, setCustomerSuggestions] = useState([]);
   const [isEditing, setIsEditing] = useState(false);
   const [selectedReconcileIds, setSelectedReconcileIds] = useState([]);
   const [isReconciling, setIsReconciling] = useState(false);
@@ -223,6 +225,9 @@ const Bookings = () => {
     'travelDate',
     'travelClass',      // Travel Class (same row as travel date)
     'quotaType',        // Quota Type (after travel class)
+    'advanceAmount',
+    'paymentMode',
+    'utrNumber',
     // Passenger fields - visible by default
     'passenger_name',
     'passenger_age', 
@@ -415,7 +420,8 @@ const Bookings = () => {
         // Send advance payment details for backend processing
         advanceAmount: formData.advanceAmount,
         paymentMode: formData.paymentMode,
-        paymentReference: formData.paymentReference,
+        paymentReference: formData.utrNumber,
+        utrNumber: formData.utrNumber,
         
         // Audit fields (match BookingTVL model)
         mby: user?.us_name || 'system', // Modified by
@@ -511,6 +517,7 @@ const Bookings = () => {
       advanceAmount: '',
       paymentMode: 'Cash',
       paymentReference: '',
+      utrNumber: '',
       pnrNumber: '', // NEW: PNR field
       remarks: '',
       status: 'DRF', // ✓ Use DRF as default (database compatible)
@@ -535,6 +542,9 @@ const Bookings = () => {
       gender: 'M',
       berth: ''
     });
+      
+    // Passenger history auto-population has been intentionally removed per requirements
+    // Passengers must be entered manually for every new booking
       
     // Focus will be handled automatically by keyboard engine
   }, [user?.us_name, clearLookupCache]);
@@ -713,6 +723,7 @@ const Bookings = () => {
       advanceAmount: record.advanceAmount || '',
       paymentMode: record.paymentMode || 'Cash',
       paymentReference: record.paymentReference || '',
+      utrNumber: record.utrNumber || record.paymentReference || '',
       pnrNumber: record.pnrNumber || record.bk_pnr || '', // NEW: PNR field
       remarks: record.remarks || record.bk_remarks || '',
       status: record.bk_status || 'DRAFT',
@@ -722,6 +733,14 @@ const Bookings = () => {
       modifiedOn: record.modifiedOn || record.bk_modifiedon || '',
       closedBy: record.closedBy || record.bk_closedby || '',
       closedOn: record.closedOn || record.bk_closedon || ''
+    });
+    
+    // Also reset the passenger draft when selecting a new record
+    setCurrentPassengerDraft({
+      name: '',
+      age: '',
+      gender: 'M',
+      berth: ''
     });
     
     // Initialize with empty list first
@@ -982,12 +1001,14 @@ const Bookings = () => {
       
       setPassengerList(prev => [...prev, newPassenger]);
       
-      // Clear draft
+      // Clear the draft completely for the next passenger entry
       setCurrentPassengerDraft({
         name: '',
         age: '',
         gender: 'M',
-        berth: ''
+        berth: '',
+        idProofType: '',
+        idProofNumber: ''
       });
       
       console.log('✅ Passenger added:', newPassenger.name);
@@ -1139,6 +1160,30 @@ const Bookings = () => {
     }
   }, [validatePhoneNumber, lookupCustomerByPhone, isEditing]);
     
+  const handleCustomerNameBlur = useCallback(async (e) => {
+    if (!isEditing) return;
+    const name = e.target.value.trim();
+    if (!name || formData.phoneNumber) return; // Only fetch if name exists and phone is empty
+
+    try {
+      const results = await customerAPI.searchCustomers(name);
+      const customerList = Array.isArray(results) ? results : (results?.data || []);
+      // Look for exact match (case-insensitive)
+      const match = customerList.find(c => c.name?.toLowerCase() === name.toLowerCase() || c.companyName?.toLowerCase() === name.toLowerCase());
+      
+      if (match && match.phone) {
+        setFormData(prev => ({
+          ...prev,
+          phoneNumber: match.phone,
+          internalCustomerId: match.id || prev.internalCustomerId
+        }));
+      }
+    } catch (error) {
+      // Silently fail - auto-fetch is an enhancement, not a requirement
+      console.warn('Auto-fetch customer by name failed:', error);
+    }
+  }, [formData.phoneNumber, isEditing]);
+
   // Auto-calculate total passengers when passenger list changes (DERIVED STATE)
   useEffect(() => {
     const total = passengerList.filter(p => p.name && p.name.trim() !== '').length;
@@ -1194,12 +1239,26 @@ const Bookings = () => {
       
   
     
-  const handleInputChange = useCallback((e) => {
+  const handleInputChange = useCallback(async (e) => {
     const { name, value } = e.target;
     setFormData(prev => ({
       ...prev,
       [name]: value
     }));
+
+    if (name === 'customerName') {
+      if (value.trim().length >= 2) {
+        try {
+          const results = await customerAPI.searchCustomers(value.trim());
+          const customerList = Array.isArray(results) ? results : (results?.data || []);
+          setCustomerSuggestions(customerList);
+        } catch (error) {
+          console.warn('Failed to fetch customer suggestions:', error);
+        }
+      } else {
+        setCustomerSuggestions([]);
+      }
+    }
 
     // DO NOT auto-enter passenger mode on quota type selection
     // Passenger mode ONLY activates on Tab key press from quota field
@@ -1392,10 +1451,8 @@ setSelectedBooking(null); // Clear selection after deletion
   }, [selectedReconcileIds, inlineFilters]);
 
   const removePassenger = useCallback((id) => {
-    if (passengerList.length <= 1) {
-      setError('At least one passenger is required');
-      return;
-    }
+    // Only prevent deletion if it's the very last passenger and they aren't adding a new one
+    // Actually, users might want to delete all passengers to start over, so just delete it.
     setPassengerList(prev => prev.filter(p => p.id !== id));
   }, []);
 
@@ -1737,18 +1794,28 @@ setSelectedBooking(null); // Clear selection after deletion
                     disabled={!isEditing}
                   />
                   <label className="erp-form-label">Customer Name</label>
-                  <input
-                    type="text"
-                    name="customerName"
-                    data-field="customerName"
-                    className="erp-input"
-                    value={formData.customerName}
-                    onChange={handleInputChange}
-                    onFocus={() => handleFieldFocus('customerName')}
-                    onKeyDown={(e) => handleEnhancedTabNavigation(e, 'customerName')}
-                    disabled={!isEditing}
-                    placeholder="Enter name"
-                  />
+                  <div style={{ position: 'relative' }}>
+                    <input
+                      type="text"
+                      name="customerName"
+                      data-field="customerName"
+                      className="erp-input"
+                      value={formData.customerName}
+                      onChange={handleInputChange}
+                      onBlur={handleCustomerNameBlur}
+                      onFocus={() => handleFieldFocus('customerName')}
+                      onKeyDown={(e) => handleEnhancedTabNavigation(e, 'customerName')}
+                      disabled={!isEditing}
+                      placeholder="Enter name"
+                      list="customer-suggestions"
+                      style={{ width: '100%' }}
+                    />
+                    <datalist id="customer-suggestions">
+                      {customerSuggestions.map((c, i) => (
+                        <option key={c.id || c.cu_usid || i} value={c.name || `${c.firstName || ''} ${c.lastName || ''}`.trim() || c.cu_name} />
+                      ))}
+                    </datalist>
+                  </div>
                   <label className="erp-form-label">Phone Number</label>
                   <input
                     type="tel"
@@ -1874,9 +1941,11 @@ setSelectedBooking(null); // Clear selection after deletion
                   <input
                     type="number"
                     name="advanceAmount"
+                    data-field="advanceAmount"
                     className="erp-input"
                     value={formData.advanceAmount}
                     onChange={handleInputChange}
+                    onFocus={() => handleFieldFocus('advanceAmount')}
                     onKeyDown={(e) => handleEnhancedTabNavigation(e, 'advanceAmount')}
                     disabled={!isEditing}
                     min="0"
@@ -1884,9 +1953,11 @@ setSelectedBooking(null); // Clear selection after deletion
                   <label className="erp-form-label">Payment Mode</label>
                   <select
                     name="paymentMode"
+                    data-field="paymentMode"
                     className="erp-input"
                     value={formData.paymentMode}
                     onChange={handleInputChange}
+                    onFocus={() => handleFieldFocus('paymentMode')}
                     onKeyDown={(e) => handleEnhancedTabNavigation(e, 'paymentMode')}
                     disabled={!isEditing}
                   >
@@ -1900,11 +1971,13 @@ setSelectedBooking(null); // Clear selection after deletion
                   <label className="erp-form-label">Ref / UTR No</label>
                   <input
                     type="text"
-                    name="paymentReference"
+                    name="utrNumber"
+                    data-field="utrNumber"
                     className="erp-input"
-                    value={formData.paymentReference}
+                    value={formData.utrNumber}
                     onChange={handleInputChange}
-                    onKeyDown={(e) => handleEnhancedTabNavigation(e, 'paymentReference')}
+                    onFocus={() => handleFieldFocus('utrNumber')}
+                    onKeyDown={(e) => handleEnhancedTabNavigation(e, 'utrNumber')}
                     disabled={!isEditing}
                     placeholder="Transaction ID"
                   />
@@ -1926,9 +1999,10 @@ setSelectedBooking(null); // Clear selection after deletion
                             data-field="passenger_name"
                             value={currentPassengerDraft.name}
                             onChange={(e) => updatePassengerDraft('name', e.target.value)}
-                            onFocus={() => {
+                            onFocus={(e) => {
                               handleFieldFocus('passenger_name');
                               enhancedFocusManager.enterPassengerMode();
+                              e.target.select(); // Auto-select text for easy overwrite
                             }}
                             onKeyDown={(e) => {
                               if (e.key === 'Escape') exitPassengerEntryMode();
@@ -1943,7 +2017,10 @@ setSelectedBooking(null); // Clear selection after deletion
                             data-field="passenger_age"
                             value={currentPassengerDraft.age}
                             onChange={(e) => updatePassengerDraft('age', e.target.value)}
-                            onFocus={() => handleFieldFocus('passenger_age')}
+                            onFocus={(e) => {
+                              handleFieldFocus('passenger_age');
+                              e.target.select();
+                            }}
                             onKeyDown={(e) => {
                               if (e.key === 'Escape') exitPassengerEntryMode();
                               else handlePassengerTabNavigation(e, 'passenger_age');
@@ -1955,7 +2032,9 @@ setSelectedBooking(null); // Clear selection after deletion
                             data-field="passenger_gender"
                             value={currentPassengerDraft.gender}
                             onChange={(e) => updatePassengerDraft('gender', e.target.value)}
-                            onFocus={() => handleFieldFocus('passenger_gender')}
+                            onFocus={(e) => {
+                              handleFieldFocus('passenger_gender');
+                            }}
                             onKeyDown={(e) => {
                               if (e.key === 'Escape') exitPassengerEntryMode();
                               else handlePassengerTabNavigation(e, 'passenger_gender');
@@ -1972,7 +2051,9 @@ setSelectedBooking(null); // Clear selection after deletion
                             data-field="passenger_berth"
                             value={currentPassengerDraft.berth}
                             onChange={(e) => updatePassengerDraft('berth', e.target.value)}
-                            onFocus={() => handleFieldFocus('passenger_berth')}
+                            onFocus={(e) => {
+                              handleFieldFocus('passenger_berth');
+                            }}
                             onKeyDown={(e) => {
                               if (e.key === 'Escape') exitPassengerEntryMode();
                               else handlePassengerTabNavigation(e, 'passenger_berth');
@@ -2093,6 +2174,7 @@ setSelectedBooking(null); // Clear selection after deletion
                               }} 
                             />
                             <button 
+                              type="button"
                               onClick={() => removePassenger(p.id)} 
                               disabled={!isEditing} 
                               style={{ 

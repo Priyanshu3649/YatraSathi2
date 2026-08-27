@@ -964,7 +964,7 @@ const getAllBills = async (req, res) => {
         BillTVL, 
         where, 
         [], 
-        ['bl_total_amount', 'bl_railway_fare', 'bl_gst', 'bl_service_charge', 'bl_station_boy_incentive'],
+        ['bl_total_amount', 'bl_railway_fare', 'bl_gst', 'bl_service_charge'],
         include.map(inc => ({ ...inc, attributes: [] }))
       );
 
@@ -974,7 +974,7 @@ const getAllBills = async (req, res) => {
           totalFare: parseFloat(aggregateResults[0]?.total_bl_railway_fare || 0),
           totalGST: parseFloat(aggregateResults[0]?.total_bl_gst || 0),
           totalServiceCharges: parseFloat(aggregateResults[0]?.total_bl_service_charge || 0),
-          totalSBIncentive: parseFloat(aggregateResults[0]?.total_bl_station_boy_incentive || 0),
+          totalSBIncentive: 0,
           count: parseInt(aggregateResults[0]?.count || count || 0)
         };
       }
@@ -1198,7 +1198,7 @@ const getPrintableBill = async (req, res) => {
       data: payload
     });
   } catch (error) {
-    console.error('Get printable bill error:', error);
+    console.error('Error generating printable bill:', error);
     res.status(500).json({
       success: false,
       message: 'Failed to generate printable bill',

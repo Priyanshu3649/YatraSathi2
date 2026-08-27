@@ -3,6 +3,7 @@ const { validationResult } = require('express-validator');
 const { Op } = require('sequelize');
 const queryHelper = require('../utils/queryHelper');
 const Audit = require('../services/forensicAuditService');
+const { validateUtrUniqueness, saveUtrReference } = require('../utils/utrValidation');
 
 
 /**
@@ -104,9 +105,26 @@ class ReceiptController {
         rc_amount, 
         rc_payment_mode, 
         rc_ref_number, 
-        rc_bank_account, 
-        rc_narration 
+        rc_bank_account,
+        rc_narration,
+        utr_number
       } = req.body;
+      
+      try {
+        await validateUtrUniqueness(utr_number);
+      } catch (validationErr) {
+        return res.status(400).json({
+          success: false,
+          message: validationErr.message
+        });
+      }
+
+      let attachment_path = null;
+      let attachment_mime = null;
+      if (req.file) {
+        attachment_path = `/uploads/payments/${req.file.filename}`;
+        attachment_mime = req.file.mimetype;
+      }
       
       const entryNo = this.generateEntryNo('RC');
       
@@ -120,11 +138,18 @@ class ReceiptController {
         rc_ref_number,
         rc_bank_account,
         rc_narration,
+        utr_number: utr_number || null,
+        attachment_path,
+        attachment_mime,
         rc_created_by: req.user.us_usid,
         rc_status: 'Active'
       }, {
         userId: req.user.us_usid
       });
+      
+      if (utr_number) {
+        await saveUtrReference(utr_number, 'RECEIPT', receipt.rc_rcid);
+      }
       
       // ── Forensic Audit: INSERT (async) ─────────────────────────────────────────────
       Audit.logAction({ module: Audit.MODULES.RECEIPT, recordId: receipt.rc_rcid,
@@ -160,8 +185,27 @@ class ReceiptController {
       }
       
       const receiptBefore = receipt.toJSON();
+      
+      const updateData = { ...req.body };
+      
+      if (updateData.utr_number !== undefined) {
+        try {
+          await validateUtrUniqueness(updateData.utr_number, 'RECEIPT', id);
+        } catch (validationErr) {
+          return res.status(400).json({
+            success: false,
+            message: validationErr.message
+          });
+        }
+      }
+
+      if (req.file) {
+        updateData.attachment_path = `/uploads/payments/${req.file.filename}`;
+        updateData.attachment_mime = req.file.mimetype;
+      }
+      
       const updatedReceipt = await receipt.update({
-        ...req.body,
+        ...updateData,
         rc_modified_by: req.user.us_usid,
         rc_modified_dt: new Date(),
         modified_by: req.user.us_usid,
@@ -173,6 +217,11 @@ class ReceiptController {
       Audit.logFieldChanges(receiptBefore, updatedReceipt.toJSON(), {
         module: Audit.MODULES.RECEIPT, recordId: receipt.rc_rcid, req });
       // ───────────────────────────────────────────────────────────────────────
+      
+      if (updatedReceipt.utr_number) {
+        await saveUtrReference(updatedReceipt.utr_number, 'RECEIPT', updatedReceipt.rc_rcid);
+      }
+      
       res.json({
         success: true,
         data: updatedReceipt,

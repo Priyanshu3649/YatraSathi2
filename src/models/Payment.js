@@ -69,6 +69,14 @@ const Payment = sequelize.define('pyXpayment', {
     allowNull: true,
     comment: 'Reference number'
   },
+
+  utr_number: {
+    type: DataTypes.STRING(100),
+    allowNull: true,
+    comment: 'Global unique UTR number'
+  },
+
+
   
   py_bank_account: {
     type: DataTypes.STRING(100),
@@ -82,11 +90,6 @@ const Payment = sequelize.define('pyXpayment', {
     comment: 'Payment mode (Cash, Bank, UPI, etc.)'
   },
 
-  py_active: {
-    type: DataTypes.TINYINT,
-    defaultValue: 1,
-    comment: 'Active Flag (1=Active, 0=Cancelled)'
-  },
   attachment_path: {
     type: DataTypes.STRING(500),
     allowNull: true,
@@ -175,6 +178,26 @@ const Payment = sequelize.define('pyXpayment', {
     type: DataTypes.ENUM('OPEN', 'CLOSED', 'CANCELLED'),
     defaultValue: 'OPEN',
     comment: 'Record Status'
+  },
+  is_reconciled: {
+    type: DataTypes.TINYINT(1),
+    defaultValue: 0,
+    comment: 'Is Reconciled'
+  },
+  reconciled_by: {
+    type: DataTypes.INTEGER,
+    allowNull: true,
+    comment: 'Reconciled By User ID'
+  },
+  reconciled_at: {
+    type: DataTypes.DATE,
+    allowNull: true,
+    comment: 'Reconciliation Timestamp'
+  },
+  reconciliation_remarks: {
+    type: DataTypes.TEXT,
+    allowNull: true,
+    comment: 'Reconciliation Remarks'
   }
   
 }, {

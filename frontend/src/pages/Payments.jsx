@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useKeyboardNavigation } from '../contexts/KeyboardNavigationContext';
 import PaymentsMenu from '../components/Payments/PaymentsMenu';
 import ContraForm from '../components/Payments/ContraForm';
@@ -14,6 +14,13 @@ const Payments = () => {
   const navigate = useNavigate();
   const [currentView, setCurrentView] = useState('menu'); // 'menu', 'contra', 'payment', 'receipt', 'journal'
   const { setActiveForm } = useKeyboardNavigation();
+  const location = useLocation();
+
+  useEffect(() => {
+    if (location.state && location.state.view) {
+      setCurrentView(location.state.view);
+    }
+  }, [location.state]);
 
   // Reset active form when returning to menu
   useEffect(() => {
@@ -44,7 +51,7 @@ const Payments = () => {
       case 'payment':
         return <PaymentForm onBack={() => setCurrentView('menu')} />;
       case 'receipt':
-        return <ReceiptForm onBack={() => setCurrentView('menu')} />;
+        return <ReceiptForm onBack={() => setCurrentView('menu')} autoFillData={location.state?.autoFill} />;
       case 'journal':
         return <JournalForm onBack={() => setCurrentView('menu')} />;
       default:

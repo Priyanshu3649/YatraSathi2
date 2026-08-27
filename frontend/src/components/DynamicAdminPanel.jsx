@@ -270,20 +270,18 @@ const DynamicAdminPanel = ({ initialModule = 'applications' }) => {
       name: 'Customer List',
       endpoint: '/security/customers',
       fields: [
-        { name: 'cu_usid', label: 'User ID', type: 'text', required: true, readOnly: true },
-        { name: 'cu_custno', label: 'Customer Number', type: 'text', required: true, readOnly: true },
-        { name: 'cu_name', label: 'Customer Name', type: 'text', readOnly: true },
-        { name: 'cu_email', label: 'Email', type: 'email', readOnly: true },
-        { name: 'cu_phone', label: 'Phone', type: 'tel', readOnly: true },
-        { name: 'cu_custtype', label: 'Customer Type', type: 'text' },
-        { name: 'cu_company', label: 'Company Name', type: 'text' },
-        { name: 'cu_creditlmt', label: 'Credit Limit', type: 'number', step: '0.01' },
-        { name: 'cu_status', label: 'Status', type: 'text' },
+        { name: 'name', label: 'Customer Name', type: 'text', required: true },
+        { name: 'phone', label: 'Phone No', type: 'tel', required: true },
+        { name: 'accountGroup', label: 'Account Group', type: 'text' },
+        { name: 'location', label: 'Location', type: 'text' },
+        { name: 'opBalance', label: 'Op Balance', type: 'number', step: '0.01' },
+        { name: 'workingAddress', label: 'Working Address', type: 'textarea' },
+        { name: 'permanentAddress', label: 'Permanent Address', type: 'textarea' }
       ],
-      columns: ['cu_custno', 'cu_name', 'cu_email', 'cu_phone', 'cu_custtype', 'cu_company', 'cu_status', 'edtm'],
-      columnLabels: ['Customer No', 'Name', 'Email', 'Phone', 'Type', 'Company', 'Status', 'Registered On'],
-      columnWidths: ['120px', '180px', '200px', '130px', '100px', '150px', '80px', '150px'],
-      filterFields: ['cu_custno', 'cu_name', 'cu_email', 'cu_custtype', 'cu_status']
+      columns: ['name', 'phone', 'accountGroup', 'location', 'opBalance', 'workingAddress', 'permanentAddress'],
+      columnLabels: ['Customer Name', 'Phone No', 'Account Group', 'Location', 'Op Balance', 'Working Address', 'Permanent Address'],
+      columnWidths: ['200px', '150px', '150px', '150px', '120px', '250px', '250px'],
+      filterFields: ['name', 'phone', 'accountGroup', 'location']
     },
     stationBoys: {
       name: 'Station Boys',

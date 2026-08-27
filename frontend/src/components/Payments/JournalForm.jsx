@@ -5,7 +5,7 @@ import { usePagination } from '../../hooks/usePagination';
 import useERPFilters from '../../hooks/useERPFilters';
 import PaginationControls from '../common/PaginationControls';
 import SaveConfirmationModal from '../common/SaveConfirmationModal';
-import { journalAPI } from '../../services/api';
+import { journalAPI, reconciliationAPI } from '../../services/api';
 import { printVoucher } from '../../utils/paymentPrintUtils';
 import '../../styles/vintage-erp-theme.css';
 
@@ -19,6 +19,8 @@ const JournalForm = ({ onBack }) => {
   } = useKeyboardNavigation();
   
   const [formData, setFormData] = useState({
+    utr_number: '',
+    payment_proof: null,
     journal_no: '',
     date: new Date().toISOString().split('T')[0],
     debit_account: '',
@@ -35,6 +37,8 @@ const JournalForm = ({ onBack }) => {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [showSaveModal, setShowSaveModal] = useState(false);
+  const [selectedIds, setSelectedIds] = useState([]);
+  const [isReconciling, setIsReconciling] = useState(false);
   const [auditData, setAuditData] = useState({
     enteredOn: '',
     enteredBy: '',
@@ -66,7 +70,8 @@ const JournalForm = ({ onBack }) => {
     je_account: '',
     je_amount: '',
     je_ref_number: '',
-    je_narration: ''
+    je_narration: '',
+    reconciliationStatus: 'ACTIVE'
   }, () => {
     setPage(1);
   }, { 
@@ -128,8 +133,12 @@ const JournalForm = ({ onBack }) => {
   }, [isEditing, selectedRecord, formData.journal_no, generateTempJournalNo]);
 
   const handleInputChange = (e) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
+    const { name, value, files } = e.target;
+    if (name === 'payment_proof' && files && files.length > 0) {
+      setFormData(prev => ({ ...prev, payment_proof: files[0] }));
+    } else {
+      setFormData(prev => ({ ...prev, [name]: value }));
+    }
     setError('');
   };
 
@@ -160,7 +169,9 @@ const JournalForm = ({ onBack }) => {
       credit_account: creditAccount,
       amount: record.je_amount || '',
       ref_number: record.je_ref_number || '',
-      narration: narrationText
+      narration: narrationText,
+      utr_number: record.utr_number || '',
+      payment_proof: null
     });
 
     setAuditData({
@@ -185,7 +196,9 @@ const JournalForm = ({ onBack }) => {
       credit_account: '',
       amount: '',
       ref_number: '',
-      narration: ''
+      narration: '',
+      utr_number: '',
+      payment_proof: null
     });
     setAuditData({
       enteredOn: new Date().toLocaleString(),
@@ -236,6 +249,22 @@ const JournalForm = ({ onBack }) => {
     }
   };
 
+  const handleBulkReconcile = async () => {
+    if (selectedIds.length === 0) return;
+    try {
+      setIsReconciling(true);
+      await reconciliationAPI.bulkReconcileJournals(selectedIds, 'Reconciled');
+      setSuccess(`${selectedIds.length} journal(s) reconciled successfully`);
+      setSelectedIds([]);
+      fetchJournals();
+    } catch (err) {
+      console.error('Reconciliation error:', err);
+      setError(err.message || 'Failed to reconcile journals');
+    } finally {
+      setIsReconciling(false);
+    }
+  };
+
   const handleSave = async () => {
     if (!formData.debit_account || !formData.credit_account || !formData.amount) {
       setError('Required fields are missing (Debit Account, Credit Account, Amount)');
@@ -248,14 +277,19 @@ const JournalForm = ({ onBack }) => {
       
       const narrationCombined = `Journal: ${formData.debit_account} / ${formData.credit_account}${formData.narration ? ` | ${formData.narration}` : ''}`;
       
-      const payload = {
-        je_account: formData.debit_account,
-        je_entry_type: 'Debit',
-        je_amount: parseFloat(formData.amount) || 0,
-        je_ref_number: formData.ref_number,
-        je_narration: narrationCombined,
-        je_voucher_type: 'Journal'
-      };
+      const payload = new FormData();
+      payload.append('je_account', formData.debit_account);
+      payload.append('je_entry_type', 'Debit');
+      payload.append('je_amount', parseFloat(formData.amount) || 0);
+      payload.append('je_ref_number', formData.ref_number);
+      payload.append('je_narration', narrationCombined);
+      payload.append('je_voucher_type', 'Journal');
+      if (formData.utr_number) {
+        payload.append('utr_number', formData.utr_number);
+      }
+      if (formData.payment_proof) {
+        payload.append('payment_proof', formData.payment_proof);
+      }
 
       let response;
       if (selectedRecord) {
@@ -439,12 +473,32 @@ const JournalForm = ({ onBack }) => {
         <div className="erp-tool-separator"></div>
         <button className="erp-button" onClick={handleNew} title="New (F2)">New</button>
         <button className="erp-button" onClick={handleEdit} disabled={!selectedRecord || isEditing} title="Edit (F3)">Edit</button>
-        <button className="erp-button danger" onClick={handleDelete} disabled={!selectedRecord} title="Delete (F4)">Delete</button>
+        <button className="erp-button" onClick={handleDelete} disabled={!selectedRecord} title="Delete (F4)">Delete</button>
+        <button
+          className="erp-button"
+          onClick={handleBulkReconcile}
+          disabled={selectedIds.length === 0 || isReconciling}
+          title="Reconcile selected records"
+          style={selectedIds.length > 0 ? { background: '#2e7d32', color: '#fff' } : {}}
+        >
+          {isReconciling ? 'Reconciling...' : `Reconcile${selectedIds.length > 0 ? ` (${selectedIds.length})` : ''}`}
+        </button>
         <button className="erp-button" onClick={() => printVoucher(selectedRecord, 'journal')} disabled={!selectedRecord} title="Export to PDF">Export PDF</button>
         <div className="erp-tool-separator"></div>
         <button className="erp-button" onClick={() => setShowSaveModal(true)} disabled={!isEditing} title="Save (F10)">Save</button>
         <button className="erp-button" onClick={handleCancel} disabled={!isEditing} title="Cancel">Cancel</button>
         <button className="erp-button" onClick={fetchJournals} title="Refresh">Refresh</button>
+        <div className="erp-tool-separator"></div>
+        <select
+          className="erp-input"
+          style={{ padding: '2px 8px', fontSize: '11px', width: 'auto' }}
+          value={inlineFilters['reconciliationStatus'] || 'ACTIVE'}
+          onChange={(e) => { handleInlineFilterChange('reconciliationStatus', e.target.value); setSelectedIds([]); }}
+        >
+          <option value="ACTIVE">Active (Default)</option>
+          <option value="RECONCILED">Reconciled</option>
+          <option value="ALL">All</option>
+        </select>
         <div style={{ flex: 1 }}></div>
         <div style={{ fontWeight: 'bold', fontSize: '12px' }}>
           {isEditing ? (selectedRecord ? 'EDIT MODE' : 'NEW RECORD') : 'READY'} | Total Records: {pagination.totalRecords || journalRecords.length}
@@ -462,13 +516,13 @@ const JournalForm = ({ onBack }) => {
               {error && <div className="erp-error-banner" style={{ marginBottom: '10px' }}>{error}</div>}
               {success && <div className="erp-success-banner" style={{ marginBottom: '10px' }}>{success}</div>}
               
-              <div className="erp-form-row-compact-2">
+              <div className="erp-form-row-compact-3">
                 <div className="erp-form-group">
-                  <label className="erp-form-label">Journal No.</label>
-                  <input type="text" className="erp-input" value={formData.journal_no} readOnly tabIndex="-1" />
+                  <label className="erp-form-label">Receipt No</label>
+                  <input type="text" className="erp-input" value={formData.receipt_no} readOnly tabIndex="-1" />
                 </div>
                 <div className="erp-form-group">
-                  <label className="erp-form-label">Voucher Date</label>
+                  <label className="erp-form-label">Date</label>
                   <input 
                     type="date" 
                     name="date"
@@ -479,38 +533,64 @@ const JournalForm = ({ onBack }) => {
                     disabled={!isEditing}
                   />
                 </div>
-              </div>
-
-              <div className="erp-form-row-compact-2" style={{ marginTop: '10px' }}>
                 <div className="erp-form-group">
-                  <label className="erp-form-label required">Debit Account (By)</label>
-                  <input 
-                    type="text" 
-                    name="debit_account"
+                  <label className="erp-form-label">Voucher Type</label>
+                  <select 
+                    name="type"
                     className="erp-input" 
-                    value={formData.debit_account} 
-                    onChange={handleInputChange} 
-                    placeholder="Account to be Debited" 
-                    onFocus={() => handleManualFocus('journal', 'debit_account')}
+                    value={formData.type} 
+                    onChange={handleInputChange}
+                    onFocus={() => handleManualFocus('journal', 'type')}
                     disabled={!isEditing}
-                  />
-                </div>
-                <div className="erp-form-group">
-                  <label className="erp-form-label required">Credit Account (To)</label>
-                  <input 
-                    type="text" 
-                    name="credit_account"
-                    className="erp-input" 
-                    value={formData.credit_account} 
-                    onChange={handleInputChange} 
-                    placeholder="Account to be Credited" 
-                    onFocus={() => handleManualFocus('journal', 'credit_account')}
-                    disabled={!isEditing}
-                  />
+                  >
+                    <option value="Journal">Journal (Adjustment)</option>
+                  </select>
                 </div>
               </div>
 
               <div className="erp-form-row-compact-2" style={{ marginTop: '10px' }}>
+                <div className="erp-form-group">
+                  <label className="erp-form-label required">Customer / Payee</label>
+                  <input 
+                    type="text" 
+                    name="customer_name"
+                    className="erp-input" 
+                    value={formData.customer_name} 
+                    onChange={handleInputChange} 
+                    placeholder="Search or enter name" 
+                    onFocus={() => handleManualFocus('journal', 'customer_name')}
+                    disabled={!isEditing || (typeof autoFillReadOnly !== 'undefined' && autoFillReadOnly)}
+                  />
+                </div>
+                <div className="erp-form-group">
+                  <label className="erp-form-label">Phone Number</label>
+                  <input 
+                    type="text" 
+                    name="customer_phone"
+                    className="erp-input" 
+                    value={formData.customer_phone} 
+                    onChange={handleInputChange} 
+                    onFocus={() => handleManualFocus('journal', 'customer_phone')}
+                    disabled={!isEditing || (typeof autoFillReadOnly !== 'undefined' && autoFillReadOnly)}
+                  />
+                </div>
+              </div>
+
+              <div className="erp-form-row-compact-4" style={{ marginTop: '10px' }}>
+                <div className="erp-form-group">
+                  <label className="erp-form-label required">Account</label>
+                  <select 
+                    name="account_name"
+                    className="erp-input" 
+                    value={formData.account_name} 
+                    onChange={handleInputChange}
+                    onFocus={() => handleManualFocus('journal', 'account_name')}
+                    disabled={!isEditing}
+                  >
+                    <option value="">Select Account</option>
+                    {accounts.map(acc => <option key={acc} value={acc}>{acc}</option>)}
+                  </select>
+                </div>
                 <div className="erp-form-group">
                   <label className="erp-form-label required">Amount (₹)</label>
                   <input 
@@ -519,47 +599,84 @@ const JournalForm = ({ onBack }) => {
                     className="erp-input" 
                     value={formData.amount} 
                     onChange={handleInputChange} 
+                    placeholder="0.00" 
                     style={{ fontWeight: 'bold' }}
                     onFocus={() => handleManualFocus('journal', 'amount')}
                     disabled={!isEditing}
                   />
                 </div>
                 <div className="erp-form-group">
-                  <label className="erp-form-label">Ref Number</label>
+                  <label className="erp-form-label">Mode</label>
+                  <select 
+                    name="payment_mode"
+                    className="erp-input" 
+                    value={formData.payment_mode} 
+                    onChange={handleInputChange}
+                    onFocus={() => handleManualFocus('journal', 'payment_mode')}
+                    disabled={!isEditing}
+                  >
+                    <option value="Cash">Cash</option>
+                    <option value="UPI">UPI</option>
+                    <option value="Bank Transfer">Bank Transfer</option>
+                    <option value="Cheque">Cheque</option>
+                  </select>
+                </div>
+                <div className="erp-form-group">
+                  <label className="erp-form-label">UTR Number</label>
                   <input 
                     type="text" 
-                    name="ref_number"
+                    name="utr_number"
                     className="erp-input" 
-                    value={formData.ref_number} 
+                    value={formData.utr_number}
                     onChange={handleInputChange}
-                    onFocus={() => handleManualFocus('journal', 'ref_number')}
+                    placeholder="Enter UTR if applicable..."
+                    onFocus={() => handleManualFocus('journal', 'utr_number')}
                     disabled={!isEditing}
                   />
                 </div>
               </div>
 
-              <div className="erp-form-group" style={{ marginTop: '10px' }}>
-                <label className="erp-form-label" style={{ display: 'block', textAlign: 'left', marginBottom: '2px' }}>Journal Narration</label>
-                <textarea 
-                  name="narration"
-                  className="erp-input" 
-                  value={formData.narration} 
-                  onChange={handleInputChange} 
-                  rows="2" 
-                  style={{ width: '100%', resize: 'none' }}
-                  onFocus={() => handleManualFocus('journal', 'narration')}
-                  disabled={!isEditing}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Tab' && !e.shiftKey && isEditing) {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      setShowSaveModal(true);
-                    }
-                  }}
-                />
+              <div className="erp-form-row-compact-2" style={{ marginTop: '10px' }}>
+                <div className="erp-form-group">
+                  <label className="erp-form-label" style={{ display: 'block', textAlign: 'left', marginBottom: '2px' }}>Payment Proof (Image)</label>
+                  <input 
+                    type="file" 
+                    name="payment_proof"
+                    className="erp-input" 
+                    onChange={handleInputChange}
+                    onFocus={() => handleManualFocus('journal', 'payment_proof')}
+                    disabled={!isEditing}
+                    accept="image/*"
+                  />
+                  {selectedRecord?.attachment_path && (
+                    <div style={{ marginTop: '5px', fontSize: '12px' }}>
+                      <a href={selectedRecord.attachment_path} target="_blank" rel="noopener noreferrer">View Current Proof</a>
+                    </div>
+                  )}
+                </div>
+                <div className="erp-form-group">
+                  <label className="erp-form-label" style={{ display: 'block', textAlign: 'left', marginBottom: '2px' }}>Transaction Narration</label>
+                  <textarea 
+                    name="narration"
+                    className="erp-input" 
+                    style={{ height: '50px', resize: 'none', width: '100%' }}
+                    value={formData.narration}
+                    onChange={handleInputChange}
+                    placeholder="Enter specific details for this payment..."
+                    onFocus={() => handleManualFocus('journal', 'narration')}
+                    disabled={!isEditing}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Tab' && !e.shiftKey && isEditing) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setShowSaveModal(true);
+                      }
+                    }}
+                  />
+                </div>
               </div>
             </div>
-
+            
             {/* Audit Section */}
             <div className="erp-audit-section" style={{ marginTop: '15px' }}>
               <div className="erp-audit-row">
@@ -588,7 +705,18 @@ const JournalForm = ({ onBack }) => {
               <table className="erp-table">
                 <thead style={{ position: 'sticky', top: 0, backgroundColor: '#f5f5f5', zIndex: 1 }}>
                   <tr>
-                    <th style={{ width: '30px' }}><input type="checkbox" disabled style={{ opacity: 0.3 }} /></th>
+                    <th style={{ width: '30px' }}>
+                      <input
+                        type="checkbox"
+                        title="Select all unreconciled"
+                        checked={journalRecords.filter(r => !r.is_reconciled).length > 0 && selectedIds.length === journalRecords.filter(r => !r.is_reconciled).length}
+                        onChange={(e) => {
+                          if (e.target.checked) setSelectedIds(journalRecords.filter(r => !r.is_reconciled).map(r => r.je_jeid));
+                          else setSelectedIds([]);
+                        }}
+                        disabled={journalRecords.filter(r => !r.is_reconciled).length === 0}
+                      />
+                    </th>
                     <th style={{ width: '100px' }}>Date</th>
                     <th style={{ width: '120px' }}>Entry No</th>
                     <th>Debit Account</th>
@@ -598,7 +726,7 @@ const JournalForm = ({ onBack }) => {
                   </tr>
                   {/* Inline Filter Row */}
                   <tr style={{ backgroundColor: '#f8f9fa' }}>
-                    <td><input type="checkbox" disabled style={{ opacity: 0.3 }} /></td>
+                    <td style={{ textAlign: 'center', fontSize: '10px', color: '#888' }}>{selectedIds.length > 0 ? `${selectedIds.length}✓` : ''}</td>
                     <td>
                       <input 
                         type="text" 
@@ -680,11 +808,21 @@ const JournalForm = ({ onBack }) => {
                     return (
                       <tr 
                         key={r.je_jeid || i}
-                        className={isSelected ? 'selected' : ''}
+                        className={`${isSelected ? 'selected' : ''} ${r.is_reconciled ? 'reconciled-row' : ''}`}
                         onClick={() => handleRecordSelect(r)}
-                        style={{ cursor: 'pointer' }}
+                        style={{ cursor: 'pointer', opacity: r.is_reconciled ? 0.6 : 1, backgroundColor: r.is_reconciled ? '#f5f5f5' : '' }}
                       >
-                        <td><input type="checkbox" checked={!!isSelected} onChange={() => {}} /></td>
+                        <td onClick={(e) => e.stopPropagation()}>
+                          <input
+                            type="checkbox"
+                            checked={selectedIds.includes(r.je_jeid)}
+                            onChange={(e) => {
+                              if (e.target.checked) setSelectedIds(prev => [...prev, r.je_jeid]);
+                              else setSelectedIds(prev => prev.filter(id => id !== r.je_jeid));
+                            }}
+                            disabled={!!r.is_reconciled}
+                          />
+                        </td>
                         <td>{r.je_date ? new Date(r.je_date).toLocaleDateString() : ''}</td>
                         <td className="font-bold">{r.je_entry_no || ''}</td>
                         <td>{debitAcc}</td>

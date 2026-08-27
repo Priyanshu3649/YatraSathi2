@@ -624,15 +624,19 @@ const getAllCustomers = async (req, res) => {
       return {
         cu_usid: custData.cu_usid,
         cu_custno: custData.cu_custno,
-        cu_custtype: custData.cu_custtype,
-        cu_company: custData.cu_company,
-        cu_email: custData.user?.us_email || '',
-        cu_phone: custData.user?.us_phone || '',
-        cu_name: custData.user ? `${custData.user.us_fname || ''} ${custData.user.us_lname || ''}`.trim() : 'N/A',
-        cu_gst: custData.cu_gstno || custData.cu_gst || '', // Handle multiple naming conventions
-        cu_creditlmt: custData.cu_creditlimit || custData.cu_creditlmt || 0,
+        customerType: custData.cu_custtype,
+        companyName: custData.cu_company,
+        email: custData.user?.us_email || '',
+        phone: custData.user?.us_phone || '',
+        name: custData.user ? `${custData.user.us_fname || ''} ${custData.user.us_lname || ''}`.trim() : 'N/A',
+        phone: custData.user ? custData.user.us_phone || '' : '',
+        accountGroup: custData.cu_custtype || 'INDIVIDUAL',
+        location: custData.user ? custData.user.us_city || '' : '',
+        opBalance: custData.cu_creditlimit || custData.cu_creditlmt || 0,
+        workingAddress: custData.user ? custData.user.us_addr1 || '' : '',
+        permanentAddress: '', // us_addr2 doesn't exist
         cu_status: custData.cu_status || custData.status || '',
-        edtm: custData.entered_on || custData.edtm, // Map TVL date fields to frontend expectation
+        edtm: custData.edtm || custData.createdAt,
         eby: custData.entered_by || custData.eby,
         mdtm: custData.modified_on || custData.mdtm,
         mby: custData.modified_by || custData.mby,
@@ -882,21 +886,78 @@ const deleteUser = async (req, res) => {
 
 // Update customer
 const updateCustomer = async (req, res) => {
+  const transaction = await sequelizeTVL.transaction();
   try {
-    const customer = await Customer.findByPk(req.params.id);
+    const customer = await CustomerTVL.findByPk(req.params.id, { transaction });
     
     if (!customer) {
+      await transaction.rollback();
       return res.status(404).json({ message: 'Customer not found' });
     }
     
-    await customer.update({
-      ...req.body,
-      mby: req.user?.us_usid || 'SYSTEM',
-      mdtm: new Date()
-    });
+    const user = await UserTVL.findByPk(customer.cu_usid, { transaction });
     
+    if (!user) {
+      await transaction.rollback();
+      return res.status(404).json({ message: 'User record not found' });
+    }
+
+    const {
+      name,
+      phone,
+      accountGroup,
+      location,
+      opBalance,
+      workingAddress,
+      permanentAddress,
+      cu_status
+    } = req.body;
+    
+    // Map new fields to legacy fields
+    const customerType = accountGroup;
+    const city = location;
+    const creditLimit = opBalance;
+    const address = workingAddress;
+    const email = req.body.email; // keep undefined if not provided
+
+    // Split unified name into first and last name
+    let firstName = user.us_fname;
+    let lastName = user.us_lname;
+    if (name) {
+      const nameParts = name.trim().split(' ');
+      firstName = nameParts[0];
+      lastName = nameParts.slice(1).join(' ') || '';
+    }
+
+    // Auto-generate a dummy email if none provided but we need one
+    const finalEmail = (email && email.trim() !== '') ? email : user.us_email || `dummy-${user.us_usid}@system.local`;
+
+    await user.update({
+      us_fname: firstName,
+      us_lname: lastName,
+      us_email: finalEmail,
+      us_phone: phone !== undefined ? phone : user.us_phone,
+      us_city: city !== undefined ? city : user.us_city,
+      us_addr1: address !== undefined ? address : user.us_addr1,
+      us_active: cu_status === 'ACTIVE' ? 1 : 0,
+      us_mby: req.user?.us_usid || 'SYSTEM',
+      us_mdtm: new Date()
+    }, { transaction });
+
+    await customer.update({
+      cu_custtype: customerType !== undefined ? customerType : customer.cu_custtype,
+      cu_company: companyName !== undefined ? companyName : customer.cu_company,
+      cu_creditlimit: creditLimit !== undefined ? creditLimit : customer.cu_creditlimit,
+
+      cu_status: cu_status !== undefined ? cu_status : customer.cu_status,
+      modified_by: req.user?.us_usid || 'SYSTEM',
+      modified_on: new Date()
+    }, { transaction });
+    
+    await transaction.commit();
     res.json(customer);
   } catch (error) {
+    await transaction.rollback();
     console.error('Error updating customer:', error);
     res.status(500).json({ message: error.message });
   }

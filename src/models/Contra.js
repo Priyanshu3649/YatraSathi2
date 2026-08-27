@@ -58,6 +58,26 @@ const Contra = sequelize.define('ctContra', {
     allowNull: true,
     comment: 'Reference number'
   },
+
+  utr_number: {
+    type: DataTypes.STRING(100),
+    allowNull: true,
+    comment: 'Global unique UTR number'
+  },
+
+
+
+  attachment_path: {
+    type: DataTypes.STRING(500),
+    allowNull: true,
+    comment: 'Path to proof image'
+  },
+
+  attachment_mime: {
+    type: DataTypes.STRING(50),
+    allowNull: true,
+    comment: 'MIME type of proof image'
+  },
   
   ct_created_by: {
     type: DataTypes.STRING(15),
@@ -70,6 +90,27 @@ const Contra = sequelize.define('ctContra', {
     allowNull: false,
     defaultValue: 'Active',
     comment: 'Contra status'
+  },
+  
+  is_reconciled: {
+    type: DataTypes.TINYINT(1),
+    defaultValue: 0,
+    comment: 'Is Reconciled'
+  },
+  reconciled_by: {
+    type: DataTypes.INTEGER,
+    allowNull: true,
+    comment: 'Reconciled By User ID'
+  },
+  reconciled_at: {
+    type: DataTypes.DATE,
+    allowNull: true,
+    comment: 'Reconciliation Timestamp'
+  },
+  reconciliation_remarks: {
+    type: DataTypes.TEXT,
+    allowNull: true,
+    comment: 'Reconciliation Remarks'
   },
   
   // Audit fields from BaseModel

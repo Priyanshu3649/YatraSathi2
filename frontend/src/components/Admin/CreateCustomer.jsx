@@ -19,7 +19,15 @@ const CreateCustomer = () => {
     pincode: '',
     customerType: 'INDIVIDUAL',
     companyName: '',
-    creditLimit: 0
+    creditLimit: 0,
+    serviceCharges: {
+      SL: 0,
+      '3A': 0,
+      '2A': 0,
+      '1A': 0,
+      CC: 0,
+      '2S': 0
+    }
   });
   
   const [loading, setLoading] = useState(false);
@@ -27,7 +35,18 @@ const CreateCustomer = () => {
   const [successMessage, setSuccessMessage] = useState(null);
 
   const onChange = (e) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
+    if (e.target.name.startsWith('sc_')) {
+      const classKey = e.target.name.replace('sc_', '');
+      setFormData({
+        ...formData,
+        serviceCharges: {
+          ...formData.serviceCharges,
+          [classKey]: parseFloat(e.target.value) || 0
+        }
+      });
+    } else {
+      setFormData({ ...formData, [e.target.name]: e.target.value });
+    }
   };
 
   const onSubmit = async (e) => {
@@ -218,6 +237,27 @@ const CreateCustomer = () => {
                         value={formData.pincode}
                         onChange={onChange}
                       />
+                    </div>
+                  </div>
+
+                  {/* Service Charges configuration */}
+                  <div className="mt-4">
+                    <h5>Service Charges (₹) by Train Class</h5>
+                    <div className="row g-3">
+                      {Object.keys(formData.serviceCharges).map((trainClass) => (
+                        <div className="col-md-4 col-sm-6" key={trainClass}>
+                          <label className="form-label">{trainClass} Class</label>
+                          <input
+                            type="number"
+                            className="form-control"
+                            name={`sc_${trainClass}`}
+                            value={formData.serviceCharges[trainClass]}
+                            onChange={onChange}
+                            min="0"
+                            step="0.01"
+                          />
+                        </div>
+                      ))}
                     </div>
                   </div>
                 </div>

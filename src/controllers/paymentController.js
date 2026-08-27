@@ -4,6 +4,7 @@ const { Op } = require('sequelize');
 const queryHelper = require('../utils/queryHelper');
 const RealTimeService = require('../services/realTimeService');
 const Audit = require('../services/forensicAuditService');
+const { validateUtrUniqueness, saveUtrReference } = require('../utils/utrValidation');
 
 
 /**
@@ -161,8 +162,26 @@ class PaymentController {
         py_ref_number, 
         py_bank_account,
         py_payment_mode,
-        py_narration
+        py_narration,
+        utr_number
       } = req.body;
+
+      try {
+        await validateUtrUniqueness(utr_number);
+      } catch (validationErr) {
+        return res.status(400).json({
+          success: false,
+          message: validationErr.message
+        });
+      }
+
+      // Handle file upload
+      let attachment_path = null;
+      let attachment_mime = null;
+      if (req.file) {
+        attachment_path = `/uploads/payments/${req.file.filename}`;
+        attachment_mime = req.file.mimetype;
+      }
 
       // Import customer management utility
       const { getOrCreateCustomer, linkPaymentToCustomer } = require('../utils/customerManagement');
@@ -212,6 +231,9 @@ class PaymentController {
         py_bank_account,
         py_payment_mode: py_payment_mode || null,
         py_narration: py_narration || null,
+        utr_number: utr_number || null,
+        attachment_path,
+        attachment_mime,
         py_balance: balance,
         py_total_credit: totalCredit,
         py_total_debit: totalDebit,
@@ -220,6 +242,10 @@ class PaymentController {
       }, {
         userId: req.user.us_usid
       });
+      
+      if (utr_number) {
+        await saveUtrReference(utr_number, 'PAYMENT', payment.py_pymtid);
+      }
       
       // Emit real-time update
       RealTimeService.emitPaymentUpdate(payment.toJSON());
@@ -286,10 +312,29 @@ class PaymentController {
         });
       }
       
+      // Handle file upload and UTR
+      const updateData = { ...req.body };
+      
+      if (updateData.utr_number !== undefined) {
+        try {
+          await validateUtrUniqueness(updateData.utr_number, 'PAYMENT', id);
+        } catch (validationErr) {
+          return res.status(400).json({
+            success: false,
+            message: validationErr.message
+          });
+        }
+      }
+
+      if (req.file) {
+        updateData.attachment_path = `/uploads/payments/${req.file.filename}`;
+        updateData.attachment_mime = req.file.mimetype;
+      }
+
       // Update payment data
       const paymentBefore = payment.toJSON();
       const updatedPayment = await payment.update({
-        ...req.body,
+        ...updateData,
         py_modified_by: req.user.us_usid,
         py_modified_dt: new Date(),
         modified_by: req.user.us_usid,
@@ -301,6 +346,11 @@ class PaymentController {
       Audit.logFieldChanges(paymentBefore, updatedPayment.toJSON(), {
         module: Audit.MODULES.PAYMENT, recordId: payment.py_pymtid, req });
       // ──────────────────────────────────────────────────────────────────────
+      
+      if (updatedPayment.utr_number) {
+        await saveUtrReference(updatedPayment.utr_number, 'PAYMENT', updatedPayment.py_pymtid);
+      }
+
       // Emit real-time update
       RealTimeService.broadcast('payment_update', {
         type: 'PAYMENT_UPDATED',

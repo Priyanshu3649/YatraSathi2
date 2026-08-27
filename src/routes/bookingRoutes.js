@@ -14,7 +14,8 @@ const {
   confirmBooking,
   getBookingsByStatus,
   searchBookings,
-  getBookingPassengers
+  getBookingPassengers,
+  getLatestPassengers
 } = require('../controllers/bookingController');
 const authMiddleware = require('../middleware/authMiddleware');
 const { canEditBooking, canViewBooking, canCancelBooking, canDeleteBooking } = require('../middleware/bookingAuthorization');
@@ -26,6 +27,7 @@ router.use(authMiddleware);
 
 // Specific routes first (more specific paths)
 router.post('/', createBooking);
+router.get('/latest-passengers', getLatestPassengers);
 router.get('/my-bookings', getCustomerBookings);
 router.get('/status/:status', getBookingsByStatus);
 router.get('/search', searchBookings);

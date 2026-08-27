@@ -3,6 +3,7 @@ const { validationResult } = require('express-validator');
 const { Op } = require('sequelize');
 const queryHelper = require('../utils/queryHelper');
 const Audit = require('../services/forensicAuditService');
+const { validateUtrUniqueness, saveUtrReference } = require('../utils/utrValidation');
 
 
 /**
@@ -98,7 +99,24 @@ class ContraController {
         return res.status(400).json({ success: false, message: 'Validation failed', errors: errors.array() });
       }
       
-      const { ct_from_account, ct_to_account, ct_amount, ct_narration, ct_ref_number } = req.body;
+      const { ct_from_account, ct_to_account, ct_amount, ct_narration, ct_ref_number, utr_number } = req.body;
+      
+      try {
+        await validateUtrUniqueness(utr_number);
+      } catch (validationErr) {
+        return res.status(400).json({
+          success: false,
+          message: validationErr.message
+        });
+      }
+
+      let attachment_path = null;
+      let attachment_mime = null;
+      if (req.file) {
+        attachment_path = `/uploads/payments/${req.file.filename}`;
+        attachment_mime = req.file.mimetype;
+      }
+      
       const entryNo = this.generateEntryNo('CT');
       
       const contra = await Contra.create({
@@ -109,11 +127,18 @@ class ContraController {
         ct_amount: parseFloat(ct_amount) || 0,
         ct_narration,
         ct_ref_number,
+        utr_number: utr_number || null,
+        attachment_path,
+        attachment_mime,
         ct_created_by: req.user.us_usid,
         ct_status: 'Active'
       }, {
         userId: req.user.us_usid
       });
+      
+      if (utr_number) {
+        await saveUtrReference(utr_number, 'CONTRA', contra.ct_ctid);
+      }
       
       // ── Forensic Audit: INSERT (async) ─────────────────────────────────────────────
       Audit.logAction({ module: Audit.MODULES.CONTRA, recordId: contra.ct_ctid,
@@ -149,8 +174,27 @@ class ContraController {
       }
       
       const contraBefore = contra.toJSON();
+      
+      const updateData = { ...req.body };
+      
+      if (updateData.utr_number !== undefined) {
+        try {
+          await validateUtrUniqueness(updateData.utr_number, 'CONTRA', id);
+        } catch (validationErr) {
+          return res.status(400).json({
+            success: false,
+            message: validationErr.message
+          });
+        }
+      }
+
+      if (req.file) {
+        updateData.attachment_path = `/uploads/payments/${req.file.filename}`;
+        updateData.attachment_mime = req.file.mimetype;
+      }
+      
       const updatedContra = await contra.update({
-        ...req.body,
+        ...updateData,
         ct_modified_by: req.user.us_usid,
         ct_modified_dt: new Date(),
         modified_by: req.user.us_usid,
@@ -162,6 +206,11 @@ class ContraController {
       Audit.logFieldChanges(contraBefore, updatedContra.toJSON(), {
         module: Audit.MODULES.CONTRA, recordId: contra.ct_ctid, req });
       // ───────────────────────────────────────────────────────────────────────
+      
+      if (updatedContra.utr_number) {
+        await saveUtrReference(updatedContra.utr_number, 'CONTRA', updatedContra.ct_ctid);
+      }
+      
       res.json({
         success: true,
         data: updatedContra,

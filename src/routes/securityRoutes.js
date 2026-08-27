@@ -39,8 +39,10 @@ router.put('/users/:id', securityController.updateUser);
 router.delete('/users/:id', securityController.deleteUser);
 
 // ==================== CUSTOMER ROUTES ====================
+const customerController = require('../controllers/customerController');
 const customerDetailsController = require('../controllers/customerDetailsController');
 router.get('/customers', securityController.getAllCustomers);
+router.post('/customers', customerController.createCustomer);
 // Detail sub-routes must come before generic :id routes
 router.get('/customers/:id/details', customerDetailsController.getCustomerDetails);
 router.get('/customers/:id/bookings', customerDetailsController.getCustomerBookings);

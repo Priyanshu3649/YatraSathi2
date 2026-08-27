@@ -102,6 +102,11 @@ const BookingTVL = sequelizeTVL.define('bkXbooking', {
     comment: 'Billing Status'
   },
   // Audit fields
+  eby: {
+    type: DataTypes.STRING(15),
+    allowNull: false,
+    comment: "Entered By"
+  },
   edtm: {
     type: DataTypes.DATE,
     defaultValue: DataTypes.NOW,

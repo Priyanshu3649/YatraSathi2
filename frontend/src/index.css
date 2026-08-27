@@ -449,3 +449,11 @@ input[type="checkbox"], input[type="radio"] {
 .pb-1 { padding-bottom: var(--spacing-xs); }
 .pb-2 { padding-bottom: var(--spacing-sm); }
 .pb-3 { padding-bottom: var(--spacing-md); }
+/* Billing highlight fix */
+.erp-table tbody tr.selected-row {
+  background-color: var(--erp-blue-selected) !important;
+  color: white !important;
+}
+.erp-table tbody tr.selected-row td {
+  color: white !important;
+}

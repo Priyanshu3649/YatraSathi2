@@ -597,6 +597,20 @@ export const bookingAPI = {
   },
 
   // Get passengers for a specific booking
+
+  getLatestPassengers: async () => {
+    const response = await fetch(`${API_BASE_URL}/bookings/latest-passengers`, {
+      headers: getHeaders(true)
+    });
+    
+    const data = await response.json();
+    
+    if (!response.ok) {
+      throw new Error(data.message || 'Failed to fetch latest passengers');
+    }
+    
+    return data;
+  },
   getBookingPassengers: async (bookingId) => {
     // Determine user role to use correct endpoint
     let userRole = 'CUS'; // default to customer
@@ -638,10 +652,16 @@ export const bookingAPI = {
 export const paymentAPI = {
   // Create a new payment
   createPayment: async (paymentData) => {
-    const response = await fetch(`${API_BASE_URL}/payments`, {
+    const isFormData = paymentData instanceof FormData;
+    const headers = getHeaders(true);
+    if (isFormData) {
+      delete headers['Content-Type'];
+    }
+
+    const fetchOptions = {
       method: 'POST',
-      headers: getHeaders(true),
-      body: JSON.stringify({
+      headers,
+      body: isFormData ? paymentData : JSON.stringify({
         py_entry_type: paymentData.py_entry_type,
         py_customer_name: paymentData.py_customer_name,
         py_customer_phone: paymentData.py_customer_phone,
@@ -650,7 +670,8 @@ export const paymentAPI = {
         py_bank_account: paymentData.py_bank_account,
         py_narration: paymentData.py_narration
       })
-    });
+    };
+    const response = await fetch(`${API_BASE_URL}/payments`, fetchOptions);
 
     const data = await response.json();
     if (!response.ok) throw new Error(data.message || 'Failed to create payment');
@@ -843,11 +864,18 @@ export const paymentAPI = {
 
   // Update payment
   updatePayment: async (id, paymentData) => {
-    const response = await fetch(`${API_BASE_URL}/payments/${id}`, {
+    const isFormData = paymentData instanceof FormData;
+    const headers = getHeaders(true);
+    if (isFormData) {
+      delete headers['Content-Type'];
+    }
+
+    const fetchOptions = {
       method: 'PUT',
-      headers: getHeaders(true),
-      body: JSON.stringify(paymentData)
-    });
+      headers,
+      body: isFormData ? paymentData : JSON.stringify(paymentData)
+    };
+    const response = await fetch(`${API_BASE_URL}/payments/${id}`, fetchOptions);
 
     const data = await response.json();
 
@@ -1742,21 +1770,35 @@ export const receiptAPI = {
     return data;
   },
   createReceipt: async (receiptData) => {
-    const response = await fetch(`${API_BASE_URL}/receipts`, {
+    const isFormData = receiptData instanceof FormData;
+    const headers = getHeaders(true);
+    if (isFormData) {
+      delete headers['Content-Type'];
+    }
+
+    const fetchOptions = {
       method: 'POST',
-      headers: getHeaders(true),
-      body: JSON.stringify(receiptData)
-    });
+      headers,
+      body: isFormData ? receiptData : JSON.stringify(receiptData)
+    };
+    const response = await fetch(`${API_BASE_URL}/receipts`, fetchOptions);
     const data = await response.json();
     if (!response.ok) throw new Error(data.message || 'Failed to create receipt');
     return data;
   },
   updateReceipt: async (id, receiptData) => {
-    const response = await fetch(`${API_BASE_URL}/receipts/${id}`, {
+    const isFormData = receiptData instanceof FormData;
+    const headers = getHeaders(true);
+    if (isFormData) {
+      delete headers['Content-Type'];
+    }
+
+    const fetchOptions = {
       method: 'PUT',
-      headers: getHeaders(true),
-      body: JSON.stringify(receiptData)
-    });
+      headers,
+      body: isFormData ? receiptData : JSON.stringify(receiptData)
+    };
+    const response = await fetch(`${API_BASE_URL}/receipts/${id}`, fetchOptions);
     const data = await response.json();
     if (!response.ok) throw new Error(data.message || 'Failed to update receipt');
     return data;
@@ -1786,21 +1828,35 @@ export const contraAPI = {
     return data;
   },
   createContra: async (contraData) => {
-    const response = await fetch(`${API_BASE_URL}/contra`, {
+    const isFormData = contraData instanceof FormData;
+    const headers = getHeaders(true);
+    if (isFormData) {
+      delete headers['Content-Type'];
+    }
+
+    const fetchOptions = {
       method: 'POST',
-      headers: getHeaders(true),
-      body: JSON.stringify(contraData)
-    });
+      headers,
+      body: isFormData ? contraData : JSON.stringify(contraData)
+    };
+    const response = await fetch(`${API_BASE_URL}/contra`, fetchOptions);
     const data = await response.json();
     if (!response.ok) throw new Error(data.message || 'Failed to create contra entry');
     return data;
   },
   updateContra: async (id, contraData) => {
-    const response = await fetch(`${API_BASE_URL}/contra/${id}`, {
+    const isFormData = contraData instanceof FormData;
+    const headers = getHeaders(true);
+    if (isFormData) {
+      delete headers['Content-Type'];
+    }
+
+    const fetchOptions = {
       method: 'PUT',
-      headers: getHeaders(true),
-      body: JSON.stringify(contraData)
-    });
+      headers,
+      body: isFormData ? contraData : JSON.stringify(contraData)
+    };
+    const response = await fetch(`${API_BASE_URL}/contra/${id}`, fetchOptions);
     const data = await response.json();
     if (!response.ok) throw new Error(data.message || 'Failed to update contra entry');
     return data;
@@ -1830,21 +1886,35 @@ export const journalAPI = {
     return data;
   },
   createJournal: async (journalData) => {
-    const response = await fetch(`${API_BASE_URL}/journal`, {
+    const isFormData = journalData instanceof FormData;
+    const headers = getHeaders(true);
+    if (isFormData) {
+      delete headers['Content-Type'];
+    }
+
+    const fetchOptions = {
       method: 'POST',
-      headers: getHeaders(true),
-      body: JSON.stringify(journalData)
-    });
+      headers,
+      body: isFormData ? journalData : JSON.stringify(journalData)
+    };
+    const response = await fetch(`${API_BASE_URL}/journal`, fetchOptions);
     const data = await response.json();
     if (!response.ok) throw new Error(data.message || 'Failed to create journal entry');
     return data;
   },
   updateJournal: async (id, journalData) => {
-    const response = await fetch(`${API_BASE_URL}/journal/${id}`, {
+    const isFormData = journalData instanceof FormData;
+    const headers = getHeaders(true);
+    if (isFormData) {
+      delete headers['Content-Type'];
+    }
+
+    const fetchOptions = {
       method: 'PUT',
-      headers: getHeaders(true),
-      body: JSON.stringify(journalData)
-    });
+      headers,
+      body: isFormData ? journalData : JSON.stringify(journalData)
+    };
+    const response = await fetch(`${API_BASE_URL}/journal/${id}`, fetchOptions);
     const data = await response.json();
     if (!response.ok) throw new Error(data.message || 'Failed to update journal entry');
     return data;
@@ -2511,6 +2581,56 @@ export const reconciliationAPI = {
     });
     const data = await response.json();
     if (!response.ok) throw new Error(data.error?.message || data.error || 'Failed to bulk reconcile');
+    return data;
+  },
+  bulkReconcilePayments: async (ids, remarks) => {
+    const response = await fetch(`${API_BASE_URL}/reconciliation/payments/bulk-reconcile`, {
+      method: 'POST',
+      headers: getHeaders(true),
+      body: JSON.stringify({ ids, remarks })
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error?.message || data.error || 'Failed to bulk reconcile payments');
+    return data;
+  },
+  bulkReconcileReceipts: async (ids, remarks) => {
+    const response = await fetch(`${API_BASE_URL}/reconciliation/receipts/bulk-reconcile`, {
+      method: 'POST',
+      headers: getHeaders(true),
+      body: JSON.stringify({ ids, remarks })
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error?.message || data.error || 'Failed to bulk reconcile receipts');
+    return data;
+  },
+  bulkReconcileContras: async (ids, remarks) => {
+    const response = await fetch(`${API_BASE_URL}/reconciliation/contras/bulk-reconcile`, {
+      method: 'POST',
+      headers: getHeaders(true),
+      body: JSON.stringify({ ids, remarks })
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error?.message || data.error || 'Failed to bulk reconcile contras');
+    return data;
+  },
+  bulkReconcileJournals: async (ids, remarks) => {
+    const response = await fetch(`${API_BASE_URL}/reconciliation/journals/bulk-reconcile`, {
+      method: 'POST',
+      headers: getHeaders(true),
+      body: JSON.stringify({ ids, remarks })
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error?.message || data.error || 'Failed to bulk reconcile journals');
+    return data;
+  },
+  bulkReconcileStationBoyPayments: async (ids, remarks) => {
+    const response = await fetch(`${API_BASE_URL}/reconciliation/station-boy-payments/bulk-reconcile`, {
+      method: 'POST',
+      headers: getHeaders(true),
+      body: JSON.stringify({ ids, remarks })
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error?.message || data.error || 'Failed to bulk reconcile station boy payments');
     return data;
   },
   reconcileBooking: async (id, remarks) => {

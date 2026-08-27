@@ -6,6 +6,7 @@ const fs = require('fs');
 const employeeUploadDir = path.join(__dirname, '../../public/uploads/employees');
 const customerUploadDir = path.join(__dirname, '../../public/uploads/customers');
 const profileUploadDir = path.join(__dirname, '../../public/uploads/profiles');
+const paymentUploadDir = path.join(__dirname, '../../public/uploads/payments');
 
 if (!fs.existsSync(employeeUploadDir)) {
   fs.mkdirSync(employeeUploadDir, { recursive: true });
@@ -16,6 +17,9 @@ if (!fs.existsSync(customerUploadDir)) {
 if (!fs.existsSync(profileUploadDir)) {
   fs.mkdirSync(profileUploadDir, { recursive: true });
 }
+if (!fs.existsSync(paymentUploadDir)) {
+  fs.mkdirSync(paymentUploadDir, { recursive: true });
+}
 
 // Configure storage
 const storage = multer.diskStorage({
@@ -25,6 +29,8 @@ const storage = multer.diskStorage({
       cb(null, profileUploadDir);
     } else if (req.route.path.includes('/customer/') || req.route.path.includes('/customers/')) {
       cb(null, customerUploadDir);
+    } else if (req.route.path.includes('/payment') || req.route.path.includes('/receipt') || req.route.path.includes('/journal') || req.route.path.includes('/contra')) {
+      cb(null, paymentUploadDir);
     } else {
       cb(null, employeeUploadDir);
     }
@@ -38,6 +44,8 @@ const storage = multer.diskStorage({
       cb(null, 'profile-' + uniqueSuffix + ext);
     } else if (req.route.path.includes('/customer/') || req.route.path.includes('/customers/')) {
       cb(null, 'customer-' + uniqueSuffix + ext);
+    } else if (req.route.path.includes('/payment') || req.route.path.includes('/receipt') || req.route.path.includes('/journal') || req.route.path.includes('/contra')) {
+      cb(null, 'payment-proof-' + uniqueSuffix + ext);
     } else {
       cb(null, 'employee-' + uniqueSuffix + ext);
     }

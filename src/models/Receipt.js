@@ -59,6 +59,14 @@ const Receipt = sequelize.define('rcReceipt', {
     allowNull: true,
     comment: 'Reference number'
   },
+
+  utr_number: {
+    type: DataTypes.STRING(100),
+    allowNull: true,
+    comment: 'Global unique UTR number'
+  },
+
+
   
   rc_bank_account: {
     type: DataTypes.STRING(100),

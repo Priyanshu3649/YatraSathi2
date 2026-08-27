@@ -1,4 +1,4 @@
-const { BookingTVL, BillTVL, PaymentTVL, Receipt, StationBoyPayment, Contra } = require('../models');
+const { BookingTVL, BillTVL, PaymentTVL, Receipt, StationBoyPayment, Contra, Journal } = require('../models');
 
 // Helper to convert USID string to integer for audit hooks/reconciled_by
 function convertUserIdToInt(userId) {
@@ -130,10 +130,15 @@ const reconciliationController = {
         return res.status(404).json({ success: false, error: 'One or more bills not found' });
       }
 
-      const invalidBills = bills.filter(b => b.payment_status !== 'PAID' && b.bl_status !== 'CANCELLED' && b.status !== 'CANCELLED');
+      const invalidBills = bills.filter(b => {
+        const status = b.bl_status;
+        const paymentStatus = b.payment_status;
+        const allowedStatuses = ['PAID', 'CANCELLED', 'CONFIRMED', 'CNF', 'CAN', 'FINAL'];
+        return !allowedStatuses.includes(status) && paymentStatus !== 'PAID';
+      });
       if (invalidBills.length > 0) {
         await t.rollback();
-        return res.status(400).json({ success: false, error: 'Only fully paid or cancelled bills can be reconciled' });
+        return res.status(400).json({ success: false, error: 'Only confirmed, paid, or cancelled bills can be reconciled' });
       }
 
       const reconciledBy = convertUserIdToInt(req.user?.us_usid);
@@ -167,8 +172,9 @@ const reconciliationController = {
       const bill = await BillTVL.findByPk(id);
       if (!bill) return res.status(404).json({ success: false, error: 'Bill not found' });
       
-      if (bill.payment_status !== 'PAID' && bill.bl_status !== 'CANCELLED' && bill.status !== 'CANCELLED') {
-        return res.status(400).json({ success: false, error: 'Only fully paid or cancelled bills can be reconciled' });
+      const allowedStatuses = ['PAID', 'CANCELLED', 'CONFIRMED', 'CNF', 'CAN', 'FINAL'];
+      if (!allowedStatuses.includes(bill.bl_status) && bill.payment_status !== 'PAID') {
+        return res.status(400).json({ success: false, error: 'Only confirmed, paid, or cancelled bills can be reconciled' });
       }
 
       bill.is_reconciled = 1;
@@ -384,6 +390,171 @@ const reconciliationController = {
       res.json({ success: true, message: 'Station Boy Payment unreconciled successfully', data: payment });
     } catch (error) {
       console.error('Error unreconciling station boy payment:', error);
+      res.status(500).json({ success: false, error: error.message });
+    }
+  },
+
+  // Bulk Payments
+  bulkReconcilePayments: async (req, res) => {
+    const t = await PaymentTVL.sequelize.transaction();
+    try {
+      const { ids, remarks } = req.body;
+      if (!Array.isArray(ids) || ids.length === 0) {
+        await t.rollback();
+        return res.status(400).json({ success: false, error: 'No payment IDs provided' });
+      }
+
+      const reconciledBy = convertUserIdToInt(req.user?.us_usid);
+      await PaymentTVL.update(
+        {
+          is_reconciled: 1,
+          reconciled_by: reconciledBy,
+          reconciled_at: new Date(),
+          reconciliation_remarks: remarks || 'Reconciled'
+        },
+        {
+          where: { pm_id: { [Op.in]: ids } },
+          transaction: t
+        }
+      );
+
+      await t.commit();
+      res.json({ success: true, message: `${ids.length} payments reconciled successfully` });
+    } catch (error) {
+      await t.rollback();
+      console.error('Error bulk reconciling payments:', error);
+      res.status(500).json({ success: false, error: error.message });
+    }
+  },
+
+  // Bulk Receipts
+  bulkReconcileReceipts: async (req, res) => {
+    const t = await Receipt.sequelize.transaction();
+    try {
+      const { ids, remarks } = req.body;
+      if (!Array.isArray(ids) || ids.length === 0) {
+        await t.rollback();
+        return res.status(400).json({ success: false, error: 'No receipt IDs provided' });
+      }
+
+      const reconciledBy = convertUserIdToInt(req.user?.us_usid);
+      await Receipt.update(
+        {
+          is_reconciled: 1,
+          reconciled_by: reconciledBy,
+          reconciled_at: new Date(),
+          reconciliation_remarks: remarks || 'Reconciled'
+        },
+        {
+          where: { rc_id: { [Op.in]: ids } },
+          transaction: t
+        }
+      );
+
+      await t.commit();
+      res.json({ success: true, message: `${ids.length} receipts reconciled successfully` });
+    } catch (error) {
+      await t.rollback();
+      console.error('Error bulk reconciling receipts:', error);
+      res.status(500).json({ success: false, error: error.message });
+    }
+  },
+
+  // Bulk Contras
+  bulkReconcileContras: async (req, res) => {
+    const t = await Contra.sequelize.transaction();
+    try {
+      const { ids, remarks } = req.body;
+      if (!Array.isArray(ids) || ids.length === 0) {
+        await t.rollback();
+        return res.status(400).json({ success: false, error: 'No contra IDs provided' });
+      }
+
+      const reconciledBy = convertUserIdToInt(req.user?.us_usid);
+      await Contra.update(
+        {
+          is_reconciled: 1,
+          reconciled_by: reconciledBy,
+          reconciled_at: new Date(),
+          reconciliation_remarks: remarks || 'Reconciled'
+        },
+        {
+          where: { ct_id: { [Op.in]: ids } },
+          transaction: t
+        }
+      );
+
+      await t.commit();
+      res.json({ success: true, message: `${ids.length} contras reconciled successfully` });
+    } catch (error) {
+      await t.rollback();
+      console.error('Error bulk reconciling contras:', error);
+      res.status(500).json({ success: false, error: error.message });
+    }
+  },
+
+  // Bulk Journals
+  bulkReconcileJournals: async (req, res) => {
+    const t = await Journal.sequelize.transaction();
+    try {
+      const { ids, remarks } = req.body;
+      if (!Array.isArray(ids) || ids.length === 0) {
+        await t.rollback();
+        return res.status(400).json({ success: false, error: 'No journal IDs provided' });
+      }
+
+      const reconciledBy = convertUserIdToInt(req.user?.us_usid);
+      await Journal.update(
+        {
+          is_reconciled: 1,
+          reconciled_by: reconciledBy,
+          reconciled_at: new Date(),
+          reconciliation_remarks: remarks || 'Reconciled'
+        },
+        {
+          where: { je_id: { [Op.in]: ids } },
+          transaction: t
+        }
+      );
+
+      await t.commit();
+      res.json({ success: true, message: `${ids.length} journals reconciled successfully` });
+    } catch (error) {
+      await t.rollback();
+      console.error('Error bulk reconciling journals:', error);
+      res.status(500).json({ success: false, error: error.message });
+    }
+  },
+
+  // Bulk Station Boy Payments
+  bulkReconcileStationBoyPayments: async (req, res) => {
+    const t = await StationBoyPayment.sequelize.transaction();
+    try {
+      const { ids, remarks } = req.body;
+      if (!Array.isArray(ids) || ids.length === 0) {
+        await t.rollback();
+        return res.status(400).json({ success: false, error: 'No Station Boy Payment IDs provided' });
+      }
+
+      const reconciledBy = convertUserIdToInt(req.user?.us_usid);
+      await StationBoyPayment.update(
+        {
+          is_reconciled: 1,
+          reconciled_by: reconciledBy,
+          reconciled_at: new Date(),
+          reconciliation_remarks: remarks || 'Reconciled'
+        },
+        {
+          where: { id: { [Op.in]: ids } },
+          transaction: t
+        }
+      );
+
+      await t.commit();
+      res.json({ success: true, message: `${ids.length} station boy payments reconciled successfully` });
+    } catch (error) {
+      await t.rollback();
+      console.error('Error bulk reconciling station boy payments:', error);
       res.status(500).json({ success: false, error: error.message });
     }
   }

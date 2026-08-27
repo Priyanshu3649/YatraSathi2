@@ -3,6 +3,7 @@ const { Sequelize, Op } = require('sequelize');
 const { sequelizeTVL: sequelize } = require('../../config/db'); // Use sequelizeTVL for TVL database
 const queryHelper = require('../utils/queryHelper');
 const Audit = require('../services/forensicAuditService');
+const { validateUtrUniqueness, saveUtrReference } = require('../utils/utrValidation');
 
 
 // Helper function to convert string user ID to integer for database compatibility
@@ -98,7 +99,7 @@ const createBooking = async (req, res) => {
     
     try {
       // Disable foreign key checks for this specific transaction's connection
-      await sequelize.query('SET FOREIGN_KEY_CHECKS = 0', { transaction });
+      await sequelize.query('SET FOREIGN_KEY_CHECKS = 0', { transaction, userId: req.user?.us_usid || req.user?.id });
       
       let customerId = internalCustomerId;
       
@@ -180,7 +181,7 @@ const createBooking = async (req, res) => {
             us_password: 'PHONE_BOOKING', // Temporary password
             us_eby: req.user.us_usid,
             us_mby: req.user.us_usid
-          }, { transaction });
+          }, { transaction, userId: req.user?.us_usid || req.user?.id });
           
           // Create customer record
           const customerNumber = `CUST${Date.now()}${Math.floor(Math.random() * 1000)}`;
@@ -277,10 +278,15 @@ const createBooking = async (req, res) => {
         const advanceAmount = parseFloat(req.body.advanceAmount);
         const paymentMode = req.body.paymentMode || 'Cash';
         const paymentReference = req.body.paymentReference || '';
+        const utrNumber = req.body.utrNumber || '';
         const CustomerLedgerService = require('../services/CustomerLedgerService');
         const { Receipt } = require('../models');
         
         try {
+          if (utrNumber) {
+            await validateUtrUniqueness(utrNumber, null, null, transaction);
+          }
+          
           const rcEntryNo = 'RC' + Date.now().toString().slice(-9);
           const paymentAccountName = 'Bank';
 
@@ -292,12 +298,20 @@ const createBooking = async (req, res) => {
             rc_amount: advanceAmount,
             rc_payment_mode: paymentMode,
             rc_ref_number: paymentReference,
+            utr_number: utrNumber,
             rc_bank_account: paymentAccountName,
             rc_narration: `Advance payment for Booking ${booking.bk_bkno}`,
             rc_created_by: String(req.user.us_usid),
             rc_status: 'Active',
             entered_by: String(req.user.us_usid)
+          }, {
+            transaction: transaction,
+            userId: req.user.us_usid
           });
+          
+          if (utrNumber) {
+            await saveUtrReference(utrNumber, 'RECEIPT', receipt.rc_rcid, transaction);
+          }
           
           await CustomerLedgerService.writeLedgerEntry({
             customerId: customerId,
@@ -704,7 +718,7 @@ const updateBooking = async (req, res) => {
     
     try {
       // Disable foreign key checks for this specific transaction's connection
-      await sequelize.query('SET FOREIGN_KEY_CHECKS = 0', { transaction });
+      await sequelize.query('SET FOREIGN_KEY_CHECKS = 0', { transaction, userId: req.user?.us_usid || req.user?.id });
       
       const { passengerList, 
               bk_fromst, bk_tost, bk_trvldt, bk_class, bk_quota, 
@@ -1056,7 +1070,7 @@ const confirmBooking = async (req, res) => {
       pn_totamt: totalAmount || 0,
       eby: req.user.us_usid,
       mby: req.user.us_usid
-    });
+    }, { userId: req.user?.us_usid || req.user?.id });
     
     // Create account record for the booking
     const { Account } = require('../models');
@@ -1067,7 +1081,7 @@ const confirmBooking = async (req, res) => {
       ac_status: 'PND',
       eby: req.user.us_usid,
       mby: req.user.us_usid
-    });
+    }, { userId: req.user?.us_usid || req.user?.id });
     
     // Create bill automatically using the unified BillingMaster system (BillingMaster and Op already imported above)
     const { Customer } = require('../models');
@@ -1578,6 +1592,45 @@ const updateBookingStatus = async (req, res) => {
   }
 };
 
+// Add getLatestPassengers
+const getLatestPassengers = async (req, res) => {
+  try {
+    const { BookingTVL, PassengerTVL: Passenger } = require('../models');
+    
+    // Find the latest booking created by the user or for the user
+    const latestBooking = await BookingTVL.findOne({
+      where: {
+        [Op.or]: [
+          { eby: req.user.us_usid },
+          { bk_usid: req.user.us_usid }
+        ]
+      },
+      order: [['bk_bkid', 'DESC']]
+    });
+
+    if (!latestBooking) {
+      return res.status(200).json({ success: true, data: [] });
+    }
+
+    const passengers = await Passenger.findAll({
+      where: { ps_bkid: latestBooking.bk_bkid },
+      order: [['ps_psid', 'ASC']]
+    });
+
+    res.status(200).json({
+      success: true,
+      data: passengers
+    });
+  } catch (error) {
+    console.error('Error fetching latest passengers:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch latest passengers',
+      error: error.message
+    });
+  }
+};
+
 module.exports = {
   createBooking,
   getCustomerBookings,
@@ -1593,5 +1646,6 @@ module.exports = {
   getBookingsByStatus,
   searchBookings,
   getBookingPassengers,
-  getAssignedBookings
+  getAssignedBookings,
+  getLatestPassengers
 };
