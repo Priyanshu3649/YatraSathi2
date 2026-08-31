@@ -1,6 +1,13 @@
 const { DataTypes } = require('sequelize');
 const { sequelizeTVL } = require('../../config/db');
 
+function parseUserIdToInt(id) {
+  if (!id) return null;
+  if (typeof id === 'number') return id;
+  const num = parseInt(String(id).replace(/\D/g, ''));
+  return isNaN(num) ? 1 : num;
+}
+
 const CustomerTVL = sequelizeTVL.define('cuXcustomer', {
   cu_cusid: {
     type: DataTypes.STRING(15),
@@ -61,6 +68,11 @@ const CustomerTVL = sequelizeTVL.define('cuXcustomer', {
     allowNull: true,
     comment: 'GST Number'
   },
+  cu_servicecharge_config: {
+    type: DataTypes.JSON,
+    allowNull: true,
+    comment: 'Service charge configuration matrix for reservation & cancellation'
+  },
   entered_by: {
     type: DataTypes.INTEGER,
     allowNull: true,
@@ -92,14 +104,14 @@ const CustomerTVL = sequelizeTVL.define('cuXcustomer', {
   hooks: {
     beforeCreate: (customer, options) => {
       if (options.userId) {
-        customer.entered_by = options.userId;
+        customer.entered_by = parseUserIdToInt(options.userId);
         customer.entered_on = new Date();
         if (!customer.status) customer.status = 'OPEN';
       }
     },
     beforeUpdate: (customer, options) => {
       if (options.userId) {
-        customer.modified_by = options.userId;
+        customer.modified_by = parseUserIdToInt(options.userId);
         customer.modified_on = new Date();
       }
     }

@@ -5,6 +5,7 @@ import { showMessage } from './MessageDisplay';
 import { parseError, validateFormData } from '../utils/errorParser';
 import PaginationControls from './common/PaginationControls';
 import useERPFilters from '../hooks/useERPFilters';
+import CustomerServiceChargeModal from './Admin/CustomerServiceChargeModal';
 import '../styles/vintage-erp-theme.css';
 import '../styles/dynamic-admin-panel.css';
 
@@ -40,6 +41,32 @@ const DynamicAdminPanel = ({ initialModule = 'applications' }) => {
     totalPages: 1,
     totalRecords: 0
   });
+
+  // Service Charge Modal state
+  const [serviceChargeModal, setServiceChargeModal] = useState({
+    isOpen: false,
+    customerId: null,
+    customerName: '',
+    customerNo: ''
+  });
+
+  const openServiceChargeModal = (record = selectedRecord) => {
+    const target = record || selectedRecord;
+    if (!target) {
+      showMessage('Please select a customer first to configure service charges', 'info');
+      return;
+    }
+    const custId = target.cu_cusid || target.cu_usid || target.cu_custno || target.id;
+    const custName = target.name || target.cu_name || (target.us_fname ? `${target.us_fname || ''} ${target.us_lname || ''}`.trim() : target.cu_usid);
+    const custNo = target.cu_custno || target.cu_usid || custId;
+
+    setServiceChargeModal({
+      isOpen: true,
+      customerId: custId,
+      customerName: custName,
+      customerNo: custNo
+    });
+  };
   
   // Dropdown data sources
   const [dropdownData, setDropdownData] = useState({
@@ -278,9 +305,9 @@ const DynamicAdminPanel = ({ initialModule = 'applications' }) => {
         { name: 'workingAddress', label: 'Working Address', type: 'textarea' },
         { name: 'permanentAddress', label: 'Permanent Address', type: 'textarea' }
       ],
-      columns: ['name', 'phone', 'accountGroup', 'location', 'opBalance', 'workingAddress', 'permanentAddress'],
-      columnLabels: ['Customer Name', 'Phone No', 'Account Group', 'Location', 'Op Balance', 'Working Address', 'Permanent Address'],
-      columnWidths: ['200px', '150px', '150px', '150px', '120px', '250px', '250px'],
+      columns: ['name', 'phone', 'accountGroup', 'location', 'opBalance', 'serviceChargeAction', 'workingAddress', 'permanentAddress'],
+      columnLabels: ['Customer Name', 'Phone No', 'Account Group', 'Location', 'Op Balance', 'Service Charge', 'Working Address', 'Permanent Address'],
+      columnWidths: ['200px', '140px', '140px', '140px', '110px', '130px', '220px', '220px'],
       filterFields: ['name', 'phone', 'accountGroup', 'location']
     },
     stationBoys: {
@@ -750,6 +777,11 @@ const DynamicAdminPanel = ({ initialModule = 'applications' }) => {
         if (currentIndex > 0) {
           handleRecordSelect(filteredData[currentIndex - 1]);
           scrollToSelectedRow();
+        }
+      } else if (e.key === 'F2') {
+        e.preventDefault();
+        if (activeModule === 'customers' && selectedRecord) {
+          openServiceChargeModal(selectedRecord);
         }
       } else if (e.key === 'Enter' && !isEditing) {
         e.preventDefault();
@@ -1399,6 +1431,16 @@ const DynamicAdminPanel = ({ initialModule = 'applications' }) => {
             {activeModule === 'customers' ? 'View Details' : 'View Ledger'}
           </button>
         )}
+        {activeModule === 'customers' && selectedRecord && (
+          <button 
+            className="erp-button" 
+            style={{ background: '#0284c7', color: '#fff', fontWeight: 600 }} 
+            onClick={() => openServiceChargeModal(selectedRecord)}
+            title="Configure Service Charge (F2)"
+          >
+            ⚙️ Service Charge (F2)
+          </button>
+        )}
         {activeModule === 'stationBoys' && (
           <button className="erp-button" style={{ background: '#d32f2f', color: '#fff' }} onClick={() => {
             navigate('/admin/station-boys/reconciliation');
@@ -1605,6 +1647,17 @@ const DynamicAdminPanel = ({ initialModule = 'applications' }) => {
                           className="erp-input"
                           value={formData[field.name] || ''}
                           onChange={handleInputChange}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' || (e.key === 'Tab' && !e.shiftKey)) {
+                              const formFields = currentModule.fields.map(f => f.name);
+                              const currIdx = formFields.indexOf(field.name);
+                              if (currIdx !== -1 && currIdx < formFields.length - 1) {
+                                e.preventDefault();
+                                const nextEl = document.querySelector(`[name="${formFields[currIdx + 1]}"]`);
+                                if (nextEl) { nextEl.focus(); if (nextEl.select) nextEl.select(); }
+                              }
+                            }
+                          }}
                           disabled={!isEditing}
                         >
                           <option value="">Select...</option>
@@ -1620,6 +1673,17 @@ const DynamicAdminPanel = ({ initialModule = 'applications' }) => {
                           className="erp-input"
                           value={formData[field.name] || ''}
                           onChange={handleInputChange}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' || (e.key === 'Tab' && !e.shiftKey)) {
+                              const formFields = currentModule.fields.map(f => f.name);
+                              const currIdx = formFields.indexOf(field.name);
+                              if (currIdx !== -1 && currIdx < formFields.length - 1) {
+                                e.preventDefault();
+                                const nextEl = document.querySelector(`[name="${formFields[currIdx + 1]}"]`);
+                                if (nextEl) { nextEl.focus(); if (nextEl.select) nextEl.select(); }
+                              }
+                            }
+                          }}
                           disabled={!isEditing}
                         >
                           <option value="">Select...</option>
@@ -1633,6 +1697,17 @@ const DynamicAdminPanel = ({ initialModule = 'applications' }) => {
                           className="erp-input"
                           value={formData[field.name] || ''}
                           onChange={handleInputChange}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' && !e.shiftKey) {
+                              const formFields = currentModule.fields.map(f => f.name);
+                              const currIdx = formFields.indexOf(field.name);
+                              if (currIdx !== -1 && currIdx < formFields.length - 1) {
+                                e.preventDefault();
+                                const nextEl = document.querySelector(`[name="${formFields[currIdx + 1]}"]`);
+                                if (nextEl) { nextEl.focus(); if (nextEl.select) nextEl.select(); }
+                              }
+                            }
+                          }}
                           disabled={!isEditing || (field.readOnly && selectedRecord)}
                           readOnly={field.readOnly && selectedRecord}
                           rows={3}
@@ -1644,6 +1719,17 @@ const DynamicAdminPanel = ({ initialModule = 'applications' }) => {
                           className="erp-input"
                           value={formData[field.name] || ''}
                           onChange={handleInputChange}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' || (e.key === 'Tab' && !e.shiftKey)) {
+                              const formFields = currentModule.fields.map(f => f.name);
+                              const currIdx = formFields.indexOf(field.name);
+                              if (currIdx !== -1 && currIdx < formFields.length - 1) {
+                                e.preventDefault();
+                                const nextEl = document.querySelector(`[name="${formFields[currIdx + 1]}"]`);
+                                if (nextEl) { nextEl.focus(); if (nextEl.select) nextEl.select(); }
+                              }
+                            }
+                          }}
                           disabled={!isEditing || (field.readOnly && selectedRecord)}
                           readOnly={field.readOnly && selectedRecord}
                           maxLength={field.maxLength}
@@ -1779,6 +1865,34 @@ const DynamicAdminPanel = ({ initialModule = 'applications' }) => {
                           >
                             <td><input type="checkbox" checked={!!isSelected} onChange={() => {}} /></td>
                             {currentModule.columns.map((col, colIdx) => {
+                              if (col === 'serviceChargeAction') {
+                                return (
+                                  <td key={colIdx} style={{ textAlign: 'center' }}>
+                                    <button
+                                      type="button"
+                                      style={{
+                                        background: '#0284c7',
+                                        color: '#ffffff',
+                                        border: 'none',
+                                        padding: '2px 8px',
+                                        borderRadius: '4px',
+                                        fontSize: '11px',
+                                        fontWeight: 600,
+                                        cursor: 'pointer'
+                                      }}
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleRecordSelect(record);
+                                        openServiceChargeModal(record);
+                                      }}
+                                      title="Configure Service Charge (F2)"
+                                    >
+                                      ⚙️ Config (F2)
+                                    </button>
+                                  </td>
+                                );
+                              }
+
                               let value = record[col];
                               
                               // Handle checkbox/boolean columns
@@ -2297,6 +2411,15 @@ const DynamicAdminPanel = ({ initialModule = 'applications' }) => {
           </button>
         </div>
       </div>
+
+      {/* Customer Service Charge Modal */}
+      <CustomerServiceChargeModal
+        isOpen={serviceChargeModal.isOpen}
+        customerId={serviceChargeModal.customerId}
+        customerName={serviceChargeModal.customerName}
+        customerNo={serviceChargeModal.customerNo}
+        onClose={() => setServiceChargeModal(prev => ({ ...prev, isOpen: false }))}
+      />
     </div>
   );
 };

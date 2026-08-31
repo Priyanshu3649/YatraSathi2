@@ -1,6 +1,13 @@
 const { DataTypes } = require('sequelize');
 const { sequelizeTVL } = require('../../config/db');
 
+function parseUserIdToInt(id) {
+  if (!id) return null;
+  if (typeof id === 'number') return id;
+  const num = parseInt(String(id).replace(/\D/g, ''));
+  return isNaN(num) ? 1 : num;
+}
+
 /**
  * Service Charge Default Model
  * Defines fallback charging rules when no customer-specific rule is found.
@@ -78,18 +85,18 @@ const ServiceChargeDefault = sequelizeTVL.define('service_charges_default', {
   hooks: {
     beforeCreate: (record, options) => {
       if (options.userId) {
-        record.entered_by = options.userId;
+        record.entered_by = parseUserIdToInt(options.userId);
         record.entered_on = new Date();
       }
     },
     beforeUpdate: (record, options) => {
       if (options.userId) {
-        record.modified_by = options.userId;
+        record.modified_by = parseUserIdToInt(options.userId);
         record.modified_on = new Date();
       }
       if (record.changed('is_active') && record.is_active === false) {
         if (options.userId && !record.closed_by) {
-          record.closed_by = options.userId;
+          record.closed_by = parseUserIdToInt(options.userId);
           record.closed_on = new Date();
         }
       }

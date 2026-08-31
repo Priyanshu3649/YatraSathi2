@@ -1,294 +1,85 @@
 'use strict';
 
 const PDFDocument = require('pdfkit');
-const QRCode = require('qrcode');
 
-// ─── colour palette ───────────────────────────────────────────────────────────
-const CLR = {
-  primary:   '#1A237E',  // Deep navy
-  accent:    '#6A1B9A',  // Purple
-  light:     '#F5F5F5',
-  muted:     '#757575',
-  black:     '#212121',
-  white:     '#FFFFFF',
-  divider:   '#BDBDBD',
-  headerBg:  '#E8EAF6',
-  altRow:    '#FAFAFA',
-  green:     '#2E7D32',
-  separator: '#7986CB',
-};
-
-const M  = 36;          // margin
-const PW = 595.28;      // A4 width
-const PH = 841.89;      // A4 height
-const CW = PW - M * 2; // content width
-
-// ─── helpers ─────────────────────────────────────────────────────────────────
+// ─── Helpers ─────────────────────────────────────────────────────────────────
 function fmt(value) {
   const n = Number.parseFloat(value);
-  if (!Number.isFinite(n)) return '₹0.00';
-  return '₹' + n.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  if (!Number.isFinite(n) || n === 0) return '0.00';
+  return n.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 function fmtDate(value) {
-  if (!value) return 'N/A';
+  if (!value) return '';
   const d = new Date(value);
-  if (isNaN(d.getTime())) return 'N/A';
-  return d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+  if (isNaN(d.getTime())) return String(value);
+  const day = String(d.getDate()).padStart(2, '0');
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const year = d.getFullYear();
+  return `${day}/${month}/${year}`;
 }
 
-function hRule(doc, x, y, width, color = CLR.divider, lw = 0.5) {
-  doc.save().strokeColor(color).lineWidth(lw)
-     .moveTo(x, y).lineTo(x + width, y).stroke().restore();
+function fmtShortDate(value) {
+  if (!value) return '';
+  const d = new Date(value);
+  if (isNaN(d.getTime())) return String(value);
+  const day = String(d.getDate()).padStart(2, '0');
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  return `${day}/${month}`;
 }
 
-function fillRect(doc, x, y, w, h, fill, stroke) {
-  doc.save().rect(x, y, w, h);
-  if (fill)   doc.fillColor(fill).fill();
-  if (stroke) doc.strokeColor(stroke).lineWidth(0.5).stroke();
-  doc.restore();
-}
-
-/**
- * Ensures there is enough space on the page. If not, adds a new page.
- * Returns the updated Y coordinate.
- */
-function checkPageSpace(doc, y, requiredSpace) {
-  if (y + requiredSpace > PH - M - 40) { // 40 is bottom margin for footer
-    doc.addPage();
-    return M;
-  }
-  return y;
-}
-
-/**
- * Draw a simple table; returns the new y position below the table.
- */
-function drawTable(doc, { x, y, colWidths, headers, rows, rowH = 16, headerH = 18 }) {
-  const totalW = colWidths.reduce((a, b) => a + b, 0);
-
-  y = checkPageSpace(doc, y, headerH + (rows.length * rowH) + 10);
-
-  // Header row
-  fillRect(doc, x, y, totalW, headerH, CLR.headerBg, CLR.divider);
-  let cx = x;
-  headers.forEach((h, i) => {
-    doc.fontSize(7.5).font('Helvetica-Bold').fillColor(CLR.primary)
-       .text(h, cx + 3, y + 5, { width: colWidths[i] - 6, ellipsis: true });
-    cx += colWidths[i];
-  });
-  y += headerH;
-
-  // Data rows
-  rows.forEach((row, ri) => {
-    const bg = ri % 2 === 1 ? CLR.altRow : CLR.white;
-    fillRect(doc, x, y, totalW, rowH, bg, CLR.divider);
-    cx = x;
-    row.forEach((cell, ci) => {
-      const cellStr = cell !== null && cell !== undefined ? String(cell) : '-';
-      doc.fontSize(7).font('Helvetica').fillColor(CLR.black)
-         .text(cellStr, cx + 3, y + 4, { width: colWidths[ci] - 6, ellipsis: true });
-      cx += colWidths[ci];
-    });
-    y += rowH;
-  });
-
-  // Bottom border
-  hRule(doc, x, y, totalW, CLR.divider, 0.8);
-  return y;
-}
-
-/**
- * Draw the global header and customer details (once per consolidated document)
- */
-function drawConsolidatedHeader(doc, payloads) {
-  let y = M;
-  const first = payloads[0];
-  const { company, customer } = first;
-
-  // ── Page watermark ──
+function hRule(doc, x, y, width, thickness = 0.5) {
   doc.save()
-     .fontSize(55).fillColor(CLR.muted).fillOpacity(0.04)
-     .font('Helvetica-Bold')
-     .translate(PW / 2, PH / 2)
-     .rotate(-45)
-     .text('ANMOL TRAVELS', -240, -40, { characterSpacing: 4 })
+     .strokeColor('#000000')
+     .lineWidth(thickness)
+     .moveTo(x, y)
+     .lineTo(x + width, y)
+     .stroke()
      .restore();
-
-  // ── Merge indicator badge ──
-  fillRect(doc, M, y, CW, 16, CLR.headerBg, CLR.separator);
-  doc.fontSize(7.5).font('Helvetica-Bold').fillColor(CLR.separator)
-     .text(`CONSOLIDATED INVOICE  •  Contains ${payloads.length} bills  •  Generated: ${fmtDate(new Date())}`,
-           M + 4, y + 4, { width: CW - 8 });
-  y += 22;
-
-  // ── Company name ──
-  doc.fontSize(18).font('Helvetica-Bold').fillColor(CLR.primary)
-     .text(company.name || 'Anmol Travels', M, y);
-  y += 22;
-  doc.fontSize(8.5).font('Helvetica').fillColor(CLR.black)
-     .text(company.address || '', M, y, { width: 300 });
-  y += 14;
-  if (company.phone) {
-    doc.text(`Phone: ${company.phone}  |  GSTIN: ${company.gst}`, M, y);
-    y += 14;
-  }
-
-  // ── CONSOLIDATED INVOICE label ──
-  const superBillNo = `CB-${Date.now().toString().slice(-7)}`;
-  const boxX = PW - M - 200;
-  fillRect(doc, boxX, y - 45, 200, 50, CLR.headerBg, CLR.primary);
-  doc.fontSize(13).font('Helvetica-Bold').fillColor(CLR.primary)
-     .text('CONSOLIDATED BILLING', boxX, y - 35, { width: 200, align: 'center' });
-  doc.fontSize(11).font('Helvetica-Bold').fillColor(CLR.accent)
-     .text(`SUPER BILL NO: ${superBillNo}`, boxX, y - 15, { width: 200, align: 'center' });
-
-  y += 12;
-  hRule(doc, M, y, CW, CLR.divider);
-  y += 10;
-
-  // ── Customer Details ──
-  doc.fontSize(9).font('Helvetica-Bold').fillColor(CLR.primary).text('Bill To (Customer Details)', M, y);
-  y += 12;
-  doc.fontSize(8.5).font('Helvetica-Bold').fillColor(CLR.black).text(customer.name || '-', M, y);
-  y += 11;
-  doc.fontSize(8).font('Helvetica').fillColor(CLR.muted).text(customer.address || '-', M, y, { width: 280 });
-  y += 12;
-  doc.text(`Phone: ${customer.phone || '-'}  |  GSTIN: ${customer.gstNo || 'Unregistered'}  |  State: ${customer.state || '-'}`, M, y);
-  y += 18;
-
-  hRule(doc, M, y, CW, CLR.divider, 1.5);
-  y += 15;
-
-  return y;
 }
 
 /**
- * Draw a single bill section in the continuous flow
+ * Format particulars in one compact line:
+ * e.g. "R KAVITA T X 1 NDLS-CNB,27/10,22426T,CC,(RADHE)"
  */
-function drawContinuousBillSection(doc, { payload, billIndex, y }) {
-  const { bill, booking, passengers, financials, gst } = payload;
-  
-  y = checkPageSpace(doc, y, 120); // ensure space for header + journey
+function buildParticularsLine(payload) {
+  const { bill = {}, booking = {}, passengers = [], cancellation = {} } = payload;
+  const isCancel = Boolean(cancellation?.isCancelled || bill.is_cancelled || bill.bl_status === 'CAN' || bill.status === 'CAN');
+  const typePrefix = isCancel ? 'C' : 'R';
 
-  // ── Bill Subheader ──
-  fillRect(doc, M, y, CW, 18, CLR.primary, CLR.primary);
-  doc.fontSize(9).font('Helvetica-Bold').fillColor(CLR.white)
-     .text(`${billIndex}. Invoice No: ${bill.billNumber || bill.bl_entry_no || '-'}  |  Date: ${fmtDate(bill.date || bill.bl_billing_date)}`, M + 6, y + 5);
-  y += 24;
+  const paxCount = passengers.length > 0 ? passengers.length : (bill.bl_seatsAlloted || booking.seatsReserved || 1);
+  const firstPaxName = (passengers[0]?.name || bill.bl_customer_name || 'PAX').toUpperCase();
 
-  // ── Journey / Booking Summary ──
-  const journeyDetails = [
-    ['Journey', booking.travelDetails || '-'],
-    ['Journey Date', fmtDate(booking.journeyDate)],
-    ['Train No.', booking.trainNumber || '-'],
-    ['PNR No.', booking.pnr || '-'],
-    ['Seats', `${booking.seatsAlloted || '-'} seat(s)`],
-    ['Station Boy', booking.stationBoy || '-'],
-  ];
+  const fromStn = (booking.fromStation || bill.bl_from_station || '').toUpperCase();
+  const toStn = (booking.toStation || bill.bl_to_station || '').toUpperCase();
+  const sector = fromStn && toStn ? `${fromStn}-${toStn}` : (fromStn || toStn || '');
 
-  const jColW = CW / 2 - 10;
-  const col1 = journeyDetails.slice(0, 3);
-  const col2 = journeyDetails.slice(3);
-  col1.forEach(([lbl, val], i) => {
-    const ry = y + i * 12;
-    doc.fontSize(7.5).font('Helvetica').fillColor(CLR.muted).text(`${lbl}:`, M, ry, { width: 70 });
-    doc.font('Helvetica-Bold').fillColor(CLR.black).text(val, M + 72, ry, { width: jColW - 72 });
-  });
-  col2.forEach(([lbl, val], i) => {
-    const ry = y + i * 12;
-    const cx = M + jColW + 20;
-    doc.fontSize(7.5).font('Helvetica').fillColor(CLR.muted).text(`${lbl}:`, cx, ry, { width: 70 });
-    doc.font('Helvetica-Bold').fillColor(CLR.black).text(val, cx + 72, ry, { width: jColW - 72 });
-  });
-  y += 42;
+  const jDate = fmtShortDate(booking.journeyDate || bill.bl_journey_date || bill.bl_date);
+  const rawTrain = booking.trainNumber || bill.bl_train_no || '';
+  const trainNo = rawTrain ? `${rawTrain}T` : '';
+  const travelClass = (booking.reservationClass || bill.bl_class || '3A').toUpperCase();
 
-  // ── Passenger Details ──
-  doc.fontSize(8).font('Helvetica-Bold').fillColor(CLR.primary)
-     .text(`Passengers (${passengers.length})`, M, y);
-  y += 10;
+  const remarks = booking.stationBoy || bill.stationBoy || bill.bl_station_boy || bill.remarks || bill.bl_remarks || '';
+  const remarksTag = remarks ? `,(${remarks})` : '';
 
-  if (passengers.length > 0) {
-    const paxColW = [25, 145, 65, 55, 55, 60, 118.28];
-    const paxHeaders = ['#', 'Full Name', 'Age / Gender', 'Coach', 'Seat/Berth', 'ID Type', 'ID Number'];
-    const paxRows = passengers.map((p, i) => [
-      i + 1,
-      p.name || '-',
-      `${p.age || '-'} / ${p.gender || '-'}`,
-      p.coach || '-',
-      p.seatNo !== '-' ? p.seatNo : (p.berth || '-'),
-      p.idType || '-',
-      p.idNumber || '-',
-    ]);
-    y = drawTable(doc, { x: M, y, colWidths: paxColW, headers: paxHeaders, rows: paxRows, rowH: 13, headerH: 14 });
-  } else {
-    doc.fontSize(8).font('Helvetica').fillColor(CLR.muted).text('No passenger records found.', M, y);
-    y += 14;
-  }
-  y += 8;
+  const details = [sector, jDate, trainNo, travelClass].filter(Boolean).join(',');
 
-  // ── Financial Breakdown ──
-  doc.fontSize(8).font('Helvetica-Bold').fillColor(CLR.primary).text('Charges Breakdown', M, y);
-  y += 10;
-
-  const chargeColW = [210, 80, 80, 70, 83.28];
-  const chargeHeaders = ['Description', 'SAC/HSN', 'Taxable Value', 'GST %', 'Amount'];
-  const chargeRows = [];
-  if (financials.railwayFare > 0)
-    chargeRows.push(['Railway Fare (Train Reservation)', '998511', fmt(financials.railwayFare), 'Nil', fmt(financials.railwayFare)]);
-  if (financials.serviceCharges > 0)
-    chargeRows.push(['Service Charges', '998551', fmt(financials.serviceCharges), '18%', fmt(financials.serviceCharges * 1.18)]);
-  if (financials.sbIncentive > 0)
-    chargeRows.push(['Station Boy / Delivery Incentive', '998551', fmt(financials.sbIncentive), 'Nil', fmt(financials.sbIncentive)]);
-  const misc = (financials.platformFees || 0) + (financials.miscCharges || 0) + (financials.deliveryCharges || 0);
-  if (misc > 0)
-    chargeRows.push(['Platform / Porter / Misc Charges', '998551', fmt(misc), 'Nil', fmt(misc)]);
-  if (financials.cancellationCharges > 0)
-    chargeRows.push(['Cancellation Charges', '998551', fmt(financials.cancellationCharges), 'Nil', fmt(financials.cancellationCharges)]);
-  if (chargeRows.length === 0)
-    chargeRows.push(['(No individual charge lines)', '-', '-', '-', fmt(financials.total)]);
-
-  y = drawTable(doc, { x: M, y, colWidths: chargeColW, headers: chargeHeaders, rows: chargeRows, rowH: 13, headerH: 14 });
-  y += 8;
-
-  // ── Bill Total (right-aligned) ──
-  const totX = PW - M - 200;
-  y = checkPageSpace(doc, y, 90);
-  
-  const taxRows = [
-    ['Subtotal (before tax)', fmt((financials.railwayFare || 0) + (financials.serviceCharges || 0) + (financials.sbIncentive || 0) + misc)],
-    ...(gst.isIntraState
-      ? [['CGST (9%)', fmt(gst.cgst)], ['SGST (9%)', fmt(gst.sgst)]]
-      : [['IGST (18%)', fmt(gst.igst)]]),
-    ['Surcharge', fmt(financials.surcharge || 0)],
-    ['Discount', `- ${fmt(financials.discount || 0)}`],
-    [`Bill ${billIndex} Total`, fmt(financials.total)],
-  ];
-
-  let ty = y;
-  taxRows.forEach((row, i) => {
-    const isTotal = i === taxRows.length - 1;
-    if (isTotal) {
-      fillRect(doc, totX, ty, 200, 16, CLR.headerBg, CLR.divider);
-    }
-    doc.fontSize(isTotal ? 8 : 7.5)
-       .font(isTotal ? 'Helvetica-Bold' : 'Helvetica')
-       .fillColor(isTotal ? CLR.black : CLR.black)
-       .text(row[0], totX + 4, ty + 4, { width: 120 })
-       .text(row[1], totX + 125, ty + 4, { width: 70, align: 'right' });
-    ty += 14;
-  });
-  
-  y = ty + 14;
-  return y;
+  return `${typePrefix} ${firstPaxName} X ${paxCount} ${details}${remarksTag}`;
 }
 
 /**
- * Generates a unified consolidated PDF for multiple bills in a continuous flow.
+ * Generates the Merged Bills Statement of Outstanding Account PDF matching reference
+ * Shows: Date, Bill no, Particulars, Amount
+ * In case of advance, adds an extra row with 'Adv payment' in particulars and -ve amount.
  * @param {Array} payloads - Array of bill print payloads
  * @returns {Promise<Buffer>}
  */
 async function generateMergedBillsPDF(payloads) {
+  const M = 40;
+  const PW = 595.28; // A4
+  const PH = 841.89;
+  const CW = PW - M * 2;
+
   const doc = new PDFDocument({ size: 'A4', margin: M, autoFirstPage: true });
   const buffers = [];
   doc.on('data', buffers.push.bind(buffers));
@@ -298,63 +89,205 @@ async function generateMergedBillsPDF(payloads) {
     return Buffer.concat(buffers);
   }
 
-  // Draw header once
-  let y = drawConsolidatedHeader(doc, payloads);
-  
-  let grandTotal = 0;
+  const firstPayload = payloads[0] || {};
+  const { company = {}, customer = {} } = firstPayload;
 
-  // Draw each bill sequentially
-  for (let i = 0; i < payloads.length; i++) {
-    y = drawContinuousBillSection(doc, { payload: payloads[i], billIndex: i + 1, y });
-    grandTotal += (payloads[i].financials?.total || 0);
+  const agencyName = (company.name || 'AMOLAK TRAVELS').toUpperCase();
+  const agencyAddress = company.address && company.address !== 'Address unavailable'
+    ? company.address
+    : '3173 / 32, BEADON PURA KAROL BAGH, DELHI-110005';
+
+  const todayStr = fmtDate(new Date());
+  const stmtNo = Math.floor(1000 + Math.random() * 9000);
+
+  let y = M;
+
+  // ── Company Header (Centered) ──
+  doc.font('Helvetica-Bold').fontSize(14).fillColor('#000000')
+     .text(agencyName, M, y, { width: CW, align: 'center' });
+  y += 18;
+
+  doc.font('Helvetica').fontSize(9.5).fillColor('#000000')
+     .text(agencyAddress, M, y, { width: CW, align: 'center' });
+  y += 24;
+
+  // ── Document Title ──
+  doc.font('Helvetica-Bold').fontSize(11).fillColor('#000000')
+     .text('STATEMENT OF OUTSTANDING ACCOUNT', M, y, { width: CW, align: 'center', underline: true });
+  y += 22;
+
+  // ── Two Column Info Block ──
+  const col1X = M;
+  const col2X = M + 280;
+  const infoStartY = y;
+
+  // Left: Customer To
+  doc.font('Helvetica').fontSize(8.5).fillColor('#000000')
+     .text('To,', col1X, y);
+  y += 12;
+
+  const custName = (customer.name || firstPayload.bill?.bl_customer_name || 'BAPA NAGAR OFFICE TKT A/C').toUpperCase();
+  doc.font('Helvetica-Bold').fontSize(8.5).fillColor('#000000')
+     .text(custName, col1X + 15, y, { width: 250 });
+  y += 12;
+
+  const custAddr = customer.address && customer.address !== 'Address unavailable'
+    ? customer.address
+    : (customer.city ? `${customer.city}, ${customer.state || ''}` : 'BAPA NAGAR, KAROL BAGH, NEW DELHI-110005');
+  doc.font('Helvetica').fontSize(8).fillColor('#000000')
+     .text(custAddr, col1X + 15, y, { width: 250 });
+  y += (custAddr.length > 35 ? 20 : 12);
+
+  const phoneStr = customer.phone || firstPayload.bill?.bl_customer_phone || '';
+  if (phoneStr) {
+    doc.text(phoneStr, col1X + 15, y, { width: 250 });
+    y += 12;
   }
 
-  // ── GRAND TOTAL SECTION ──
-  y = checkPageSpace(doc, y, 140);
-  
+  // Right: Statement Meta
+  let ry = infoStartY + 12;
+  const metaLines = [
+    ['STATEMENT NO.', `: ${stmtNo}`],
+    ['DATE', `: ${todayStr}`],
+    ['PREPARED BY', `: ${(firstPayload.audit?.enteredBy || 'AMIT KUMAR').toUpperCase()}`],
+    ['PAYMENT TERM', ': '],
+    ['BILL DUE DAY', ': ']
+  ];
+
+  metaLines.forEach(([lbl, val]) => {
+    doc.font('Helvetica-Bold').fontSize(8).fillColor('#000000')
+       .text(lbl, col2X, ry, { width: 95 })
+       .text(val, col2X + 95, ry, { width: 140 });
+    ry += 12;
+  });
+
+  y = Math.max(y + 10, ry + 10);
+
+  // ── Salutation & Introduction Text ──
+  doc.font('Helvetica-Bold').fontSize(8).fillColor('#000000').text('Kind Attention :', M, y);
+  y += 14;
+
+  doc.font('Helvetica').fontSize(8).fillColor('#000000')
+     .text('Dear Sir(s),', M, y);
+  y += 10;
+
+  doc.text(`We give herebelow the details of your Outstanding account as per our books as on ${todayStr}. Please make the payment as per statement as early as possible.`, M, y, { width: CW });
   y += 20;
-  // Draw a big box with primary color
-  fillRect(doc, M, y, CW, 50, CLR.primary, CLR.black);
-  
-  doc.fontSize(16).font('Helvetica-Bold').fillColor(CLR.white)
-     .text('CONSOLIDATED GRAND TOTAL:', M + 20, y + 16, { width: 300 });
-  
-  // Big font for grand total
-  doc.fontSize(22).font('Helvetica-Bold').fillColor(CLR.white)
-     .text(fmt(grandTotal), PW - M - 250, y + 12, { width: 230, align: 'right' });
-  
-  y += 70;
 
-  // ── QR Code (UPI Pay) & Signature ──
-  const qrY = y;
-  try {
-    const firstPayload = payloads[0];
-    const upiQr = await QRCode.toBuffer(firstPayload.upi?.upiString || 'https://anmoltravels.in');
-    doc.image(upiQr, M, qrY, { width: 70 });
-    doc.fontSize(7).fillColor(CLR.muted).text('Scan to Pay (UPI)', M, qrY + 74, { width: 70, align: 'center' });
-  } catch (_) { /* skip if QR fails */ }
-
-  const sigX = PW - M - 140;
-  doc.fontSize(8.5).font('Helvetica-Bold').fillColor(CLR.primary)
-     .text('For Anmol Travels', sigX, qrY, { align: 'right', width: 140 });
-  doc.fontSize(7).font('Helvetica').fillColor(CLR.muted)
-     .text('Authorized Signatory', sigX, qrY + 38, { align: 'right', width: 140 });
-
-  // Add event for page additions to add footer
-  const drawFooter = () => {
-    const origBottom = doc.page.margins.bottom;
-    doc.page.margins.bottom = 0;
-    doc.fontSize(7).font('Helvetica').fillColor(CLR.muted)
-       .text('E. & O.E. | Computer-generated document — does not require a physical signature.',
-             M, PH - 25, { width: CW, align: 'center', lineBreak: false });
-    doc.page.margins.bottom = origBottom;
+  // ── Table Header (Date, Bill no, Particulars, Amount) ──
+  const colW = {
+    date: 75,
+    billNo: 70,
+    particulars: 285,
+    amount: 85
   };
 
-  // Add event for page additions to add footer
-  doc.on('pageAdded', drawFooter);
-  
-  // Draw footer on current page
-  drawFooter();
+  const xDate = M;
+  const xBill = xDate + colW.date;
+  const xPart = xBill + colW.billNo;
+  const xAmt = xPart + colW.particulars;
+
+  hRule(doc, M, y, CW, 0.8);
+  y += 4;
+
+  doc.font('Helvetica-Bold').fontSize(8.5).fillColor('#000000')
+     .text('Date', xDate, y, { width: colW.date })
+     .text('Bill no', xBill, y, { width: colW.billNo })
+     .text('Particulars', xPart, y, { width: colW.particulars })
+     .text('Amount', xAmt, y, { width: colW.amount, align: 'right' });
+  y += 12;
+
+  hRule(doc, M, y, CW, 0.8);
+  y += 6;
+
+  // ── Table Rows ──
+  let netTotalAmount = 0;
+
+  payloads.forEach((p) => {
+    const bill = p.bill || {};
+    const financials = p.financials || {};
+    const cancellation = p.cancellation || {};
+    const advance = p.advance || {};
+
+    const isCancel = Boolean(cancellation.isCancelled || bill.is_cancelled || bill.bl_status === 'CAN' || bill.status === 'CAN');
+    const billDate = fmtDate(bill.date || bill.bl_billing_date || bill.bl_date);
+    const billNo = bill.billNumber || bill.bl_entry_no || bill.bl_bill_no || `B-${bill.bl_id}`;
+    const rawBillAmount = Number(financials.total || bill.bl_total_amount || 0);
+    const billAmount = isCancel ? -rawBillAmount : rawBillAmount;
+
+    netTotalAmount += billAmount;
+
+    const particularsText = buildParticularsLine(p);
+
+    // 1. Bill Row
+    doc.font('Helvetica').fontSize(8).fillColor('#000000')
+       .text(billDate, xDate, y, { width: colW.date, lineBreak: false })
+       .text(billNo, xBill, y, { width: colW.billNo, lineBreak: false })
+       .text(particularsText, xPart, y, { width: colW.particulars - 5, lineBreak: false, ellipsis: true })
+       .text(fmt(billAmount), xAmt, y, { width: colW.amount, align: 'right' });
+
+    y += 14;
+
+    // 2. Advance Row (if advance payment exists)
+    const advAmount = Number(advance.advanceAmount || bill.bl_advance_amount || 0);
+    if (advAmount > 0) {
+      netTotalAmount -= advAmount;
+
+      const advRef = advance.paymentReference || advance.paymentMode || bill.bl_payment_reference || '';
+      const advParticulars = `Adv payment${advRef ? ` (${advRef})` : ''}`;
+
+      doc.font('Helvetica').fontSize(8).fillColor('#000000')
+         .text(billDate, xDate, y, { width: colW.date, lineBreak: false })
+         .text('', xBill, y, { width: colW.billNo, lineBreak: false })
+         .text(advParticulars, xPart, y, { width: colW.particulars - 5, lineBreak: false, ellipsis: true })
+         .text(`-${fmt(advAmount)}`, xAmt, y, { width: colW.amount, align: 'right' });
+
+      y += 14;
+    }
+
+    // Page break handling
+    if (y > PH - M - 100) {
+      doc.addPage();
+      y = M;
+    }
+  });
+
+  // ── Summary Totals ──
+  y += 4;
+  hRule(doc, M, y, CW, 0.8);
+  y += 5;
+
+  doc.font('Helvetica-Bold').fontSize(8.5).fillColor('#000000')
+     .text('Total', xDate, y, { width: 150 })
+     .text(fmt(netTotalAmount), xAmt, y, { width: colW.amount, align: 'right' });
+  y += 14;
+
+  const balanceType = netTotalAmount >= 0 ? 'Dr' : 'Cr';
+  const absBalance = Math.abs(netTotalAmount);
+
+  doc.font('Helvetica-Bold').fontSize(9).fillColor('#000000')
+     .text(`BALANCE :    ${fmt(absBalance)} ${balanceType}`, xDate, y, { width: 250 });
+  y += 16;
+
+  hRule(doc, M, y, CW, 0.8);
+  y += 24;
+
+  // ── Signatures & Confirmation ──
+  const signCol1X = M;
+  const signCol2X = PW - M - 180;
+
+  doc.font('Helvetica').fontSize(8).fillColor('#000000')
+     .text('E. & O. E.', signCol1X, y)
+     .text('Yours faithfully', signCol2X, y, { width: 180, align: 'right' });
+  y += 14;
+
+  doc.font('Helvetica-Bold').fontSize(8.5).fillColor('#000000')
+     .text(agencyName, signCol2X, y, { width: 180, align: 'right' });
+  y += 10;
+
+  doc.font('Helvetica').fontSize(7.5).fillColor('#000000')
+     .text('We do hereby confirm the correctness of', signCol1X, y)
+     .text('the above account', signCol1X, y + 10);
 
   doc.end();
 

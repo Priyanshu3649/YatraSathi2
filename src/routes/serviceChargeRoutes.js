@@ -11,6 +11,12 @@ const { requireRole } = require('../middleware/rbacMiddleware');
 router.get('/calculate', auth, serviceChargeController.calculateServiceCharge);
 
 /**
+ * Customer Specific Service Charge Matrix
+ */
+router.get('/customer/:customerId', auth, requireRole(['ADM', 'admin']), serviceChargeController.getCustomerConfig);
+router.post('/customer/:customerId', auth, requireRole(['ADM', 'admin']), serviceChargeController.saveCustomerConfig);
+
+/**
  * Admin: Service Charge Management (CRUD)
  */
 router.get('/customer-rules', auth, requireRole(['ADM', 'admin']), serviceChargeController.getAllCustomerRules);

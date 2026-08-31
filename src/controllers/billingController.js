@@ -285,12 +285,20 @@ async function getBillPrintPayload(bill, booking, user) {
     booking: {
       bookingId: bill.bl_booking_id,
       bookingNumber: booking?.bk_bkno || bill.bl_booking_no || null,
+      fromStation: bill.bl_from_station || booking?.bk_fromst || '',
+      toStation: bill.bl_to_station || booking?.bk_tost || '',
       travelDetails: [bill.bl_from_station || booking?.bk_fromst, bill.bl_to_station || booking?.bk_tost].filter(Boolean).join(' -> '),
       journeyDate: bill.bl_journey_date || booking?.bk_trvldt || null,
-      trainNumber: bill.bl_train_no || null,
+      trainNumber: bill.bl_train_no || booking?.bk_trainno || booking?.bk_train_no || null,
       reservationClass: bill.bl_class || booking?.bk_class || null,
       pnr: bill.bl_pnr || booking?.bk_pnr || null,
-      seatsReserved: bill.bl_seats_reserved || null
+      seatsReserved: bill.bl_seats_reserved || bill.bl_seatsAlloted || null,
+      stationBoy: bill.bl_station_boy || bill.stationBoy || booking?.bk_station_boy || ''
+    },
+    advance: {
+      advanceAmount: parseAmount(bill.bl_advance_amount || booking?.bk_advance || receiptTotal || 0),
+      paymentMode: bill.bl_payment_mode || '',
+      paymentReference: bill.bl_payment_reference || ''
     },
     passengers: passengers || [],
     financials: {
@@ -2416,7 +2424,11 @@ const mergeBill = async (req, res) => {
 // --- V2 IMPLEMENTATIONS ---
 const fetchBookingForBilling = async (req, res) => {
   const { BookingTVL, PassengerTVL } = require('../models');
-  const { checkPNRStatus } = require('railkit');
+  const { configure, checkPNRStatus } = require('railkit');
+  
+  if (process.env.RAILKIT_API_KEY) {
+    try { configure(process.env.RAILKIT_API_KEY); } catch (e) {}
+  }
   
   try {
     const { id } = req.params;
@@ -2443,22 +2455,19 @@ const fetchBookingForBilling = async (req, res) => {
             if (!isNaN(temp.getTime())) parsedDate = temp;
           }
           
-          // Extract primary passenger details for global seat mapping
+          // Extract primary passenger details
           const p1 = d.passengers && d.passengers[0] ? d.passengers[0] : null;
-          const p1Details = p1 ? (p1.current?.details || p1.booking?.details || '') : '';
-          const p1Status = p1 ? (p1.current?.status || p1.booking?.status || '') : '';
-          let coachStr = '', berthStr = '', berthCodeStr = '';
-          if (p1Details) {
-            const parts = p1Details.split(',').map(s => s.trim());
-            if (parts.length >= 1) coachStr = parts[0];
-            if (parts.length >= 2) berthStr = parts[1];
-            if (parts.length >= 3) berthCodeStr = parts[2];
-          }
+          const p1Status = p1?.current?.status || p1?.booking?.status || d.pnrStatus || (d.chart?.status?.includes('Prepared') ? 'CNF' : 'CNF');
+          const coachStr = p1?.current?.coach || p1?.booking?.coach || '';
+          const berthStr = p1?.current?.berthNo ? String(p1.current.berthNo) : (p1?.booking?.berthNo ? String(p1.booking.berthNo) : '');
+          const berthCodeStr = p1?.current?.berthCode || p1?.booking?.berthCode || '';
+          const p1Details = p1?.current?.details || p1?.booking?.details || '';
           
-          let pnrStatusStr = d.pnrStatus || d.chartStatus || p1Status || '';
-          if (!pnrStatusStr && p1Details.includes('CNF')) pnrStatusStr = 'CNF';
-          if (!pnrStatusStr && p1Details.includes('RAC')) pnrStatusStr = 'RAC';
-          if (!pnrStatusStr && p1Details.includes('WL')) pnrStatusStr = 'WL';
+          const fromStn = d.journey?.boardingPoint?.code || d.journey?.source?.code || d.boardingStation?.code || d.fromStation?.code || '';
+          const toStn = d.journey?.destination?.code || d.reservationUpTo?.code || d.toStation?.code || '';
+          const trainNo = d.train?.number || d.trainInfo?.trainNo || d.trainInfo?.trainNumber || '';
+          const travelClass = d.journey?.class || d.trainInfo?.class || d.trainInfo?.travelClass || '3A';
+          const ticketFare = d.booking?.fare || d.booking?.ticketFare || d.ticketFare || d.fare || d.totalFare || 0;
           
           return res.status(200).json({
             success: true,
@@ -2467,32 +2476,25 @@ const fetchBookingForBilling = async (req, res) => {
               bl_pnr: id,
               bl_customer_name: '',
               bl_customer_phone: '',
-              bl_from_station: d.boardingStation?.code || '',
-              bl_to_station: d.reservationUpTo?.code || '',
-              bl_train_no: d.trainInfo?.trainNo || '',
-              bl_class: d.trainInfo?.class || d.trainInfo?.travelClass || '', // Attempt to parse class
+              bl_from_station: fromStn,
+              bl_to_station: toStn,
+              bl_train_no: trainNo,
+              bl_class: travelClass,
               bl_journey_date: parsedDate,
               bl_journeyTime: d.boardingStation?.departureTime || d.journey?.departureTime || d.trainInfo?.departureTime || '',
-              bl_pnrStatus: pnrStatusStr,
+              bl_pnrStatus: p1Status,
               bl_coach: coachStr,
               bl_berthNo: berthStr,
               bl_berthCode: berthCodeStr,
               bl_details: p1Details,
-              bl_seatsAlloted: d.passengers ? String(d.passengers.length) : '',
-              passengers: (d.passengers || []).map((p, i) => {
-                const details = p.current?.details || p.booking?.details || '';
-                // Try to parse coach/berth from details like "S2, 32"
-                let coach = '', berth = details;
-                if (details.includes(',')) {
-                  [coach, berth] = details.split(',').map(s => s.trim());
-                }
-                return {
-                  id: `new_${i}`,
-                  name: `Passenger ${i+1}`,
-                  coach: coach,
-                  berth: berth
-                };
-              })
+              bl_railway_fare: ticketFare,
+              bl_seatsAlloted: d.passengers ? String(d.passengers.length) : '1',
+              passengers: (d.passengers || []).map((p, i) => ({
+                id: `new_${i}`,
+                name: p.name || p.serialNumber || `Passenger ${i+1}`,
+                coach: p.current?.coach || p.booking?.coach || coachStr,
+                berth: p.current?.berthNo ? String(p.current.berthNo) : (p.booking?.berthNo ? String(p.booking.berthNo) : berthStr)
+              }))
             }
           });
         }
@@ -2507,6 +2509,36 @@ const fetchBookingForBilling = async (req, res) => {
     const passengers = await PassengerTVL.findAll({
       where: { ps_bkid: booking.bk_bkid, ps_active: 1 }
     });
+
+    let liveFare = booking.bk_railwayfare || booking.bk_fare || 0;
+    let trainNo = booking.bk_trainno || booking.bk_train_no || '';
+    let pnrStatus = 'CNF';
+    let coachStr = passengers[0]?.ps_coach || '';
+    let berthStr = passengers[0]?.ps_berthalloc || passengers[0]?.ps_berthpref || '';
+
+    // If booking has PNR and some fields are empty, try live RailKit enrich
+    if (booking.bk_pnr && booking.bk_pnr.length === 10 && (!liveFare || !trainNo)) {
+      try {
+        const liveResult = await checkPNRStatus(booking.bk_pnr);
+        if (liveResult && liveResult.success && liveResult.data) {
+          const ld = liveResult.data;
+          if (!trainNo) trainNo = ld.trainInfo?.trainNo || ld.trainInfo?.trainNumber || '';
+          if (!liveFare) liveFare = ld.ticketFare || ld.fare || ld.totalFare || ld.bookingFare || 0;
+          if (ld.pnrStatus) pnrStatus = ld.pnrStatus;
+          const p1 = ld.passengers?.[0];
+          if (p1) {
+            const p1Details = p1.current?.details || p1.booking?.details || '';
+            if (p1Details.includes(',')) {
+              const parts = p1Details.split(',').map(s => s.trim());
+              if (parts[0] && !coachStr) coachStr = parts[0];
+              if (parts[1] && !berthStr) berthStr = parts[1];
+            }
+          }
+        }
+      } catch (e) {
+        // Continue with local booking data
+      }
+    }
     
     const data = {
       bl_booking_id: booking.bk_bkid,
@@ -2515,9 +2547,14 @@ const fetchBookingForBilling = async (req, res) => {
       bl_customer_phone: booking.bk_phonenumber || '',
       bl_from_station: booking.bk_fromst || '',
       bl_to_station: booking.bk_tost || '',
-      bl_train_no: '', // Not stored in BookingTVL
+      bl_train_no: trainNo,
       bl_class: booking.bk_class || '',
       bl_journey_date: booking.bk_trvldt || booking.bk_reqdt,
+      bl_railway_fare: liveFare,
+      bl_pnrStatus: pnrStatus,
+      bl_coach: coachStr,
+      bl_berthNo: berthStr,
+      bl_seatsAlloted: String(passengers.length || 1),
       passengers: passengers.map(p => ({
         id: p.ps_psid,
         name: `${p.ps_fname} ${p.ps_lname}`.trim(),
@@ -2528,6 +2565,7 @@ const fetchBookingForBilling = async (req, res) => {
     
     try {
       const { Receipt } = require('../models');
+      const { Op } = require('sequelize');
       const advanceReceipt = await Receipt.findOne({
         where: {
           rc_narration: {

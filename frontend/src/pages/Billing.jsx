@@ -1886,23 +1886,50 @@ const Billing = () => {
     try {
       const id = formData.pnrNumbers || formData.bookingId;
       const data = await billingAPI.fetchBookingForBilling(id);
+      if (!data) throw new Error('No data returned for PNR/Booking');
+
+      let formattedJourneyDate = '';
+      if (data.bl_journey_date) {
+        try {
+          const d = new Date(data.bl_journey_date);
+          if (!isNaN(d.getTime())) {
+            formattedJourneyDate = d.toISOString().split('T')[0];
+          }
+        } catch (e) {
+          formattedJourneyDate = data.bl_journey_date;
+        }
+      }
+
+      const seats = data.bl_seatsAlloted || (data.passengers ? String(data.passengers.length) : '');
+      const fare = data.bl_railway_fare !== undefined && data.bl_railway_fare !== null && data.bl_railway_fare !== '' ? String(data.bl_railway_fare) : '';
       
       setFormData(prev => ({
         ...prev,
-        bookingId: data.bl_booking_id,
-        pnrNumbers: data.bl_pnr,
-        customerName: data.bl_customer_name !== undefined ? data.bl_customer_name : prev.customerName,
-        phoneNumber: data.bl_customer_phone !== undefined ? data.bl_customer_phone : prev.phoneNumber,
-        fromStation: data.bl_from_station !== undefined ? data.bl_from_station : prev.fromStation,
-        toStation: data.bl_to_station !== undefined ? data.bl_to_station : prev.toStation,
-        trainNumber: data.bl_train_no !== undefined ? data.bl_train_no : prev.trainNumber,
+        bookingId: data.bl_booking_id || prev.bookingId,
+        pnrNumbers: data.bl_pnr || prev.pnrNumbers,
+        customerName: data.bl_customer_name !== undefined && data.bl_customer_name !== '' ? data.bl_customer_name : prev.customerName,
+        phoneNumber: data.bl_customer_phone !== undefined && data.bl_customer_phone !== '' ? data.bl_customer_phone : prev.phoneNumber,
+        fromStation: data.bl_from_station || prev.fromStation,
+        toStation: data.bl_to_station || prev.toStation,
+        trainNumber: data.bl_train_no || prev.trainNumber,
         reservationClass: data.bl_class || prev.reservationClass,
-        journeyDate: data.bl_journey_date || prev.journeyDate,
-        advance: data.advanceAmount !== undefined ? data.advanceAmount : prev.advance,
+        journeyDate: formattedJourneyDate || prev.journeyDate,
+        journeyTime: data.bl_journeyTime || prev.journeyTime,
+        pnrStatus: data.bl_pnrStatus || prev.pnrStatus || 'CNF',
+        coach: data.bl_coach || prev.coach,
+        pnrCoach: data.bl_coach || prev.pnrCoach,
+        berthNo: data.bl_berthNo || prev.berthNo,
+        pnrBerthNo: data.bl_berthNo || prev.pnrBerthNo,
+        seatsAlloted: seats || prev.seatsAlloted,
+        railwayFare: fare || prev.railwayFare,
+        passengerList: (data.passengers && data.passengers.length > 0) ? data.passengers : prev.passengerList,
+        advanceAmount: data.advanceAmount !== undefined ? String(data.advanceAmount) : prev.advanceAmount,
+        advance: data.advanceAmount !== undefined ? String(data.advanceAmount) : prev.advance,
         paymentMode: data.paymentMode !== undefined ? data.paymentMode : prev.paymentMode,
+        paymentReference: data.paymentReference !== undefined ? data.paymentReference : prev.paymentReference,
         referenceNo: data.paymentReference !== undefined ? data.paymentReference : prev.referenceNo
       }));
-      alert('Booking data fetched successfully');
+      alert('PNR details fetched and populated successfully!');
     } catch (error) {
       console.error('Fetch booking error:', error);
       alert(error.message || 'Failed to fetch booking data');
@@ -2162,7 +2189,22 @@ const Billing = () => {
               </select>
               <label className="erp-form-label required">PNR Number(s)</label>
               <div style={{ display: 'flex', gap: '4px' }}>
-                <input type="text" name="pnrNumbers" className="erp-input" value={formData.pnrNumbers || ''} onChange={(e) => setFormData({...formData, pnrNumbers: e.target.value})} disabled={!isEditing} placeholder="Enter PNR" style={{ flex: 1 }} onKeyDown={handlePnrKeyDown} />
+                <input
+                  type="text"
+                  name="pnrNumbers"
+                  className="erp-input"
+                  value={formData.pnrNumbers || ''}
+                  onChange={(e) => setFormData({...formData, pnrNumbers: e.target.value})}
+                  onBlur={(e) => {
+                    if (e.target.value && e.target.value.trim().length === 10 && !formData.fromStation) {
+                      handleFetchBooking();
+                    }
+                  }}
+                  disabled={!isEditing}
+                  placeholder="Enter PNR"
+                  style={{ flex: 1 }}
+                  onKeyDown={handlePnrKeyDown}
+                />
                 <button type="button" onClick={handleFetchBooking} disabled={!isEditing} style={{ padding: '0 8px', background: '#f0f0f0', border: '1px solid #ccc', borderRadius: '4px', cursor: 'pointer', whiteSpace: 'nowrap', fontSize: '11px' }}>Fetch</button>
               </div>
               <label className="erp-form-label">Railway Fare</label>

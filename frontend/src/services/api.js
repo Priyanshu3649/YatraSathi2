@@ -2730,6 +2730,28 @@ export const reconciliationAPI = {
   }
 };
 
+export const serviceChargeAPI = {
+  getCustomerConfig: async (customerId) => {
+    const response = await fetch(`${API_BASE_URL}/service-charge/customer/${customerId}`, {
+      method: 'GET',
+      headers: getHeaders(true)
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.message || 'Failed to fetch customer service charges');
+    return data;
+  },
+  saveCustomerConfig: async (customerId, config) => {
+    const response = await fetch(`${API_BASE_URL}/service-charge/customer/${customerId}`, {
+      method: 'POST',
+      headers: getHeaders(true),
+      body: JSON.stringify({ config })
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.message || 'Failed to save customer service charges');
+    return data;
+  }
+};
+
 export default {
   authAPI,
   dashboardAPI,
@@ -2747,5 +2769,6 @@ export default {
   customerDetailsAPI,
   stationBoyAPI,
   sessionAPI,
-  reconciliationAPI
+  reconciliationAPI,
+  serviceChargeAPI
 };

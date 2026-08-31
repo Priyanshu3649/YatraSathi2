@@ -1163,13 +1163,22 @@ const Bookings = () => {
   const handleCustomerNameBlur = useCallback(async (e) => {
     if (!isEditing) return;
     const name = e.target.value.trim();
-    if (!name || formData.phoneNumber) return; // Only fetch if name exists and phone is empty
+    if (!name) return;
 
     try {
       const results = await customerAPI.searchCustomers(name);
-      const customerList = Array.isArray(results) ? results : (results?.data || []);
-      // Look for exact match (case-insensitive)
-      const match = customerList.find(c => c.name?.toLowerCase() === name.toLowerCase() || c.companyName?.toLowerCase() === name.toLowerCase());
+      const rawList = Array.isArray(results) ? results : (results?.customers || results?.data || []);
+      const customerList = rawList.map(c => ({
+        id: c.cu_cusid || c.cu_usid || c.id,
+        name: c.name || (c.user ? `${c.user.us_fname || ''} ${c.user.us_lname || ''}`.trim() : '') || `${c.firstName || ''} ${c.lastName || ''}`.trim() || c.cu_name || c.cu_custno,
+        phone: c.phone || c.user?.us_phone || c.us_phone || c.cu_phone || ''
+      }));
+
+      const match = customerList.find(c => 
+        c.name.toLowerCase() === name.toLowerCase() ||
+        name.toLowerCase().includes(c.name.toLowerCase()) ||
+        c.name.toLowerCase().includes(name.toLowerCase())
+      );
       
       if (match && match.phone) {
         setFormData(prev => ({
@@ -1179,10 +1188,9 @@ const Bookings = () => {
         }));
       }
     } catch (error) {
-      // Silently fail - auto-fetch is an enhancement, not a requirement
       console.warn('Auto-fetch customer by name failed:', error);
     }
-  }, [formData.phoneNumber, isEditing]);
+  }, [isEditing]);
 
   // Auto-calculate total passengers when passenger list changes (DERIVED STATE)
   useEffect(() => {
@@ -1250,8 +1258,23 @@ const Bookings = () => {
       if (value.trim().length >= 2) {
         try {
           const results = await customerAPI.searchCustomers(value.trim());
-          const customerList = Array.isArray(results) ? results : (results?.data || []);
+          const rawList = Array.isArray(results) ? results : (results?.customers || results?.data || []);
+          const customerList = rawList.map(c => ({
+            id: c.cu_cusid || c.cu_usid || c.id,
+            name: c.name || (c.user ? `${c.user.us_fname || ''} ${c.user.us_lname || ''}`.trim() : '') || `${c.firstName || ''} ${c.lastName || ''}`.trim() || c.cu_name || c.cu_custno,
+            phone: c.phone || c.user?.us_phone || c.us_phone || c.cu_phone || ''
+          }));
           setCustomerSuggestions(customerList);
+
+          // Check if exact match is selected
+          const match = customerList.find(c => c.name.toLowerCase() === value.trim().toLowerCase());
+          if (match && match.phone) {
+            setFormData(prev => ({
+              ...prev,
+              phoneNumber: match.phone,
+              internalCustomerId: match.id || prev.internalCustomerId
+            }));
+          }
         } catch (error) {
           console.warn('Failed to fetch customer suggestions:', error);
         }
