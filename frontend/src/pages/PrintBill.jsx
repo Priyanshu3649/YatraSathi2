@@ -140,11 +140,23 @@ const PrintBill = () => {
   const pnrStr = booking.pnr || bill.bl_pnr || '-';
   const statusStr = (bill.bl_pnrStatus || 'CNF').toUpperCase();
 
-  const fareAmt = Number(financials.railwayFare || bill.bl_railway_fare || 0);
-  const srvCharge = Number(financials.serviceCharges || bill.bl_service_charge || 0);
+  const fareAmt = Number(financials.railwayFare ?? bill.bl_railway_fare ?? 0);
+  const srvCharge = Number(
+    financials.serviceCharges !== undefined && financials.serviceCharges !== null
+      ? financials.serviceCharges
+      : (
+          Number(bill.bl_service_charge || 0) +
+          Number(bill.bl_sb_incentive || 0) +
+          Number(bill.bl_platform_fee || 0) +
+          Number(bill.bl_misc_charges || 0) +
+          Number(bill.bl_delivery_charge || 0) +
+          Number(bill.bl_surcharge || 0) -
+          Number(bill.bl_discount || 0)
+        )
+  );
   const cancelCharge = Number(financials.cancellationCharges || bill.total_cancel_charges || 0);
-  const gstAmt = Number(financials.gst || gst.igst || (gst.cgst * 2) || bill.bl_gst || 0);
-  const totalAmt = Number(financials.total || bill.bl_total_amount || 0);
+  const gstAmt = Number(financials.gstAmount || financials.gst || gst.igst || (gst.cgst * 2) || bill.bl_gst || 0);
+  const totalAmt = Number(financials.total || bill.bl_total_amount || (fareAmt + srvCharge + gstAmt));
   const words = (financials.amountInWords || 'ZERO').toUpperCase();
 
   const paxList = passengers.length > 0

@@ -35,17 +35,16 @@ class ServiceChargeController {
    */
   async calculateServiceCharge(req, res) {
     try {
-      const { customerId, serviceType, travelClass, passengerCount } = req.query;
+      const { customerId, customerName, phone, serviceType, travelClass, passengerCount, baseFare } = req.query;
       
-      if (!customerId || !serviceType || !travelClass || !passengerCount) {
-        return res.status(400).json({ success: false, message: 'Missing required parameters' });
-      }
-
       const amount = await serviceChargeService.getServiceCharge({
-        customerId: convertUserIdToInt(customerId),
-        serviceType: serviceType.toUpperCase(),
-        travelClass: travelClass.toUpperCase(),
-        passengerCount: parseInt(passengerCount)
+        customerId: customerId || undefined,
+        customerName: customerName || undefined,
+        phone: phone || undefined,
+        serviceType: (serviceType || 'RESERVATION').toUpperCase(),
+        travelClass: (travelClass || '3A').toUpperCase(),
+        passengerCount: parseInt(passengerCount, 10) || 1,
+        baseFare: parseFloat(baseFare) || 0
       });
 
       res.status(200).json({ success: true, amount });

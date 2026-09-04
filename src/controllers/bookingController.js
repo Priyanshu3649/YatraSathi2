@@ -150,7 +150,12 @@ const createBooking = async (req, res) => {
               cu_usid: existingUser.us_usid,
               cu_custno: customerNumber,
               cu_custtype: 'WALK_IN',
+              us_fname: existingUser.us_fname,
+              us_lname: existingUser.us_lname,
+              us_phone: existingUser.us_phone,
+              us_email: existingUser.us_email,
               cu_active: 1,
+              cu_status: 'ACTIVE',
               eby: req.user.us_usid,
               mby: req.user.us_usid
             }, { 
@@ -193,7 +198,12 @@ const createBooking = async (req, res) => {
             cu_usid: newUser.us_usid,
             cu_custno: customerNumber,
             cu_custtype: 'WALK_IN',
+            us_fname: firstName,
+            us_lname: lastName,
+            us_phone: cleanPhone,
+            us_email: `${cleanPhone}@phone.booking`,
             cu_active: 1,
+            cu_status: 'ACTIVE',
             eby: req.user.us_usid,
             mby: req.user.us_usid
           }, { 

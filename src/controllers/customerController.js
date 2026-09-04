@@ -39,36 +39,41 @@ const customerController = {
       const {
         name,
         phone,
+        email: inputEmail,
+        creditLimit: inputCreditLimit,
         accountGroup,
         location,
         opBalance,
         workingAddress,
         permanentAddress,
+        pincode,
+        pin,
         status
       } = req.body;
       
       // Legacy field mappings for compatibility
-      const customerType = accountGroup;
-      const city = location;
-      const creditLimit = opBalance;
-      const address = workingAddress;
-      const state = permanentAddress;
+      const customerType = accountGroup || 'INDIVIDUAL';
+      const city = location || '';
+      const creditLimit = inputCreditLimit !== undefined && inputCreditLimit !== '' ? parseFloat(inputCreditLimit) : (parseFloat(opBalance) || 0);
+      const address = workingAddress || '';
+      const state = permanentAddress || '';
       const companyName = name; // fallback
       const gstNumber = '';
+      const finalPin = pincode || pin || '';
       
-      // Auto-generate dummy email
-      const email = `dummy-${Date.now()}@system.local`;
+      // Auto-generate dummy email only if none provided
+      const email = (inputEmail && inputEmail.trim() !== '') ? inputEmail.trim() : `dummy-${Date.now()}@system.local`;
 
-      if (!name || !companyName) {
+      if (!name || !name.trim()) {
         await transaction.rollback();
         return res.status(400).json({
           success: false,
-          message: 'Name and Company Name are mandatory fields'
+          message: 'Customer Name is mandatory'
         });
       }
 
       // Split unified name into first and last name
-      const nameParts = name.trim().split(' ');
+      const nameParts = name.trim().split(/\s+/);
       const firstName = nameParts[0];
       const lastName = nameParts.slice(1).join(' ') || '';
 
@@ -76,7 +81,7 @@ const customerController = {
 
       // Check if email or phone already exists (if provided)
       const orConditions = [];
-      if (email && email.trim() !== '') orConditions.push({ us_email: email });
+      if (email && email.trim() !== '' && !email.startsWith('dummy-')) orConditions.push({ us_email: email });
       if (phone && phone.trim() !== '') orConditions.push({ us_phone: phone });
 
       if (orConditions.length > 0) {
@@ -86,32 +91,86 @@ const customerController = {
         });
 
         if (existingUser) {
-          await transaction.rollback();
-          return res.status(409).json({
-            success: false,
-            message: 'User with this email or phone already exists'
+          // Check if this existing user is already linked in cuXcustomer
+          const existingCustomer = await Customer.findOne({
+            where: { cu_usid: existingUser.us_usid },
+            transaction
           });
+
+          if (existingCustomer) {
+            await transaction.rollback();
+            return res.status(409).json({
+              success: false,
+              message: 'Customer with this email or phone already exists'
+            });
+          } else {
+            // User exists in usXuser but missing in cuXcustomer: Heal and create the link!
+            const custCount = await Customer.count({ transaction });
+            const cusId = `CU${Date.now().toString().slice(-6)}${String(custCount + 1).padStart(3, '0')}`.slice(0, 15);
+            const custNo = `${Math.floor(10000 + Math.random() * 90000)}`;
+
+            await Customer.create({
+              cu_cusid: cusId,
+              cu_custno: custNo,
+              cu_usid: existingUser.us_usid,
+              cu_name: name.trim(),
+              cu_custtype: customerType || 'INDIVIDUAL',
+              us_fname: firstName || existingUser.us_fname,
+              us_lname: lastName || existingUser.us_lname,
+              us_email: (email && email.trim() !== '') ? email : existingUser.us_email,
+              us_phone: (phone && phone.trim() !== '') ? phone : existingUser.us_phone,
+              us_addr1: address || existingUser.us_addr1,
+              us_city: city || existingUser.us_city,
+              us_state: state || existingUser.us_state,
+              us_pin: finalPin || existingUser.us_pin,
+              cu_creditlimit: creditLimit || 0,
+              cu_creditused: 0,
+              cu_active: 1,
+              status: 'OPEN',
+              entered_by: req.user?.us_usid ? parseInt(req.user.us_usid.replace(/\D/g, '')) || 1 : 1,
+              modified_by: req.user?.us_usid ? parseInt(req.user.us_usid.replace(/\D/g, '')) || 1 : 1
+            }, { transaction });
+
+            await existingUser.update({
+              us_fname: firstName || existingUser.us_fname,
+              us_lname: lastName || existingUser.us_lname,
+              us_email: (email && email.trim() !== '') ? email : existingUser.us_email,
+              us_phone: (phone && phone.trim() !== '') ? phone : existingUser.us_phone,
+              us_addr1: address || existingUser.us_addr1,
+              us_city: city || existingUser.us_city,
+              us_state: state || existingUser.us_state,
+              us_pin: finalPin || existingUser.us_pin,
+              us_limit: creditLimit || existingUser.us_limit
+            }, { transaction });
+
+            await transaction.commit();
+            return res.status(201).json({
+              success: true,
+              message: 'Customer profile linked and created successfully',
+              customer: {
+                userId: existingUser.us_usid,
+                firstName: existingUser.us_fname,
+                lastName: existingUser.us_lname,
+                email: existingUser.us_email,
+                phone: existingUser.us_phone
+              }
+            });
+          }
         }
       }
 
-      // Exact Name Matching for Duplicate Warning when Mobile is Missing
-      if ((!phone || phone.trim() === '') && !forceCreate) {
-        const existingNameMatch = await User.findOne({
-          where: {
-            us_fname: firstName,
-            us_lname: lastName
-          },
-          transaction
+      // Check for duplicate name in cuXcustomer
+      const existingCustomerName = await Customer.findOne({
+        where: { cu_name: name.trim() },
+        transaction
+      });
+
+      if (existingCustomerName) {
+        await transaction.rollback();
+        return res.status(409).json({
+          success: false,
+          message: `A customer named "${name.trim()}" already exists. Customer names must be unique.`
         });
-        
-        if (existingNameMatch) {
-          await transaction.rollback();
-          return res.status(409).json({
-            success: false,
-            requiresConfirmation: true,
-            message: `A customer named ${name} already exists. Do you want to create a duplicate?`
-          });
-        }
       }
 
       // Generate unique user ID
@@ -144,23 +203,37 @@ const customerController = {
         us_addr1: address,
         us_city: city,
         us_state: state,
-        us_pin: pincode
+        us_pin: finalPin
       }, { transaction });
 
       // Create customer record
-      await Customer.create({
-        cu_usid: userId,
-        cu_custtype: customerType || 'INDIVIDUAL',
-        cu_company: companyName,
-        cu_gst: gstNumber,
-        cu_creditlimit: creditLimit || 0,
-        cu_creditused: 0,
-        cu_status: 'ACTIVE',
+      const custCount = await Customer.count({ transaction });
+      const cusId = `CU${Date.now().toString().slice(-6)}${String(custCount + 1).padStart(3, '0')}`.slice(0, 15);
+      const custNo = `${Math.floor(10000 + Math.random() * 90000)}`;
 
-        edtm: new Date(),
-        eby: req.user.us_usid,
-        mdtm: new Date(),
-        mby: req.user.us_usid
+      await Customer.create({
+        cu_cusid: cusId,
+        cu_custno: custNo,
+        cu_usid: userId,
+        cu_name: name.trim(),
+        cu_custtype: customerType || 'INDIVIDUAL',
+        us_fname: firstName,
+        us_lname: lastName,
+        us_email: finalEmail,
+        us_phone: phone,
+        us_pwd: hashedPassword,
+        us_addr1: address,
+        us_city: city,
+        us_state: state,
+        us_pin: finalPin,
+        cu_gstno: gstNumber,
+        cu_creditlimit: creditLimit || 0,
+        cu_creditdays: 30,
+        cu_discount: 0,
+        cu_active: 1,
+        status: 'OPEN',
+        entered_by: req.user?.us_usid ? parseInt(req.user.us_usid.replace(/\D/g, '')) || 1 : 1,
+        modified_by: req.user?.us_usid ? parseInt(req.user.us_usid.replace(/\D/g, '')) || 1 : 1
       }, { transaction });
 
       await transaction.commit();
@@ -172,21 +245,21 @@ const customerController = {
           userId,
           firstName,
           lastName,
-          email,
+          email: finalEmail,
           phone
         }
       });
 
     } catch (error) {
       await transaction.rollback();
-      console.error('Error creating customer:', error);
+      console.error('Create customer failed:', error);
       res.status(500).json({
         success: false,
-        message: 'Failed to create customer',
-        error: error.message
+        message: 'Internal server error: ' + error.message
       });
     }
   },
+
   /**
    * Search customers
    * GET /api/employees/customers/search
@@ -194,30 +267,59 @@ const customerController = {
   searchCustomers: async (req, res) => {
     try {
       const { q } = req.query;
-      if (!q) {
+      if (!q || !q.trim()) {
         return res.json({ success: true, customers: [] });
       }
 
-      const customers = await Customer.findAll({
-        include: [
-          {
-            model: User,
-            as: 'user',
-            attributes: ['us_usid', 'us_fname', 'us_lname', 'us_email', 'us_phone']
-          }
-        ],
-        where: {
-          [Op.or]: [
-            { cu_custno: { [Op.like]: `%${q}%` } },
-            { '$user.us_fname$': { [Op.like]: `%${q}%` } },
-            { '$user.us_lname$': { [Op.like]: `%${q}%` } },
-            { '$user.us_phone$': { [Op.like]: `%${q}%` } }
+      const searchTerm = q.trim();
+      const tokens = searchTerm.split(/\s+/);
+
+      const whereConditions = [
+        { cu_custno: { [Op.like]: `%${searchTerm}%` } },
+        { cu_usid: { [Op.like]: `%${searchTerm}%` } },
+        { cu_name: { [Op.like]: `%${searchTerm}%` } },
+        { us_fname: { [Op.like]: `%${searchTerm}%` } },
+        { us_lname: { [Op.like]: `%${searchTerm}%` } },
+        { us_phone: { [Op.like]: `%${searchTerm}%` } },
+        { us_email: { [Op.like]: `%${searchTerm}%` } }
+      ];
+
+      if (tokens.length >= 2) {
+        whereConditions.push({
+          [Op.and]: [
+            { us_fname: { [Op.like]: `%${tokens[0]}%` } },
+            { us_lname: { [Op.like]: `%${tokens.slice(1).join(' ')}%` } }
           ]
+        });
+      }
+
+      const customers = await Customer.findAll({
+        where: {
+          [Op.or]: whereConditions
         },
-        limit: 20
+        limit: 25
       });
 
-      res.json({ success: true, customers });
+      const formatted = customers.map(c => {
+        const data = c.toJSON();
+        const fullName = data.cu_name || `${data.us_fname || ''} ${data.us_lname || ''}`.trim() || data.cu_custno;
+        return {
+          ...data,
+          name: fullName,
+          customerName: fullName,
+          phone: data.us_phone || '',
+          email: data.us_email || '',
+          user: {
+            us_usid: data.cu_usid,
+            us_fname: data.us_fname || '',
+            us_lname: data.us_lname || '',
+            us_email: data.us_email || '',
+            us_phone: data.us_phone || ''
+          }
+        };
+      });
+
+      res.json({ success: true, customers: formatted, data: formatted });
     } catch (error) {
       console.error('Search customers failed:', error);
       res.status(500).json({ success: false, error: error.message });
@@ -232,21 +334,36 @@ const customerController = {
     try {
       const { id } = req.params;
       const customer = await Customer.findOne({
-        where: { cu_usid: id },
-        include: [
-          {
-            model: User,
-            as: 'user',
-            attributes: ['us_usid', 'us_fname', 'us_lname', 'us_email', 'us_phone']
-          }
-        ]
+        where: {
+          [Op.or]: [{ cu_usid: id }, { cu_cusid: id }]
+        }
       });
 
       if (!customer) {
         return res.status(404).json({ success: false, error: 'Customer not found' });
       }
 
-      res.json({ success: true, customer });
+      const data = customer.toJSON();
+      const fullName = data.cu_name || `${data.us_fname || ''} ${data.us_lname || ''}`.trim() || data.cu_custno;
+      const formatted = {
+        ...data,
+        name: fullName,
+        customerName: fullName,
+        phone: data.us_phone || '',
+        email: data.us_email || '',
+        user: {
+          us_usid: data.cu_usid,
+          us_fname: data.us_fname || '',
+          us_lname: data.us_lname || '',
+          us_email: data.us_email || '',
+          us_phone: data.us_phone || ''
+        }
+      };
+      res.json({
+        success: true,
+        customer: formatted,
+        data: formatted
+      });
     } catch (error) {
       console.error('Get customer failed:', error);
       res.status(500).json({ success: false, error: error.message });
@@ -255,27 +372,52 @@ const customerController = {
 
   /**
    * Find customer by phone
-   * GET /api/employees/customers/phone/:phone
+   * GET /api/employees/customers/phone/:phoneNumber
    */
   findCustomerByPhone: async (req, res) => {
     try {
       const { phoneNumber } = req.params;
+      if (!phoneNumber) {
+        return res.json({ success: true, customer: null, data: null });
+      }
+
+      const cleanPhone = phoneNumber.replace(/\D/g, '');
       const customer = await Customer.findOne({
-        include: [
-          {
-            model: User,
-            as: 'user',
-            attributes: ['us_usid', 'us_fname', 'us_lname', 'us_email', 'us_phone'],
-            where: { us_phone: phoneNumber }
-          }
-        ]
+        where: {
+          [Op.or]: [
+            { us_phone: phoneNumber },
+            { us_phone: cleanPhone },
+            { us_phone: { [Op.like]: `%${cleanPhone.slice(-10)}%` } }
+          ]
+        }
       });
 
       if (!customer) {
-        return res.json({ success: true, customer: null });
+        return res.json({ success: true, customer: null, data: null });
       }
 
-      res.json({ success: true, customer });
+      const data = customer.toJSON();
+      const fullName = data.cu_name || `${data.us_fname || ''} ${data.us_lname || ''}`.trim() || data.cu_custno;
+      const formatted = {
+        ...data,
+        name: fullName,
+        customerName: fullName,
+        phone: data.us_phone || '',
+        email: data.us_email || '',
+        user: {
+          us_usid: data.cu_usid,
+          us_fname: data.us_fname || '',
+          us_lname: data.us_lname || '',
+          us_email: data.us_email || '',
+          us_phone: data.us_phone || ''
+        }
+      };
+
+      res.json({
+        success: true,
+        customer: formatted,
+        data: formatted
+      });
     } catch (error) {
       console.error('Find customer by phone failed:', error);
       res.status(500).json({ success: false, error: error.message });

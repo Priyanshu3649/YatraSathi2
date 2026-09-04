@@ -42,19 +42,21 @@ export const usePhoneLookup = () => {
     try {
       // Query customer by phone number
       const response = await customerAPI.findByPhone(cleanPhone);
+      const cust = response?.data || response?.customer;
       
-      if (response.success && response.data) {
+      if (response && response.success && cust) {
         // Customer found - return customer data
+        const custName = cust.name || cust.customerName || cust.cu_name || `${cust.us_fname || cust.firstName || ''} ${cust.us_lname || cust.lastName || ''}`.trim() || `${cust.user?.us_fname || ''} ${cust.user?.us_lname || ''}`.trim();
         return {
           found: true,
           customer: {
-            internalCustomerId: response.data.us_usid || response.data.id,
-            customerName: `${response.data.us_fname || ''} ${response.data.us_lname || ''}`.trim(),
-            phoneNumber: cleanPhone,
-            address: response.data.us_addr1 || '',
-            city: response.data.us_city || '',
-            state: response.data.us_state || '',
-            email: response.data.us_email || ''
+            internalCustomerId: cust.cu_cusid || cust.cu_usid || cust.us_usid || cust.id,
+            customerName: custName,
+            phoneNumber: cust.phone || cust.us_phone || cleanPhone,
+            address: cust.us_addr1 || cust.address || '',
+            city: cust.us_city || cust.city || '',
+            state: cust.us_state || cust.state || '',
+            email: cust.us_email || cust.email || ''
           }
         };
       } else {

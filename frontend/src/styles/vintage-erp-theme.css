@@ -821,6 +821,20 @@ a.erp-button {
   margin-bottom: 8px;
 }
 
+.erp-form-row-compact-5.erp-booking-row-1 {
+  display: grid;
+  grid-template-columns: auto minmax(65px, 0.7fr) auto minmax(95px, 0.9fr) auto minmax(200px, 2.5fr) auto minmax(105px, 1fr) auto minmax(105px, 1fr);
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.erp-payment-customer-row {
+  display: grid !important;
+  grid-template-columns: minmax(280px, 2.5fr) minmax(140px, 1fr) !important;
+  gap: 15px !important;
+}
+
 .erp-form-row-compact .erp-form-label,
 .erp-form-row-compact-2 .erp-form-label,
 .erp-form-row-compact-3 .erp-form-label,

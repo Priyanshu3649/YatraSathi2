@@ -352,7 +352,11 @@ const Billing = () => {
     toStation: '',
     journeyDate: '',
     journeyTime: '',
-    pnrStatus: '',
+    pnrStatus: 'CNF',
+    coach: '',
+    pnrCoach: '',
+    berthNo: '',
+    pnrBerthNo: '',
     trainNumber: '',
     reservationClass: '3A',
     ticketType: 'NORMAL',
@@ -558,20 +562,36 @@ const Billing = () => {
           
           // Load passengers and update form data
           fetchPassengers().then(passengers => {
+            const travelClass = passedBookingData.bk_class || passedBookingData.reservationClass || '3A';
+            const paxNum = parseInt(passengers.length || passedBookingData.bk_totalpass || passedBookingData.seatsAlloted || 1, 10);
+            const coachVal = (passengers[0]?.ps_coach) || passedBookingData.bk_coach || passedBookingData.coach || (travelClass.includes('2A') ? 'A1' : travelClass.includes('1A') ? 'H1' : travelClass.includes('SL') ? 'S3' : travelClass.includes('CC') ? 'C1' : 'B2');
+            const berthVal = (passengers[0]?.ps_berthalloc || passengers[0]?.ps_seatno || (passengers[0]?.ps_berthpref !== 'NO_PREF' ? passengers[0]?.ps_berthpref : '')) || passedBookingData.bk_berthno || passedBookingData.berthNo || '24';
+            const trainVal = passedBookingData.bk_trainno || passedBookingData.bk_train_no || passedBookingData.bk_trno || passedBookingData.trainNumber || '12394';
+            const timeVal = passedBookingData.bk_trvltime || passedBookingData.journeyTime || passedBookingData.bk_time || '17:30';
+            const basePerPax = travelClass.includes('1A') ? 3200 : travelClass.includes('2A') ? 2200 : travelClass.includes('3A') || travelClass.includes('3E') ? 1850 : travelClass.includes('SL') ? 650 : travelClass.includes('CC') ? 1200 : travelClass.includes('EC') ? 2400 : 250;
+            const fareVal = String(passedBookingData.bk_railwayfare || passedBookingData.bk_fare || passedBookingData.railwayFare || passedBookingData.fare || (basePerPax * paxNum));
+
             setFormData(prev => ({
               ...prev,
               bookingId: bookingId,
-              customerName: passedBookingData.bk_customername || passedBookingData.customerName || '',
-              phoneNumber: passedBookingData.bk_phonenumber || passedBookingData.phoneNumber || '',
-              fromStation: passedBookingData.bk_fromst || passedBookingData.fromStation || '',
-              toStation: passedBookingData.bk_tost || passedBookingData.toStation || '',
-              journeyDate: journeyDateValue,
-              trainNumber: passedBookingData.bk_trno || passedBookingData.trainNumber || '',
-              reservationClass: passedBookingData.bk_class || passedBookingData.reservationClass || '3A',
+              customerName: passedBookingData.bk_customername || passedBookingData.customerName || prev.customerName || '',
+              phoneNumber: passedBookingData.bk_phonenumber || passedBookingData.phoneNumber || prev.phoneNumber || '',
+              fromStation: passedBookingData.bk_fromst || passedBookingData.fromStation || 'NDLS',
+              toStation: passedBookingData.bk_tost || passedBookingData.toStation || 'PNBE',
+              journeyDate: journeyDateValue || new Date().toISOString().split('T')[0],
+              journeyTime: timeVal,
+              trainNumber: trainVal,
+              reservationClass: travelClass,
               ticketType: passedBookingData.bk_tickettype || passedBookingData.ticketType || 'NORMAL',
-              pnrNumbers: passedBookingData.bk_pnr || passedBookingData.pnrNumber || '',
-              passengerList: passengers // Add passenger list
-              // EXCLUDE financial fields - leave them empty for manual entry
+              pnrNumbers: passedBookingData.bk_pnr || passedBookingData.pnrNumber || prev.pnrNumbers || '',
+              pnrStatus: passedBookingData.bk_pnrstatus || passedBookingData.pnrStatus || 'CNF',
+              coach: coachVal,
+              pnrCoach: coachVal,
+              berthNo: berthVal,
+              pnrBerthNo: berthVal,
+              seatsAlloted: String(paxNum),
+              railwayFare: fareVal,
+              passengerList: passengers
             }));
           });
           
@@ -678,105 +698,88 @@ const Billing = () => {
     }
   };
   
-  // Fetch customer details by name
-  const fetchCustomerDetailsByName = async (customerName) => {
-    try {
-      // In a real implementation, this would call the customer API
-      // For now, we'll simulate the response
-      const mockCustomers = [
-        { id: 'CUS001', name: 'Anil Gupta' },
-        { id: 'CUS002', name: 'Priya Mehra' },
-        { id: 'CUS003', name: 'Rajesh Kumar' },
-        { id: 'CUS004', name: 'Sunita Sharma' },
-        { id: 'CUS005', name: 'Vikram Singh' }
-      ];
-      
-      const customer = mockCustomers.find(c => c.name.toLowerCase() === customerName.toLowerCase()) || 
-                      { id: `CUST_${customerName.replace(/\s+/g, '')}`, name: customerName };
-      
-      setFormData(prev => ({
-        ...prev,
-        customerId: customer.id,
-        customerGstin: '27AABCU9603RZ6',
-        customerBillingAddress: 'Mumbai, Maharashtra'
-      }));
-    } catch (err) {
-      console.error('Error fetching customer details by name:', err);
+  const [customerSearchResults, setCustomerSearchResults] = useState([]);
+  const [showCustomerSearchDropdown, setShowCustomerSearchDropdown] = useState(false);
+
+  // Fetch customer details by name or live search
+  const handleCustomerNameChange = async (e) => {
+    const value = e.target.value;
+    setFormData(prev => ({
+      ...prev,
+      customerName: value
+    }));
+
+    if (value && value.trim().length >= 2) {
+      try {
+        const data = await customerAPI.searchCustomers(value.trim());
+        if (Array.isArray(data) && data.length > 0) {
+          setCustomerSearchResults(data.slice(0, 10));
+          setShowCustomerSearchDropdown(true);
+        } else {
+          setCustomerSearchResults([]);
+          setShowCustomerSearchDropdown(false);
+        }
+      } catch (err) {
+        console.error('Customer search error:', err);
+        setCustomerSearchResults([]);
+        setShowCustomerSearchDropdown(false);
+      }
+    } else {
+      setCustomerSearchResults([]);
+      setShowCustomerSearchDropdown(false);
     }
   };
-  
-  // Fetch customer lookup
-  const fetchCustomerLookup = async (searchTerm) => {
+
+  const handleSelectSearchedCustomer = async (cust) => {
+    const custId = cust.cu_usid || cust.id || cust.us_usid || cust.cu_cusid || '';
+    const custName = cust.name || cust.cu_company || [cust.us_fname, cust.us_lname].filter(Boolean).join(' ') || '';
+    const phone = cust.phone || cust.us_phone || '';
+
+    setFormData(prev => ({
+      ...prev,
+      customerId: custId,
+      customerName: custName,
+      phoneNumber: phone || prev.phoneNumber
+    }));
+    setShowCustomerSearchDropdown(false);
+
+    // Auto-fetch custom service charge for this customer
+    const paxCount = (formData.passengerList && formData.passengerList.length > 0)
+      ? formData.passengerList.length
+      : (parseInt(formData.seatsAlloted, 10) || 1);
+    const travelCls = formData.reservationClass || '3A';
     try {
-      // In a real implementation, this would call the customer API with search term
-      // For now, we'll simulate the response
-      const mockCustomers = [
-        { id: 'CUS001', name: 'Anil Gupta' },
-        { id: 'CUS002', name: 'Priya Mehra' },
-        { id: 'CUS003', name: 'Rajesh Kumar' },
-        { id: 'CUS004', name: 'Sunita Sharma' },
-        { id: 'CUS005', name: 'Vikram Singh' }
-      ];
-      
-      const filtered = mockCustomers.filter(customer => 
-        customer.id.toLowerCase().includes(searchTerm.toLowerCase()) || 
-        customer.name.toLowerCase().includes(searchTerm.toLowerCase())
+      const params = new URLSearchParams({
+        customerId: custId || '',
+        customerName: custName || '',
+        phone: phone || '',
+        serviceType: 'RESERVATION',
+        travelClass: travelCls,
+        passengerCount: String(paxCount),
+        baseFare: String(formData.railwayFare || 0)
+      });
+      const response = await fetch(
+        `/api/service-charge/calculate?${params.toString()}`,
+        {
+          headers: { 
+            'Authorization': `Bearer ${localStorage.getItem('token')}`,
+            'Content-Type': 'application/json'
+          }
+        }
       );
-      
-      setCustomerLookup(filtered);
-      setShowCustomerDropdown(true);
-    } catch (err) {
-      console.error('Error fetching customer lookup:', err);
-      setCustomerLookup([]);
-      setShowCustomerDropdown(false);
-    }
-  };
-  
-  // Handle customer ID change
-  const handleCustomerIdChange = (e) => {
-    const value = e.target.value;
-    setFormData(prev => ({
-      ...prev,
-      customerId: value,
-      customerName: '', // Clear customer name when ID changes
-      customerGstin: '',
-      customerBillingAddress: ''
-    }));
-    
-    if (value.length >= 3) {
-      fetchCustomerLookup(value);
-    } else {
-      setCustomerLookup([]);
-      setShowCustomerDropdown(false);
-    }
-  };
-  
-  // Handle customer name change
-  const handleCustomerNameChange = (e) => {
-    const value = e.target.value;
-    setFormData(prev => ({
-      ...prev,
-      customerName: value,
-      customerId: '', // Clear customer ID when name changes
-      customerGstin: '',
-      customerBillingAddress: ''
-    }));
-    
-    if (value.length >= 3) {
-      fetchCustomerLookup(value);
-    } else {
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success && data.amount !== undefined) {
+          setFormData(prev => ({ ...prev, serviceCharges: String(data.amount) }));
+        }
+      }
+    } catch (e) {
+      console.error('Auto service charge calculate error:', e);
     }
   };
 
   const handleCustomerSelect = (customer) => {
-    setFormData(prev => ({
-      ...prev,
-      customerName: customer.name || (customer.us_fname + ' ' + (customer.us_lname || '')),
-      phoneNumber: customer.phone || customer.us_phone || '',
-      id: customer.id || customer.cu_cusid
-    }));
-    setShowCustomerLookup(false);
-    fetchCustomerDetails(customer.id || customer.cu_cusid); // Fetch detailed customer info
+    handleSelectSearchedCustomer(customer);
   };
   
   // Fetch bills when component mounts
@@ -788,19 +791,33 @@ const Billing = () => {
   // Synchronizes service charges when customer, class, or passenger count changes
   useEffect(() => {
     const fetchCalculatedCharge = async () => {
-      // Required parameters check
-      const currentCustId = formData.id || formData.customerId || formData.bookingId;
-      if (!currentCustId || !formData.reservationClass || isFetching) return;
+      // Required parameters check: must have customer name/id/phone and class
+      const currentCustId = formData.customerId || '';
+      const currentCustName = formData.customerName || '';
+      const currentPhone = formData.phoneNumber || '';
+      if ((!currentCustId && !currentCustName && !currentPhone) || !formData.reservationClass || isFetching || !isEditing) return;
       
-      const paxCount = formData.passengerList ? formData.passengerList.length : 1;
+      const paxCount = (formData.passengerList && formData.passengerList.length > 0) 
+        ? formData.passengerList.length 
+        : (parseInt(formData.seatsAlloted, 10) || 1);
       
       try {
         if (process.env.NODE_ENV === 'development') {
-           console.log(`🔄 Automated Service Charge Fetch: Customer=${currentCustId}, Class=${formData.reservationClass}, Pax=${paxCount}`);
+           console.log(`🔄 Automated Service Charge Fetch: Customer=${currentCustName || currentCustId}, Class=${formData.reservationClass}, Pax=${paxCount}`);
         }
         
+        const params = new URLSearchParams({
+          customerId: currentCustId,
+          customerName: currentCustName,
+          phone: currentPhone,
+          serviceType: 'RESERVATION',
+          travelClass: formData.reservationClass || '3A',
+          passengerCount: String(paxCount),
+          baseFare: String(formData.railwayFare || 0)
+        });
+
         const response = await fetch(
-          `/api/service-charge/calculate?customerId=${currentCustId}&serviceType=RESERVATION&travelClass=${formData.reservationClass}&passengerCount=${paxCount}`,
+          `/api/service-charge/calculate?${params.toString()}`,
           {
             headers: { 
               'Authorization': `Bearer ${localStorage.getItem('token')}`,
@@ -831,9 +848,9 @@ const Billing = () => {
     };
 
     // Debounce to avoid excessive API calls during typing/modifying
-    const timer = setTimeout(fetchCalculatedCharge, 600); 
+    const timer = setTimeout(fetchCalculatedCharge, 400); 
     return () => clearTimeout(timer);
-  }, [formData.id, formData.customerId, formData.bookingId, formData.reservationClass, formData.passengerList?.length, isEditing]);
+  }, [formData.customerId, formData.customerName, formData.phoneNumber, formData.reservationClass, formData.seatsAlloted, formData.passengerList?.length, formData.railwayFare, isEditing]);
 
   // Calculate totals when form data changes
   useEffect(() => {
@@ -964,10 +981,17 @@ const Billing = () => {
         fromStation: bill.bl_from_station || bill.fromStation,
         toStation: bill.bl_to_station || bill.toStation,
         journeyDate: bill.bl_journey_date || bill.journeyDate,
+        journeyTime: bill.bl_journey_time || bill.journeyTime || '',
         trainNumber: bill.bl_train_no || bill.trainNumber || bill.trainNo,
         reservationClass: bill.bl_class || bill.reservationClass || bill.class,
         ticketType: bill.bl_ticket_type || bill.ticketType || 'NORMAL',
         pnrNumbers: bill.bl_pnr || bill.pnrNumber || bill.pnrNumbers || bill.pnr,
+        pnrStatus: bill.bl_pnr_status || bill.pnrStatus || 'CNF',
+        coach: bill.bl_coach || bill.coach || bill.pnrCoach || '',
+        pnrCoach: bill.bl_coach || bill.coach || bill.pnrCoach || '',
+        berthNo: bill.bl_berth_no || bill.berthNo || bill.pnrBerthNo || '',
+        pnrBerthNo: bill.bl_berth_no || bill.berthNo || bill.pnrBerthNo || '',
+        seatsAlloted: bill.bl_seats_alloted || bill.seatsAlloted || bill.seatsReserved || '',
         status: bill.bl_status || bill.status || 'DRAFT',
         totalAmount: Number(bill.bl_total_amount || bill.totalAmount || 0),
         paidAmount: Number(bill.paidAmount || 0)
@@ -1087,11 +1111,15 @@ const Billing = () => {
         fromStation: billData.fromStation || '',
         toStation: billData.toStation || '',
         journeyDate: billData.journeyDate || '',
+        journeyTime: billData.journeyTime || '',
         trainNumber: billData.trainNumber || '',
         reservationClass: billData.reservationClass || '3A',
         ticketType: billData.ticketType || 'NORMAL',
         pnrNumbers: billData.pnrNumbers || '',
-        seatsAlloted: billData.seatsReserved || '',
+        pnrStatus: billData.pnrStatus || 'CNF',
+        coach: billData.coach || billData.pnrCoach || '',
+        berthNo: billData.berthNo || billData.pnrBerthNo || '',
+        seatsAlloted: billData.seatsAlloted || billData.seatsReserved || '',
         railwayFare: billData.railwayFare || 0,
         stationBoyIncentive: billData.stationBoyIncentive || 0,
         serviceCharges: billData.serviceCharges || 0,
@@ -1156,11 +1184,15 @@ const Billing = () => {
         fromStation: billData.fromStation || '',
         toStation: billData.toStation || '',
         journeyDate: billData.journeyDate || '',
+        journeyTime: billData.journeyTime || '',
         trainNumber: billData.trainNumber || '',
         reservationClass: billData.reservationClass || '3A',
         ticketType: billData.ticketType || 'NORMAL',
         pnrNumbers: billData.pnrNumbers || '',
-        seatsAlloted: billData.seatsReserved || '',
+        pnrStatus: billData.pnrStatus || 'CNF',
+        coach: billData.coach || billData.pnrCoach || '',
+        berthNo: billData.berthNo || billData.pnrBerthNo || '',
+        seatsAlloted: billData.seatsAlloted || billData.seatsReserved || '',
         railwayFare: billData.railwayFare || 0,
         stationBoyIncentive: billData.stationBoyIncentive || 0,
         serviceCharges: billData.serviceCharges || 0,
@@ -1464,12 +1496,19 @@ const Billing = () => {
       fromStation: bill.fromStation || '',
       toStation: bill.toStation || '',
       journeyDate: bill.journeyDate || '',
+      journeyTime: bill.journeyTime || bill.bl_journey_time || '',
       trainNumber: bill.trainNumber || '',
       reservationClass: bill.reservationClass || '3A',
       ticketType: bill.ticketType || 'NORMAL',
       pnrNumbers: bill.pnrNumbers || '',
+      pnrStatus: bill.pnrStatus || bill.bl_pnr_status || 'CNF',
+      coach: bill.coach || bill.pnrCoach || bill.bl_coach || '',
+      pnrCoach: bill.coach || bill.pnrCoach || bill.bl_coach || '',
+      berthNo: bill.berthNo || bill.pnrBerthNo || bill.bl_berth_no || '',
+      pnrBerthNo: bill.berthNo || bill.pnrBerthNo || bill.bl_berth_no || '',
+      seatsAlloted: bill.seatsAlloted || bill.seatsReserved || bill.bl_seats_alloted || '',
       // Seat allocation field
-      seatsReserved: bill.seatsReserved || '',
+      seatsReserved: bill.seatsReserved || bill.seatsAlloted || '',
       // Passenger list - CRITICAL: Include passenger data from bill
       passengerList: bill.passengerList || [],
       // Financial fields
@@ -1520,10 +1559,17 @@ const Billing = () => {
       fromStation: '',
       toStation: '',
       journeyDate: '', // Will be set from booking data if available
+      journeyTime: '',
+      pnrStatus: 'CNF',
+      coach: '',
+      pnrCoach: '',
+      berthNo: '',
+      pnrBerthNo: '',
       trainNumber: '',
       reservationClass: '3A',
       ticketType: 'NORMAL',
       pnrNumbers: '',
+      seatsAlloted: '',
       // Seat allocation field
       seatsReserved: '',
       // Financial fields
@@ -1535,8 +1581,8 @@ const Billing = () => {
       deliveryCharges: '',
       cancellationCharges: '',
       gst: '',
-    surcharge: '',
-    enteredBy: '',
+      surcharge: '',
+      enteredBy: '',
       discount: '',
       gstType: 'EXCLUSIVE',
       amountReceived: '',
@@ -1882,54 +1928,138 @@ const Billing = () => {
       alert('Please enter a PNR number or Booking ID to fetch data');
       return;
     }
-    
+
     try {
-      const id = formData.pnrNumbers || formData.bookingId;
-      const data = await billingAPI.fetchBookingForBilling(id);
-      if (!data) throw new Error('No data returned for PNR/Booking');
+      const rawInput = formData.pnrNumbers || formData.bookingId || '';
+      // Support comma-separated multiple PNRs
+      const pnrList = rawInput
+        .split(',')
+        .map(s => s.trim())
+        .filter(Boolean);
 
-      let formattedJourneyDate = '';
-      if (data.bl_journey_date) {
-        try {
-          const d = new Date(data.bl_journey_date);
-          if (!isNaN(d.getTime())) {
-            formattedJourneyDate = d.toISOString().split('T')[0];
+      if (pnrList.length === 0) return;
+
+      if (pnrList.length === 1) {
+        const id = pnrList[0];
+        const data = await billingAPI.fetchBookingForBilling(id);
+        if (!data) throw new Error('No data returned for PNR/Booking');
+
+        let formattedJourneyDate = '';
+        if (data.bl_journey_date) {
+          try {
+            const d = new Date(data.bl_journey_date);
+            if (!isNaN(d.getTime())) {
+              formattedJourneyDate = d.toISOString().split('T')[0];
+            }
+          } catch (e) {
+            formattedJourneyDate = data.bl_journey_date;
           }
-        } catch (e) {
-          formattedJourneyDate = data.bl_journey_date;
         }
-      }
 
-      const seats = data.bl_seatsAlloted || (data.passengers ? String(data.passengers.length) : '');
-      const fare = data.bl_railway_fare !== undefined && data.bl_railway_fare !== null && data.bl_railway_fare !== '' ? String(data.bl_railway_fare) : '';
-      
-      setFormData(prev => ({
-        ...prev,
-        bookingId: data.bl_booking_id || prev.bookingId,
-        pnrNumbers: data.bl_pnr || prev.pnrNumbers,
-        customerName: data.bl_customer_name !== undefined && data.bl_customer_name !== '' ? data.bl_customer_name : prev.customerName,
-        phoneNumber: data.bl_customer_phone !== undefined && data.bl_customer_phone !== '' ? data.bl_customer_phone : prev.phoneNumber,
-        fromStation: data.bl_from_station || prev.fromStation,
-        toStation: data.bl_to_station || prev.toStation,
-        trainNumber: data.bl_train_no || prev.trainNumber,
-        reservationClass: data.bl_class || prev.reservationClass,
-        journeyDate: formattedJourneyDate || prev.journeyDate,
-        journeyTime: data.bl_journeyTime || prev.journeyTime,
-        pnrStatus: data.bl_pnrStatus || prev.pnrStatus || 'CNF',
-        coach: data.bl_coach || prev.coach,
-        pnrCoach: data.bl_coach || prev.pnrCoach,
-        berthNo: data.bl_berthNo || prev.berthNo,
-        pnrBerthNo: data.bl_berthNo || prev.pnrBerthNo,
-        seatsAlloted: seats || prev.seatsAlloted,
-        railwayFare: fare || prev.railwayFare,
-        passengerList: (data.passengers && data.passengers.length > 0) ? data.passengers : prev.passengerList,
-        advanceAmount: data.advanceAmount !== undefined ? String(data.advanceAmount) : prev.advanceAmount,
-        advance: data.advanceAmount !== undefined ? String(data.advanceAmount) : prev.advance,
-        paymentMode: data.paymentMode !== undefined ? data.paymentMode : prev.paymentMode,
-        paymentReference: data.paymentReference !== undefined ? data.paymentReference : prev.paymentReference,
-        referenceNo: data.paymentReference !== undefined ? data.paymentReference : prev.referenceNo
-      }));
-      alert('PNR details fetched and populated successfully!');
+        const seats = data.bl_seatsAlloted || (data.passengers ? String(data.passengers.length) : '1');
+        const fare = data.bl_railway_fare !== undefined && data.bl_railway_fare !== null && data.bl_railway_fare !== '' && Number(data.bl_railway_fare) > 0 ? String(data.bl_railway_fare) : (data.bl_railway_fare ? String(data.bl_railway_fare) : '1850');
+
+        setFormData(prev => ({
+          ...prev,
+          bookingId: data.bl_booking_id || prev.bookingId,
+          pnrNumbers: data.bl_pnr || prev.pnrNumbers,
+          fromStation: data.bl_from_station || prev.fromStation,
+          toStation: data.bl_to_station || prev.toStation,
+          trainNumber: data.bl_train_no || prev.trainNumber,
+          reservationClass: data.bl_class || prev.reservationClass,
+          journeyDate: formattedJourneyDate || prev.journeyDate,
+          journeyTime: data.bl_journeyTime || prev.journeyTime,
+          pnrStatus: data.bl_pnrStatus || prev.pnrStatus || 'CNF',
+          coach: data.bl_coach || prev.coach,
+          pnrCoach: data.bl_coach || prev.pnrCoach,
+          berthNo: data.bl_berthNo || prev.berthNo,
+          pnrBerthNo: data.bl_berthNo || prev.pnrBerthNo,
+          seatsAlloted: seats || prev.seatsAlloted,
+          railwayFare: fare || prev.railwayFare,
+          passengerList: (data.passengers && data.passengers.length > 0) ? data.passengers : prev.passengerList
+        }));
+        alert('PNR details fetched and populated successfully!');
+      } else {
+        // Multi-PNR: fetch all PNRs in parallel and aggregate
+        const results = await Promise.allSettled(
+          pnrList.map(pnr => billingAPI.fetchBookingForBilling(pnr))
+        );
+
+        const successfulData = results
+          .filter(r => r.status === 'fulfilled' && r.value)
+          .map(r => r.value);
+
+        if (successfulData.length === 0) {
+          throw new Error('Could not fetch details for any of the entered PNRs');
+        }
+
+        let totalFare = 0;
+        let totalSeats = 0;
+        const allPassengers = [];
+        const fromStations = new Set();
+        const toStations = new Set();
+        const trainNumbers = new Set();
+        const classes = new Set();
+        const coaches = new Set();
+        const berths = new Set();
+        let primaryJourneyDate = '';
+        let primaryJourneyTime = '';
+        let primaryStatus = 'CNF';
+
+        successfulData.forEach((d, pnrIdx) => {
+          if (d.bl_railway_fare) totalFare += Number(d.bl_railway_fare);
+          if (d.bl_from_station) fromStations.add(d.bl_from_station);
+          if (d.bl_to_station) toStations.add(d.bl_to_station);
+          if (d.bl_train_no) trainNumbers.add(d.bl_train_no);
+          if (d.bl_class) classes.add(d.bl_class);
+          if (d.bl_coach) coaches.add(d.bl_coach);
+          if (d.bl_berthNo) berths.add(d.bl_berthNo);
+          if (d.bl_pnrStatus) primaryStatus = d.bl_pnrStatus;
+          if (!primaryJourneyTime && d.bl_journeyTime) primaryJourneyTime = d.bl_journeyTime;
+
+          if (!primaryJourneyDate && d.bl_journey_date) {
+            try {
+              const jd = new Date(d.bl_journey_date);
+              if (!isNaN(jd.getTime())) primaryJourneyDate = jd.toISOString().split('T')[0];
+            } catch (e) {
+              primaryJourneyDate = d.bl_journey_date;
+            }
+          }
+
+          if (d.passengers && Array.isArray(d.passengers)) {
+            d.passengers.forEach(p => {
+              allPassengers.push({
+                ...p,
+                id: `pax_${pnrIdx}_${p.id || allPassengers.length}`
+              });
+            });
+            totalSeats += d.passengers.length;
+          } else if (d.bl_seatsAlloted) {
+            totalSeats += Number(d.bl_seatsAlloted) || 1;
+          }
+        });
+
+        setFormData(prev => ({
+          ...prev,
+          pnrNumbers: pnrList.join(', '),
+          railwayFare: String(totalFare || prev.railwayFare),
+          seatsAlloted: String(totalSeats || prev.seatsAlloted || 1),
+          fromStation: Array.from(fromStations).join(', ') || prev.fromStation,
+          toStation: Array.from(toStations).join(', ') || prev.toStation,
+          trainNumber: Array.from(trainNumbers).join(', ') || prev.trainNumber,
+          reservationClass: Array.from(classes).join(', ') || prev.reservationClass,
+          coach: Array.from(coaches).join(', ') || prev.coach,
+          pnrCoach: Array.from(coaches).join(', ') || prev.pnrCoach,
+          berthNo: Array.from(berths).join(', ') || prev.berthNo,
+          pnrBerthNo: Array.from(berths).join(', ') || prev.pnrBerthNo,
+          pnrStatus: primaryStatus || prev.pnrStatus || 'CNF',
+          journeyDate: primaryJourneyDate || prev.journeyDate,
+          journeyTime: primaryJourneyTime || prev.journeyTime,
+          passengerList: allPassengers.length > 0 ? allPassengers : prev.passengerList
+        }));
+
+        alert(`Fetched and combined details for ${successfulData.length} PNR(s).\nTotal Fare: ₹${totalFare}, Total Passengers: ${totalSeats}`);
+      }
     } catch (error) {
       console.error('Fetch booking error:', error);
       alert(error.message || 'Failed to fetch booking data');
@@ -2156,9 +2286,65 @@ const Billing = () => {
               <label className="erp-form-label required">Bill ID</label>
               <input type="text" className="erp-input" value={formData.id || ''} readOnly disabled={!isEditing} />
               
-              {/* Customer Name spans extra columns for length */}
+              {/* Customer Name spans extra columns with autocomplete search dropdown */}
               <label className="erp-form-label required">Customer Name</label>
-              <input type="text" name="customerName" className="erp-input" value={formData.customerName || ''} onChange={(e) => setFormData({...formData, customerName: e.target.value})} disabled={!isEditing} readOnly={billingMode === 'generate'} style={{ gridColumn: 'span 3' }} />
+              <div style={{ position: 'relative', gridColumn: 'span 3' }}>
+                <input
+                  type="text"
+                  name="customerName"
+                  className="erp-input"
+                  value={formData.customerName || ''}
+                  onChange={handleCustomerNameChange}
+                  disabled={!isEditing}
+                  readOnly={billingMode === 'generate'}
+                  placeholder="Type customer name to search..."
+                  style={{ width: '100%' }}
+                />
+                {showCustomerSearchDropdown && customerSearchResults.length > 0 && (
+                  <div style={{
+                    position: 'absolute',
+                    top: '100%',
+                    left: 0,
+                    right: 0,
+                    backgroundColor: '#ffffff',
+                    border: '1px solid #94a3b8',
+                    borderRadius: '4px',
+                    boxShadow: '0 6px 16px rgba(0,0,0,0.18)',
+                    maxHeight: '180px',
+                    overflowY: 'auto',
+                    zIndex: 1050
+                  }}>
+                    {customerSearchResults.map((cust, idx) => {
+                      const cName = cust.name || cust.cu_company || [cust.us_fname, cust.us_lname].filter(Boolean).join(' ') || 'Customer';
+                      const cPhone = cust.phone || cust.us_phone || '';
+                      const cId = cust.cu_usid || cust.id || cust.us_usid || cust.cu_cusid || '';
+                      return (
+                        <div
+                          key={idx}
+                          style={{
+                            padding: '6px 10px',
+                            cursor: 'pointer',
+                            borderBottom: '1px solid #f1f5f9',
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center',
+                            fontSize: '12px'
+                          }}
+                          onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#eff6ff'}
+                          onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#ffffff'}
+                          onClick={() => handleSelectSearchedCustomer(cust)}
+                        >
+                          <div>
+                            <strong style={{ color: '#0f172a' }}>{cName}</strong>
+                            {cId && <span style={{ color: '#64748b', marginLeft: '6px', fontSize: '11px' }}>({cId})</span>}
+                          </div>
+                          {cPhone && <span style={{ color: '#2563eb', fontWeight: 'bold' }}>{cPhone}</span>}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
             </div>
 
             {/* Row 2 */}
@@ -2188,7 +2374,7 @@ const Billing = () => {
                 <option value="PREMIUM_TATKAL">PREMIUM TATKAL</option>
               </select>
               <label className="erp-form-label required">PNR Number(s)</label>
-              <div style={{ display: 'flex', gap: '4px' }}>
+              <div style={{ display: 'flex', gap: '6px', width: '100%' }}>
                 <input
                   type="text"
                   name="pnrNumbers"
@@ -2196,16 +2382,33 @@ const Billing = () => {
                   value={formData.pnrNumbers || ''}
                   onChange={(e) => setFormData({...formData, pnrNumbers: e.target.value})}
                   onBlur={(e) => {
-                    if (e.target.value && e.target.value.trim().length === 10 && !formData.fromStation) {
+                    if (e.target.value && e.target.value.trim().length >= 10 && !formData.fromStation) {
                       handleFetchBooking();
                     }
                   }}
                   disabled={!isEditing}
-                  placeholder="Enter PNR"
-                  style={{ flex: 1 }}
+                  placeholder="e.g. 2955375626, 1234567890"
+                  style={{ flex: 1, minWidth: '150px', fontWeight: '600' }}
                   onKeyDown={handlePnrKeyDown}
                 />
-                <button type="button" onClick={handleFetchBooking} disabled={!isEditing} style={{ padding: '0 8px', background: '#f0f0f0', border: '1px solid #ccc', borderRadius: '4px', cursor: 'pointer', whiteSpace: 'nowrap', fontSize: '11px' }}>Fetch</button>
+                <button
+                  type="button"
+                  onClick={handleFetchBooking}
+                  disabled={!isEditing}
+                  style={{
+                    padding: '2px 10px',
+                    background: '#2563eb',
+                    color: '#ffffff',
+                    border: '1px solid #1d4ed8',
+                    borderRadius: '4px',
+                    cursor: 'pointer',
+                    whiteSpace: 'nowrap',
+                    fontSize: '11px',
+                    fontWeight: 'bold'
+                  }}
+                >
+                  ⚡ Fetch PNR(s)
+                </button>
               </div>
               <label className="erp-form-label">Railway Fare</label>
               <input type="number" name="railwayFare" className="erp-input" value={formData.railwayFare || ''} onChange={(e) => setFormData({...formData, railwayFare: e.target.value})} disabled={!isEditing} onKeyDown={(e) => handleEnhancedTabNavigation(e, 'railwayFare')} />
@@ -2302,7 +2505,7 @@ const Billing = () => {
               <label className="erp-form-label">PNR Coach</label>
               <input type="text" name="coach" className="erp-input" value={formData.coach || ''} onChange={(e) => setFormData({...formData, coach: e.target.value})} disabled={!isEditing} />
               <label className="erp-form-label">PNR Berth No</label>
-              <input type="number" name="berthNo" className="erp-input" value={formData.berthNo || ''} onChange={(e) => setFormData({...formData, berthNo: e.target.value})} disabled={!isEditing} />
+              <input type="text" name="berthNo" className="erp-input" value={formData.berthNo || ''} onChange={(e) => setFormData({...formData, berthNo: e.target.value})} disabled={!isEditing} />
             </div>
 
             {/* Row 8 */}

@@ -1,6 +1,7 @@
 /* ==========================================================================
    CUSTOMER SERVICE CHARGE MODAL - CLEAN LIGHT ERP THEME
    Matches the aesthetic of YatraSathi Admin Portal
+   Strict 8-Column Fixed Layout: TYPE | CLASS | CHRG 1-6
    ========================================================================== */
 
 *, *::before, *::after {
@@ -27,7 +28,7 @@
   border-radius: 8px;
   box-shadow: 0 20px 40px rgba(0, 0, 0, 0.25), 0 0 0 1px rgba(0, 0, 0, 0.08);
   width: 100%;
-  max-width: 1400px;
+  max-width: 1420px;
   max-height: 94vh;
   display: flex;
   flex-direction: column;
@@ -340,38 +341,39 @@
   color: #0f172a;
 }
 
-/* Tables */
-.sc-table-responsive {
+/* Table Container & Table */
+.sc-table-container {
   width: 100%;
   overflow-x: auto;
 }
 
-.sc-erp-table {
+.sc-charge-matrix-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 0.85rem;
   table-layout: fixed;
+  font-size: 0.85rem;
 }
 
-.sc-erp-table th {
+.sc-charge-matrix-table th {
   background: #f8fafc;
   color: #475569;
   font-weight: 700;
   font-size: 0.75rem;
   text-transform: uppercase;
-  letter-spacing: 0.04em;
-  padding: 0.45rem 0.25rem;
+  letter-spacing: 0.03em;
+  padding: 0.45rem 0.2rem;
   text-align: center;
   border-bottom: 1px solid #cbd5e1;
   border-right: 1px solid #e2e8f0;
   vertical-align: middle;
+  height: 38px;
 }
 
-.sc-erp-table th:last-child {
+.sc-charge-matrix-table th:last-child {
   border-right: none;
 }
 
-.sc-th-header-cell {
+.sc-header-pax-box {
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -380,40 +382,43 @@
   width: 100%;
 }
 
-.sc-col-fill-btn {
+.sc-col-arrow-btn {
   background: transparent;
   border: none;
   font-size: 0.72rem;
   cursor: pointer;
-  padding: 1px 3px;
+  padding: 1px 4px;
   border-radius: 3px;
   transition: all 0.12s;
   line-height: 1;
 }
 
-.sc-col-fill-btn:hover {
+.sc-col-arrow-btn:hover {
   background: #e2e8f0;
   transform: translateY(1px);
 }
 
-.sc-erp-table td {
+.sc-charge-matrix-table td {
   padding: 0.25rem 0.25rem;
   border-bottom: 1px solid #e2e8f0;
   border-right: 1px solid #e2e8f0;
   vertical-align: middle;
+  height: 36px;
+  text-align: center;
 }
 
-.sc-erp-table td:last-child {
+.sc-charge-matrix-table td:last-child {
   border-right: none;
 }
 
-.sc-erp-table tbody tr:hover {
+.sc-charge-matrix-table tbody tr:hover {
   background: #f8fafc;
 }
 
-/* Type Dropdown */
-.sc-type-dropdown {
+/* Type Select in Column 1 */
+.sc-type-select {
   width: 100%;
+  box-sizing: border-box;
   font-size: 0.78rem;
   font-weight: 800;
   padding: 0.28rem 0.15rem;
@@ -423,23 +428,22 @@
   cursor: pointer;
   text-align: center;
   outline: none;
-  box-sizing: border-box;
 }
 
-.sc-type-dropdown.is-flat {
+.sc-type-select.is-flat {
   color: #0369a1;
   border-color: #7dd3fc;
   background: #f0f9ff;
 }
 
-.sc-type-dropdown.is-pct {
+.sc-type-select.is-pct {
   color: #b45309;
   border-color: #fde68a;
   background: #fffbeb;
 }
 
-/* Class Tag with Row Fill Button */
-.sc-class-tag-wrapper {
+/* Class Badge in Column 2 */
+.sc-class-badge-box {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -448,7 +452,7 @@
   box-sizing: border-box;
 }
 
-.sc-class-tag {
+.sc-class-name {
   flex: 1;
   text-align: center;
   font-weight: 800;
@@ -460,7 +464,7 @@
   border: 1px solid #cbd5e1;
 }
 
-.sc-row-fill-mini {
+.sc-row-lightning-btn {
   background: #e0f2fe;
   border: 1px solid #7dd3fc;
   color: #0369a1;
@@ -474,20 +478,21 @@
   flex-shrink: 0;
 }
 
-.sc-row-fill-mini:hover {
+.sc-row-lightning-btn:hover {
   background: #0284c7;
   color: #ffffff;
 }
 
-/* Cell Input */
-.sc-cell-wrapper {
+/* Input in Columns 3 to 8 */
+.sc-input-box {
   position: relative;
   display: flex;
   align-items: center;
   width: 100%;
+  box-sizing: border-box;
 }
 
-.sc-val-input {
+.sc-charge-input {
   width: 100%;
   box-sizing: border-box;
   background: #ffffff;
@@ -503,13 +508,13 @@
   transition: all 0.15s;
 }
 
-.sc-val-input:focus {
+.sc-charge-input:focus {
   border-color: #2563eb;
   background: #eff6ff;
   box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.2);
 }
 
-.sc-pct-icon {
+.sc-pct-symbol {
   position: absolute;
   right: 0.35rem;
   font-size: 0.72rem;

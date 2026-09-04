@@ -19,7 +19,7 @@ const CustomerTVL = sequelizeTVL.define('cuXcustomer', {
     type: DataTypes.STRING(15),
     allowNull: false,
     unique: true,
-    comment: 'User ID'
+    comment: 'User ID / Customer User ID'
   },
   cu_custno: {
     type: DataTypes.STRING(20),
@@ -37,6 +37,68 @@ const CustomerTVL = sequelizeTVL.define('cuXcustomer', {
     type: DataTypes.STRING(15),
     allowNull: true,
     comment: 'Company ID (for corporate customers)'
+  },
+  cu_name: {
+    type: DataTypes.STRING(150),
+    allowNull: true,
+    unique: true,
+    comment: 'Customer Full Name (Unique Constraint)'
+  },
+  // Consolidated user fields directly in cuXcustomer
+  us_fname: {
+    type: DataTypes.STRING(100),
+    allowNull: true,
+    comment: 'First Name'
+  },
+  us_lname: {
+    type: DataTypes.STRING(100),
+    allowNull: true,
+    comment: 'Last Name'
+  },
+  us_email: {
+    type: DataTypes.STRING(120),
+    allowNull: true,
+    comment: 'Email Address'
+  },
+  us_phone: {
+    type: DataTypes.STRING(30),
+    allowNull: true,
+    comment: 'Phone Number'
+  },
+  us_pwd: {
+    type: DataTypes.STRING(255),
+    allowNull: true,
+    comment: 'Password Hash'
+  },
+  us_addr1: {
+    type: DataTypes.STRING(255),
+    allowNull: true,
+    comment: 'Address Line 1'
+  },
+  us_city: {
+    type: DataTypes.STRING(100),
+    allowNull: true,
+    comment: 'City'
+  },
+  us_state: {
+    type: DataTypes.STRING(100),
+    allowNull: true,
+    comment: 'State'
+  },
+  us_pin: {
+    type: DataTypes.STRING(20),
+    allowNull: true,
+    comment: 'Pincode'
+  },
+  us_aadhaar: {
+    type: DataTypes.STRING(20),
+    allowNull: true,
+    comment: 'Aadhaar Number'
+  },
+  us_title: {
+    type: DataTypes.STRING(50),
+    allowNull: true,
+    comment: 'Title'
   },
   cu_creditlimit: {
     type: DataTypes.DECIMAL(12, 2),
@@ -101,6 +163,24 @@ const CustomerTVL = sequelizeTVL.define('cuXcustomer', {
   modelName: 'cuXcustomer',
   tableName: 'cuXcustomer',
   timestamps: false,
+  getterMethods: {
+    fullName() {
+      const first = this.us_fname || '';
+      const last = this.us_lname || '';
+      return `${first} ${last}`.trim() || 'N/A';
+    },
+    name() {
+      const first = this.us_fname || '';
+      const last = this.us_lname || '';
+      return `${first} ${last}`.trim() || 'N/A';
+    },
+    phone() {
+      return this.us_phone || '';
+    },
+    email() {
+      return this.us_email || '';
+    }
+  },
   hooks: {
     beforeCreate: (customer, options) => {
       if (options.userId) {
@@ -118,7 +198,7 @@ const CustomerTVL = sequelizeTVL.define('cuXcustomer', {
   }
 });
 
-// Define associations
+// Define associations (kept for backwards compatibility)
 CustomerTVL.belongsTo(require('./UserTVL'), {
   foreignKey: 'cu_usid',
   targetKey: 'us_usid',

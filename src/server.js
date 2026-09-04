@@ -156,10 +156,11 @@ app.use('/api/payments', paymentRoutes);
 app.use('/api/contra', contraRoutes);
 app.use('/api/receipts', receiptRoutes);
 app.use('/api/journal', journalRoutes);
-// Employee booking, payment, and billing routes - separate access for employees
+// Employee booking, payment, billing, and customer routes - separate access for employees
 app.use('/api/employee/bookings', employeeBookingRoutes);
 app.use('/api/employee/payments', employeePaymentRoutes);
 app.use('/api/employee/billing', employeeBillingRoutes);
+app.use('/api/employee/customers', employeeCustomerRoutes);
 app.use('/api/employees', employeeRoutes);
 app.use('/api/employee', employeeRoutes); // Employee dashboard routes
 // Customer portal routes - removed /api/customers to avoid conflicts
@@ -169,8 +170,6 @@ app.use('/api/customer/master-list', masterPassengerListRoutes); // Master passe
 app.use('/api/customer', customerRoutes); // Customer portal routes
 app.get('/api/customers/:id/ledger', require('./middleware/authMiddleware'), require('./controllers/customerController').getCustomerLedger);
 app.get('/api/customers/:id/ledger/pdf', require('./middleware/authMiddleware'), require('./controllers/customerController').getCustomerLedgerPdf);
-// Employee customer routes - separate access for employees
-app.use('/api/employee/customers', employeeCustomerRoutes);
 app.use('/api/audit', auditRoutes);
 app.use('/api/config', configRoutes);
 app.use('/api/notifications', notificationRoutes);

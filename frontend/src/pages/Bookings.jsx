@@ -1794,7 +1794,7 @@ setSelectedBooking(null); // Clear selection after deletion
             <div className="erp-panel-header">Booking Details</div>
             <div style={{ padding: '4px' }}>
               {/* Row 1: Booking ID, Date, Customer Name, Phone Number, PNR Number (5 fields) */}
-              <div className="erp-form-row-compact-5">
+              <div className="erp-form-row-compact-5 erp-booking-row-1">
                   <label className="erp-form-label">Booking ID</label>
                   <input
                     type="text"

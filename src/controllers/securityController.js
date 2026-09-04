@@ -605,13 +605,96 @@ const getEffectivePermissions = async (req, res) => {
 // Get all customers
 const getAllCustomers = async (req, res) => {
   try {
+    const { Op } = require('sequelize');
     const { limit, offset, page } = queryHelper.getPaginationOptions(req.query);
+    const {
+      search, name, customerName, fullName, cu_name, shortName,
+      phone, phoneNumber,
+      email, cu_email,
+      cu_custno, custno, cu_usid,
+      cu_custtype, customerType, accountGroup,
+      location, city,
+      workingAddress, address,
+      permanentAddress, state,
+      cu_status, status, active
+    } = req.query;
+
+    const customerWhere = {};
+
+    const nameTerm = search || name || customerName || fullName || cu_name || shortName;
+    if (nameTerm && nameTerm.trim()) {
+      const term = nameTerm.trim();
+      const parts = term.split(/\s+/).filter(Boolean);
+      
+      if (parts.length > 1) {
+        // Multi-word search (e.g. "Priyanshu Pandey")
+        customerWhere[Op.and] = parts.map(part => ({
+          [Op.or]: [
+            { us_fname: { [Op.like]: `%${part}%` } },
+            { us_lname: { [Op.like]: `%${part}%` } },
+            { cu_custno: { [Op.like]: `%${part}%` } },
+            { cu_usid: { [Op.like]: `%${part}%` } }
+          ]
+        }));
+      } else {
+        customerWhere[Op.or] = [
+          { us_fname: { [Op.like]: `%${term}%` } },
+          { us_lname: { [Op.like]: `%${term}%` } },
+          { cu_custno: { [Op.like]: `%${term}%` } },
+          { cu_usid: { [Op.like]: `%${term}%` } }
+        ];
+      }
+    }
+
+    const phoneTerm = phone || phoneNumber;
+    if (phoneTerm && phoneTerm.trim()) {
+      customerWhere.us_phone = { [Op.like]: `%${phoneTerm.trim()}%` };
+    }
+
+    const emailTerm = email || cu_email;
+    if (emailTerm && emailTerm.trim()) {
+      customerWhere.us_email = { [Op.like]: `%${emailTerm.trim()}%` };
+    }
+
+    const custNoTerm = cu_custno || custno || cu_usid;
+    if (custNoTerm && custNoTerm.trim()) {
+      customerWhere[Op.or] = [
+        { cu_custno: { [Op.like]: `%${custNoTerm.trim()}%` } },
+        { cu_usid: { [Op.like]: `%${custNoTerm.trim()}%` } }
+      ];
+    }
+
+    const typeTerm = cu_custtype || customerType || accountGroup;
+    if (typeTerm && typeTerm.trim()) {
+      customerWhere.cu_custtype = { [Op.like]: `%${typeTerm.trim()}%` };
+    }
+
+    const locTerm = location || city;
+    if (locTerm && locTerm.trim()) {
+      customerWhere.us_city = { [Op.like]: `%${locTerm.trim()}%` };
+    }
+
+    const addrTerm = workingAddress || address;
+    if (addrTerm && addrTerm.trim()) {
+      customerWhere.us_addr1 = { [Op.like]: `%${addrTerm.trim()}%` };
+    }
+
+    const permAddrTerm = permanentAddress || state;
+    if (permAddrTerm && permAddrTerm.trim()) {
+      customerWhere.us_state = { [Op.like]: `%${permAddrTerm.trim()}%` };
+    }
+
+    const statusTerm = cu_status || status;
+    if (statusTerm && statusTerm.trim()) {
+      customerWhere.status = { [Op.like]: `%${statusTerm.trim()}%` };
+    }
+
+    if (active !== undefined && active !== '') {
+      customerWhere.cu_active = parseInt(active) === 1 ? 1 : 0;
+    }
+
     const { count, rows: customers } = await CustomerTVL.findAndCountAll({
-      include: [{
-        model: UserTVL,
-        as: 'user',
-        attributes: ['us_fname', 'us_lname', 'us_email', 'us_phone', 'us_roid', 'us_active']
-      }],
+      where: customerWhere,
       order: [['cu_custno', 'ASC']],
       limit,
       offset,
@@ -621,26 +704,27 @@ const getAllCustomers = async (req, res) => {
     // Format data for frontend
     const formattedCustomers = customers.map(cust => {
       const custData = cust.toJSON();
+      const fullName = `${custData.us_fname || ''} ${custData.us_lname || ''}`.trim() || custData.cu_company || 'N/A';
       return {
         cu_usid: custData.cu_usid,
         cu_custno: custData.cu_custno,
         customerType: custData.cu_custtype,
-        companyName: custData.cu_company,
-        email: custData.user?.us_email || '',
-        phone: custData.user?.us_phone || '',
-        name: custData.user ? `${custData.user.us_fname || ''} ${custData.user.us_lname || ''}`.trim() : 'N/A',
-        phone: custData.user ? custData.user.us_phone || '' : '',
+        companyName: custData.cu_company || fullName,
+        email: custData.us_email || '',
+        phone: custData.us_phone || '',
+        name: fullName,
+        fullName: fullName,
+        creditLimit: custData.cu_creditlimit || 0,
         accountGroup: custData.cu_custtype || 'INDIVIDUAL',
-        location: custData.user ? custData.user.us_city || '' : '',
-        opBalance: custData.cu_creditlimit || custData.cu_creditlmt || 0,
-        workingAddress: custData.user ? custData.user.us_addr1 || '' : '',
-        permanentAddress: '', // us_addr2 doesn't exist
-        cu_status: custData.cu_status || custData.status || '',
-        edtm: custData.edtm || custData.createdAt,
+        location: custData.us_city || '',
+        opBalance: custData.cu_creditlimit || 0,
+        workingAddress: custData.us_addr1 || '',
+        permanentAddress: custData.us_state || '',
+        cu_status: custData.cu_status || custData.status || 'ACTIVE',
+        edtm: custData.edtm || custData.entered_on || custData.createdAt,
         eby: custData.entered_by || custData.eby,
         mdtm: custData.modified_on || custData.mdtm,
-        mby: custData.modified_by || custData.mby,
-        fullName: custData.user ? `${custData.user.us_fname || ''} ${custData.user.us_lname || ''}`.trim() : 'N/A'
+        mby: custData.modified_by || custData.mby
       };
     });
     
@@ -924,7 +1008,7 @@ const updateCustomer = async (req, res) => {
     let firstName = user.us_fname;
     let lastName = user.us_lname;
     if (name) {
-      const nameParts = name.trim().split(' ');
+      const nameParts = name.trim().split(/\s+/);
       firstName = nameParts[0];
       lastName = nameParts.slice(1).join(' ') || '';
     }
@@ -939,18 +1023,26 @@ const updateCustomer = async (req, res) => {
       us_phone: phone !== undefined ? phone : user.us_phone,
       us_city: city !== undefined ? city : user.us_city,
       us_addr1: address !== undefined ? address : user.us_addr1,
-      us_active: cu_status === 'ACTIVE' ? 1 : 0,
+      us_state: state !== undefined ? state : user.us_state,
+      us_active: (cu_status === 'ACTIVE' || cu_status === 'OPEN' || cu_status === 1) ? 1 : 0,
       us_mby: req.user?.us_usid || 'SYSTEM',
       us_mdtm: new Date()
     }, { transaction });
 
     await customer.update({
+      cu_name: name ? name.trim() : customer.cu_name,
       cu_custtype: customerType !== undefined ? customerType : customer.cu_custtype,
-      cu_company: companyName !== undefined ? companyName : customer.cu_company,
+      us_fname: firstName,
+      us_lname: lastName,
+      us_email: finalEmail,
+      us_phone: phone !== undefined ? phone : customer.us_phone,
+      us_city: city !== undefined ? city : customer.us_city,
+      us_addr1: address !== undefined ? address : customer.us_addr1,
+      us_state: state !== undefined ? state : customer.us_state,
       cu_creditlimit: creditLimit !== undefined ? creditLimit : customer.cu_creditlimit,
-
-      cu_status: cu_status !== undefined ? cu_status : customer.cu_status,
-      modified_by: req.user?.us_usid || 'SYSTEM',
+      cu_active: (cu_status === 'ACTIVE' || cu_status === 'OPEN' || cu_status === 1) ? 1 : 0,
+      status: (cu_status === 'ACTIVE' || cu_status === 'OPEN') ? 'OPEN' : (cu_status || customer.status),
+      modified_by: req.user?.us_usid ? parseInt(req.user.us_usid.replace(/\D/g, '')) || 1 : 1,
       modified_on: new Date()
     }, { transaction });
     

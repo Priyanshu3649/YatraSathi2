@@ -548,7 +548,7 @@ const JournalForm = ({ onBack }) => {
                 </div>
               </div>
 
-              <div className="erp-form-row-compact-2" style={{ marginTop: '10px' }}>
+              <div className="erp-form-row-compact-2 erp-payment-customer-row" style={{ marginTop: '10px' }}>
                 <div className="erp-form-group">
                   <label className="erp-form-label required">Customer / Payee</label>
                   <input 

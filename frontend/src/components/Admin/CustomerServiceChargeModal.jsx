@@ -345,29 +345,29 @@ const CustomerServiceChargeModal = ({ isOpen, onClose, customerId, customerName,
         </div>
       </div>
 
-      <div className="sc-table-responsive">
-        <table className="sc-erp-table">
+      <div className="sc-table-container">
+        <table className="sc-charge-matrix-table">
           <colgroup>
+            <col style={{ width: '13%' }} />
+            <col style={{ width: '15%' }} />
             <col style={{ width: '12%' }} />
-            <col style={{ width: '14%' }} />
-            <col style={{ width: '12.33%' }} />
-            <col style={{ width: '12.33%' }} />
-            <col style={{ width: '12.33%' }} />
-            <col style={{ width: '12.33%' }} />
-            <col style={{ width: '12.33%' }} />
-            <col style={{ width: '12.33%' }} />
+            <col style={{ width: '12%' }} />
+            <col style={{ width: '12%' }} />
+            <col style={{ width: '12%' }} />
+            <col style={{ width: '12%' }} />
+            <col style={{ width: '12%' }} />
           </colgroup>
           <thead>
             <tr>
-              <th>TYPE</th>
-              <th>CLASS</th>
+              <th className="sc-th-type">TYPE</th>
+              <th className="sc-th-class">CLASS</th>
               {[0, 1, 2, 3, 4, 5].map((paxIdx) => (
-                <th key={paxIdx}>
-                  <div className="sc-th-header-cell">
+                <th key={paxIdx} className="sc-th-pax">
+                  <div className="sc-header-pax-box">
                     <span>CHRG {paxIdx + 1}</span>
                     <button
                       type="button"
-                      className="sc-col-fill-btn"
+                      className="sc-col-arrow-btn"
                       title={`Copy value down entire column for Chrg ${paxIdx + 1}`}
                       onClick={() => handleFillColumn(section, paxIdx)}
                     >
@@ -384,10 +384,11 @@ const CustomerServiceChargeModal = ({ isOpen, onClose, customerId, customerName,
               const isPercentage = rowData.type === 'PERCENTAGE';
 
               return (
-                <tr key={`${section}-${cls}`}>
-                  <td className="text-center">
+                <tr key={`${section}-${cls}`} className="sc-matrix-row">
+                  {/* Column 1: TYPE */}
+                  <td className="sc-td-type">
                     <select
-                      className={`sc-type-dropdown ${isPercentage ? 'is-pct' : 'is-flat'}`}
+                      className={`sc-type-select ${isPercentage ? 'is-pct' : 'is-flat'}`}
                       value={rowData.type}
                       onChange={(e) => handleTypeChange(section, cls, e.target.value)}
                     >
@@ -395,12 +396,14 @@ const CustomerServiceChargeModal = ({ isOpen, onClose, customerId, customerName,
                       <option value="PERCENTAGE">%</option>
                     </select>
                   </td>
-                  <td className="text-center">
-                    <div className="sc-class-tag-wrapper">
-                      <span className="sc-class-tag">{cls}</span>
+
+                  {/* Column 2: CLASS */}
+                  <td className="sc-td-class">
+                    <div className="sc-class-badge-box">
+                      <span className="sc-class-name">{cls}</span>
                       <button
                         type="button"
-                        className="sc-row-fill-mini"
+                        className="sc-row-lightning-btn"
                         title={`Replicate Chrg 1 across all columns for ${cls}`}
                         onClick={() => handleFillRow(section, cls)}
                       >
@@ -408,21 +411,23 @@ const CustomerServiceChargeModal = ({ isOpen, onClose, customerId, customerName,
                       </button>
                     </div>
                   </td>
+
+                  {/* Columns 3 to 8: CHRG 1 to CHRG 6 */}
                   {[0, 1, 2, 3, 4, 5].map((paxIdx) => (
-                    <td key={paxIdx}>
-                      <div className="sc-cell-wrapper">
+                    <td key={paxIdx} className="sc-td-pax">
+                      <div className="sc-input-box">
                         <input
                           id={`sc-cell-${section}-${clsIdx}-${paxIdx}`}
                           type="number"
                           step={isPercentage ? '0.5' : '1'}
                           min="0"
-                          className="sc-val-input"
+                          className="sc-charge-input"
                           value={rowData.pax[paxIdx] === 0 ? '' : rowData.pax[paxIdx]}
                           placeholder="0"
                           onChange={(e) => handleCellChange(section, cls, paxIdx, e.target.value)}
                           onKeyDown={(e) => handleGridKeyDown(e, section, clsIdx, paxIdx)}
                         />
-                        {isPercentage && <span className="sc-pct-icon">%</span>}
+                        {isPercentage && <span className="sc-pct-symbol">%</span>}
                       </div>
                     </td>
                   ))}

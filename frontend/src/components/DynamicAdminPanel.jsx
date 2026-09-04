@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { showMessage } from './MessageDisplay';
@@ -119,26 +119,18 @@ const DynamicAdminPanel = ({ initialModule = 'applications' }) => {
     active: ''
   });
   
-  // Inline filter state for grid filtering - Enable real-time filtering with 500ms debounce
-  const handleApplyFilters = React.useCallback((newFilters) => {
-    handlePageChange(1);
-    fetchData(1, limit || 50, newFilters);
-  }, [limit, activeModule]);
-
-  // Inline filter state for grid filtering - Enable real-time filtering with 500ms debounce
+  // Inline filter state for grid filtering - Client-side live filtering
   const { 
     draftFilters: inlineFilters, 
     activeFilters, 
     handleFilterChange: handleInlineFilterChange, 
     applyFiltersManual: applyFilters, 
     clearFiltersManual: clearFilters 
-  } = useERPFilters({}, handleApplyFilters, { 
-    realTime: true, 
-    debounceMs: 500 
+  } = useERPFilters({}, () => {}, { 
+    realTime: false 
   });
   
-  // Filter timeout for live search
-  const [filterTimeout, setFilterTimeout] = useState(null);
+  const debounceTimerRef = useRef(null);
   
   const [auditData, setAuditData] = useState({
     enteredOn: '',
@@ -299,16 +291,18 @@ const DynamicAdminPanel = ({ initialModule = 'applications' }) => {
       fields: [
         { name: 'name', label: 'Customer Name', type: 'text', required: true },
         { name: 'phone', label: 'Phone No', type: 'tel', required: true },
+        { name: 'email', label: 'Email Id', type: 'email' },
+        { name: 'creditLimit', label: 'Credit Limit', type: 'number', step: '0.01' },
         { name: 'accountGroup', label: 'Account Group', type: 'text' },
         { name: 'location', label: 'Location', type: 'text' },
         { name: 'opBalance', label: 'Op Balance', type: 'number', step: '0.01' },
         { name: 'workingAddress', label: 'Working Address', type: 'textarea' },
         { name: 'permanentAddress', label: 'Permanent Address', type: 'textarea' }
       ],
-      columns: ['name', 'phone', 'accountGroup', 'location', 'opBalance', 'serviceChargeAction', 'workingAddress', 'permanentAddress'],
-      columnLabels: ['Customer Name', 'Phone No', 'Account Group', 'Location', 'Op Balance', 'Service Charge', 'Working Address', 'Permanent Address'],
-      columnWidths: ['200px', '140px', '140px', '140px', '110px', '130px', '220px', '220px'],
-      filterFields: ['name', 'phone', 'accountGroup', 'location']
+      columns: ['name', 'phone', 'email', 'creditLimit', 'accountGroup', 'location', 'opBalance', 'serviceChargeAction', 'workingAddress', 'permanentAddress'],
+      columnLabels: ['Customer Name', 'Phone No', 'Email Id', 'Credit Limit', 'Account Group', 'Location', 'Op Balance', 'Service Charge', 'Working Address', 'Permanent Address'],
+      columnWidths: ['180px', '130px', '180px', '120px', '130px', '130px', '110px', '130px', '200px', '200px'],
+      filterFields: ['name', 'phone', 'email', 'accountGroup', 'location']
     },
     stationBoys: {
       name: 'Station Boys',
@@ -557,7 +551,7 @@ const DynamicAdminPanel = ({ initialModule = 'applications' }) => {
     return Array.from(mods).sort();
   };
 
-  // Apply filters - Enhanced live filtering with 500ms debounce
+  // Apply filters - Enhanced live filtering with 300ms debounce
   useEffect(() => {
     let filtered = [...data];
     
@@ -675,48 +669,51 @@ const DynamicAdminPanel = ({ initialModule = 'applications' }) => {
     
     // ==================== CUSTOMER FILTERS ====================
     if (filters.cu_custno) {
+      const q = filters.cu_custno.toLowerCase();
       filtered = filtered.filter(record => 
-        record.cu_custno?.toLowerCase().includes(filters.cu_custno.toLowerCase())
+        (record.cu_custno || record.cu_usid || record.custno || '').toString().toLowerCase().includes(q)
       );
     }
     if (filters.cu_name) {
+      const q = filters.cu_name.toLowerCase();
       filtered = filtered.filter(record => 
-        record.cu_name?.toLowerCase().includes(filters.cu_name.toLowerCase())
+        (record.name || record.fullName || record.companyName || record.cu_company || record.cu_name || '').toString().toLowerCase().includes(q)
       );
     }
     if (filters.cu_email) {
+      const q = filters.cu_email.toLowerCase();
       filtered = filtered.filter(record => 
-        record.cu_email?.toLowerCase().includes(filters.cu_email.toLowerCase())
+        (record.email || record.us_email || record.cu_email || '').toString().toLowerCase().includes(q)
       );
     }
     if (filters.cu_custtype) {
+      const q = filters.cu_custtype.toLowerCase();
       filtered = filtered.filter(record => 
-        record.cu_custtype?.toLowerCase().includes(filters.cu_custtype.toLowerCase())
+        (record.customerType || record.accountGroup || record.cu_custtype || '').toString().toLowerCase().includes(q)
       );
     }
     if (filters.cu_status) {
+      const q = filters.cu_status.toLowerCase();
       filtered = filtered.filter(record => 
-        record.cu_status?.toLowerCase().includes(filters.cu_status.toLowerCase())
+        (record.status || record.cu_status || (record.us_active === 1 ? 'active' : 'inactive')).toString().toLowerCase().includes(q)
       );
     }
     
     // ==================== GENERAL FILTERS ====================
-    // Filter by short name (LIKE) - works across different field names
     if (filters.shortName) {
       const searchTerm = filters.shortName.toLowerCase();
       filtered = filtered.filter(record => {
-        const shortFields = ['ap_apshort', 'mo_moshort', 'op_opshort', 'fn_fnshort', 'us_usname', 'us_email', 'cu_name'];
+        const shortFields = ['ap_apshort', 'mo_moshort', 'op_opshort', 'fn_fnshort', 'us_usname', 'us_email', 'cu_name', 'name', 'companyName'];
         return shortFields.some(field => 
-          record[field]?.toLowerCase().includes(searchTerm)
+          record[field]?.toString().toLowerCase().includes(searchTerm)
         );
       });
     }
     
-    // Filter by active status
     if (filters.active !== '' && filters.active !== undefined) {
       const activeValue = parseInt(filters.active);
       filtered = filtered.filter(record => {
-        const activeFields = ['ap_active', 'mo_active', 'op_active', 'fn_active', 'us_active', 'fp_active', 'up_active'];
+        const activeFields = ['ap_active', 'mo_active', 'op_active', 'fn_active', 'us_active', 'fp_active', 'up_active', 'cu_active'];
         return activeFields.some(field => record[field] === activeValue);
       });
     }
@@ -724,29 +721,78 @@ const DynamicAdminPanel = ({ initialModule = 'applications' }) => {
     // ==================== INLINE GRID FILTERS ====================
     Object.entries(inlineFilters).forEach(([column, value]) => {
       if (value !== undefined && value !== '') {
-        // Handle boolean/checkbox fields
+        const valStr = value.toString().toLowerCase();
         if (column.includes('active') || column.includes('admin') || column.includes('security') || 
             column.includes('allow') || column.includes('ready') || column.includes('secure')) {
           const booleanValue = value === '1' ? 1 : 0;
           filtered = filtered.filter(record => record[column] === booleanValue);
-        }
-        // Handle date fields
-        else if (column.includes('edtm') || column.includes('mdtm') || column.includes('cdtm') || column.includes('paydt')) {
+        } else if (column.includes('edtm') || column.includes('mdtm') || column.includes('cdtm') || column.includes('paydt')) {
           filtered = filtered.filter(record => {
             const recordDate = record[column] ? new Date(record[column]).toISOString().split('T')[0] : null;
             const filterDate = new Date(value).toISOString().split('T')[0];
             return recordDate === filterDate;
           });
-        }
-        // Handle text fields with partial match
-        else {
+        } else if (column === 'name' || column === 'customerName' || column === 'fullName') {
           filtered = filtered.filter(record => 
-            record[column]?.toString().toLowerCase().includes(value.toLowerCase())
+            (record.name || record.fullName || record.companyName || record.cu_name || '').toString().toLowerCase().includes(valStr)
+          );
+        } else if (column === 'phone' || column === 'phoneNumber') {
+          filtered = filtered.filter(record => 
+            (record.phone || record.us_phone || '').toString().toLowerCase().includes(valStr)
+          );
+        } else if (column === 'email') {
+          filtered = filtered.filter(record => 
+            (record.email || record.us_email || record.cu_email || '').toString().toLowerCase().includes(valStr)
+          );
+        } else if (column === 'accountGroup' || column === 'customerType') {
+          filtered = filtered.filter(record => 
+            (record.accountGroup || record.customerType || record.cu_custtype || '').toString().toLowerCase().includes(valStr)
+          );
+        } else if (column === 'location') {
+          filtered = filtered.filter(record => 
+            (record.location || record.us_city || '').toString().toLowerCase().includes(valStr)
+          );
+        } else if (column === 'workingAddress') {
+          filtered = filtered.filter(record => 
+            (record.workingAddress || record.us_addr1 || '').toString().toLowerCase().includes(valStr)
+          );
+        } else if (column === 'permanentAddress') {
+          filtered = filtered.filter(record => 
+            (record.permanentAddress || record.us_state || '').toString().toLowerCase().includes(valStr)
+          );
+        } else if (column === 'status' || column === 'cu_status') {
+          filtered = filtered.filter(record => 
+            (record.cu_status || record.status || '').toString().toLowerCase().includes(valStr)
+          );
+        } else {
+          filtered = filtered.filter(record => 
+            (record[column] || '').toString().toLowerCase().includes(valStr)
           );
         }
       }
     });
+
     setFilteredData(filtered);
+
+    // Step 2: Trigger debounced server query across all database records if any filter is active
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+    }
+    debounceTimerRef.current = setTimeout(() => {
+      const activeFilterKeys = Object.keys(filters).filter(k => filters[k] !== '' && filters[k] !== undefined);
+      const activeInlineKeys = Object.keys(inlineFilters).filter(k => inlineFilters[k] !== '' && inlineFilters[k] !== undefined);
+
+      if (activeFilterKeys.length > 0 || activeInlineKeys.length > 0) {
+        const combined = { ...filters, ...inlineFilters };
+        fetchData(1, limit || 50, combined, true /* isSilent */);
+      }
+    }, 300);
+
+    return () => {
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+      }
+    };
   }, [filters, data, inlineFilters]);
 
   // Auto-select first record when filteredData changes (only on initial load or module change)
@@ -757,19 +803,67 @@ const DynamicAdminPanel = ({ initialModule = 'applications' }) => {
     }
   }, [activeModule, filteredData.length]); // Only trigger on module change or data load
 
-  // Keyboard navigation - Arrow keys
+  // Handle form field navigation on Tab and Enter
+  const handleFormKeyDown = (e, fieldName) => {
+    const formFields = currentModule.fields.map(f => f.name);
+    const currIdx = formFields.indexOf(fieldName);
+    
+    if (e.key === 'Enter' || (e.key === 'Tab' && !e.shiftKey)) {
+      if (currIdx !== -1 && currIdx < formFields.length - 1) {
+        e.preventDefault();
+        const nextName = formFields[currIdx + 1];
+        const nextEl = document.querySelector(`[name="${nextName}"]`);
+        if (nextEl) {
+          nextEl.focus();
+          if (nextEl.select) nextEl.select();
+        }
+      } else if (currIdx === formFields.length - 1 && e.key === 'Enter') {
+        e.preventDefault();
+        handleSave();
+      }
+    } else if (e.key === 'Tab' && e.shiftKey) {
+      if (currIdx > 0) {
+        e.preventDefault();
+        const prevName = formFields[currIdx - 1];
+        const prevEl = document.querySelector(`[name="${prevName}"]`);
+        if (prevEl) {
+          prevEl.focus();
+          if (prevEl.select) prevEl.select();
+        }
+      }
+    }
+  };
+
+  // Keyboard navigation - Arrow keys, PageUp, PageDown, Home, End
   useEffect(() => {
     const handleKeyDown = (e) => {
-      if (!selectedRecord || isEditing) return;
+      const activeTag = document.activeElement ? document.activeElement.tagName.toLowerCase() : '';
+      const isInputActive = activeTag === 'input' || activeTag === 'textarea' || activeTag === 'select';
+
+      if (isEditing || isInputActive) {
+        if (e.key === 'Escape') {
+          e.preventDefault();
+          setIsEditing(false);
+          if (selectedRecord) {
+            setFormData(selectedRecord);
+          }
+        }
+        return;
+      }
       
-      const currentIndex = filteredData.findIndex(item => 
+      if (!filteredData || filteredData.length === 0) return;
+      
+      const currentIndex = selectedRecord ? filteredData.findIndex(item => 
         isSameRecord(item, selectedRecord, activeModule)
-      );
+      ) : -1;
       
       if (e.key === 'ArrowDown') {
         e.preventDefault();
         if (currentIndex < filteredData.length - 1) {
           handleRecordSelect(filteredData[currentIndex + 1]);
+          scrollToSelectedRow();
+        } else if (currentIndex === -1) {
+          handleRecordSelect(filteredData[0]);
           scrollToSelectedRow();
         }
       } else if (e.key === 'ArrowUp') {
@@ -777,6 +871,27 @@ const DynamicAdminPanel = ({ initialModule = 'applications' }) => {
         if (currentIndex > 0) {
           handleRecordSelect(filteredData[currentIndex - 1]);
           scrollToSelectedRow();
+        } else if (currentIndex === -1) {
+          handleRecordSelect(filteredData[filteredData.length - 1]);
+          scrollToSelectedRow();
+        }
+      } else if (e.key === 'Home') {
+        e.preventDefault();
+        handleRecordSelect(filteredData[0]);
+        scrollToSelectedRow();
+      } else if (e.key === 'End') {
+        e.preventDefault();
+        handleRecordSelect(filteredData[filteredData.length - 1]);
+        scrollToSelectedRow();
+      } else if (e.key === 'PageDown') {
+        e.preventDefault();
+        if (pagination && pagination.currentPage < pagination.totalPages) {
+          handlePageChange(pagination.currentPage + 1);
+        }
+      } else if (e.key === 'PageUp') {
+        e.preventDefault();
+        if (pagination && pagination.currentPage > 1) {
+          handlePageChange(pagination.currentPage - 1);
         }
       } else if (e.key === 'F2') {
         e.preventDefault();
@@ -786,18 +901,12 @@ const DynamicAdminPanel = ({ initialModule = 'applications' }) => {
       } else if (e.key === 'Enter' && !isEditing) {
         e.preventDefault();
         handleEdit();
-      } else if (e.key === 'Escape' && isEditing) {
-        e.preventDefault();
-        setIsEditing(false);
-        if (selectedRecord) {
-          setFormData(selectedRecord);
-        }
       }
     };
     
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [selectedRecord, isEditing, activeModule, filteredData, currentPage]);
+  }, [selectedRecord, isEditing, activeModule, filteredData, pagination, currentPage]);
 
   // Scroll to selected row
   const scrollToSelectedRow = () => {
@@ -862,10 +971,22 @@ const DynamicAdminPanel = ({ initialModule = 'applications' }) => {
     }
   };
 
-  const fetchData = async (page = 1, pageSize = 50, currentFilters = null) => {
-    setLoading(true);
+  const fetchData = async (page = 1, pageSize = 50, currentFilters = null, isSilent = false) => {
+    if (!isSilent) setLoading(true);
     try {
-      const filtersToUse = currentFilters || activeFilters || {};
+      const rawFilters = currentFilters || activeFilters || {};
+      const filtersToUse = {};
+      Object.entries(rawFilters).forEach(([k, v]) => {
+        if (v !== undefined && v !== null && v !== '') {
+          filtersToUse[k] = v;
+        }
+      });
+
+      // Map customer filter keys
+      if (activeModule === 'customers') {
+        if (filtersToUse.cu_name) filtersToUse.name = filtersToUse.cu_name;
+        if (filtersToUse.cu_email) filtersToUse.email = filtersToUse.cu_email;
+      }
       
       const queryParams = new URLSearchParams({
         page,
@@ -974,25 +1095,10 @@ const DynamicAdminPanel = ({ initialModule = 'applications' }) => {
 
   const handleFilterChange = (e) => {
     const { name, value } = e.target;
-    
-    // Clear existing timeout
-    if (filterTimeout) {
-      clearTimeout(filterTimeout);
-    }
-    
-    // Update filter immediately for UI responsiveness
     setFilters(prev => ({
       ...prev,
       [name]: value
     }));
-    
-    // Set new timeout for live search (500ms delay)
-    const newTimeout = setTimeout(() => {
-      // Filter will be applied automatically by useEffect
-      console.log('Filter applied:', name, value);
-    }, 500);
-    
-    setFilterTimeout(newTimeout);
   };
   
   const handleClearFilters = () => {
@@ -1603,6 +1709,7 @@ const DynamicAdminPanel = ({ initialModule = 'applications' }) => {
                               name={cbField.name}
                               checked={formData[cbField.name] === 1}
                               onChange={handleInputChange}
+                              onKeyDown={(e) => handleFormKeyDown(e, cbField.name)}
                               disabled={!isEditing}
                             />
                             <label htmlFor={cbField.name}>{cbField.label}</label>
@@ -1625,6 +1732,7 @@ const DynamicAdminPanel = ({ initialModule = 'applications' }) => {
                               name={cbField.name}
                               checked={formData[cbField.name] === 1}
                               onChange={handleInputChange}
+                              onKeyDown={(e) => handleFormKeyDown(e, cbField.name)}
                               disabled={!isEditing}
                             />
                             <label htmlFor={cbField.name}>{cbField.label}</label>
@@ -1647,17 +1755,7 @@ const DynamicAdminPanel = ({ initialModule = 'applications' }) => {
                           className="erp-input"
                           value={formData[field.name] || ''}
                           onChange={handleInputChange}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter' || (e.key === 'Tab' && !e.shiftKey)) {
-                              const formFields = currentModule.fields.map(f => f.name);
-                              const currIdx = formFields.indexOf(field.name);
-                              if (currIdx !== -1 && currIdx < formFields.length - 1) {
-                                e.preventDefault();
-                                const nextEl = document.querySelector(`[name="${formFields[currIdx + 1]}"]`);
-                                if (nextEl) { nextEl.focus(); if (nextEl.select) nextEl.select(); }
-                              }
-                            }
-                          }}
+                          onKeyDown={(e) => handleFormKeyDown(e, field.name)}
                           disabled={!isEditing}
                         >
                           <option value="">Select...</option>
@@ -1673,17 +1771,7 @@ const DynamicAdminPanel = ({ initialModule = 'applications' }) => {
                           className="erp-input"
                           value={formData[field.name] || ''}
                           onChange={handleInputChange}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter' || (e.key === 'Tab' && !e.shiftKey)) {
-                              const formFields = currentModule.fields.map(f => f.name);
-                              const currIdx = formFields.indexOf(field.name);
-                              if (currIdx !== -1 && currIdx < formFields.length - 1) {
-                                e.preventDefault();
-                                const nextEl = document.querySelector(`[name="${formFields[currIdx + 1]}"]`);
-                                if (nextEl) { nextEl.focus(); if (nextEl.select) nextEl.select(); }
-                              }
-                            }
-                          }}
+                          onKeyDown={(e) => handleFormKeyDown(e, field.name)}
                           disabled={!isEditing}
                         >
                           <option value="">Select...</option>
@@ -1697,17 +1785,7 @@ const DynamicAdminPanel = ({ initialModule = 'applications' }) => {
                           className="erp-input"
                           value={formData[field.name] || ''}
                           onChange={handleInputChange}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter' && !e.shiftKey) {
-                              const formFields = currentModule.fields.map(f => f.name);
-                              const currIdx = formFields.indexOf(field.name);
-                              if (currIdx !== -1 && currIdx < formFields.length - 1) {
-                                e.preventDefault();
-                                const nextEl = document.querySelector(`[name="${formFields[currIdx + 1]}"]`);
-                                if (nextEl) { nextEl.focus(); if (nextEl.select) nextEl.select(); }
-                              }
-                            }
-                          }}
+                          onKeyDown={(e) => handleFormKeyDown(e, field.name)}
                           disabled={!isEditing || (field.readOnly && selectedRecord)}
                           readOnly={field.readOnly && selectedRecord}
                           rows={3}
@@ -1719,17 +1797,7 @@ const DynamicAdminPanel = ({ initialModule = 'applications' }) => {
                           className="erp-input"
                           value={formData[field.name] || ''}
                           onChange={handleInputChange}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter' || (e.key === 'Tab' && !e.shiftKey)) {
-                              const formFields = currentModule.fields.map(f => f.name);
-                              const currIdx = formFields.indexOf(field.name);
-                              if (currIdx !== -1 && currIdx < formFields.length - 1) {
-                                e.preventDefault();
-                                const nextEl = document.querySelector(`[name="${formFields[currIdx + 1]}"]`);
-                                if (nextEl) { nextEl.focus(); if (nextEl.select) nextEl.select(); }
-                              }
-                            }
-                          }}
+                          onKeyDown={(e) => handleFormKeyDown(e, field.name)}
                           disabled={!isEditing || (field.readOnly && selectedRecord)}
                           readOnly={field.readOnly && selectedRecord}
                           maxLength={field.maxLength}
@@ -1773,7 +1841,7 @@ const DynamicAdminPanel = ({ initialModule = 'applications' }) => {
           {/* Data Grid - Scrollable */}
           <div className="erp-grid-section">
             <div className="erp-panel-header">{currentModule.name}</div>
-            {loading ? (
+            {loading && data.length === 0 ? (
               <div style={{ padding: '20px', textAlign: 'center' }}>Loading...</div>
             ) : (
               <div className="erp-grid-container" style={{ maxHeight: 'calc(100vh - 450px)', overflowY: 'auto' }}>
