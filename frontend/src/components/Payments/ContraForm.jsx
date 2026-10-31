@@ -79,6 +79,14 @@ const ContraForm = ({ onBack }) => {
     debounceMs: 500 
   });
 
+  const [accounts] = useState([
+    'Cash Account',
+    'Bank Account - SBI',
+    'Bank Account - HDFC',
+    'Customer Account',
+    'Supplier Account'
+  ]);
+
   const fieldOrder = useMemo(() => [
     'date', 
     'from_account', 

@@ -294,34 +294,6 @@ const PaymentMenu = () => {
   );
 };
 
-// Individual section components will be implemented separately
-// PaymentSection is imported from ./PaymentSection
-
-const ContraSection = () => {
-  return (
-    <div className="contra-section">
-      <h3>Contra Entries</h3>
-      <p>Contra section implementation will be added here with records list.</p>
-    </div>
-  );
-};
-
-const ReceiptSection = () => {
-  return (
-    <div className="receipt-section">
-      <h3>Receipt Records</h3>
-      <p>Receipt section implementation will be added here with records list.</p>
-    </div>
-  );
-};
-
-const JournalSection = () => {
-  return (
-    <div className="journal-section">
-      <h3>Journal Entries</h3>
-      <p>Journal section implementation will be added here with records list.</p>
-    </div>
-  );
-};
+// Section components are imported above
 
 export default PaymentMenu;

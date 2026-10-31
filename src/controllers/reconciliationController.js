@@ -1,4 +1,5 @@
-const { BookingTVL, BillTVL, PaymentTVL, Receipt, StationBoyPayment, Contra, Journal } = require('../models');
+const { BookingTVL, BillTVL, PaymentTVL, Receipt, StationBoyPayment, StationBoyPaymentAllocation, Contra, Journal, sequelizeTVL } = require('../models');
+const stationBoySettlementService = require('../services/stationBoySettlementService');
 
 // Helper to convert USID string to integer for audit hooks/reconciled_by
 function convertUserIdToInt(userId) {
@@ -352,43 +353,103 @@ const reconciliationController = {
   
   // Station Boy Payment Reconciliation
   reconcileStationBoyPayment: async (req, res) => {
+    const transaction = await sequelizeTVL.transaction();
     try {
       const { id } = req.params;
       const { remarks } = req.body;
-      
-      const payment = await StationBoyPayment.findByPk(id);
-      if (!payment) return res.status(404).json({ success: false, error: 'Station Boy Payment not found' });
+
+      const payment = await StationBoyPayment.findByPk(id, { transaction });
+      if (!payment) {
+        await transaction.rollback();
+        return res.status(404).json({ success: false, error: 'Station Boy Payment not found' });
+      }
+
+      if (payment.is_reconciled) {
+        await transaction.rollback();
+        return res.status(400).json({ success: false, error: 'Payment is already reconciled' });
+      }
+
+      const reconciledBy = convertUserIdToInt(req.user?.us_usid);
+
+      // Legacy safety net - allocate any unsettled amount oldest-bill-first.
+      await stationBoySettlementService.backfillStationBoyAllocations(
+        payment.station_boy_id,
+        transaction,
+        reconciledBy
+      );
+
+      const settlement = await stationBoySettlementService.getPaymentSettlement(payment.id, transaction);
+      const amount = stationBoySettlementService.round2(payment.amount);
+
+      if (settlement.allocated + 0.009 < amount) {
+        await transaction.rollback();
+        const pending = stationBoySettlementService.round2(amount - settlement.allocated);
+        return res.status(400).json({
+          success: false,
+          error: `Payment is not fully settled yet. ₹${pending.toFixed(2)} remains unallocated against pending bills`
+        });
+      }
 
       payment.is_reconciled = 1;
-      payment.reconciled_by = convertUserIdToInt(req.user?.us_usid);
+      payment.reconciled_by = reconciledBy;
       payment.reconciled_at = new Date();
       payment.reconciliation_remarks = remarks || 'Reconciled';
-      
-      await payment.save();
-      
+
+      await payment.save({ transaction });
+
+      await StationBoyPaymentAllocation.update({
+        is_reconciled: 1,
+        reconciled_by: reconciledBy,
+        reconciled_at: new Date(),
+        reconciliation_remarks: remarks || 'Reconciled'
+      }, {
+        where: { payment_id: payment.id },
+        transaction
+      });
+
+      await transaction.commit();
+
       res.json({ success: true, message: 'Station Boy Payment reconciled successfully', data: payment });
     } catch (error) {
+      await transaction.rollback();
       console.error('Error reconciling station boy payment:', error);
       res.status(500).json({ success: false, error: error.message });
     }
   },
 
   unreconcileStationBoyPayment: async (req, res) => {
+    const transaction = await sequelizeTVL.transaction();
     try {
       const { id } = req.params;
-      
-      const payment = await StationBoyPayment.findByPk(id);
-      if (!payment) return res.status(404).json({ success: false, error: 'Station Boy Payment not found' });
-      
+
+      const payment = await StationBoyPayment.findByPk(id, { transaction });
+      if (!payment) {
+        await transaction.rollback();
+        return res.status(404).json({ success: false, error: 'Station Boy Payment not found' });
+      }
+
       payment.is_reconciled = 0;
       payment.reconciled_by = null;
       payment.reconciled_at = null;
       payment.reconciliation_remarks = null;
-      
-      await payment.save();
-      
+
+      await payment.save({ transaction });
+
+      await StationBoyPaymentAllocation.update({
+        is_reconciled: 0,
+        reconciled_by: null,
+        reconciled_at: null,
+        reconciliation_remarks: null
+      }, {
+        where: { payment_id: payment.id },
+        transaction
+      });
+
+      await transaction.commit();
+
       res.json({ success: true, message: 'Station Boy Payment unreconciled successfully', data: payment });
     } catch (error) {
+      await transaction.rollback();
       console.error('Error unreconciling station boy payment:', error);
       res.status(500).json({ success: false, error: error.message });
     }

@@ -74,6 +74,11 @@ const PassengerTVL = sequelizeTVL.define('psXpassenger', {
     defaultValue: 1,
     comment: 'Active Status'
   },
+  bl_bill_no: {
+    type: DataTypes.STRING(30),
+    allowNull: true,
+    comment: 'Bill number the ticket was billed under'
+  },
   // Audit fields
   edtm: {
     type: DataTypes.DATE,

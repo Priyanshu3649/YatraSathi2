@@ -87,6 +87,14 @@ const ReceiptForm = ({ onBack, autoFillData }) => {
     debounceMs: 500 
   });
 
+  const [accounts] = useState([
+    'Cash Account',
+    'Bank Account - SBI',
+    'Bank Account - HDFC',
+    'Customer Account',
+    'Supplier Account'
+  ]);
+
   // Field order for keyboard navigation context
   const fieldOrder = useMemo(() => [
     'date', 

@@ -149,6 +149,11 @@ import BillDetails from '../components/Billing/BillDetails';
 import CustomerLedger from './admin/CustomerLedger';
 import { customerAPI } from '../services/api';
 
+const money = (value) => Number(value || 0).toLocaleString('en-IN', {
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2
+});
+
 const Billing = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -177,6 +182,8 @@ const Billing = () => {
     totalServiceCharges: 0, 
     totalSBIncentive: 0, 
     totalGST: 0, 
+    grossAmount: 0,
+    cancellationAmount: 0,
     count: 0 
   });
   
@@ -208,17 +215,6 @@ const Billing = () => {
   // Cancellation modal state
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [showSplitModal, setShowSplitModal] = useState(false);
-  const [isCancelling, setIsCancelling] = useState(false);
-  const [cancelError, setCancelError] = useState('');
-  const [cancelFormData, setCancelFormData] = useState({
-    railwayCharges: 0,
-    agentCharges: 0,
-    reason: '',
-    cancellationDate: '',
-    approverUserId: '',
-    approverName: ''
-  });
-  const cancelModalRef = useRef(null);
   
   // Booking integration state
   const [bookingData, setBookingData] = useState(null);
@@ -291,7 +287,12 @@ const Billing = () => {
   
   const [stationBoys, setStationBoys] = useState([]);
   const [sbSearchTerm, setSbSearchTerm] = useState('');
-  const [sbDropdownOpen, setSbDropdownOpen] = useState(false);
+  const [sbDropdownOpen, setSbDropdownOpenState] = useState(false);
+  const [sbHighlightedIndex, setSbHighlightedIndexState] = useState(-1);
+  const sbOpenRef = useRef(false);
+  const sbHighlightRef = useRef(-1);
+  const setSbDropdown = (open) => { sbOpenRef.current = open; setSbDropdownOpenState(open); };
+  const setSbHighlight = (index) => { sbHighlightRef.current = index; setSbHighlightedIndexState(index); };
 
   // Fetch active station boys on mount
   
@@ -383,10 +384,85 @@ const Billing = () => {
     status: 'DRAFT'
   });
 
+  // Ref always holds the latest formData — avoids stale closure in async handlers
+  const formDataRef = useRef(formData);
+  useEffect(() => { formDataRef.current = formData; }, [formData]);
+
+  // PNR fetch status shown inline (replaces alert)
+  const [pnrFetchStatus, setPnrFetchStatus] = useState(null); // null | { type: 'success'|'error'|'loading', msg: string }
+  // Tracks the last PNR that was auto-fetched so typing/pasting doesn't refire calls
+  const lastFetchedPnrRef = useRef('');
+
   // Update search term when formData.stationBoy changes
   useEffect(() => {
     setSbSearchTerm(formData.stationBoy || '');
   }, [formData.stationBoy]);
+
+  const sbSuggestions = useMemo(
+    () => stationBoys.filter((sb) => (sb.name || '').toLowerCase().includes((sbSearchTerm || '').toLowerCase())),
+    [stationBoys, sbSearchTerm]
+  );
+
+  // The open/highlight state is mirrored in refs because a keydown handler reads
+  // render-closure state: two arrow presses inside one frame would otherwise both
+  // see index -1 and the second Enter would find nothing highlighted.
+  const selectStationBoy = (sb) => {
+    if (!sb) return;
+    setFormData((prev) => ({ ...prev, stationBoy: sb.name, stationBoyId: sb.id }));
+    setSbSearchTerm(sb.name);
+    setSbDropdown(false);
+    setSbHighlight(-1);
+  };
+
+  // Arrow keys walk the station boy suggestions: ArrowDown from a closed or
+  // unselected list lands on the first record, Enter accepts the highlighted
+  // one. While the list is visible Enter is consumed here so it cannot reach the
+  // page-level handlers that save the bill or jump to the receipt screen.
+  const handleStationBoyKeyDown = (e) => {
+    if (e.key === 'Escape') {
+      setSbDropdown(false);
+      setSbHighlight(-1);
+      e.target.blur();
+      return;
+    }
+
+    const count = sbSuggestions.length;
+
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      if (!isEditing || count === 0) return;
+      e.preventDefault();
+      e.stopPropagation();
+      if (!sbOpenRef.current) {
+        setSbDropdown(true);
+        setSbHighlight(0);
+        return;
+      }
+      const current = sbHighlightRef.current;
+      let next;
+      if (current < 0) {
+        next = e.key === 'ArrowDown' ? 0 : count - 1;
+      } else {
+        const stepped = e.key === 'ArrowDown' ? current + 1 : current - 1;
+        next = stepped < 0 ? count - 1 : stepped > count - 1 ? 0 : stepped;
+      }
+      setSbHighlight(next);
+      return;
+    }
+
+    if (e.key === 'Enter' && sbOpenRef.current) {
+      e.preventDefault();
+      e.stopPropagation();
+      const highlighted = sbHighlightRef.current;
+      const chosen = highlighted >= 0 && highlighted < count
+        ? sbSuggestions[highlighted]
+        : count === 1 ? sbSuggestions[0] : null;
+      if (chosen) selectStationBoy(chosen);
+      else setSbDropdown(false);
+      return;
+    }
+
+    handleEnhancedTabNavigation(e, 'stationBoy');
+  };
 
   // Initialize keyboard navigation
   useEffect(() => {
@@ -1103,7 +1179,6 @@ const Billing = () => {
       // Create the bill using the booking ID
       const billPayload = {
         bookingId: bookingId,
-        subBillNo: billData.subBillNo || '',
         customerName: billData.customerName || '',
         phoneNumber: billData.phoneNumber || '',
         stationBoy: billData.stationBoy || '',
@@ -1376,6 +1451,10 @@ const Billing = () => {
 
   const handleCancelBill = () => {
     if (selectedBill) {
+      if ((selectedBill.bl_billing_type || selectedBill.billingType) === 'C') {
+        alert('A cancellation document cannot be cancelled. Cancel the original reservation bill instead.');
+        return;
+      }
       if (selectedBill.status === 'CANCELLED' || selectedBill.bl_status === 'CANCELLED') {
         alert('This bill is already cancelled.');
         return;
@@ -1390,56 +1469,9 @@ const Billing = () => {
         alert('Cannot cancel: bill is paid or finalized.');
         return;
       }
-      setCancelFormData({
-        railwayCharges: 0,
-        agentCharges: 0,
-        reason: '',
-        cancellationDate: new Date().toISOString().slice(0, 10),
-        approverUserId: user?.us_usid || '',
-        approverName: [user?.us_fname, user?.us_lname].filter(Boolean).join(' ').trim() || user?.us_usid || ''
-      });
       setShowCancelModal(true);
-      // Focus will be handled by useEffect
     } else {
       alert('Please select a bill to cancel');
-    }
-  };
-
-  const handleCancelSave = async () => {
-    setCancelError('');
-    if (!cancelFormData.reason) {
-      setCancelError('Cancellation reason is required');
-      return;
-    }
-    if (!cancelFormData.cancellationDate) {
-      setCancelError('Cancellation date is required');
-      return;
-    }
-    if (!cancelFormData.approverUserId || !String(cancelFormData.approverUserId).trim()) {
-      setCancelError('Approver user id is required');
-      return;
-    }
-    if (!cancelFormData.approverName || !String(cancelFormData.approverName).trim()) {
-      setCancelError('Approver name is required');
-      return;
-    }
-
-    const totalCharges = (parseFloat(cancelFormData.railwayCharges) || 0) + (parseFloat(cancelFormData.agentCharges) || 0);
-    if (totalCharges > selectedBill.totalAmount) {
-      setCancelError('Total cancellation charges cannot exceed bill amount');
-      return;
-    }
-
-    try {
-      setIsCancelling(true);
-      await billingAPI.cancelBill(selectedBill.id, cancelFormData);
-      setShowCancelModal(false);
-      alert('Bill cancelled successfully');
-      fetchBills();
-    } catch (error) {
-      setCancelError('Error cancelling bill: ' + error.message);
-    } finally {
-      setIsCancelling(false);
     }
   };
 
@@ -1488,7 +1520,7 @@ const Billing = () => {
       id: bill.id,
       billDate: bill.billDate || '',
       bookingId: bill.bookingId || '',
-      subBillNo: bill.subBillNo || bill.bl_sub_bill_no || (bill.bl_bill_no ? `${bill.bl_bill_no}-A` : (bill.id ? `${bill.id}-A` : '-A')),
+      subBillNo: bill.subBillNo || bill.bl_sub_bill_no || '',
       customerName: bill.customerName || '',
       phoneNumber: bill.phoneNumber || '',
       stationBoy: bill.stationBoy || '',
@@ -1551,7 +1583,7 @@ const Billing = () => {
     setSelectedBill(null);
     setFormData({
       customerId: user?.us_usertype === 'customer' ? user.us_usid : '',
-      subBillNo: '-A',
+      subBillNo: '',
       customerName: '',
       phoneNumber: '',
       stationBoy: '',
@@ -1596,6 +1628,7 @@ const Billing = () => {
       remarks: ''
     });
     setIsEditing(true);
+    setPnrFetchStatus(null);
     
     setAuditData({
       enteredOn: '',
@@ -1743,6 +1776,16 @@ const Billing = () => {
   // Check if navigation buttons should be disabled
   const isFirstRecord = selectedBill && bills.length > 0 && 
     bills[0].id === selectedBill.id;
+  // Sums of the rows currently on screen. Cancellation documents (type C) carry
+  // negative amounts, so the page total is gross (R) minus every cancellation (C).
+  const pageTotals = useMemo(() => bills.reduce((acc, bill) => {
+    const amount = Number(bill.bl_total_amount) || 0;
+    acc.net += amount;
+    if ((bill.bl_billing_type || 'R') === 'R') acc.gross += amount;
+    else acc.cancelled += amount;
+    return acc;
+  }, { gross: 0, net: 0, cancelled: 0 }), [bills]);
+
   const isLastRecord = selectedBill && bills.length > 0 && 
     bills[bills.length - 1].id === selectedBill.id;
 
@@ -1765,16 +1808,8 @@ const Billing = () => {
       return;
     }
 
-    if (showCancelModal) {
-      if (e.key === 'Escape') {
-        e.preventDefault();
-        setShowCancelModal(false);
-      } else if (e.key === 'F10') {
-        e.preventDefault();
-        handleCancelSave();
-      }
-      return;
-    }
+    // The cancellation dialog owns its own keys (Esc/Enter) while it is open.
+    if (showCancelModal) return;
 
     const isInFormField = e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT' || e.target.tagName === 'TEXTAREA';
     if (!isInFormField && !showForm) {
@@ -1840,9 +1875,6 @@ const Billing = () => {
         // Note: Default browser tab behavior will be used
         break;
       case 'Enter':
-        // If we are in the cancellation modal, don't trigger general save
-        if (showCancelModal) return;
-
         e.preventDefault();
         // Save form on Enter
         if (isEditing) {
@@ -1862,50 +1894,6 @@ const Billing = () => {
     };
   }, [showForm, isEditing, selectedBill, showCancelModal]);
 
-  // Handle keyboard navigation in the cancellation modal
-  const handleCancelModalKeyDown = (e) => {
-    if (e.key === 'Tab') {
-      const focusableElements = cancelModalRef.current.querySelectorAll(
-        'input:not([disabled]), textarea:not([disabled]), button:not([disabled])'
-      );
-      const firstElement = focusableElements[0];
-      const lastElement = focusableElements[focusableElements.length - 1];
-
-      if (e.shiftKey) {
-        if (document.activeElement === firstElement) {
-          e.preventDefault();
-          lastElement.focus();
-        }
-      } else {
-        if (document.activeElement === lastElement) {
-          e.preventDefault();
-          firstElement.focus();
-        }
-      }
-    } else if (e.key === 'Enter' && e.target.tagName !== 'TEXTAREA') {
-      e.preventDefault();
-      const focusableElements = Array.from(cancelModalRef.current.querySelectorAll(
-        'input:not([disabled]), textarea:not([disabled]), button:not([disabled])'
-      ));
-      const currentIndex = focusableElements.indexOf(document.activeElement);
-      if (currentIndex > -1 && currentIndex < focusableElements.length - 1) {
-        focusableElements[currentIndex + 1].focus();
-      } else if (currentIndex === focusableElements.length - 1) {
-        handleCancelSave();
-      }
-    }
-  };
-
-  // Focus Railway Charges when modal opens
-  useEffect(() => {
-    if (showCancelModal && cancelModalRef.current) {
-      const firstInput = cancelModalRef.current.querySelector('input[name="railwayCharges"]');
-      if (firstInput) {
-        setTimeout(() => firstInput.focus(), 100);
-      }
-    }
-  }, [showCancelModal]);
-
   if (loading) {
     return (
       <div className="erp-admin-container">
@@ -1914,73 +1902,98 @@ const Billing = () => {
     );
   }
 
-    const handlePnrKeyDown = (e) => {
+  const handlePnrKeyDown = (e) => {
     if (e.key === 'Enter' || e.key === 'Tab') {
-      if (formData.pnrNumbers && formData.pnrNumbers.length === 10) {
+      // Read from ref so we always have the latest value even if closure is stale
+      const currentPnr = formDataRef.current.pnrNumbers || '';
+      if (/^\d{10}$/.test(currentPnr.trim())) {
         handleFetchBooking();
       }
       handleEnhancedTabNavigation(e, 'pnrNumbers');
     }
   };
 
-  const handleFetchBooking = async () => {
-    if (!formData.pnrNumbers && !formData.bookingId) {
-      alert('Please enter a PNR number or Booking ID to fetch data');
+  const handleFetchBooking = async (pnrOverride) => {
+    // Always read from ref — this is the latest formData regardless of closure age
+    const current = formDataRef.current;
+    const rawInput = String(pnrOverride ?? current.pnrNumbers ?? current.bookingId ?? '').trim();
+
+    if (!rawInput) {
+      setPnrFetchStatus({ type: 'error', msg: 'Please enter a PNR number' });
       return;
     }
 
+    const pnrList = rawInput
+      .split(',')
+      .map(s => s.trim())
+      .filter(Boolean);
+
+    if (pnrList.length === 0) return;
+
+    if (!pnrList.every(p => /^\d{10}$/.test(p))) {
+      setPnrFetchStatus({ type: 'error', msg: 'PNR must be exactly 10 digits' });
+      return;
+    }
+
+    setPnrFetchStatus({ type: 'loading', msg: 'Fetching PNR details...' });
+
     try {
-      const rawInput = formData.pnrNumbers || formData.bookingId || '';
-      // Support comma-separated multiple PNRs
-      const pnrList = rawInput
-        .split(',')
-        .map(s => s.trim())
-        .filter(Boolean);
-
-      if (pnrList.length === 0) return;
-
       if (pnrList.length === 1) {
+        // ── Single PNR ──────────────────────────────────────────────
         const id = pnrList[0];
         const data = await billingAPI.fetchBookingForBilling(id);
-        if (!data) throw new Error('No data returned for PNR/Booking');
+        if (!data) throw new Error('No data returned for PNR');
 
         let formattedJourneyDate = '';
         if (data.bl_journey_date) {
-          try {
-            const d = new Date(data.bl_journey_date);
+          const rawDate = String(data.bl_journey_date);
+          if (/^\d{4}-\d{2}-\d{2}/.test(rawDate)) {
+            formattedJourneyDate = rawDate.slice(0, 10);
+          } else {
+            const d = new Date(rawDate);
             if (!isNaN(d.getTime())) {
-              formattedJourneyDate = d.toISOString().split('T')[0];
+              const pad = (n) => String(n).padStart(2, '0');
+              formattedJourneyDate = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
             }
-          } catch (e) {
-            formattedJourneyDate = data.bl_journey_date;
           }
         }
 
-        const seats = data.bl_seatsAlloted || (data.passengers ? String(data.passengers.length) : '1');
-        const fare = data.bl_railway_fare !== undefined && data.bl_railway_fare !== null && data.bl_railway_fare !== '' && Number(data.bl_railway_fare) > 0 ? String(data.bl_railway_fare) : (data.bl_railway_fare ? String(data.bl_railway_fare) : '1850');
+        const passengers = Array.isArray(data.passengers) ? data.passengers : [];
+        const seats = data.bl_seatsAlloted || (passengers.length ? String(passengers.length) : '');
+        const fare = data.bl_railway_fare != null && Number(data.bl_railway_fare) > 0
+          ? String(data.bl_railway_fare)
+          : '';
 
+        // Functional updater — always applied on top of the true latest state
         setFormData(prev => ({
           ...prev,
-          bookingId: data.bl_booking_id || prev.bookingId,
-          pnrNumbers: data.bl_pnr || prev.pnrNumbers,
-          fromStation: data.bl_from_station || prev.fromStation,
-          toStation: data.bl_to_station || prev.toStation,
-          trainNumber: data.bl_train_no || prev.trainNumber,
-          reservationClass: data.bl_class || prev.reservationClass,
-          journeyDate: formattedJourneyDate || prev.journeyDate,
-          journeyTime: data.bl_journeyTime || prev.journeyTime,
-          pnrStatus: data.bl_pnrStatus || prev.pnrStatus || 'CNF',
-          coach: data.bl_coach || prev.coach,
-          pnrCoach: data.bl_coach || prev.pnrCoach,
-          berthNo: data.bl_berthNo || prev.berthNo,
-          pnrBerthNo: data.bl_berthNo || prev.pnrBerthNo,
-          seatsAlloted: seats || prev.seatsAlloted,
-          railwayFare: fare || prev.railwayFare,
-          passengerList: (data.passengers && data.passengers.length > 0) ? data.passengers : prev.passengerList
+          bookingId:        data.bl_booking_id != null  ? String(data.bl_booking_id)   : prev.bookingId,
+          pnrNumbers:       data.bl_pnr            || id,
+          customerName:     data.bl_customer_name  || prev.customerName,
+          phoneNumber:      data.bl_customer_phone || prev.phoneNumber,
+          fromStation:      data.bl_from_station   || '',
+          toStation:        data.bl_to_station     || '',
+          trainNumber:      data.bl_train_no       || '',
+          reservationClass: data.bl_class          || '',
+          journeyDate:      formattedJourneyDate,
+          journeyTime:      data.bl_journeyTime    || '',
+          pnrStatus:        data.bl_pnrStatus      || '',
+          coach:            data.bl_coach          || '',
+          pnrCoach:         data.bl_coach          || '',
+          berthNo:          data.bl_berthNo        || '',
+          pnrBerthNo:       data.bl_berthNo        || '',
+          seatsAlloted:     seats,
+          railwayFare:      fare,
+          advanceAmount:    data.advanceAmount      ? String(data.advanceAmount) : prev.advanceAmount,
+          paymentMode:      data.paymentMode       || prev.paymentMode,
+          paymentReference: data.paymentReference  || prev.paymentReference,
+          passengerList:    passengers,
         }));
-        alert('PNR details fetched and populated successfully!');
+
+        setPnrFetchStatus(null);
+
       } else {
-        // Multi-PNR: fetch all PNRs in parallel and aggregate
+        // ── Multi-PNR ────────────────────────────────────────────────
         const results = await Promise.allSettled(
           pnrList.map(pnr => billingAPI.fetchBookingForBilling(pnr))
         );
@@ -2004,65 +2017,71 @@ const Billing = () => {
         const berths = new Set();
         let primaryJourneyDate = '';
         let primaryJourneyTime = '';
-        let primaryStatus = 'CNF';
+        let primaryStatus = '';
 
         successfulData.forEach((d, pnrIdx) => {
           if (d.bl_railway_fare) totalFare += Number(d.bl_railway_fare);
           if (d.bl_from_station) fromStations.add(d.bl_from_station);
-          if (d.bl_to_station) toStations.add(d.bl_to_station);
-          if (d.bl_train_no) trainNumbers.add(d.bl_train_no);
-          if (d.bl_class) classes.add(d.bl_class);
-          if (d.bl_coach) coaches.add(d.bl_coach);
-          if (d.bl_berthNo) berths.add(d.bl_berthNo);
-          if (d.bl_pnrStatus) primaryStatus = d.bl_pnrStatus;
+          if (d.bl_to_station)   toStations.add(d.bl_to_station);
+          if (d.bl_train_no)     trainNumbers.add(d.bl_train_no);
+          if (d.bl_class)        classes.add(d.bl_class);
+          if (d.bl_coach)        coaches.add(d.bl_coach);
+          if (d.bl_berthNo)      berths.add(d.bl_berthNo);
+          if (d.bl_pnrStatus)    primaryStatus = d.bl_pnrStatus;
           if (!primaryJourneyTime && d.bl_journeyTime) primaryJourneyTime = d.bl_journeyTime;
 
           if (!primaryJourneyDate && d.bl_journey_date) {
-            try {
-              const jd = new Date(d.bl_journey_date);
-              if (!isNaN(jd.getTime())) primaryJourneyDate = jd.toISOString().split('T')[0];
-            } catch (e) {
-              primaryJourneyDate = d.bl_journey_date;
+            const rawDate = String(d.bl_journey_date);
+            if (/^\d{4}-\d{2}-\d{2}/.test(rawDate)) {
+              primaryJourneyDate = rawDate.slice(0, 10);
+            } else {
+              const jd = new Date(rawDate);
+              if (!isNaN(jd.getTime())) {
+                const pad = (n) => String(n).padStart(2, '0');
+                primaryJourneyDate = `${jd.getFullYear()}-${pad(jd.getMonth() + 1)}-${pad(jd.getDate())}`;
+              }
             }
           }
 
           if (d.passengers && Array.isArray(d.passengers)) {
             d.passengers.forEach(p => {
-              allPassengers.push({
-                ...p,
-                id: `pax_${pnrIdx}_${p.id || allPassengers.length}`
-              });
+              allPassengers.push({ ...p, id: `pax_${pnrIdx}_${p.id || allPassengers.length}` });
             });
             totalSeats += d.passengers.length;
-          } else if (d.bl_seatsAlloted) {
-            totalSeats += Number(d.bl_seatsAlloted) || 1;
           }
         });
 
+        const primaryData = successfulData[0];
+
         setFormData(prev => ({
           ...prev,
-          pnrNumbers: pnrList.join(', '),
-          railwayFare: String(totalFare || prev.railwayFare),
-          seatsAlloted: String(totalSeats || prev.seatsAlloted || 1),
-          fromStation: Array.from(fromStations).join(', ') || prev.fromStation,
-          toStation: Array.from(toStations).join(', ') || prev.toStation,
-          trainNumber: Array.from(trainNumbers).join(', ') || prev.trainNumber,
-          reservationClass: Array.from(classes).join(', ') || prev.reservationClass,
-          coach: Array.from(coaches).join(', ') || prev.coach,
-          pnrCoach: Array.from(coaches).join(', ') || prev.pnrCoach,
-          berthNo: Array.from(berths).join(', ') || prev.berthNo,
-          pnrBerthNo: Array.from(berths).join(', ') || prev.pnrBerthNo,
-          pnrStatus: primaryStatus || prev.pnrStatus || 'CNF',
-          journeyDate: primaryJourneyDate || prev.journeyDate,
-          journeyTime: primaryJourneyTime || prev.journeyTime,
-          passengerList: allPassengers.length > 0 ? allPassengers : prev.passengerList
+          pnrNumbers:       pnrList.join(', '),
+          customerName:     primaryData.bl_customer_name  || prev.customerName,
+          phoneNumber:      primaryData.bl_customer_phone || prev.phoneNumber,
+          railwayFare:      totalFare > 0 ? String(totalFare) : '',
+          seatsAlloted:     totalSeats > 0 ? String(totalSeats) : '',
+          fromStation:      Array.from(fromStations).join(', '),
+          toStation:        Array.from(toStations).join(', '),
+          trainNumber:      Array.from(trainNumbers).join(', '),
+          reservationClass: Array.from(classes).join(', '),
+          coach:            Array.from(coaches).join(', '),
+          pnrCoach:         Array.from(coaches).join(', '),
+          berthNo:          Array.from(berths).join(', '),
+          pnrBerthNo:       Array.from(berths).join(', '),
+          pnrStatus:        primaryStatus,
+          journeyDate:      primaryJourneyDate,
+          journeyTime:      primaryJourneyTime,
+          advanceAmount:    primaryData.advanceAmount ? String(primaryData.advanceAmount) : prev.advanceAmount,
+          paymentMode:      primaryData.paymentMode      || prev.paymentMode,
+          paymentReference: primaryData.paymentReference || prev.paymentReference,
+          passengerList:    allPassengers.length > 0 ? allPassengers : [],
         }));
 
-        alert(`Fetched and combined details for ${successfulData.length} PNR(s).\nTotal Fare: ₹${totalFare}, Total Passengers: ${totalSeats}`);
+        setPnrFetchStatus(null);
       }
     } catch (error) {
       console.error('Fetch booking error:', error);
-      alert(error.message || 'Failed to fetch booking data');
+      setPnrFetchStatus({ type: 'error', msg: error.message || 'Failed to fetch PNR data' });
     }
   };
 
@@ -2081,8 +2100,12 @@ const Billing = () => {
 
   const handleCancelBillConfirm = async (cancelData) => {
     try {
-      await billingAPI.cancelBill(selectedBill.bl_id || selectedBill.id, cancelData);
-      alert('Bill cancelled successfully');
+      const result = await billingAPI.cancelBill(selectedBill.bl_id || selectedBill.id, cancelData);
+      const doc = result.cancellationDocument || {};
+      alert(
+        `Cancellation document ${doc.entryNumber || result.cancellationDocument?.billNumber || ''} created ` +
+        `under bill ${doc.billNumber || ''}. Refund payable ₹${Number(result.refundAmount || 0).toFixed(2)}.`
+      );
       setShowCancelModal(false);
       fetchBills();
       setSelectedBill(null);
@@ -2272,17 +2295,46 @@ const Billing = () => {
               <label className="erp-form-label">Station Boy Name</label>
               
               <div style={{ position: 'relative', width: '100%' }}>
-                <input type="text" name="stationBoy" className="erp-input" value={sbSearchTerm} onChange={(e) => { const val = e.target.value; setSbSearchTerm(val); setSbDropdownOpen(true); setFormData({...formData, stationBoy: val, stationBoyId: ''}); }} onFocus={() => isEditing && setSbDropdownOpen(true)} onBlur={() => { setTimeout(() => { setSbDropdownOpen(false); const match = stationBoys.find(sb => sb.name.toLowerCase() === sbSearchTerm.toLowerCase()); if (match) { setFormData(prev => ({...prev, stationBoy: match.name, stationBoyId: match.id})); setSbSearchTerm(match.name); } }, 200); }} disabled={!isEditing} onKeyDown={(e) => { if (e.key === 'Escape') { setSbDropdownOpen(false); e.target.blur(); } else { handleEnhancedTabNavigation(e, 'stationBoy'); } }} placeholder="Enter or select station boy" />
+                <input
+                  type="text"
+                  name="stationBoy"
+                  className="erp-input"
+                  value={sbSearchTerm}
+                  onChange={(e) => { const val = e.target.value; setSbSearchTerm(val); setSbHighlight(-1); setSbDropdown(true); setFormData(prev => ({...prev, stationBoy: val, stationBoyId: ''})); }}
+                  onFocus={() => { if (isEditing) { setSbDropdown(true); setSbHighlight(-1); } }}
+                  onBlur={() => { setTimeout(() => { setSbDropdown(false); setSbHighlight(-1); const match = stationBoys.find(sb => sb.name.toLowerCase() === sbSearchTerm.toLowerCase()); if (match) { setFormData(prev => ({...prev, stationBoy: match.name, stationBoyId: match.id})); setSbSearchTerm(match.name); } }, 200); }}
+                  disabled={!isEditing}
+                  onKeyDown={handleStationBoyKeyDown}
+                  placeholder="Enter or select station boy"
+                />
                 {sbDropdownOpen && isEditing && (
                   <div className="erp-dropdown-menu" style={{ position: 'absolute', top: '100%', left: 0, right: 0, backgroundColor: '#fff', border: '1px solid #ccc', maxHeight: '150px', overflowY: 'auto', zIndex: 1000 }}>
-                    {stationBoys.filter(sb => sb.name.toLowerCase().includes(sbSearchTerm.toLowerCase())).map(sb => (
-                      <div key={sb.id} className="erp-dropdown-item" style={{ padding: '6px 10px', cursor: 'pointer', borderBottom: '1px solid #eee' }} onMouseDown={() => { setFormData(prev => ({...prev, stationBoy: sb.name, stationBoyId: sb.id})); setSbSearchTerm(sb.name); setSbDropdownOpen(false); }}>{sb.name}</div>
+                    {sbSuggestions.map((sb, idx) => (
+                      <div
+                        key={sb.id}
+                        className="erp-dropdown-item"
+                        ref={(node) => { if (idx === sbHighlightedIndex && node) node.scrollIntoView({ block: 'nearest' }); }}
+                        style={{
+                          padding: '6px 10px',
+                          cursor: 'pointer',
+                          borderBottom: '1px solid #eee',
+                          backgroundColor: idx === sbHighlightedIndex ? '#dbeafe' : '#fff',
+                          fontWeight: idx === sbHighlightedIndex ? 'bold' : 'normal'
+                        }}
+                        onMouseEnter={() => setSbHighlight(idx)}
+                        onMouseDown={() => selectStationBoy(sb)}
+                      >
+                        {sb.name}
+                      </div>
                     ))}
+                    {sbSuggestions.length === 0 && (
+                      <div style={{ padding: '6px 10px', color: '#64748b', fontSize: '12px' }}>No station boy matches “{sbSearchTerm}”</div>
+                    )}
                   </div>
                 )}
               </div>
               <label className="erp-form-label">Special ID</label>
-              <input type="text" name="specialId" className="erp-input" value={formData.specialId || ''} onChange={(e) => setFormData({...formData, specialId: e.target.value})} disabled={!isEditing} onKeyDown={(e) => handleEnhancedTabNavigation(e, 'specialId')} />
+              <input type="text" name="specialId" className="erp-input" value={formData.specialId || ''} onChange={(e) => setFormData(prev => ({...prev, specialId: e.target.value}))} disabled={!isEditing} onKeyDown={(e) => handleEnhancedTabNavigation(e, 'specialId')} />
               <label className="erp-form-label required">Bill ID</label>
               <input type="text" className="erp-input" value={formData.id || ''} readOnly disabled={!isEditing} />
               
@@ -2349,26 +2401,35 @@ const Billing = () => {
 
             {/* Row 2 */}
             <div className="erp-form-row-compact-5">
-              <label className="erp-form-label required">Sub Bill No</label>
-              <input type="text" name="subBillNo" className="erp-input" value={formData.subBillNo || ''} onChange={(e) => setFormData({...formData, subBillNo: e.target.value})} disabled={!isEditing} />
+              <label className="erp-form-label">Sub Bill No</label>
+              <input
+                type="text"
+                name="subBillNo"
+                className="erp-input"
+                value={formData.subBillNo || ''}
+                readOnly
+                disabled
+                placeholder="Auto-generated"
+                title="Derived by the server for split bills"
+              />
               <label className="erp-form-label required">Bill Date</label>
-              <input type="date" name="billDate" className="erp-input" value={formData.billDate ? String(formData.billDate).substring(0, 10) : ''} onChange={(e) => setFormData({...formData, billDate: e.target.value})} disabled={!isEditing} />
+              <input type="date" name="billDate" className="erp-input" value={formData.billDate ? String(formData.billDate).substring(0, 10) : ''} onChange={(e) => setFormData(prev => ({...prev, billDate: e.target.value}))} disabled={!isEditing} />
               <label className="erp-form-label required">Booking ID</label>
               <input type="text" name="bookingId" className="erp-input" value={formData.bookingId || ''} readOnly disabled={true} />
               <label className="erp-form-label">Status</label>
               <input type="text" className={`erp-input status-${(formData.status || 'DRAFT').toLowerCase()}`} value={formData.status || 'DRAFT'} readOnly disabled={true} style={{ fontWeight: 'bold' }} />
               <label className="erp-form-label required">Phone Number</label>
-              <input type="text" name="phoneNumber" className="erp-input" value={formData.phoneNumber || ''} onChange={(e) => setFormData({...formData, phoneNumber: e.target.value})} disabled={!isEditing} readOnly={billingMode === 'generate'} />
+              <input type="text" name="phoneNumber" className="erp-input" value={formData.phoneNumber || ''} onChange={(e) => setFormData(prev => ({...prev, phoneNumber: e.target.value}))} disabled={!isEditing} readOnly={billingMode === 'generate'} />
             </div>
 
             {/* Row 3 */}
             <div className="erp-form-row-compact-5">
               <label className="erp-form-label required">From Station</label>
-              <input type="text" name="fromStation" className="erp-input" value={formData.fromStation || ''} onChange={(e) => setFormData({...formData, fromStation: e.target.value})} disabled={!isEditing} readOnly={billingMode === 'generate'} />
+              <input type="text" name="fromStation" className="erp-input" value={formData.fromStation || ''} onChange={(e) => setFormData(prev => ({...prev, fromStation: e.target.value}))} disabled={!isEditing} readOnly={billingMode === 'generate'} />
               <label className="erp-form-label required">To Station</label>
-              <input type="text" name="toStation" className="erp-input" value={formData.toStation || ''} onChange={(e) => setFormData({...formData, toStation: e.target.value})} disabled={!isEditing} readOnly={billingMode === 'generate'} />
+              <input type="text" name="toStation" className="erp-input" value={formData.toStation || ''} onChange={(e) => setFormData(prev => ({...prev, toStation: e.target.value}))} disabled={!isEditing} readOnly={billingMode === 'generate'} />
               <label className="erp-form-label required">Ticket Type</label>
-              <select name="ticketType" className="erp-input" value={formData.ticketType || 'NORMAL'} onChange={(e) => setFormData({...formData, ticketType: e.target.value})} disabled={!isEditing || billingMode === 'generate'}>
+              <select name="ticketType" className="erp-input" value={formData.ticketType || 'NORMAL'} onChange={(e) => setFormData(prev => ({...prev, ticketType: e.target.value}))} disabled={!isEditing || billingMode === 'generate'}>
                 <option value="NORMAL">NORMAL</option>
                 <option value="TATKAL">TATKAL</option>
                 <option value="PREMIUM_TATKAL">PREMIUM TATKAL</option>
@@ -2380,52 +2441,67 @@ const Billing = () => {
                   name="pnrNumbers"
                   className="erp-input"
                   value={formData.pnrNumbers || ''}
-                  onChange={(e) => setFormData({...formData, pnrNumbers: e.target.value})}
-                  onBlur={(e) => {
-                    if (e.target.value && e.target.value.trim().length >= 10 && !formData.fromStation) {
-                      handleFetchBooking();
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    setFormData(prev => ({...prev, pnrNumbers: v}));
+                    setPnrFetchStatus(null);
+                    const trimmed = v.trim();
+                    // Fire the RailKit lookup automatically once a full 10-digit PNR is entered
+                    if (/^\d{10}$/.test(trimmed)) {
+                      if (lastFetchedPnrRef.current !== trimmed) {
+                        lastFetchedPnrRef.current = trimmed;
+                        handleFetchBooking(trimmed);
+                      }
+                    } else {
+                      lastFetchedPnrRef.current = '';
                     }
                   }}
                   disabled={!isEditing}
-                  placeholder="e.g. 2955375626, 1234567890"
+                  placeholder="Enter 10-digit PNR"
                   style={{ flex: 1, minWidth: '150px', fontWeight: '600' }}
                   onKeyDown={handlePnrKeyDown}
                 />
                 <button
                   type="button"
-                  onClick={handleFetchBooking}
-                  disabled={!isEditing}
+                  onClick={() => handleFetchBooking()}
+                  disabled={!isEditing || pnrFetchStatus?.type === 'loading'}
                   style={{
                     padding: '2px 10px',
-                    background: '#2563eb',
+                    background: pnrFetchStatus?.type === 'loading' ? '#93c5fd' : '#2563eb',
                     color: '#ffffff',
                     border: '1px solid #1d4ed8',
                     borderRadius: '4px',
-                    cursor: 'pointer',
+                    cursor: pnrFetchStatus?.type === 'loading' ? 'wait' : 'pointer',
                     whiteSpace: 'nowrap',
                     fontSize: '11px',
                     fontWeight: 'bold'
                   }}
                 >
-                  ⚡ Fetch PNR(s)
+                  {pnrFetchStatus?.type === 'loading' ? 'Fetching…' : '⚡ Fetch PNR(s)'}
                 </button>
               </div>
               <label className="erp-form-label">Railway Fare</label>
-              <input type="number" name="railwayFare" className="erp-input" value={formData.railwayFare || ''} onChange={(e) => setFormData({...formData, railwayFare: e.target.value})} disabled={!isEditing} onKeyDown={(e) => handleEnhancedTabNavigation(e, 'railwayFare')} />
+              <input type="number" name="railwayFare" className="erp-input" value={formData.railwayFare || ''} onChange={(e) => setFormData(prev => ({...prev, railwayFare: e.target.value}))} disabled={!isEditing} onKeyDown={(e) => handleEnhancedTabNavigation(e, 'railwayFare')} />
             </div>
+
+            {pnrFetchStatus?.type === 'error' && (
+              <div style={{ color: '#b91c1c', fontSize: '11px', fontWeight: '600', margin: '0 0 4px' }}>
+                {pnrFetchStatus.msg}
+              </div>
+            )}
 
             {/* Row 4 */}
             <div className="erp-form-row-compact-5">
               <label className="erp-form-label">Service Charges</label>
-              <input type="number" name="serviceCharges" className="erp-input" value={formData.serviceCharges || ''} onChange={(e) => setFormData({...formData, serviceCharges: e.target.value})} disabled={!isEditing} onKeyDown={(e) => handleEnhancedTabNavigation(e, 'serviceCharges')} />
+              <input type="number" name="serviceCharges" className="erp-input" value={formData.serviceCharges || ''} onChange={(e) => setFormData(prev => ({...prev, serviceCharges: e.target.value}))} disabled={!isEditing} onKeyDown={(e) => handleEnhancedTabNavigation(e, 'serviceCharges')} />
               <label className="erp-form-label">Station Boy Incentive</label>
-              <input type="number" name="stationBoyIncentive" className="erp-input" value={formData.stationBoyIncentive || ''} onChange={(e) => setFormData({...formData, stationBoyIncentive: e.target.value})} disabled={!isEditing} onKeyDown={(e) => handleEnhancedTabNavigation(e, 'stationBoyIncentive')} />
+              <input type="number" name="stationBoyIncentive" className="erp-input" value={formData.stationBoyIncentive || ''} onChange={(e) => setFormData(prev => ({...prev, stationBoyIncentive: e.target.value}))} disabled={!isEditing} onKeyDown={(e) => handleEnhancedTabNavigation(e, 'stationBoyIncentive')} />
               <label className="erp-form-label">Misc. Charges</label>
-              <input type="number" name="miscCharges" className="erp-input" value={formData.miscCharges || ''} onChange={(e) => setFormData({...formData, miscCharges: e.target.value})} disabled={!isEditing} onKeyDown={(e) => handleEnhancedTabNavigation(e, 'miscCharges')} />
+              <input type="number" name="miscCharges" className="erp-input" value={formData.miscCharges || ''} onChange={(e) => setFormData(prev => ({...prev, miscCharges: e.target.value}))} disabled={!isEditing} onKeyDown={(e) => handleEnhancedTabNavigation(e, 'miscCharges')} />
               <label className="erp-form-label">Delivery Charges</label>
-              <input type="number" name="deliveryCharges" className="erp-input" value={formData.deliveryCharges || ''} onChange={(e) => setFormData({...formData, deliveryCharges: e.target.value})} disabled={!isEditing} onKeyDown={(e) => handleEnhancedTabNavigation(e, 'deliveryCharges')} />
+              <input type="number" name="deliveryCharges" className="erp-input" value={formData.deliveryCharges || ''} onChange={(e) => setFormData(prev => ({...prev, deliveryCharges: e.target.value}))} disabled={!isEditing} onKeyDown={(e) => handleEnhancedTabNavigation(e, 'deliveryCharges')} />
               <label className="erp-form-label">GST Type</label>
-              <select name="gstType" className="erp-input" value={formData.gstType || ''} onChange={(e) => setFormData({...formData, gstType: e.target.value})} disabled={!isEditing} onKeyDown={(e) => handleEnhancedTabNavigation(e, 'gstType')}>
+              <select name="gstType" className="erp-input" value={formData.gstType || ''} onChange={(e) => setFormData(prev => ({...prev, gstType: e.target.value}))} disabled={!isEditing} onKeyDown={(e) => handleEnhancedTabNavigation(e, 'gstType')}>
                 <option value="">Select GST Type</option>
                 <option value="EXCLUSIVE">EXCLUSIVE</option>
                 <option value="INCLUSIVE">INCLUSIVE</option>
@@ -2436,16 +2512,16 @@ const Billing = () => {
             {/* Row 5 */}
             <div className="erp-form-row-compact-5">
               <label className="erp-form-label">GST</label>
-              <input type="number" name="gst" className="erp-input" value={formData.gst || ''} onChange={(e) => setFormData({...formData, gst: e.target.value})} disabled={!isEditing} onKeyDown={(e) => handleEnhancedTabNavigation(e, 'gst')} />
+              <input type="number" name="gst" className="erp-input" value={formData.gst || ''} onChange={(e) => setFormData(prev => ({...prev, gst: e.target.value}))} disabled={!isEditing} onKeyDown={(e) => handleEnhancedTabNavigation(e, 'gst')} />
               <label className="erp-form-label">Surcharge</label>
-              <input type="number" name="surcharge" className="erp-input" value={formData.surcharge || ''} onChange={(e) => setFormData({...formData, surcharge: e.target.value})} disabled={!isEditing} onKeyDown={(e) => handleEnhancedTabNavigation(e, 'surcharge')} />
+              <input type="number" name="surcharge" className="erp-input" value={formData.surcharge || ''} onChange={(e) => setFormData(prev => ({...prev, surcharge: e.target.value}))} disabled={!isEditing} onKeyDown={(e) => handleEnhancedTabNavigation(e, 'surcharge')} />
               <label className="erp-form-label">Account (Dr/Cr)</label>
-              <select name="paymentAccount" className="erp-input" value={formData.paymentAccount || 'Bank'} onChange={(e) => setFormData({...formData, paymentAccount: e.target.value})} disabled={!isEditing} onKeyDown={(e) => handleEnhancedTabNavigation(e, 'paymentAccount')}>
+              <select name="paymentAccount" className="erp-input" value={formData.paymentAccount || 'Bank'} onChange={(e) => setFormData(prev => ({...prev, paymentAccount: e.target.value}))} disabled={!isEditing} onKeyDown={(e) => handleEnhancedTabNavigation(e, 'paymentAccount')}>
                 <option value="Bank">Bank</option>
                 <option value="Cash">Cash</option>
               </select>
               <label className="erp-form-label">Payment Mode</label>
-              <select name="paymentMode" className="erp-input" value={formData.paymentMode || ''} onChange={(e) => setFormData({...formData, paymentMode: e.target.value})} disabled={!isEditing} onKeyDown={(e) => handleEnhancedTabNavigation(e, 'paymentMode')}>
+              <select name="paymentMode" className="erp-input" value={formData.paymentMode || ''} onChange={(e) => setFormData(prev => ({...prev, paymentMode: e.target.value}))} disabled={!isEditing} onKeyDown={(e) => handleEnhancedTabNavigation(e, 'paymentMode')}>
                 <option value="">Select Mode</option>
                 <option value="CASH">CASH</option>
                 <option value="UPI">UPI</option>
@@ -2453,27 +2529,27 @@ const Billing = () => {
                 <option value="CARD">CARD</option>
               </select>
               <label className="erp-form-label">Advance Amount</label>
-              <input type="number" name="advanceAmount" className="erp-input" value={formData.advanceAmount || ''} onChange={(e) => setFormData({...formData, advanceAmount: e.target.value})} disabled={!isEditing} onKeyDown={(e) => handleEnhancedTabNavigation(e, 'advanceAmount')} />
+              <input type="number" name="advanceAmount" className="erp-input" value={formData.advanceAmount || ''} onChange={(e) => setFormData(prev => ({...prev, advanceAmount: e.target.value}))} disabled={!isEditing} onKeyDown={(e) => handleEnhancedTabNavigation(e, 'advanceAmount')} />
             </div>
 
             {/* Row 6 */}
             <div className="erp-form-row-compact-5">
               <label className="erp-form-label">UTR/Reference No</label>
-              <input type="text" name="paymentReference" className="erp-input" value={formData.paymentReference || ''} onChange={(e) => setFormData({...formData, paymentReference: e.target.value})} disabled={!isEditing} onKeyDown={(e) => handleEnhancedTabNavigation(e, 'paymentReference')} />
+              <input type="text" name="paymentReference" className="erp-input" value={formData.paymentReference || ''} onChange={(e) => setFormData(prev => ({...prev, paymentReference: e.target.value}))} disabled={!isEditing} onKeyDown={(e) => handleEnhancedTabNavigation(e, 'paymentReference')} />
               <label className="erp-form-label">Entered By</label>
-              <input type="text" name="enteredBy" className="erp-input" value={formData.enteredBy || ''} onChange={(e) => setFormData({...formData, enteredBy: e.target.value})} disabled={!isEditing} onKeyDown={(e) => handleEnhancedTabNavigation(e, 'enteredBy')} />
+              <input type="text" name="enteredBy" className="erp-input" value={formData.enteredBy || ''} onChange={(e) => setFormData(prev => ({...prev, enteredBy: e.target.value}))} disabled={!isEditing} onKeyDown={(e) => handleEnhancedTabNavigation(e, 'enteredBy')} />
               <label className="erp-form-label required">Journey Date</label>
-              <input type="date" name="journeyDate" className="erp-input" value={formData.journeyDate ? String(formData.journeyDate).substring(0, 10) : ''} onChange={(e) => setFormData({...formData, journeyDate: e.target.value})} disabled={!isEditing} readOnly={billingMode === 'generate'} />
+              <input type="date" name="journeyDate" className="erp-input" value={formData.journeyDate ? String(formData.journeyDate).substring(0, 10) : ''} onChange={(e) => setFormData(prev => ({...prev, journeyDate: e.target.value}))} disabled={!isEditing} readOnly={billingMode === 'generate'} />
               <label className="erp-form-label">Journey Time</label>
-              <input type="time" name="journeyTime" className="erp-input" value={formData.journeyTime || ''} onChange={(e) => setFormData({...formData, journeyTime: e.target.value})} disabled={!isEditing} />
+              <input type="time" name="journeyTime" className="erp-input" value={formData.journeyTime || ''} onChange={(e) => setFormData(prev => ({...prev, journeyTime: e.target.value}))} disabled={!isEditing} />
               <label className="erp-form-label required">Train Number</label>
-              <input type="text" name="trainNumber" className="erp-input" value={formData.trainNumber || ''} onChange={(e) => setFormData({...formData, trainNumber: e.target.value})} disabled={!isEditing} />
+              <input type="text" name="trainNumber" className="erp-input" value={formData.trainNumber || ''} onChange={(e) => setFormData(prev => ({...prev, trainNumber: e.target.value}))} disabled={!isEditing} />
             </div>
 
             {/* Row 7 */}
             <div className="erp-form-row-compact-5">
               <label className="erp-form-label required">Reservation Class</label>
-              <select name="reservationClass" className="erp-input" value={formData.reservationClass || '3A'} onChange={(e) => setFormData({...formData, reservationClass: e.target.value})} disabled={!isEditing || billingMode === 'generate'}>
+              <select name="reservationClass" className="erp-input" value={formData.reservationClass || '3A'} onChange={(e) => setFormData(prev => ({...prev, reservationClass: e.target.value}))} disabled={!isEditing || billingMode === 'generate'}>
                 <option value="SL">SL - Sleeper Class</option>
                 <option value="2S">2S - Second Seating</option>
                 <option value="3A">3A - Third AC</option>
@@ -2491,9 +2567,9 @@ const Billing = () => {
                 <option value="VA">VA - Vistadome AC</option>
               </select>
               <label className="erp-form-label">Seat(s) Allocated</label>
-              <input type="text" name="seatsAlloted" className="erp-input" value={formData.seatsAlloted || ''} onChange={(e) => setFormData({...formData, seatsAlloted: e.target.value})} disabled={!isEditing} />
+              <input type="text" name="seatsAlloted" className="erp-input" value={formData.seatsAlloted || ''} onChange={(e) => setFormData(prev => ({...prev, seatsAlloted: e.target.value}))} disabled={!isEditing} />
               <label className="erp-form-label">PNR Status</label>
-              <select name="pnrStatus" className="erp-input" value={formData.pnrStatus || 'CNF'} onChange={(e) => setFormData({...formData, pnrStatus: e.target.value})} disabled={!isEditing}>
+              <select name="pnrStatus" className="erp-input" value={formData.pnrStatus || 'CNF'} onChange={(e) => setFormData(prev => ({...prev, pnrStatus: e.target.value}))} disabled={!isEditing}>
                 <option value="CNF">CNF - Confirmed</option>
                 <option value="WL">WL - Waiting List</option>
                 <option value="RAC">RAC - Reservation Against Cancellation</option>
@@ -2503,15 +2579,15 @@ const Billing = () => {
                 <option value="GNWL">GNWL - General Waiting List</option>
               </select>
               <label className="erp-form-label">PNR Coach</label>
-              <input type="text" name="coach" className="erp-input" value={formData.coach || ''} onChange={(e) => setFormData({...formData, coach: e.target.value})} disabled={!isEditing} />
+              <input type="text" name="coach" className="erp-input" value={formData.coach || ''} onChange={(e) => setFormData(prev => ({...prev, coach: e.target.value}))} disabled={!isEditing} />
               <label className="erp-form-label">PNR Berth No</label>
-              <input type="text" name="berthNo" className="erp-input" value={formData.berthNo || ''} onChange={(e) => setFormData({...formData, berthNo: e.target.value})} disabled={!isEditing} />
+              <input type="text" name="berthNo" className="erp-input" value={formData.berthNo || ''} onChange={(e) => setFormData(prev => ({...prev, berthNo: e.target.value}))} disabled={!isEditing} />
             </div>
 
             {/* Row 8 */}
             <div className="erp-form-row-compact-5">
               <label className="erp-form-label">Special Request</label>
-              <input type="text" name="remarks" className="erp-input" value={formData.remarks || ''} onChange={(e) => setFormData({...formData, remarks: e.target.value})} disabled={!isEditing} />
+              <input type="text" name="remarks" className="erp-input" value={formData.remarks || ''} onChange={(e) => setFormData(prev => ({...prev, remarks: e.target.value}))} disabled={!isEditing} />
               <label className="erp-form-label">Total Amount</label>
               <input type="number" name="totalAmount" className="erp-input" value={formData.totalAmount ? Number(formData.totalAmount).toFixed(2) : '0.00'} readOnly disabled={true} style={{ fontWeight: 'bold', fontSize: '14px', background: '#e8f5e9' }} />
               <label className="erp-form-label">Balance Amount</label>
@@ -2600,7 +2676,7 @@ const Billing = () => {
                         name="newPassengerName" 
                         className="erp-input" 
                         value={formData.newPassengerName || ''} 
-                        onChange={(e) => setFormData({...formData, newPassengerName: e.target.value})}
+                        onChange={(e) => setFormData(prev => ({...prev, newPassengerName: e.target.value}))}
                         placeholder="Name"
                         style={{ flex: 1, padding: '2px', fontSize: '11px' }}
                       />
@@ -2609,7 +2685,7 @@ const Billing = () => {
                         name="newPassengerAge" 
                         className="erp-input" 
                         value={formData.newPassengerAge || ''} 
-                        onChange={(e) => setFormData({...formData, newPassengerAge: e.target.value})}
+                        onChange={(e) => setFormData(prev => ({...prev, newPassengerAge: e.target.value}))}
                         placeholder="Age"
                         style={{ flex: 1, padding: '2px', fontSize: '11px' }}
                       />
@@ -2617,7 +2693,7 @@ const Billing = () => {
                         name="newPassengerGender" 
                         className="erp-input" 
                         value={formData.newPassengerGender || ''} 
-                        onChange={(e) => setFormData({...formData, newPassengerGender: e.target.value})}
+                        onChange={(e) => setFormData(prev => ({...prev, newPassengerGender: e.target.value}))}
                         style={{ flex: 1, padding: '2px', fontSize: '11px' }}
                       >
                         <option value="">Select</option>
@@ -2630,7 +2706,7 @@ const Billing = () => {
                         name="newPassengerBerth" 
                         className="erp-input" 
                         value={formData.newPassengerBerth || ''} 
-                        onChange={(e) => setFormData({...formData, newPassengerBerth: e.target.value})}
+                        onChange={(e) => setFormData(prev => ({...prev, newPassengerBerth: e.target.value}))}
                         placeholder="Berth"
                         style={{ flex: 1, padding: '2px', fontSize: '11px' }}
                       />
@@ -2646,14 +2722,14 @@ const Billing = () => {
                               berth: formData.newPassengerBerth
                             };
                             
-                            setFormData({
-                              ...formData,
-                              passengerList: [...(formData.passengerList || []), newPassenger],
+                            setFormData(prev => ({
+                              ...prev,
+                              passengerList: [...(prev.passengerList || []), newPassenger],
                               newPassengerName: '',
                               newPassengerAge: '',
                               newPassengerGender: '',
                               newPassengerBerth: ''
-                            });
+                            }));
                           }
                         }}
                       >
@@ -2715,6 +2791,7 @@ const Billing = () => {
                           </div>
                         </th>
                         <th style={{ width: '80px', cursor: 'pointer', userSelect: 'none' }} onClick={handleHeaderToggleClick} title="Toggle Active/Reconciled">Bill ID ↕</th>
+                        <th style={{ width: '50px' }} title="R = Reservation bill, C = Cancellation document">Type</th>
                         <th style={{ width: '80px' }}>Sub Bill No</th>
                         <th style={{ width: '80px', cursor: 'pointer', userSelect: 'none' }} onClick={handleHeaderToggleClick} title="Toggle Active/Reconciled">Bill Date ↕</th>
                         <th style={{ width: '80px' }}>Booking ID</th>
@@ -2765,6 +2842,19 @@ const Billing = () => {
                           </select>
                         </td>
                         <td><input type="text" className="inline-filter-input" value={inlineFilters['bl_bill_no'] || ''} onChange={(e) => handleInlineFilterChange('bl_bill_no', e.target.value)} placeholder="Filter..." style={{ width: '100%', padding: '2px', fontSize: '12px' }} /></td>
+                        <td style={{ padding: '2px' }}>
+                          <select
+                            value={inlineFilters['bl_billing_type'] || ''}
+                            onChange={(e) => handleInlineFilterChange('bl_billing_type', e.target.value)}
+                            className="inline-filter-input"
+                            style={{ width: '100%', padding: '2px', fontSize: '10px', border: '1px solid #ddd', cursor: 'pointer', textAlign: 'center' }}
+                            title="Filter by billing type"
+                          >
+                            <option value="">All</option>
+                            <option value="R">R</option>
+                            <option value="C">C</option>
+                          </select>
+                        </td>
                         <td><input type="text" className="inline-filter-input" value={inlineFilters['bl_sub_bill_no'] || ''} onChange={(e) => handleInlineFilterChange('bl_sub_bill_no', e.target.value)} placeholder="Filter..." style={{ width: '100%', padding: '2px', fontSize: '12px' }} /></td>
                         <td><input type="date" className="inline-filter-input" value={inlineFilters['bl_billing_date'] || ''} onChange={(e) => handleInlineFilterChange('bl_billing_date', e.target.value)} style={{ width: '100%', padding: '2px', fontSize: '12px' }} /></td>
                         <td><input type="text" className="inline-filter-input" value={inlineFilters['bl_booking_id'] || ''} onChange={(e) => handleInlineFilterChange('bl_booking_id', e.target.value)} placeholder="Filter..." style={{ width: '100%', padding: '2px', fontSize: '12px' }} /></td>
@@ -2818,6 +2908,9 @@ const Billing = () => {
                             />
                           </td>
                           <td>{bill.bl_bill_no || bill.bill_no || ''}</td>
+                          <td style={{ textAlign: 'center', fontWeight: 'bold', color: bill.bl_billing_type === 'C' ? '#d32f2f' : '#2e7d32' }} title={bill.bl_entry_no || ''}>
+                            {bill.bl_billing_type || 'R'}
+                          </td>
                           <td>{bill.bl_sub_bill_no || bill.sub_bill_no || ''}</td>
                           <td>{bill.bl_billing_date ? new Date(bill.bl_billing_date).toLocaleDateString() : ''}</td>
                           <td>{bill.bl_booking_id || bill.booking_id || ''}</td>
@@ -2848,12 +2941,14 @@ const Billing = () => {
                           <td>{bill.bl_station_boy || bill.station_boy || ''}</td>
                           <td>{bill.bl_special_id || bill.special_id || ''}</td>
                           <td>{bill.bl_created_by || bill.created_by || ''}</td>
-                          <td>{bill.bl_total_amount || bill.total_amount || ''}</td>
+                          <td style={{ color: Number(bill.bl_total_amount) < 0 ? '#d32f2f' : undefined }}>
+                            {bill.bl_total_amount ?? bill.total_amount ?? ''}
+                          </td>
                         </tr>
                       ))}
                       {bills.length === 0 && (
                         <tr>
-                          <td colSpan="33" style={{ textAlign: 'center', padding: '20px' }}>
+                          <td colSpan="34" style={{ textAlign: 'center', padding: '20px' }}>
                             {bills.length === 0 ? 'No billing records found.' : 'No records match the current filters.'}
                           </td>
                         </tr>
@@ -2871,10 +2966,12 @@ const Billing = () => {
                   right: 0,
                   zIndex: 200,
                 }}>
-                  {/* Totals summary bar */}
+                  {/* Totals summary bar. Gross = reservation (R) rows, net = R plus
+                      the negative cancellation (C) documents. */}
                   <div style={{
                     display: 'flex',
-                    justifyContent: 'space-between',
+                    flexWrap: 'wrap',
+                    gap: '4px 18px',
                     alignItems: 'center',
                     padding: '3px 12px',
                     backgroundColor: '#5a6268',
@@ -2883,28 +2980,28 @@ const Billing = () => {
                     fontWeight: 'bold',
                     color: '#ffffff',
                   }}>
-                    <div style={{ display: 'flex', gap: '20px' }}>
-                      <span>TOTAL RECORDS: <span style={{ color: '#ffcc00' }}>{aggregates?.count ?? bills.length}</span></span>
-                      <span>DISPLAYED: <span style={{ color: '#ffcc00' }}>{bills.length}</span></span>
-                    </div>
-                    <div style={{ display: 'flex', gap: '20px', alignItems: 'center' }}>
-                      <span>FARE: <span style={{ color: '#ffcc00' }}>₹{Number(aggregates?.totalFare || 0).toLocaleString()}</span></span>
-                      <span>SRV: <span style={{ color: '#ffcc00' }}>₹{Number(aggregates?.totalServiceCharges || 0).toLocaleString()}</span></span>
-                      <span>SBI: <span style={{ color: '#ffcc00' }}>₹{Number(aggregates?.totalSBIncentive || 0).toLocaleString()}</span></span>
-                      <span style={{ marginLeft: '10px' }}>NET TOTAL:</span>
-                      <div style={{
+                    <span>RECORDS: <span style={{ color: '#ffcc00' }}>{aggregates?.count ?? bills.length}</span></span>
+                    <span>DISPLAYED: <span style={{ color: '#ffcc00' }}>{bills.length}</span></span>
+                    <span>FARE: <span style={{ color: '#ffcc00' }}>₹{money(aggregates?.totalFare)}</span></span>
+                    <span>SRV: <span style={{ color: '#ffcc00' }}>₹{money(aggregates?.totalServiceCharges)}</span></span>
+                    <span>SBI: <span style={{ color: '#ffcc00' }}>₹{money(aggregates?.totalSBIncentive)}</span></span>
+                    <span title="Reservation (R) rows minus cancellation (C) documents, across every record matching the current filters">
+                      GROSS (R): <span style={{ color: '#ffcc00' }}>₹{money(aggregates?.grossAmount)}</span>
+                      {' · '}CANC (C): <span style={{ color: '#ff6b6b' }}>₹{money(aggregates?.cancellationAmount)}</span>
+                      {' · '}NET:
+                      <span style={{
+                        marginLeft: '4px',
                         backgroundColor: '#343a40',
-                        padding: '2px 10px',
+                        padding: '1px 8px',
                         border: '1px inset #212529',
-                        minWidth: '120px',
-                        textAlign: 'right',
                         color: '#00ff00',
-                        fontSize: '13px',
                         fontFamily: 'monospace',
-                      }}>
-                        ₹{Number(aggregates?.totalAmount || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                      </div>
-                    </div>
+                      }}>₹{money(aggregates?.totalAmount)}</span>
+                    </span>
+                    <span title="Same figures for the rows currently on this page">
+                      PAGE: GROSS ₹{money(pageTotals.gross)}
+                      {' · '}NET <span style={{ color: pageTotals.net < 0 ? '#ff6b6b' : '#ffcc00' }}>₹{money(pageTotals.net)}</span>
+                    </span>
                   </div>
 
                   {/* Pagination bar */}
@@ -3031,185 +3128,6 @@ const Billing = () => {
           onCancel={handleSaveCancel}
           message="Save Bill?"
         />
-      )}
-
-      {/* Cancellation Modal - Fully Accessible */}
-      {showCancelModal && selectedBill && (
-        <div 
-          className="erp-modal-overlay" 
-          onClick={(e) => e.target === e.currentTarget && setShowCancelModal(false)}
-          onKeyDown={(e) => e.key === 'Escape' && setShowCancelModal(false)}
-        >
-          <div 
-            className="erp-modal" 
-            style={{ maxWidth: '550px' }} 
-            ref={cancelModalRef} 
-            onKeyDown={handleCancelModalKeyDown}
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="cancel-modal-title"
-          >
-            <div className="erp-modal-header">
-              <h3 id="cancel-modal-title">🚫 Cancel Bill - {selectedBill.billNo || selectedBill.id}</h3>
-              <button 
-                className="erp-modal-close" 
-                onClick={() => setShowCancelModal(false)}
-                aria-label="Close modal"
-              >
-                ×
-              </button>
-            </div>
-            
-            <div className="erp-modal-body">
-              {cancelError && (
-                <div className="erp-error-message" style={{ margin: '0 0 15px 0', padding: '10px', background: '#ffebee', color: '#c62828', border: '1px solid #ef9a9a', borderRadius: '4px' }}>
-                  {cancelError}
-                </div>
-              )}
-              {/* Summary Section (Read-only) */}
-              <div className="erp-container" style={{ marginBottom: '15px', padding: '10px', background: '#f8f9fa' }}>
-                <div className="erp-form-row-compact-2">
-                  <div>
-                    <label className="erp-form-label">Booking ID</label>
-                    <div className="erp-value-text">{selectedBill.bookingId}</div>
-                  </div>
-                  <div>
-                    <label className="erp-form-label">Customer</label>
-                    <div className="erp-value-text">{selectedBill.customerName}</div>
-                  </div>
-                </div>
-                <div className="erp-form-row-compact-2" style={{ marginTop: '8px' }}>
-                  <div>
-                    <label className="erp-form-label">Total Amount</label>
-                    <div className="erp-value-text">₹{parseFloat(selectedBill.totalAmount).toFixed(2)}</div>
-                  </div>
-                  <div>
-                    <label className="erp-form-label">Amount Paid</label>
-                    <div className="erp-value-text">₹{parseFloat(selectedBill.amountReceived || 0).toFixed(2)}</div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Editable Charges Section */}
-              <div className="erp-form-section">
-                <div className="erp-form-group" style={{ marginBottom: '12px' }}>
-                  <label className="erp-form-label required">Cancellation date</label>
-                  <input
-                    type="date"
-                    className="erp-input"
-                    value={cancelFormData.cancellationDate}
-                    onChange={(e) => setCancelFormData({ ...cancelFormData, cancellationDate: e.target.value })}
-                    disabled={isCancelling}
-                    required
-                  />
-                </div>
-                <div className="erp-form-group" style={{ marginBottom: '12px' }}>
-                  <label className="erp-form-label required">Approver user id</label>
-                  <input
-                    type="text"
-                    className="erp-input"
-                    value={cancelFormData.approverUserId}
-                    onChange={(e) => setCancelFormData({ ...cancelFormData, approverUserId: e.target.value })}
-                    disabled={isCancelling}
-                    placeholder="e.g. ADM001"
-                    required
-                  />
-                </div>
-                <div className="erp-form-group" style={{ marginBottom: '12px' }}>
-                  <label className="erp-form-label required">Approver name</label>
-                  <input
-                    type="text"
-                    className="erp-input"
-                    value={cancelFormData.approverName}
-                    onChange={(e) => setCancelFormData({ ...cancelFormData, approverName: e.target.value })}
-                    disabled={isCancelling}
-                    placeholder="Authorizing manager / accounts lead"
-                    required
-                  />
-                </div>
-                <div className="erp-form-group" style={{ marginBottom: '12px' }}>
-                  <label className="erp-form-label required">Railway Cancellation Charge (₹)</label>
-                  <input
-                    type="number"
-                    name="railwayCharges"
-                    className="erp-input"
-                    value={cancelFormData.railwayCharges}
-                    onChange={(e) => setCancelFormData({...cancelFormData, railwayCharges: e.target.value})}
-                    placeholder="0.00"
-                    min="0"
-                    step="0.01"
-                    disabled={isCancelling}
-                    autoFocus
-                    required
-                  />
-                </div>
-                <div className="erp-form-group" style={{ marginBottom: '12px' }}>
-                  <label className="erp-form-label required">Agent Cancellation Charge (₹)</label>
-                  <input
-                    type="number"
-                    name="agentCharges"
-                    className="erp-input"
-                    value={cancelFormData.agentCharges}
-                    onChange={(e) => setCancelFormData({...cancelFormData, agentCharges: e.target.value})}
-                    placeholder="0.00"
-                    min="0"
-                    step="0.01"
-                    disabled={isCancelling}
-                    required
-                  />
-                </div>
-                <div className="erp-form-group">
-                  <label className="erp-form-label required">Cancellation Reason</label>
-                  <textarea
-                    className="erp-input"
-                    value={cancelFormData.reason}
-                    onChange={(e) => setCancelFormData({...cancelFormData, reason: e.target.value})}
-                    placeholder="Provide reason for cancellation..."
-                    rows="3"
-                    disabled={isCancelling}
-                    required
-                  />
-                </div>
-              </div>
-
-              {/* Auto Calculations Section */}
-              <div style={{ marginTop: '15px', padding: '12px', background: '#fff3cd', border: '1px solid #ffeeba', borderRadius: '4px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '5px' }}>
-                  <span style={{ fontSize: '12px', fontWeight: 'bold' }}>Total Charges:</span>
-                  <span style={{ fontSize: '14px', color: '#d32f2f', fontWeight: 'bold' }}>
-                    ₹{((parseFloat(cancelFormData.railwayCharges) || 0) + (parseFloat(cancelFormData.agentCharges) || 0)).toFixed(2)}
-                  </span>
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span style={{ fontSize: '12px', fontWeight: 'bold' }}>Refundable Amount:</span>
-                  <span style={{ fontSize: '16px', color: '#2e7d32', fontWeight: 'bold' }}>
-                    ₹{Math.max(0, parseFloat(selectedBill.totalAmount) - ((parseFloat(cancelFormData.railwayCharges) || 0) + (parseFloat(cancelFormData.agentCharges) || 0))).toFixed(2)}
-                  </span>
-                </div>
-              </div>
-            </div>
-            
-            <div className="erp-modal-footer">
-              <button 
-                className="erp-button erp-button-secondary" 
-                onClick={() => setShowCancelModal(false)}
-                disabled={isCancelling}
-                title="Cancel and close (Esc)"
-              >
-                Cancel (Esc)
-              </button>
-              <button 
-                className="erp-button erp-button-primary" 
-                onClick={handleCancelSave}
-                style={{ marginLeft: '10px' }}
-                disabled={isCancelling}
-                title="Save cancellation (F10 or Enter)"
-              >
-                {isCancelling ? 'Processing...' : 'Confirm Cancellation (F10)'}
-              </button>
-            </div>
-          </div>
-        </div>
       )}
 
       {/* Inline Preview Modal */}

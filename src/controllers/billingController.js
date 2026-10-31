@@ -11,6 +11,7 @@ const crypto = require('crypto');
 const numberToWords = require('../utils/numberToWords');
 const Audit = require('../services/forensicAuditService');
 const CustomerLedgerService = require('../services/CustomerLedgerService');
+const billNumberService = require('../services/billNumberService');
 
 
 
@@ -34,6 +35,59 @@ function convertUserIdToInt(userId) {
 function parseAmount(value) {
   const amount = Number.parseFloat(value);
   return Number.isFinite(amount) ? amount : 0;
+}
+
+function round2(value) {
+  return Math.round((Number.parseFloat(value) || 0) * 100) / 100;
+}
+
+// Bill numbers are backend-owned: bl_entry_no / bl_bill_no / bl_sub_bill_no /
+// bl_billing_type / bl_original_bill_id are deliberately absent from this map.
+const BILL_EDITABLE_FIELDS = {
+  customerName: 'bl_customer_name',
+  phoneNumber: 'bl_customer_phone',
+  fromStation: 'bl_from_station',
+  toStation: 'bl_to_station',
+  trainNumber: 'bl_train_no',
+  reservationClass: 'bl_class',
+  pnrNumbers: 'bl_pnr',
+  seatsAlloted: 'bl_seats_allocated',
+  ticketType: 'bl_ticket_type',
+  cancellationCharges: 'bl_cancellation_charge',
+  platformFees: 'bl_platform_fee',
+  miscCharges: 'bl_misc_charges',
+  deliveryCharges: 'bl_delivery_charge',
+  surcharge: 'bl_surcharge',
+  discount: 'bl_discount',
+  gstType: 'bl_gst_type',
+  railwayFare: 'bl_railway_fare',
+  serviceCharges: 'bl_service_charge',
+  remarks: 'bl_comments',
+  paymentAccount: 'bl_payment_account'
+};
+
+const BILL_EDITABLE_DATE_FIELDS = {
+  journeyDate: 'bl_journey_date',
+  billDate: 'bl_billing_date'
+};
+
+function applyEditableBillFields(patch, body) {
+  Object.entries(BILL_EDITABLE_FIELDS).forEach(([requestKey, column]) => {
+    if (body[requestKey] !== undefined) {
+      patch[column] = body[requestKey];
+    }
+  });
+  Object.entries(BILL_EDITABLE_DATE_FIELDS).forEach(([requestKey, column]) => {
+    const value = body[requestKey];
+    if (value !== undefined && value !== '' && !Number.isNaN(new Date(value).getTime())) {
+      patch[column] = new Date(value);
+    }
+  });
+  if (body.status !== undefined) {
+    patch.status = body.status;
+    patch.bl_status = body.status;
+  }
+  return patch;
 }
 
 function buildUserDisplayName(user) {
@@ -461,7 +515,6 @@ const createBill = async (req, res) => {
       gstType,
       totalAmount,
       billDate,
-      billNumber,
       status,
       remarks,
       specialId,
@@ -554,8 +607,14 @@ const createBill = async (req, res) => {
       // Use resolved charge if not provided or as a baseline
       const finalServiceCharge = parseFloat(serviceCharges) || resolvedServiceCharge;
 
-      // 3. Generate unique bill number if not provided
-      const finalBillNumber = billNumber || `BILL-${Date.now()}`;
+      // 3. Issue the next sequential number for this financial year.
+      //    Numbers are backend-owned, FY-scoped and protected by a row lock on the
+      //    sequence row, so concurrent bill creation cannot hand out the same number.
+      const issued = await billNumberService.issueBillNumber({
+        billDate: billDate ? new Date(billDate) : new Date(),
+        transaction
+      });
+      const finalBillNumber = issued.billNumber;
       
       let calculatedTotal = parseFloat(railwayFare) || 0;
       calculatedTotal += parseFloat(stationBoyIncentive) || 0;
@@ -593,7 +652,7 @@ const createBill = async (req, res) => {
         bl_journey_date: journeyDate && journeyDate.trim() ? new Date(journeyDate) : booking.bk_trvldt,
         bl_total_amount: finalTotalAmount,
         bl_created_by: convertUserIdToInt(req.user.us_usid),
-        bl_sub_bill_no: (req.body.subBillNo && req.body.subBillNo !== '-A') ? req.body.subBillNo : `${finalBillNumber}-A`
+        bl_sub_bill_no: null
       });
       
       const bill = await BillTVL.create({
@@ -613,7 +672,8 @@ const createBill = async (req, res) => {
         bl_train_no: trainNumber,
         bl_class: reservationClass,
         bl_pnr: pnrNumbers || '',
-        bl_sub_bill_no: (req.body.subBillNo && req.body.subBillNo !== '-A') ? req.body.subBillNo : `${finalBillNumber}-A`,
+        bl_sub_bill_no: null,
+        bl_billing_type: 'R',
         bl_seats_reserved: seatsAlloted || '',
         bl_railway_fare: railwayFare || 0,
         bl_sb_incentive: stationBoyIncentive || 0,
@@ -674,7 +734,7 @@ const createBill = async (req, res) => {
           }
         );
         
-        console.log(`📊 Updated ${updateResult.affectedRows} passengers with billing number ${billNumber}`);
+        console.log(`📊 Updated ${updateResult.affectedRows} passengers with billing number ${finalBillNumber}`);
       } catch (passengerError) {
         console.error('⚠️ Error updating passenger records with billing number:', passengerError);
       }
@@ -754,33 +814,6 @@ const createBill = async (req, res) => {
       // 7. Commit transaction (ALL operations succeed together)
       await transaction.commit();
 
-      // 7.5 Create official Receipt for Advance Payment if applicable
-      if (advanceAmount && parseFloat(advanceAmount) > 0) {
-        try {
-          const advAmt = parseFloat(advanceAmount);
-          const rcEntryNo = 'RC' + Date.now().toString().slice(-9);
-          const paymentAccountName = req.body.paymentAccount || 'Bank';
-
-          await Receipt.create({
-            rc_entry_no: rcEntryNo,
-            rc_date: billDate ? new Date(billDate) : new Date(),
-            rc_customer_name: customerName,
-            rc_customer_phone: phoneNumber || '',
-            rc_amount: advAmt,
-            rc_payment_mode: paymentMode || 'Cash',
-            rc_ref_number: paymentReference || '',
-            rc_bank_account: paymentAccountName,
-            rc_narration: `Advance payment from ${customerName}`,
-            rc_created_by: String(req.user.us_usid),
-            rc_status: 'Active',
-            entered_by: String(req.user.us_usid)
-          });
-          console.log(`✅ Official Receipt ${rcEntryNo} generated for Advance Payment`);
-        } catch (receiptErr) {
-          console.error('⚠️ Failed to generate Receipt for Advance Payment (non-fatal):', receiptErr);
-        }
-      }
-
       
       console.log(`✅ Bill ${finalBillNumber} created successfully for booking ${bookingId}`);
       console.log(`✅ Booking ${bookingId} status updated to CONFIRMED`);
@@ -827,7 +860,9 @@ const createBill = async (req, res) => {
       
     } catch (error) {
       // 7. Rollback transaction on ANY error (atomicity)
-      await transaction.rollback();
+      if (!transaction.finished) {
+        await transaction.rollback();
+      }
       console.error('❌ Transaction rolled back due to error:', error.message);
       if (error.message && error.message.includes('Invalid station boy')) {
         return res.status(400).json({
@@ -974,25 +1009,41 @@ const getAllBills = async (req, res) => {
 
     // Calculate aggregates for the total row (across all filtered records)
     // We pass attributes: [] to includes to avoid 'only_full_group_by' error in MySQL
-    let aggregates = { totalAmount: 0, totalFare: 0, totalGST: 0, count: count || 0 };
+    let aggregates = { totalAmount: 0, grossAmount: 0, cancellationAmount: 0, totalFare: 0, totalGST: 0, count: count || 0 };
     
     try {
+      const sumColumns = ['bl_total_amount', 'bl_railway_fare', 'bl_gst', 'bl_service_charge', 'bl_sb_incentive'];
       const aggregateResults = await queryHelper.getAggregation(
         BillTVL, 
         where, 
         [], 
-        ['bl_total_amount', 'bl_railway_fare', 'bl_gst', 'bl_service_charge'],
+        sumColumns,
+        include.map(inc => ({ ...inc, attributes: [] }))
+      );
+
+      // Cancellation documents (type C) carry negative amounts, so the same filter
+      // gives two different numbers: what was billed (R rows) and what the customer
+      // actually owes after every cancellation (all rows).
+      const grossResults = await queryHelper.getAggregation(
+        BillTVL,
+        { ...where, bl_billing_type: 'R' },
+        [],
+        sumColumns,
         include.map(inc => ({ ...inc, attributes: [] }))
       );
 
       if (aggregateResults && aggregateResults.length > 0) {
+        const netAmount = parseFloat(aggregateResults[0]?.total_bl_total_amount || 0);
+        const grossAmount = parseFloat(grossResults?.[0]?.total_bl_total_amount || 0);
         aggregates = {
-          totalAmount: parseFloat(aggregateResults[0]?.total_bl_total_amount || 0),
+          totalAmount: netAmount,
           totalFare: parseFloat(aggregateResults[0]?.total_bl_railway_fare || 0),
           totalGST: parseFloat(aggregateResults[0]?.total_bl_gst || 0),
           totalServiceCharges: parseFloat(aggregateResults[0]?.total_bl_service_charge || 0),
-          totalSBIncentive: 0,
-          count: parseInt(aggregateResults[0]?.count || count || 0)
+          totalSBIncentive: parseFloat(aggregateResults[0]?.total_bl_sb_incentive || 0),
+          count: parseInt(aggregateResults[0]?.count || count || 0),
+          grossAmount,
+          cancellationAmount: round2(netAmount - grossAmount)
         };
       }
     } catch (aggError) {
@@ -1292,6 +1343,17 @@ const updateBill = async (req, res) => {
       });
     }
 
+    // Cancellation documents and cancelled originals are never editable.
+    if (bill.bl_billing_type === 'C' || bill.is_cancelled === 1) {
+      return res.status(400).json({ message: 'Cancelled bills cannot be edited' });
+    }
+
+    const gstTypeVal = req.body.gstType !== undefined ? req.body.gstType : bill.bl_gst_type;
+    let gstVal = req.body.gst !== undefined ? parseFloat(req.body.gst) : parseFloat(bill.bl_gst) || 0;
+    if (gstTypeVal === 'C') {
+      gstVal = 0;
+    }
+
     // Calculate total amount if needed
     let totalAmount = req.body.totalAmount !== undefined ? parseFloat(req.body.totalAmount) : 
                      (req.body.bl_total_amount !== undefined ? parseFloat(req.body.bl_total_amount) : null);
@@ -1304,11 +1366,6 @@ const updateBill = async (req, res) => {
       const sbIncentive = stationBoyIncentive !== undefined ? parseFloat(stationBoyIncentive) : parseFloat(bill.bl_sb_incentive) || 0;
       totalAmount += sbIncentive;
       
-      let gstVal = req.body.gst !== undefined ? parseFloat(req.body.gst) : parseFloat(bill.bl_gst) || 0;
-      const gstTypeVal = req.body.gstType !== undefined ? req.body.gstType : bill.bl_gst_type;
-      if (gstTypeVal === 'C') {
-        gstVal = 0;
-      }
       totalAmount += gstVal;
 
       const misc = req.body.miscCharges !== undefined ? parseFloat(req.body.miscCharges) : parseFloat(bill.bl_misc_charges) || 0;
@@ -1333,25 +1390,27 @@ const updateBill = async (req, res) => {
     // Update the bill
     const incentiveAmount = stationBoyIncentive !== undefined ? parseFloat(stationBoyIncentive) : parseFloat(bill.station_boy_incentive_amount) || 0;
 
-    await bill.update({
-      ...req.body,
+    // Whitelisted patch: bill numbers, type and parent links can never be written
+    // from the request body.
+    const patch = applyEditableBillFields({
       station_boy_id: resolvedStationBoy.id,
       station_boy_name_snapshot: resolvedStationBoy.nameSnapshot,
       station_boy_incentive_amount: incentiveAmount,
       bl_station_boy: resolvedStationBoy.nameSnapshot || '',
       bl_sb_incentive: incentiveAmount,
-      bl_gst: gstVal, // Update GST with forced 0 for C type
+      bl_gst: gstVal,
       bl_total_amount: totalAmount,
       bl_advance_amount: req.body.advanceAmount !== undefined ? parseFloat(req.body.advanceAmount) : parseFloat(bill.bl_advance_amount) || 0,
       bl_payment_mode: req.body.paymentMode !== undefined ? req.body.paymentMode : bill.bl_payment_mode,
       bl_payment_reference: req.body.paymentReference !== undefined ? req.body.paymentReference : bill.bl_payment_reference,
-      bl_sub_bill_no: req.body.subBillNo || req.body.bl_sub_bill_no || bill.bl_sub_bill_no,
       bl_modified_by: convertUserIdToInt(req.user.us_usid),
       bl_modified_at: new Date(),
       // Standard audit fields — always server-side, never from frontend
       modified_by: req.user.us_usid,
       modified_on: new Date()
-    }, {
+    }, req.body);
+
+    await bill.update(patch, {
       userId: convertUserIdToInt(req.user.us_usid) // Pass userId for hooks
     });
 
@@ -2392,8 +2451,12 @@ const mergeBill = async (req, res) => {
     const mergedBillData = baseBill.toJSON();
     delete mergedBillData.bl_id;
     
-    mergedBillData.bl_entry_no = `MERGED-${Date.now().toString().slice(-6)}`;
-    mergedBillData.bl_bill_no = mergedBillData.bl_entry_no;
+    const issuedMergedNumber = await billNumberService.issueBillNumber({
+      billDate: new Date(),
+      transaction
+    });
+    mergedBillData.bl_entry_no = issuedMergedNumber.billNumber;
+    mergedBillData.bl_bill_no = issuedMergedNumber.billNumber;
     mergedBillData.bl_total_amount = combinedTotal;
     mergedBillData.bl_is_merged = false;
     mergedBillData.bl_is_split = false;
@@ -2441,10 +2504,10 @@ const fetchBookingForBilling = async (req, res) => {
   
   try {
     const { id } = req.params;
-    const isPnr = isNaN(id) || String(id).length === 10;
-    
+    const idStr = String(id).trim();
+
     function normalizePnrStatus(raw) {
-      if (!raw) return 'CNF';
+      if (!raw) return '';
       const s = String(raw).toUpperCase().trim();
       if (s.includes('CNF') || s.includes('CONFIRM') || s.includes('PREPARED') || s === 'DRF' || s === 'OPEN') return 'CNF';
       if (s.includes('RAC')) return 'RAC';
@@ -2453,7 +2516,7 @@ const fetchBookingForBilling = async (req, res) => {
       if (s.includes('TQWL')) return 'TQWL';
       if (s.includes('GNWL')) return 'GNWL';
       if (s.includes('WL') || s.includes('WAIT')) return 'WL';
-      return 'CNF';
+      return '';
     }
 
     function formatTimeHHmm(rawTime) {
@@ -2466,187 +2529,111 @@ const fetchBookingForBilling = async (req, res) => {
       return str;
     }
 
-    function getDefaultCoach(travelClass) {
-      const cls = (travelClass || '3A').toUpperCase();
-      if (cls.includes('2A')) return 'A1';
-      if (cls.includes('1A')) return 'H1';
-      if (cls.includes('SL')) return 'S3';
-      if (cls.includes('CC')) return 'C1';
-      if (cls.includes('EC')) return 'E1';
-      if (cls.includes('2S')) return 'D1';
-      return 'B2';
+    function parseDateTime(raw) {
+      if (!raw) return { date: '', time: '' };
+      const d = new Date(raw);
+      if (isNaN(d.getTime())) return { date: '', time: '' };
+      const pad = (n) => String(n).padStart(2, '0');
+      return {
+        date: `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`,
+        time: `${pad(d.getHours())}:${pad(d.getMinutes())}`
+      };
     }
-    
-    let booking;
-    if (isPnr) {
-      booking = await BookingTVL.findOne({ where: { bk_pnr: id } });
-    } else {
-      booking = await BookingTVL.findByPk(id);
-    }
-    
-    // If not found in local DB, but it is a PNR, try fetching from RailKit
-    if (!booking && isPnr && String(id).length === 10) {
-      console.log(`PNR ${id} not found locally, fetching from RailKit...`);
-      try {
-        const result = await checkPNRStatus(id);
-        if (result && result.success && result.data) {
-          const d = result.data;
-          
-          let parsedDate = null;
-          if (d.journey && d.journey.dateOfJourney) {
-            const temp = new Date(d.journey.dateOfJourney);
-            if (!isNaN(temp.getTime())) parsedDate = temp;
-          }
-          
-          // Extract primary passenger details
-          const p1 = d.passengers && d.passengers[0] ? d.passengers[0] : null;
-          const rawStatus = p1?.current?.status || p1?.booking?.status || p1?.status || d.pnrStatus || (d.chart?.status?.includes('Prepared') ? 'CNF' : 'CNF');
-          const p1Status = normalizePnrStatus(rawStatus);
-          let coachStr = p1?.current?.coach || p1?.booking?.coach || p1?.coach || p1?.currentCoach || p1?.bookingCoach || '';
-          let berthStr = p1?.current?.berthNo ? String(p1.current.berthNo) : (p1?.booking?.berthNo ? String(p1.booking.berthNo) : (p1?.berthNo ? String(p1.berthNo) : (p1?.seatNo ? String(p1.seatNo) : '')));
-          const berthCodeStr = p1?.current?.berthCode || p1?.booking?.berthCode || '';
-          const p1Details = p1?.current?.details || p1?.booking?.details || p1?.details || '';
 
-          if (!coachStr || !berthStr) {
-            if (p1Details) {
-              const coachMatch = p1Details.match(/\b([A-Z]+\d+)\b/i);
-              const berthMatch = p1Details.match(/\b(\d{1,3})\b/);
-              if (coachMatch && !coachStr) coachStr = coachMatch[1].toUpperCase();
-              if (berthMatch && !berthStr) berthStr = berthMatch[1];
-            }
-          }
-          
-          const travelClass = d.journey?.class || d.trainInfo?.class || d.trainInfo?.travelClass || d.travelClass || d.journeyClass || d.class || '3A';
-          if (!coachStr) coachStr = getDefaultCoach(travelClass);
-          if (!berthStr) berthStr = '24';
-
-          const fromStn = d.journey?.boardingPoint?.code || d.journey?.source?.code || d.boardingStation?.code || d.fromStation?.code || d.sourceStation || d.boardingPoint || d.from || 'NDLS';
-          const toStn = d.journey?.destination?.code || d.reservationUpTo?.code || d.toStation?.code || d.destinationStation || d.reservationUpTo || d.to || 'PNBE';
-          const trainNo = d.train?.number || d.trainNumber || d.trainNo || d.trainInfo?.trainNo || d.trainInfo?.trainNumber || d.trainDetails?.trainNumber || '12394';
-          const ticketFare = d.booking?.fare || d.booking?.ticketFare || d.ticketFare || d.fare || d.totalFare || d.bookingFare || 1850;
-          let journeyTimeStr = formatTimeHHmm(d.boardingStation?.departureTime || d.journey?.departureTime || d.departureTime || d.trainInfo?.departureTime || d.journeyDetails?.departureTime || d.source?.departureTime || '');
-          if (!journeyTimeStr) journeyTimeStr = '17:30';
-          
-          return res.status(200).json({
-            success: true,
-            data: {
-              bl_booking_id: null,
-              bl_pnr: id,
-              bl_customer_name: '',
-              bl_customer_phone: '',
-              bl_from_station: fromStn,
-              bl_to_station: toStn,
-              bl_train_no: trainNo,
-              bl_class: travelClass,
-              bl_journey_date: parsedDate || new Date(),
-              bl_journeyTime: journeyTimeStr,
-              bl_pnrStatus: p1Status,
-              bl_coach: coachStr,
-              bl_berthNo: berthStr,
-              bl_berthCode: berthCodeStr,
-              bl_details: p1Details,
-              bl_railway_fare: ticketFare,
-              bl_seatsAlloted: String(d.passengers?.length || d.numberOfPassengers || 1),
-              passengers: (d.passengers || []).map((p, i) => ({
-                id: `new_${i}`,
-                name: p.name || p.serialNumber || `Passenger ${i+1}`,
-                coach: p.current?.coach || p.booking?.coach || coachStr,
-                berth: p.current?.berthNo ? String(p.current.berthNo) : (p.booking?.berthNo ? String(p.booking.berthNo) : berthStr)
-              }))
-            }
-          });
-        }
-      } catch (err) {
-        console.error('RailKit API fetch failed:', err);
+    // A 10-digit identifier is always a PNR — resolve it live through RailKit
+    if (/^\d{10}$/.test(idStr)) {
+      if (!process.env.RAILKIT_API_KEY) {
+        return res.status(500).json({ success: false, message: 'RailKit API key is not configured (RAILKIT_API_KEY)' });
       }
-      
-      // Fallback for demo / unlisted 10-digit PNRs so testing workflow never breaks
-      const defaultClass = '3A';
-      return res.status(200).json({
+
+      let result;
+      try {
+        result = await checkPNRStatus(idStr);
+      } catch (err) {
+        return res.status(502).json({ success: false, message: `RailKit request failed: ${err.message}` });
+      }
+
+      if (!result || !result.success || !result.data) {
+        return res.status(502).json({ success: false, message: result?.error || `RailKit returned no data for PNR ${idStr}` });
+      }
+
+      const d = result.data;
+      const passengers = Array.isArray(d.passengers) ? d.passengers : [];
+      const { date: journeyDate, time: journeyTime } = parseDateTime(d.journey?.dateOfJourney);
+
+      const statuses = passengers.map(p => p.current?.status || p.booking?.status).filter(Boolean);
+      const pnrStatus = normalizePnrStatus(statuses[0] || '');
+
+      const coaches = [...new Set(passengers.map(p => p.current?.coach || p.booking?.coach).filter(Boolean))];
+      const berths = [...new Set(passengers.map(p => {
+        const b = p.current?.berthNo || p.booking?.berthNo;
+        return b ? String(b) : '';
+      }).filter(Boolean))];
+
+      const fare = Number(d.booking?.fare);
+
+      return res.json({
         success: true,
         data: {
           bl_booking_id: null,
-          bl_pnr: id,
+          bl_pnr: d.pnr || idStr,
           bl_customer_name: '',
           bl_customer_phone: '',
-          bl_from_station: 'NDLS',
-          bl_to_station: 'PNBE',
-          bl_train_no: '12394',
-          bl_class: defaultClass,
-          bl_journey_date: new Date(),
-          bl_journeyTime: '17:30',
-          bl_pnrStatus: 'CNF',
-          bl_coach: getDefaultCoach(defaultClass),
-          bl_berthNo: '24',
-          bl_berthCode: 'UB',
-          bl_details: 'CNF',
-          bl_railway_fare: 1850,
-          bl_seatsAlloted: '1',
-          passengers: []
+          bl_from_station: d.journey?.source?.code || '',
+          bl_to_station: d.journey?.destination?.code || '',
+          bl_train_no: d.train?.number || '',
+          bl_class: d.journey?.class || '',
+          bl_journey_date: journeyDate,
+          bl_journeyTime: journeyTime,
+          bl_pnrStatus: pnrStatus,
+          bl_coach: coaches.join(', '),
+          bl_berthNo: berths.join(', '),
+          bl_railway_fare: Number.isFinite(fare) ? fare : 0,
+          bl_seatsAlloted: passengers.length ? String(passengers.length) : '',
+          bl_chart_status: d.chart?.status || '',
+          passengers: passengers.map((p, i) => ({
+            id: `pnr_${i}`,
+            name: p.serialNumber || `Passenger ${i + 1}`,
+            coach: p.current?.coach || p.booking?.coach || '',
+            berth: String(p.current?.berthNo || p.booking?.berthNo || ''),
+            status: p.current?.status || p.booking?.status || '',
+            details: p.current?.details || p.booking?.details || ''
+          }))
         }
       });
-    } else if (!booking) {
-      return res.status(404).json({ success: false, message: 'Booking or PNR not found' });
+    }
+
+    const booking = await BookingTVL.findByPk(idStr);
+    if (!booking) {
+      return res.status(404).json({ success: false, message: 'Booking not found' });
     }
     
     const passengers = await PassengerTVL.findAll({
       where: { ps_bkid: booking.bk_bkid, ps_active: 1 }
     });
 
-    function getDefaultFare(clsName, paxCount = 1) {
-      const cls = (clsName || '3A').toUpperCase();
-      let base = 1850;
-      if (cls.includes('1A')) base = 3200;
-      else if (cls.includes('2A')) base = 2200;
-      else if (cls.includes('3A') || cls.includes('3E')) base = 1850;
-      else if (cls.includes('SL')) base = 650;
-      else if (cls.includes('CC')) base = 1200;
-      else if (cls.includes('EC') || cls.includes('EA')) base = 2400;
-      else if (cls.includes('2S')) base = 250;
-      return base * Math.max(parseInt(paxCount, 10) || 1, 1);
-    }
+    const travelClass = booking.bk_class || booking.bk_reservation_class || '';
+    const paxCount = parseInt(passengers.length || booking.bk_totalpass || 0, 10) || 0;
+    const liveFare = Number(booking.bk_railwayfare || booking.bk_fare || 0) || 0;
+    const trainNo = booking.bk_trainno || booking.bk_train_no || booking.bk_trno
+      || (booking.bk_remarks ? (booking.bk_remarks.match(/train\s*(?:no\.?|number)?\s*[:=]?\s*(\d+)/i)?.[1] || '') : '');
+    const pnrStatus = normalizePnrStatus(booking.bk_pnrstatus || booking.bk_status || '');
+    const coachStr = passengers.find(p => p.ps_coach)?.ps_coach || booking.bk_coach
+      || (booking.bk_remarks ? (booking.bk_remarks.match(/coach\s*[:=]?\s*([A-Z0-9]+)/i)?.[1] || '') : '');
+    const berthStr = passengers[0]?.ps_berthalloc || passengers[0]?.ps_seatno
+      || (passengers[0]?.ps_berthpref && passengers[0].ps_berthpref !== 'NO_PREF' ? passengers[0].ps_berthpref : '')
+      || booking.bk_berthno
+      || (booking.bk_remarks ? (booking.bk_remarks.match(/berth\s*[:=]?\s*([A-Z0-9, ]+)/i)?.[1] || '') : '');
+    const journeyTime = formatTimeHHmm(booking.bk_trvltime || booking.bk_journey_time || booking.bk_time
+      || (booking.bk_remarks ? (booking.bk_remarks.match(/(\d{1,2}:\d{2})/)?.[1] || '') : ''));
 
-    const travelClass = booking.bk_class || booking.bk_reservation_class || '3A';
-    const paxCount = parseInt(passengers.length || booking.bk_totalpass || 1, 10);
-    let liveFare = booking.bk_railwayfare || booking.bk_fare || 0;
-    if (!liveFare || liveFare <= 0) {
-      const fareMatch = booking.bk_remarks ? booking.bk_remarks.match(/(?:fare|amount|rs\.?|inr)\s*[:=]?\s*(\d+(?:\.\d+)?)/i)?.[1] : null;
-      liveFare = fareMatch ? parseFloat(fareMatch) : getDefaultFare(travelClass, paxCount);
-    }
-    let trainNo = booking.bk_trainno || booking.bk_train_no || booking.bk_trno || (booking.bk_remarks ? (booking.bk_remarks.match(/train\s*(?:no\.?|number)?\s*[:=]?\s*(\d+)/i)?.[1] || '') : '') || '12394';
-    let pnrStatus = normalizePnrStatus(booking.bk_pnrstatus || booking.bk_status || 'CNF');
-    let coachStr = passengers.find(p => p.ps_coach)?.ps_coach || booking.bk_coach || (booking.bk_remarks ? (booking.bk_remarks.match(/coach\s*[:=]?\s*([A-Z0-9]+)/i)?.[1] || '') : '') || getDefaultCoach(travelClass);
-    let berthStr = passengers[0]?.ps_berthalloc || passengers[0]?.ps_seatno || (passengers[0]?.ps_berthpref !== 'NO_PREF' ? passengers[0]?.ps_berthpref : '') || booking.bk_berthno || (booking.bk_remarks ? (booking.bk_remarks.match(/berth\s*[:=]?\s*([A-Z0-9, ]+)/i)?.[1] || '') : '') || '24';
-    let journeyTime = formatTimeHHmm(booking.bk_trvltime || booking.bk_journey_time || booking.bk_time || (booking.bk_remarks ? (booking.bk_remarks.match(/(\d{1,2}:\d{2})/)?.[1] || '') : '') || '17:30');
-
-    // If booking has PNR and some fields are empty, try live RailKit enrich
-    if (booking.bk_pnr && booking.bk_pnr.length === 10 && (!liveFare || trainNo === '12394')) {
-      try {
-        const liveResult = await checkPNRStatus(booking.bk_pnr);
-        if (liveResult && liveResult.success && liveResult.data) {
-          const ld = liveResult.data;
-          if (ld.trainInfo?.trainNo || ld.train?.number) trainNo = ld.trainInfo?.trainNo || ld.trainInfo?.trainNumber || ld.train?.number;
-          if (ld.ticketFare || ld.fare || ld.totalFare || ld.bookingFare) liveFare = ld.ticketFare || ld.fare || ld.totalFare || ld.bookingFare;
-          if (ld.pnrStatus) pnrStatus = normalizePnrStatus(ld.pnrStatus);
-          if (ld.boardingStation?.departureTime || ld.journey?.departureTime) journeyTime = formatTimeHHmm(ld.boardingStation?.departureTime || ld.journey?.departureTime || ld.trainInfo?.departureTime || '');
-          const p1 = ld.passengers?.[0];
-          if (p1) {
-            if (p1.current?.coach || p1.booking?.coach) coachStr = p1.current?.coach || p1.booking?.coach;
-            if (p1.current?.berthNo || p1.booking?.berthNo) berthStr = String(p1.current?.berthNo || p1.booking?.berthNo);
-          }
-        }
-      } catch (e) {
-        // Continue with local booking data
-      }
-    }
-    
     const data = {
       bl_booking_id: booking.bk_bkid,
       bl_pnr: booking.bk_pnr || '',
       bl_customer_name: booking.bk_customername || (passengers[0] ? `${passengers[0].ps_fname} ${passengers[0].ps_lname}`.trim() : ''),
       bl_customer_phone: booking.bk_phonenumber || '',
-      bl_from_station: booking.bk_fromst || booking.bk_from_station || 'NDLS',
-      bl_to_station: booking.bk_tost || booking.bk_to_station || 'PNBE',
+      bl_from_station: booking.bk_fromst || booking.bk_from_station || '',
+      bl_to_station: booking.bk_tost || booking.bk_to_station || '',
       bl_train_no: trainNo,
       bl_class: travelClass,
       bl_journey_date: booking.bk_trvldt || booking.bk_reqdt,
@@ -2721,6 +2708,25 @@ const splitBillV2 = async (req, res) => {
     const childBills = [];
     const parentBaseNo = parentBill.bl_bill_no || parentBill.bl_entry_no;
     const parentTotalForRatio = parseFloat(parentBill.bl_total_amount) || 1;
+
+    // Sub-bill suffixes are derived from the numbers already taken by existing
+    // siblings so a repeated split can never reuse a bill number.
+    const existingSiblings = await BillTVL.findAll({
+      where: { bl_parent_bill_id: parentBill.bl_id },
+      attributes: ['bl_entry_no', 'bl_sub_bill_no'],
+      transaction
+    });
+    const takenSplitNumbers = [
+      ...existingSiblings.map((sibling) => sibling.bl_sub_bill_no),
+      ...existingSiblings.map((sibling) => sibling.bl_entry_no)
+    ].filter(Boolean);
+
+    const allocateSplitNumber = () => {
+      const subBillNo = billNumberService.nextSubBillNumber(parentBaseNo, takenSplitNumbers);
+      const entryNo = `${parentBill.bl_entry_no}${subBillNo.slice(parentBaseNo.length)}`;
+      takenSplitNumbers.push(subBillNo, entryNo);
+      return { subBillNo, entryNo };
+    };
     
     // Fetch all passengers linked to this bill for auto-distribution
     let allPassengers = [];
@@ -2746,9 +2752,9 @@ const splitBillV2 = async (req, res) => {
       delete billData.createdAt;
       delete billData.updatedAt;
       
-      const suffix = String.fromCharCode(65 + i); // A, B, C...
-      billData.bl_entry_no = `${parentBill.bl_entry_no}-${suffix}`;
-      billData.bl_sub_bill_no = `${parentBaseNo}-${suffix}`;
+      const { subBillNo, entryNo } = allocateSplitNumber();
+      billData.bl_entry_no = entryNo;
+      billData.bl_sub_bill_no = subBillNo;
       billData.bl_bill_no = parentBill.bl_bill_no;
       billData.bl_total_amount = splitAmount;
       billData.bl_parent_bill_id = parentBill.bl_id;
@@ -2927,106 +2933,188 @@ const cancelBillV2 = async (req, res) => {
     
     const bill = await BillTVL.findByPk(id, { transaction });
     if (!bill) throw new Error('Bill not found');
+    if (bill.bl_billing_type === 'C') {
+      throw new Error('A cancellation document cannot be cancelled');
+    }
+    if (!reason || !String(reason).trim()) {
+      throw new Error('A cancellation reason is required');
+    }
     const billStatus = bill.bl_status || bill.status;
     if (billStatus === 'CANCELLED' || billStatus === 'CAN' || bill.is_cancelled === 1) {
       throw new Error('Bill is already cancelled');
     }
-    
+
+    // Roster still on this reservation.
     const passengersResult = await PassengerTVL.findAll({
-      where: { ps_bkid: bill.bl_booking_id },
+      where: { ps_bkid: bill.bl_booking_id, ps_active: 1 },
       transaction
     });
-    const totalPassengers = passengersResult.length || 1;
-    const isPartial = cancelledPassengers.length < totalPassengers;
+    const activeRoster = (Array.isArray(bill.bl_passenger_ids) && bill.bl_passenger_ids.length
+      ? bill.bl_passenger_ids
+      : passengersResult.map((p) => p.ps_psid)
+    ).map((pid) => Number(pid));
 
-    const railChg = parseFloat(railwayCharges) || 0;
-    const agentChg = parseFloat(agentCharges) || 0;
-    const totalCancel = railChg + agentChg;
-    const originalTotal = parseFloat(bill.bl_total_amount) || 0;
-    
-    const baseRefund = totalPassengers > 0 ? (originalTotal / totalPassengers) * (cancelledPassengers.length || 0) : 0;
-    
-    if (totalCancel > baseRefund) {
-      throw new Error('Cancellation charges cannot exceed the refundable amount for the selected passengers');
+    const requested = [...new Set((cancelledPassengers || []).map((pid) => Number(pid)))];
+    if (requested.length === 0) {
+      throw new Error('At least one passenger must be selected for cancellation');
     }
-    
-    const refundAmount = Math.max(0, baseRefund - totalCancel);
+
+    // A passenger already cancelled by an earlier C document of this bill cannot
+    // be cancelled a second time.
+    const priorDocs = await BillTVL.findAll({
+      where: { bl_original_bill_id: bill.bl_id, bl_billing_type: 'C' },
+      attributes: ['bl_entry_no', 'bl_passenger_ids', 'bl_railway_fare'],
+      transaction
+    });
+    const alreadyCancelled = new Set();
+    priorDocs.forEach((doc) => {
+      (Array.isArray(doc.bl_passenger_ids) ? doc.bl_passenger_ids : [])
+        .forEach((pid) => alreadyCancelled.add(Number(pid)));
+    });
+    const repeats = requested.filter((pid) => alreadyCancelled.has(pid));
+    if (repeats.length > 0) {
+      throw new Error(`Passengers already cancelled: ${repeats.join(', ')}`);
+    }
+
+    const notOnBill = requested.filter((pid) => !activeRoster.includes(pid));
+    if (notOnBill.length > 0) {
+      throw new Error(`Passengers are not on this bill: ${notOnBill.join(', ')}`);
+    }
+
+    // Refund comes only from the railway fare. Service charge, station boy
+    // incentive and every other reservation charge is retained, never returned.
+    const railChg = round2(railwayCharges);
+    const agentChg = round2(agentCharges);
+    const totalCancel = round2(railChg + agentChg);
+
+    // Per-ticket fare is taken from the tickets the bill was issued with, not the
+    // roster left after earlier cancellations, and the reversal is capped by the
+    // fare not yet reversed by previous C documents.
+    const railwayFareTotal = round2(bill.bl_railway_fare);
+    const originalTicketCount = activeRoster.length + alreadyCancelled.size || 1;
+    const reversedSoFar = round2(priorDocs.reduce((sum, doc) => sum + Math.abs(round2(doc.bl_railway_fare)), 0));
+    const refundableRemaining = round2(Math.max(0, railwayFareTotal - reversedSoFar));
+    const cancelledFare = round2(Math.min((railwayFareTotal / originalTicketCount) * requested.length, refundableRemaining));
+    const refundAmount = round2(Math.max(0, cancelledFare - totalCancel));
+
+    if (totalCancel > cancelledFare) {
+      throw new Error(
+        `Cancellation charges ₹${totalCancel.toFixed(2)} cannot exceed the refundable railway fare ₹${cancelledFare.toFixed(2)}`
+      );
+    }
+
+    const remainingPassengers = activeRoster.filter((pid) => !requested.includes(pid));
+    const isFullCancellation = remainingPassengers.length === 0;
+    const isPartial = !isFullCancellation;
 
     const cancelData = {
       isPartial,
       railwayCharges: railChg,
       agentCharges: agentChg,
       totalCancelCharges: totalCancel,
+      cancelledRailwayFare: cancelledFare,
       refundAmount,
-      cancelledPassengers, 
+      cancelledPassengers: requested,
       reason
     };
 
-    // 1. Update existing bill (reduce proportional baseRefund)
-    const activePassengers = Array.isArray(bill.bl_passenger_ids) 
-      ? bill.bl_passenger_ids 
-      : passengersResult.map(p => p.ps_psid);
-    
-    const remainingPassengers = activePassengers.filter(id => !cancelledPassengers.includes(id));
-    
-    const splitCount = Array.isArray(bill.split_audit_log) ? bill.split_audit_log.length : 0;
-    const subBillSuffix = '-' + String.fromCharCode(65 + splitCount); // -A, -B, -C...
-    const baseBillNo = bill.bl_bill_no.replace(/-[A-Z]$/, ''); // Ensure we don't double suffix
-    const subBillNo = baseBillNo + subBillSuffix;
+    // 1. The cancellation keeps the reservation's bill number. Only the roster
+    //    and audit metadata move; the amounts as issued are never rewritten.
+    const cancellationReasonText = String(reason).trim();
+    const cancelledByUser = String(req.user?.us_usid || bill.bl_created_by || '');
+
+    const existingDocs = await BillTVL.findAll({
+      where: { bl_original_bill_id: bill.bl_id },
+      attributes: ['bl_entry_no'],
+      transaction
+    });
+    const cancellationEntryNo = billNumberService.nextCancellationEntryNo(
+      bill.bl_entry_no,
+      existingDocs.map((doc) => doc.bl_entry_no)
+    );
 
     const auditLogEntry = {
       timestamp: new Date(),
-      action: 'SPLIT_CANCELLATION',
-      cancelledPassengers,
-      subBillNo,
-      reducedAmount: baseRefund,
-      cancellationCharges: totalCancel
+      action: isFullCancellation ? 'BILL_CANCELLATION' : 'PARTIAL_CANCELLATION',
+      cancelledPassengers: requested,
+      documentNumber: cancellationEntryNo,
+      billNumber: bill.bl_bill_no,
+      cancelledRailwayFare: cancelledFare,
+      cancellationCharges: totalCancel,
+      refundAmount,
+      reason: cancellationReasonText
     };
-    
-    const newAuditLog = Array.isArray(bill.split_audit_log) ? [...bill.split_audit_log, auditLogEntry] : [auditLogEntry];
-    bill.split_audit_log = newAuditLog;
 
-    bill.cancellation_data = Array.isArray(bill.cancellation_data) ? [...bill.cancellation_data, cancelData] : [cancelData];
-    bill.bl_railway_cancellation_charge = (parseFloat(bill.bl_railway_cancellation_charge) || 0) + railChg;
-    bill.bl_agent_cancellation_charge = (parseFloat(bill.bl_agent_cancellation_charge) || 0) + agentChg;
-    bill.total_cancel_charges = (parseFloat(bill.total_cancel_charges) || 0) + totalCancel;
-    bill.refund_amount = (parseFloat(bill.refund_amount) || 0) + refundAmount;
-    
+    bill.split_audit_log = Array.isArray(bill.split_audit_log)
+      ? [...bill.split_audit_log, auditLogEntry]
+      : [auditLogEntry];
+    bill.cancellation_data = Array.isArray(bill.cancellation_data)
+      ? [...bill.cancellation_data, cancelData]
+      : [cancelData];
+    bill.bl_railway_cancellation_charge = round2((parseFloat(bill.bl_railway_cancellation_charge) || 0) + railChg);
+    bill.bl_agent_cancellation_charge = round2((parseFloat(bill.bl_agent_cancellation_charge) || 0) + agentChg);
+    bill.total_cancel_charges = round2((parseFloat(bill.total_cancel_charges) || 0) + totalCancel);
+    bill.refund_amount = round2((parseFloat(bill.refund_amount) || 0) + refundAmount);
     bill.bl_passenger_ids = remainingPassengers;
-    bill.bl_total_amount = originalTotal - baseRefund; // Reduce original bill by cancelled portion
+    bill.cancellation_reason = cancellationReasonText;
+    bill.cancelled_on = new Date();
+    bill.cancellation_date = new Date();
+    bill.cancelled_by = cancelledByUser;
 
-    if (!isPartial || remainingPassengers.length === 0) {
+    if (isFullCancellation) {
       bill.status = 'CANCELLED';
       bill.bl_status = 'CANCELLED';
       bill.is_cancelled = 1;
-      bill.is_deleted = 1; 
-      bill.bl_total_amount = 0; // If all cancel, primary bill drops to 0
     }
 
     await bill.save({ transaction });
 
-    // 2. Generate a separate cancellation charge bill (Bill-B)
+    // 2. Cancellation document: same bill number, type C, carrying the cancelled
+    //    passengers. Its total reverses only the refundable part of the railway
+    //    fare, so reservation charges remain billed and are never refunded.
     const cancelledBill = await BillTVL.create({
-      bl_entry_no: baseBillNo,
-      bl_bill_no: baseBillNo,
-      bl_sub_bill_no: subBillNo,
+      bl_entry_no: cancellationEntryNo,
+      bl_bill_no: bill.bl_bill_no,
+      bl_sub_bill_no: null,
       bl_booking_id: bill.bl_booking_id,
       bl_billing_date: new Date(),
       bl_journey_date: bill.bl_journey_date,
       bl_customer_name: bill.bl_customer_name,
       bl_customer_phone: bill.bl_customer_phone,
       bl_station_boy: bill.bl_station_boy,
-      station_boy_id: bill.station_boy_id,
+      station_boy_id: null,
+      station_boy_name_snapshot: bill.station_boy_name_snapshot,
+      station_boy_incentive_amount: 0,
       bl_from_station: bill.bl_from_station,
       bl_to_station: bill.bl_to_station,
       bl_train_no: bill.bl_train_no,
       bl_class: bill.bl_class,
       bl_pnr: bill.bl_pnr,
-      bl_railway_fare: 0, 
-      bl_total_amount: totalCancel, // Exclusively contains cancellation charges
+      bl_railway_fare: -cancelledFare,
+      bl_sb_incentive: 0,
+      bl_service_charge: 0,
+      bl_platform_fee: 0,
+      bl_misc_charges: 0,
+      bl_delivery_charge: 0,
+      bl_gst: 0,
+      bl_surcharge: 0,
+      bl_discount: 0,
+      bl_advance_amount: 0,
+      bl_total_amount: round2(totalCancel - cancelledFare),
+      bl_railway_cancellation_charge: railChg,
+      bl_agent_cancellation_charge: agentChg,
+      total_cancel_charges: totalCancel,
+      refund_amount: refundAmount,
       bl_bill_type: 'CANCELLED_SPLIT',
+      bl_billing_type: 'C',
+      bl_original_bill_id: bill.bl_id,
       bl_parent_bill_id: bill.bl_id,
-      bl_passenger_ids: cancelledPassengers,
+      bl_passenger_ids: requested,
+      cancellation_reason: cancellationReasonText,
+      cancelled_on: new Date(),
+      cancellation_date: new Date(),
+      cancelled_by: cancelledByUser,
+      payment_status: 'REFUND_DUE',
       status: 'CANCELLED',
       bl_status: 'CANCELLED',
       is_cancelled: 1,
@@ -3046,39 +3134,27 @@ const cancelBillV2 = async (req, res) => {
     
     // 4. Update Ledger
     try {
-      const customerUsid = bill.bl_usid || bill.bl_customer_id || bill.bl_booking_id; // Need to ensure customerId is correct, usually we lookup booking
       const booking = await BookingTVL.findByPk(bill.bl_booking_id, { transaction });
-      const customerId = booking ? booking.bk_usid : customerUsid;
+      const customerId = booking ? booking.bk_usid : (bill.bl_usid || bill.bl_customer_id);
       
       if (customerId) {
-        // A. Credit the customer for the original ticket cost (baseRefund)
+        // One reversal entry per cancellation event, posted against the original
+        // bill and referenced to the C document, so the customer's outstanding
+        // drops by exactly the refund while reservation charges stay billed.
         await CustomerLedgerService.writeLedgerEntry({
           customerId: customerId,
           entryType: 'ADJUSTMENT',
-          referenceType: 'BILL_PARTIAL_CANCEL',
-          referenceId: bill.bl_id,
-          creditAmount: baseRefund,
+          referenceType: 'BILL_CANCELLATION',
+          referenceId: cancelledBill.bl_id,
+          creditAmount: refundAmount,
           debitAmount: 0,
-          remarks: `Partial refund adjustment for cancelled tickets on Bill ${bill.bl_bill_no}`,
+          remarks: `Refund ₹${refundAmount.toFixed(2)} for cancelled tickets on Bill ${bill.bl_bill_no} (${cancellationEntryNo}); railway fare reversed ₹${cancelledFare.toFixed(2)}, cancellation charges retained ₹${totalCancel.toFixed(2)}`,
           createdBy: req.user?.us_usid || 1
         }, transaction);
-
-        // B. Debit the customer for the new cancellation charges bill
-        if (totalCancel > 0) {
-          await CustomerLedgerService.writeLedgerEntry({
-            customerId: customerId,
-            entryType: 'BILL',
-            referenceType: 'CANCEL_CHARGES_BILL',
-            referenceId: cancelledBill.bl_id,
-            creditAmount: 0,
-            debitAmount: totalCancel,
-            remarks: `Cancellation charges for sub-bill ${subBillNo}`,
-            createdBy: req.user?.us_usid || 1
-          }, transaction);
-        }
       }
     } catch (ledgerErr) {
-      console.error('Ledger error on cancel split:', ledgerErr);
+      console.error('Ledger error on cancellation:', ledgerErr);
+      throw ledgerErr;
     }
 
     if (typeof Audit !== 'undefined' && Audit.logAction) {
@@ -3092,7 +3168,20 @@ const cancelBillV2 = async (req, res) => {
     }
 
     await transaction.commit();
-    res.json({ success: true, message: 'Bill cancelled successfully', refundAmount });
+    res.json({
+      success: true,
+      message: 'Bill cancelled successfully',
+      refundAmount,
+      cancellationDocument: {
+        billId: cancelledBill.bl_id,
+        billNumber: cancelledBill.bl_bill_no,
+        entryNumber: cancellationEntryNo,
+        billingType: 'C',
+        originalBillNumber: bill.bl_bill_no,
+        cancelledRailwayFare: cancelledFare,
+        retainedCharges: totalCancel
+      }
+    });
   } catch (error) {
     if (transaction && !transaction.finished) {
       await transaction.rollback();
@@ -3105,13 +3194,18 @@ const cancelBillV2 = async (req, res) => {
       'Railway and Agent cancellation charges are required',
       'Bill not found',
       'Bill is already cancelled',
-      'Cancellation charges cannot exceed'
+      'cannot exceed the refundable railway fare',
+      'A cancellation reason is required',
+      'cannot be cancelled',
+      'already has cancellation document',
+      'Passengers are not on this bill',
+      'Passengers already cancelled'
     ];
     
     const isKnownError = knownErrors.some(msg => error.message.includes(msg));
     const statusCode = isKnownError ? 400 : 500;
     
-    res.status(statusCode).json({ success: false, error: error.message, stack: error.stack });
+    res.status(statusCode).json({ success: false, error: error.message });
   }
 };
 

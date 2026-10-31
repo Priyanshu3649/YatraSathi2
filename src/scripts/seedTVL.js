@@ -1,7 +1,7 @@
 const mysql = require('mysql2/promise');
 const { sequelizeTVL } = require('../../config/db');
 const { 
-  UserTVL, EmployeeTVL, BookingTVL, PaymentTVL, AccountTVL, StationTVL, LoginTVL, CustomerTVL, RoleTVL
+  UserTVL, EmployeeTVL, BookingTVL, PaymentTVL, AccountTVL, StationTVL, LoginTVL, CustomerTVL, RoleTVL, CompanyTVL
 } = require('../models');
 const bcrypt = require('bcryptjs');
 
@@ -55,8 +55,22 @@ async function seedTVLDatabase() {
     await RoleTVL.bulkCreate([
       { fn_fnid: 'ADM', fn_fnshort: 'Admin', fn_fndesc: 'Administrator' },
       { fn_fnid: 'AGT', fn_fnshort: 'Agent', fn_fndesc: 'Booking Agent' },
-      { fn_fnid: 'EMP', fn_fnshort: 'Employee', fn_fndesc: 'Employee' }
+      { fn_fnid: 'EMP', fn_fnshort: 'Employee', fn_fndesc: 'Employee' },
+      { fn_fnid: 'CUS', fn_fnshort: 'Customer', fn_fndesc: 'Customer' },
+      { fn_fnid: 'ACC', fn_fnshort: 'Accounts', fn_fndesc: 'Accounts Team' }
     ]);
+
+    if (CompanyTVL) {
+      await CompanyTVL.findOrCreate({
+        where: { co_coid: 'TRV' },
+        defaults: {
+          co_coid: 'TRV',
+          co_coshort: 'YatraSathi',
+          co_codesc: 'YatraSathi Travel Agency',
+          co_active: 1
+        }
+      });
+    }
 
     // Create sample admin user in TVL
     console.log('Creating sample admin user in TVL...');

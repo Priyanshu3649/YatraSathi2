@@ -21,34 +21,43 @@ if (!fs.existsSync(paymentUploadDir)) {
   fs.mkdirSync(paymentUploadDir, { recursive: true });
 }
 
+// Determine the upload category from the full request URL.
+// req.route.path is only the matched suffix (usually '/'), so it cannot
+// distinguish mounted payment/employee routes.
+const getUploadCategory = (req) => {
+  const requestPath = `${req.baseUrl || ''}${req.path || req.originalUrl || ''}`.toLowerCase();
+
+  if (requestPath.includes('/profile')) return 'profile';
+  if (requestPath.includes('/customer')) return 'customer';
+  if (
+    requestPath.includes('/payment') ||
+    requestPath.includes('/receipt') ||
+    requestPath.includes('/journal') ||
+    requestPath.includes('/contra')
+  ) {
+    return 'payment';
+  }
+  return 'employee';
+};
+
+const categoryConfig = {
+  profile: { dir: profileUploadDir, prefix: 'profile-' },
+  customer: { dir: customerUploadDir, prefix: 'customer-' },
+  payment: { dir: paymentUploadDir, prefix: 'payment-proof-' },
+  employee: { dir: employeeUploadDir, prefix: 'employee-' }
+};
+
 // Configure storage
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    // Check route to determine upload directory
-    if (req.route.path.includes('/profile/')) {
-      cb(null, profileUploadDir);
-    } else if (req.route.path.includes('/customer/') || req.route.path.includes('/customers/')) {
-      cb(null, customerUploadDir);
-    } else if (req.route.path.includes('/payment') || req.route.path.includes('/receipt') || req.route.path.includes('/journal') || req.route.path.includes('/contra')) {
-      cb(null, paymentUploadDir);
-    } else {
-      cb(null, employeeUploadDir);
-    }
+    const category = getUploadCategory(req);
+    cb(null, categoryConfig[category].dir);
   },
   filename: (req, file, cb) => {
-    // Generate unique filename based on route
     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
     const ext = path.extname(file.originalname);
-    
-    if (req.route.path.includes('/profile/')) {
-      cb(null, 'profile-' + uniqueSuffix + ext);
-    } else if (req.route.path.includes('/customer/') || req.route.path.includes('/customers/')) {
-      cb(null, 'customer-' + uniqueSuffix + ext);
-    } else if (req.route.path.includes('/payment') || req.route.path.includes('/receipt') || req.route.path.includes('/journal') || req.route.path.includes('/contra')) {
-      cb(null, 'payment-proof-' + uniqueSuffix + ext);
-    } else {
-      cb(null, 'employee-' + uniqueSuffix + ext);
-    }
+    const category = getUploadCategory(req);
+    cb(null, categoryConfig[category].prefix + uniqueSuffix + ext);
   }
 });
 

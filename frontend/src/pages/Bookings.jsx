@@ -154,6 +154,9 @@ const Bookings = () => {
   });
   const [passengerList, setPassengerList] = useState([]);
   const [customerSuggestions, setCustomerSuggestions] = useState([]);
+  const [showCustomerDropdown, setShowCustomerDropdown] = useState(false);
+  const [highlightedCustomerIndex, setHighlightedCustomerIndex] = useState(-1);
+  const customerDropdownRef = useRef(null);
   const [isEditing, setIsEditing] = useState(false);
   const [selectedReconcileIds, setSelectedReconcileIds] = useState([]);
   const [isReconciling, setIsReconciling] = useState(false);
@@ -389,8 +392,28 @@ const Bookings = () => {
       if (!formData.customerName || formData.customerName.trim() === '') {
         throw new Error('Customer name is required');
       }
+
+      // AUTO-CREATE CUSTOMER: If customer is not linked to an existing record, create one now
+      let resolvedCustomerId = formData.internalCustomerId;
+      if (!resolvedCustomerId) {
+        try {
+          console.log('🆕 New customer detected — auto-creating record in Admin Panel...');
+          const created = await customerAPI.quickCreateCustomer({
+            name: formData.customerName.trim(),
+            phone: formData.phoneNumber.trim()
+          });
+          if (created?.customer?.id) {
+            resolvedCustomerId = created.customer.id;
+            console.log(`✅ Customer ${created.isExisting ? 'found existing' : 'created new'}: ${resolvedCustomerId}`);
+          }
+        } catch (custErr) {
+          // Non-blocking: log but continue — booking can still save without a linked customer ID
+          console.warn('⚠️ Auto-create customer failed (non-blocking):', custErr.message);
+        }
+      }
       
       // Validate passengers
+
       const activePassengers = passengerList.filter(p => p.name && p.name.trim() !== '');
       if (activePassengers.length === 0) {
         throw new Error('At least one passenger is required');
@@ -1192,6 +1215,93 @@ const Bookings = () => {
     }
   }, [isEditing]);
 
+  // Handler when selecting a customer from dropdown suggestions
+  const handleSelectCustomerSuggestion = useCallback((customer) => {
+    if (!customer) return;
+    setFormData(prev => ({
+      ...prev,
+      customerName: customer.name,
+      phoneNumber: customer.phone || prev.phoneNumber,
+      internalCustomerId: customer.id || prev.internalCustomerId
+    }));
+    setShowCustomerDropdown(false);
+    setHighlightedCustomerIndex(-1);
+    
+    // Focus phone number input automatically
+    setTimeout(() => {
+      const phoneEl = document.querySelector('input[name="phoneNumber"]');
+      if (phoneEl) {
+        phoneEl.focus();
+        if (phoneEl.select) phoneEl.select();
+      }
+    }, 50);
+  }, []);
+
+  // Close customer suggestions dropdown on outside click
+  useEffect(() => {
+    const handleOutsideClick = (e) => {
+      if (customerDropdownRef.current && !customerDropdownRef.current.contains(e.target)) {
+        setShowCustomerDropdown(false);
+        setHighlightedCustomerIndex(-1);
+      }
+    };
+    document.addEventListener('mousedown', handleOutsideClick);
+    return () => {
+      document.removeEventListener('mousedown', handleOutsideClick);
+    };
+  }, []);
+
+  // Keyboard navigation inside Customer Name input & suggestions dropdown
+  const handleCustomerNameKeyDown = useCallback((e) => {
+    if (showCustomerDropdown && customerSuggestions.length > 0) {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        setHighlightedCustomerIndex(prev => 
+          prev < customerSuggestions.length - 1 ? prev + 1 : 0
+        );
+        return;
+      }
+      if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        setHighlightedCustomerIndex(prev => 
+          prev > 0 ? prev - 1 : customerSuggestions.length - 1
+        );
+        return;
+      }
+      if (e.key === 'Enter') {
+        if (highlightedCustomerIndex >= 0 && highlightedCustomerIndex < customerSuggestions.length) {
+          e.preventDefault();
+          handleSelectCustomerSuggestion(customerSuggestions[highlightedCustomerIndex]);
+          return;
+        }
+      }
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        setShowCustomerDropdown(false);
+        setHighlightedCustomerIndex(-1);
+        return;
+      }
+    }
+
+    if (e.key === 'Enter') {
+      // Move to phone number on enter if not choosing a dropdown item
+      e.preventDefault();
+      setShowCustomerDropdown(false);
+      const phoneEl = document.querySelector('input[name="phoneNumber"]');
+      if (phoneEl) {
+        phoneEl.focus();
+        if (phoneEl.select) phoneEl.select();
+      }
+      return;
+    }
+
+    // Default Tab navigation
+    if (e.key === 'Tab') {
+      setShowCustomerDropdown(false);
+      handleEnhancedTabNavigation(e, 'customerName');
+    }
+  }, [showCustomerDropdown, customerSuggestions, highlightedCustomerIndex, handleSelectCustomerSuggestion, handleEnhancedTabNavigation]);
+
   // Auto-calculate total passengers when passenger list changes (DERIVED STATE)
   useEffect(() => {
     const total = passengerList.filter(p => p.name && p.name.trim() !== '').length;
@@ -1255,7 +1365,7 @@ const Bookings = () => {
     }));
 
     if (name === 'customerName') {
-      if (value.trim().length >= 2) {
+      if (value.trim().length >= 1) {
         try {
           const results = await customerAPI.searchCustomers(value.trim());
           const rawList = Array.isArray(results) ? results : (results?.customers || results?.data || []);
@@ -1265,8 +1375,10 @@ const Bookings = () => {
             phone: c.phone || c.user?.us_phone || c.us_phone || c.cu_phone || ''
           }));
           setCustomerSuggestions(customerList);
+          setShowCustomerDropdown(customerList.length > 0);
+          setHighlightedCustomerIndex(-1);
 
-          // Check if exact match is selected
+          // If exact match found, also link internalCustomerId
           const match = customerList.find(c => c.name.toLowerCase() === value.trim().toLowerCase());
           if (match && match.phone) {
             setFormData(prev => ({
@@ -1277,9 +1389,13 @@ const Bookings = () => {
           }
         } catch (error) {
           console.warn('Failed to fetch customer suggestions:', error);
+          setCustomerSuggestions([]);
+          setShowCustomerDropdown(false);
         }
       } else {
         setCustomerSuggestions([]);
+        setShowCustomerDropdown(false);
+        setHighlightedCustomerIndex(-1);
       }
     }
 
@@ -1817,7 +1933,7 @@ setSelectedBooking(null); // Clear selection after deletion
                     disabled={!isEditing}
                   />
                   <label className="erp-form-label">Customer Name</label>
-                  <div style={{ position: 'relative' }}>
+                  <div style={{ position: 'relative' }} ref={customerDropdownRef}>
                     <input
                       type="text"
                       name="customerName"
@@ -1826,18 +1942,69 @@ setSelectedBooking(null); // Clear selection after deletion
                       value={formData.customerName}
                       onChange={handleInputChange}
                       onBlur={handleCustomerNameBlur}
-                      onFocus={() => handleFieldFocus('customerName')}
-                      onKeyDown={(e) => handleEnhancedTabNavigation(e, 'customerName')}
+                      onFocus={() => {
+                        handleFieldFocus('customerName');
+                        if (customerSuggestions.length > 0) {
+                          setShowCustomerDropdown(true);
+                        }
+                      }}
+                      onKeyDown={handleCustomerNameKeyDown}
                       disabled={!isEditing}
                       placeholder="Enter name"
-                      list="customer-suggestions"
+                      autoComplete="off"
                       style={{ width: '100%' }}
                     />
-                    <datalist id="customer-suggestions">
-                      {customerSuggestions.map((c, i) => (
-                        <option key={c.id || c.cu_usid || i} value={c.name || `${c.firstName || ''} ${c.lastName || ''}`.trim() || c.cu_name} />
-                      ))}
-                    </datalist>
+                    {showCustomerDropdown && customerSuggestions.length > 0 && (
+                      <div 
+                        className="customer-suggestions-dropdown"
+                        style={{
+                          position: 'absolute',
+                          top: '100%',
+                          left: 0,
+                          right: 0,
+                          backgroundColor: '#ffffff',
+                          border: '1px solid #4169E1',
+                          boxShadow: '0 4px 10px rgba(0,0,0,0.18)',
+                          maxHeight: '220px',
+                          overflowY: 'auto',
+                          zIndex: 9999,
+                          marginTop: '2px'
+                        }}
+                      >
+                        {customerSuggestions.map((c, i) => (
+                          <div
+                            key={c.id || i}
+                            onMouseDown={(e) => {
+                              // Use onMouseDown so it executes before onBlur
+                              e.preventDefault();
+                              handleSelectCustomerSuggestion(c);
+                            }}
+                            onMouseEnter={() => setHighlightedCustomerIndex(i)}
+                            style={{
+                              padding: '6px 10px',
+                              cursor: 'pointer',
+                              fontSize: '12px',
+                              fontFamily: "'Segoe UI', Tahoma, sans-serif",
+                              backgroundColor: highlightedCustomerIndex === i ? '#e8f4ff' : '#ffffff',
+                              color: highlightedCustomerIndex === i ? '#4169E1' : '#222222',
+                              borderBottom: '1px solid #f0f0f0',
+                              display: 'flex',
+                              justifyContent: 'space-between',
+                              alignItems: 'center'
+                            }}
+                          >
+                            <span style={{ fontWeight: highlightedCustomerIndex === i ? '600' : 'normal' }}>
+                              {c.name}
+                            </span>
+                            {c.phone && (
+                              <span style={{ fontSize: '11px', color: '#888', marginLeft: '12px' }}>
+                                {c.phone}
+                              </span>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                   <label className="erp-form-label">Phone Number</label>
                   <input

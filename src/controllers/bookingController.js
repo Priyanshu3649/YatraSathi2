@@ -168,11 +168,13 @@ const createBooking = async (req, res) => {
         } else {
           // 4. Neither User nor Customer exists - create both
           console.log('📝 Creating new user and customer records...');
-          const firstName = customerName.split(' ')[0] || 'Customer';
-          const lastName = customerName.split(' ').slice(1).join(' ') || '';
+          const trimmedName = customerName.trim();
+          const firstName = trimmedName.split(' ')[0] || 'Customer';
+          const lastName = trimmedName.split(' ').slice(1).join(' ') || '';
           
           // Create user record first
-          const userPrimaryId = `US${Math.floor(Math.random() * 1000000)}`;
+          const userCount = await UserTVL.count({ transaction });
+          const userPrimaryId = `CUS${String(userCount + 1).padStart(5, '0')}`;
           console.log('Creating new user record:', userPrimaryId);
           const newUser = await UserTVL.create({
             us_usid: userPrimaryId,
@@ -181,6 +183,7 @@ const createBooking = async (req, res) => {
             us_phone: cleanPhone,
             us_email: `${cleanPhone}@phone.booking`, // Temporary email
             us_usertype: 'customer',
+            us_coid: 'TRV',
             us_roid: 'CUS',
             us_active: 1,
             us_password: 'PHONE_BOOKING', // Temporary password
@@ -188,22 +191,25 @@ const createBooking = async (req, res) => {
             us_mby: req.user.us_usid
           }, { transaction, userId: req.user?.us_usid || req.user?.id });
           
-          // Create customer record
-          const customerNumber = `CUST${Date.now()}${Math.floor(Math.random() * 1000)}`;
-          const customerPrimaryId = `CU${Math.floor(Math.random() * 1000000)}`;
+          // Create customer record in Customer list (Admin panel)
+          const custCount = await Customer.count({ transaction });
+          const customerNumber = `${Math.floor(10000 + Math.random() * 90000)}`;
+          const customerPrimaryId = `CU${Date.now().toString().slice(-6)}${String(custCount + 1).padStart(3, '0')}`.slice(0, 15);
           console.log('Creating new customer record:', customerPrimaryId);
           
           const newCustomer = await Customer.create({
             cu_cusid: customerPrimaryId,
             cu_usid: newUser.us_usid,
             cu_custno: customerNumber,
-            cu_custtype: 'WALK_IN',
+            cu_name: trimmedName,
+            cu_custtype: 'INDIVIDUAL',
             us_fname: firstName,
             us_lname: lastName,
             us_phone: cleanPhone,
             us_email: `${cleanPhone}@phone.booking`,
             cu_active: 1,
             cu_status: 'ACTIVE',
+            status: 'OPEN',
             eby: req.user.us_usid,
             mby: req.user.us_usid
           }, { 

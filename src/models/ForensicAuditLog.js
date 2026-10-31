@@ -34,7 +34,10 @@ const ForensicAuditLog = sequelizeTVL.define('ForensicAuditLog', {
       'INSERT', 'UPDATE', 'DELETE', 'CANCEL', 'CLOSE',
       'LOGIN', 'LOGOUT', 'FAILED_LOGIN',
       'PASSWORD_RESET', 'USER_LOCK', 'USER_UNLOCK',
-      'ROLE_CHANGE', 'PERMISSION_CHANGE'
+      'ROLE_CHANGE', 'PERMISSION_CHANGE',
+      // Ledger/settlement trail: without these the inserts failed with
+      // "Data truncated for column 'action_type'" and the audit row was dropped.
+      'PAYMENT_CREATED', 'ALLOCATION_CREATED', 'LEDGER_DISCREPANCY'
     ),
     allowNull: false,
     field: 'action_type',

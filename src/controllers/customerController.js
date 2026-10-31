@@ -633,6 +633,108 @@ const customerController = {
       console.error('Customer ledger PDF generation failed:', error);
       res.status(500).json({ error: 'Failed to generate PDF', details: error.message });
     }
+  },
+
+  /**
+   * Quick-create a customer record from the Booking module (employees/admin).
+   * Only requires name; phone is optional.
+   * If a customer with the same phone already exists, returns that customer instead.
+   * POST /api/employee/customers/quick-create
+   */
+  quickCreateCustomer: async (req, res) => {
+    const transaction = await sequelize.transaction();
+    try {
+      const { name, phone } = req.body;
+
+      if (!name || !name.trim()) {
+        await transaction.rollback();
+        return res.status(400).json({ success: false, message: 'Customer name is required' });
+      }
+
+      const trimmedName = name.trim();
+      const trimmedPhone = phone ? phone.trim() : '';
+
+      // If phone provided, check for existing customer
+      if (trimmedPhone) {
+        const existingUser = await User.findOne({
+          where: { us_phone: trimmedPhone },
+          transaction
+        });
+        if (existingUser) {
+          const existingCustomer = await Customer.findOne({
+            where: { cu_usid: existingUser.us_usid },
+            transaction
+          });
+          if (existingCustomer) {
+            await transaction.commit();
+            const data = existingCustomer.toJSON();
+            return res.json({
+              success: true,
+              isExisting: true,
+              message: 'Customer already exists',
+              customer: {
+                id: data.cu_cusid,
+                customerId: data.cu_cusid,
+                name: data.cu_name || `${data.us_fname || ''} ${data.us_lname || ''}`.trim(),
+                phone: data.us_phone || trimmedPhone
+              }
+            });
+          }
+        }
+      }
+
+      // Build new user record
+      const nameParts = trimmedName.split(/\s+/);
+      const firstName = nameParts[0];
+      const lastName = nameParts.slice(1).join(' ') || '';
+      const dummyEmail = `guest-${Date.now()}@yatrasathi.local`;
+
+      const newUser = await User.create({
+        us_fname: firstName,
+        us_lname: lastName,
+        us_email: dummyEmail,
+        us_phone: trimmedPhone || null,
+        us_usertype: 'customer',
+        us_roid: 'CUS',
+        us_status: 'active',
+        us_password: await bcrypt.hash(`Guest${Date.now()}`, 10)
+      }, { transaction });
+
+      const custCount = await Customer.count({ transaction });
+      const cusId = `CU${Date.now().toString().slice(-6)}${String(custCount + 1).padStart(3, '0')}`.slice(0, 15);
+      const custNo = `${Math.floor(10000 + Math.random() * 90000)}`;
+
+      const newCustomer = await Customer.create({
+        cu_cusid: cusId,
+        cu_custno: custNo,
+        cu_usid: newUser.us_usid,
+        cu_name: trimmedName,
+        cu_custtype: 'INDIVIDUAL',
+        us_fname: firstName,
+        us_lname: lastName,
+        us_email: dummyEmail,
+        us_phone: trimmedPhone || null
+      }, { transaction });
+
+      await transaction.commit();
+
+      const cData = newCustomer.toJSON();
+      return res.status(201).json({
+        success: true,
+        isExisting: false,
+        message: 'Customer created successfully',
+        customer: {
+          id: cData.cu_cusid,
+          customerId: cData.cu_cusid,
+          name: trimmedName,
+          phone: trimmedPhone
+        }
+      });
+    } catch (error) {
+      await transaction.rollback();
+      console.error('Quick-create customer failed:', error);
+      res.status(500).json({ success: false, message: error.message || 'Failed to create customer' });
+    }
   }
 };
 

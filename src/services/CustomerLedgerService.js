@@ -48,6 +48,29 @@ class CustomerLedgerService {
   }
 
   /**
+   * Resolve any customer identifier (cu_usid, cu_cusid or cu_custno) to the
+   * canonical cu_usid required by the customer_ledger foreign key.
+   */
+  async resolveCustomerUsid(customerId, transaction) {
+    if (!customerId) return customerId;
+
+    const [match] = await sequelizeTVL.query(`
+      SELECT cu_usid
+      FROM cuXcustomer
+      WHERE cu_usid = :customerId
+         OR cu_cusid = :customerId
+         OR cu_custno = :customerId
+      LIMIT 1
+    `, {
+      replacements: { customerId: String(customerId) },
+      type: QueryTypes.SELECT,
+      transaction
+    });
+
+    return match ? match.cu_usid : customerId;
+  }
+
+  /**
    * Write an entry to the customer ledger (immutable audit trail)
    */
   async writeLedgerEntry({
@@ -61,8 +84,10 @@ class CustomerLedgerService {
     createdBy = 'SYSTEM',
     entryDate = new Date()
   }, transaction) {
+    const resolvedCustomerId = await this.resolveCustomerUsid(customerId, transaction);
+
     return CustomerLedger.create({
-      customer_id: customerId,
+      customer_id: resolvedCustomerId,
       entry_type: entryType,
       reference_type: referenceType,
       reference_id: referenceId,
@@ -136,9 +161,11 @@ class CustomerLedgerService {
   }
 
   /**
-   * FIFO Auto-allocation of a payment to outstanding bills
+   * Auto-allocation of a payment to outstanding bills.
+   * Bills carrying the payment's PNR settle first; otherwise the oldest pending
+   * bill settles first.
    */
-  async allocatePaymentOnCreation(paymentId, customerId, amount, transaction, userId = 'SYSTEM') {
+  async allocatePaymentOnCreation(paymentId, customerId, amount, transaction, userId = 'SYSTEM', options = {}) {
     // Step 1: Write PAYMENT ledger entry
     await this.writeLedgerEntry({
       customerId,
@@ -152,105 +179,39 @@ class CustomerLedgerService {
     }, transaction);
 
     const customerIds = await this.getMatchingCustomerIds(customerId);
+    const customerSettlementService = require('./customerSettlementService');
 
-    // Step 2: Fetch unpaid / partially paid bills ordered by bill_date ASC (oldest first)
-    const [unpaidBills] = await sequelizeTVL.query(`
-      SELECT 
-        b.bl_id, 
-        b.bl_total_amount, 
-        COALESCE(SUM(pa.allocated_amount), 0) AS already_allocated
-      FROM blXbilling b
-      JOIN bkXbooking bk ON b.bl_booking_id = bk.bk_bkid
-      LEFT JOIN payment_allocations pa ON b.bl_id = pa.bill_id
-      WHERE bk.bk_usid IN (:customerIds)
-        AND b.bl_status NOT IN ('CANCELLED', 'CAN')
-        AND (b.payment_status IS NULL OR b.payment_status IN ('UNPAID', 'PARTIALLY_PAID'))
-      GROUP BY b.bl_id, b.bl_total_amount, b.bl_billing_date
-      ORDER BY b.bl_billing_date ASC, b.bl_id ASC
-    `, {
-      replacements: { customerIds },
-      type: QueryTypes.SELECT,
-      transaction
-    });
+    const result = await customerSettlementService.allocatePaymentToBills({
+      paymentId,
+      customerIds,
+      amount,
+      pnr: options.pnr,
+      transaction,
+      userId,
+      onAllocate: async ({ bill, allocAmount, settledByPnr }) => {
+        await this.writeLedgerEntry({
+          customerId,
+          entryType: 'ADJUSTMENT',
+          referenceType: 'BILL',
+          referenceId: bill.bl_id,
+          debitAmount: 0.00,
+          creditAmount: 0.00,
+          remarks: `${settledByPnr ? 'PNR' : 'FIFO'} allocation: Applied ₹${allocAmount} from Payment ${paymentId} to Bill ${bill.bl_id}`,
+          createdBy: userId
+        }, transaction);
 
-    let remainingPayment = parseFloat(amount) || 0;
-
-    for (const bill of unpaidBills) {
-      if (remainingPayment <= 0) break;
-
-      const billTotal = parseFloat(bill.bl_total_amount) || 0;
-      const alreadyAllocated = parseFloat(bill.already_allocated) || 0;
-      const billPending = Math.max(0, billTotal - alreadyAllocated);
-
-      if (billPending <= 0) continue;
-
-      const allocAmount = Math.min(remainingPayment, billPending);
-      
-      // Store allocation entry
-      await PaymentAllocation.create({
-        payment_id: paymentId,
-        bill_id: bill.bl_id,
-        allocated_amount: allocAmount,
-        allocation_date: new Date(),
-        created_by: userId,
-        created_at: new Date()
-      }, { transaction });
-
-      // Store allocation audit in ledger
-      await this.writeLedgerEntry({
-        customerId,
-        entryType: 'ADJUSTMENT',
-        referenceType: 'BILL',
-        referenceId: bill.bl_id,
-        debitAmount: 0.00,
-        creditAmount: 0.00,
-        remarks: `Auto-allocation: Allocated ₹${allocAmount} from Payment ${paymentId} to Bill ${bill.bl_id}`,
-        createdBy: userId
-      }, transaction);
-
-      // Audit log creation
-      Audit.logAction({
-        module: Audit.MODULES.LEDGER,
-        recordId: String(bill.bl_id),
-        action: 'ALLOCATION_CREATED',
-        fieldName: 'allocated_amount',
-        oldValue: null,
-        newValue: String(allocAmount)
-      });
-
-      // Recalculate bill payment status
-      const totalAllocated = alreadyAllocated + allocAmount;
-      let newStatus = 'UNPAID';
-      if (totalAllocated >= billTotal) {
-        newStatus = 'FULLY_PAID';
-      } else if (totalAllocated > 0) {
-        newStatus = 'PARTIALLY_PAID';
+        Audit.logAction({
+          module: Audit.MODULES.LEDGER,
+          recordId: String(bill.bl_id),
+          action: 'ALLOCATION_CREATED',
+          fieldName: 'allocated_amount',
+          oldValue: null,
+          newValue: String(allocAmount)
+        });
       }
-
-      await sequelizeTVL.query(`
-        UPDATE blXbilling 
-        SET payment_status = :newStatus 
-        WHERE bl_id = :billId
-      `, {
-        replacements: { newStatus, billId: bill.bl_id },
-        type: QueryTypes.UPDATE,
-        transaction
-      });
-
-      remainingPayment -= allocAmount;
-    }
-
-    // Update the payment's allocated and unallocated details
-    const totalAllocated = amount - remainingPayment;
-    await sequelizeTVL.query(`
-      UPDATE ptXpayment 
-      SET pt_allocatedamt = :totalAllocated, pt_unallocamt = :remainingPayment
-      WHERE pt_ptid = :paymentId
-    `, {
-      replacements: { totalAllocated, remainingPayment, paymentId },
-      type: QueryTypes.UPDATE,
-      transaction
     });
+
+    return result;
   }
 
   /**

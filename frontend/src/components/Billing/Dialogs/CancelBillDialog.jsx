@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 
+const round2 = (value) => Math.round((Number(value) || 0) * 100) / 100;
+
 const CancelBillDialog = ({ bill, onClose, onConfirm }) => {
   const [railwayCharges, setRailwayCharges] = useState(0);
   const [agentCharges, setAgentCharges] = useState(0);
@@ -8,16 +10,27 @@ const CancelBillDialog = ({ bill, onClose, onConfirm }) => {
   const [error, setError] = useState('');
 
   const passengers = bill?.passengerList || bill?.passengers || [];
-  const originalTotal = parseFloat(bill?.bl_total_amount || 0);
-  
   const railChg = parseFloat(railwayCharges) || 0;
   const agentChg = parseFloat(agentCharges) || 0;
   const totalCharges = railChg + agentChg;
-  
-  const totalPax = passengers.length || 1;
+
+  // Refund comes only from the railway fare. Service charge, station boy
+  // incentive, platform fee, GST and every other reservation charge is retained.
+  // Fares already reversed by earlier C documents of this bill are counted through
+  // the accumulated charges/refund on the reservation bill, so the per-ticket rate
+  // always divides the fare that is still refundable by the tickets still on it.
+  const railwayFare = parseFloat(bill?.railwayFare ?? bill?.bl_railway_fare) || 0;
+  const reversedFareSoFar =
+    (parseFloat(bill?.bl_railway_cancellation_charge) || 0) +
+    (parseFloat(bill?.bl_agent_cancellation_charge) || 0) +
+    (parseFloat(bill?.refund_amount) || 0);
+  const refundableFare = Math.max(0, round2(railwayFare - reversedFareSoFar));
+  const ticketsOnBill = passengers.length || 1;
   const selectedPax = selectedPassengerIds.length;
-  const baseRefund = (originalTotal / totalPax) * selectedPax;
-  const refundAmount = Math.max(0, baseRefund - totalCharges);
+  const perTicketFare = refundableFare / ticketsOnBill;
+  const cancelledFare = Math.min(round2(perTicketFare * selectedPax), refundableFare);
+  const refundAmount = Math.max(0, round2(cancelledFare - totalCharges));
+  const chargesExceedFare = totalCharges > cancelledFare;
 
   const handlePassengerToggle = (passId) => {
     setSelectedPassengerIds(prev => 
@@ -43,7 +56,7 @@ const CancelBillDialog = ({ bill, onClose, onConfirm }) => {
         if (activeTag === 'textarea' || activeTag === 'button') {
           return;
         }
-        if (!(totalCharges > baseRefund || selectedPassengerIds.length === 0)) {
+        if (!(chargesExceedFare || selectedPassengerIds.length === 0)) {
            e.preventDefault();
            handleConfirm();
         }
@@ -68,7 +81,7 @@ const CancelBillDialog = ({ bill, onClose, onConfirm }) => {
     };
     window.addEventListener('keydown', handleGlobalKeyDown);
     return () => window.removeEventListener('keydown', handleGlobalKeyDown);
-  }, [onClose, totalCharges, baseRefund, selectedPassengerIds]);
+  }, [onClose, railwayCharges, agentCharges, reason, selectedPassengerIds, cancelledFare, chargesExceedFare]);
 
   const handleSelectAll = () => {
     if (selectedPassengerIds.length === passengers.length) {
@@ -83,8 +96,12 @@ const CancelBillDialog = ({ bill, onClose, onConfirm }) => {
       setError('Please select at least one passenger to cancel.');
       return;
     }
-    if (totalCharges > baseRefund) {
-      setError('Total cancellation charges cannot exceed the refundable amount for the selected passengers.');
+    if (chargesExceedFare) {
+      setError(`Cancellation charges cannot exceed the refundable railway fare of ₹${cancelledFare.toFixed(2)} for the selected passengers. Service charge and station boy incentive are retained, never refunded.`);
+      return;
+    }
+    if (!String(reason).trim()) {
+      setError('A cancellation reason is required.');
       return;
     }
 
@@ -105,20 +122,23 @@ const CancelBillDialog = ({ bill, onClose, onConfirm }) => {
         
         <div style={{ marginBottom: '16px', background: '#f5f5f5', padding: '12px', borderRadius: '4px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-            <span>Original Total Amount:</span>
-            <strong>₹{originalTotal.toFixed(2)}</strong>
+            <span>Railway fare still refundable on this bill:</span>
+            <strong>₹{refundableFare.toFixed(2)}</strong>
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-            <span>Base Refund (for {selectedPax} selected):</span>
-            <strong>₹{baseRefund.toFixed(2)}</strong>
+            <span>Cancelled railway fare ({selectedPax} of {ticketsOnBill} tickets):</span>
+            <strong>₹{cancelledFare.toFixed(2)}</strong>
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
             <span>Total Cancellation Charges:</span>
             <strong style={{ color: '#d32f2f' }}>₹{totalCharges.toFixed(2)}</strong>
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px solid #ccc', paddingTop: '8px', marginTop: '8px' }}>
-            <span>Final Refundable Amount:</span>
+            <span>Refund Payable:</span>
             <strong style={{ color: '#388e3c' }}>₹{refundAmount.toFixed(2)}</strong>
+          </div>
+          <div style={{ fontSize: '12px', color: '#666', marginTop: '8px' }}>
+            Service charge, station boy incentive and other reservation charges are retained.
           </div>
         </div>
 
@@ -128,7 +148,7 @@ const CancelBillDialog = ({ bill, onClose, onConfirm }) => {
             type="number" 
             value={railwayCharges}
             onChange={(e) => setRailwayCharges(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Enter' && !(totalCharges > baseRefund || selectedPassengerIds.length === 0)) handleConfirm(); }}
+            onKeyDown={(e) => { if (e.key === 'Enter' && !(chargesExceedFare || selectedPassengerIds.length === 0)) handleConfirm(); }}
             style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ccc' }}
             tabIndex={0}
             min="0"
@@ -141,7 +161,7 @@ const CancelBillDialog = ({ bill, onClose, onConfirm }) => {
             type="number" 
             value={agentCharges}
             onChange={(e) => setAgentCharges(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Enter' && !(totalCharges > baseRefund || selectedPassengerIds.length === 0)) handleConfirm(); }}
+            onKeyDown={(e) => { if (e.key === 'Enter' && !(chargesExceedFare || selectedPassengerIds.length === 0)) handleConfirm(); }}
             style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ccc' }}
             tabIndex={0}
             min="0"
@@ -194,14 +214,14 @@ const CancelBillDialog = ({ bill, onClose, onConfirm }) => {
           <button onClick={onClose} style={{ padding: '8px 16px', border: '1px solid #ccc', background: '#fff', borderRadius: '4px', cursor: 'pointer' }}>Cancel</button>
           <button 
             onClick={handleConfirm} 
-            disabled={totalCharges > baseRefund || selectedPassengerIds.length === 0}
+            disabled={chargesExceedFare || selectedPassengerIds.length === 0}
             style={{ 
               padding: '8px 16px', 
               border: 'none', 
-              background: (totalCharges > baseRefund || selectedPassengerIds.length === 0) ? '#ccc' : '#d32f2f', 
+              background: (chargesExceedFare || selectedPassengerIds.length === 0) ? '#ccc' : '#d32f2f', 
               color: '#fff', 
               borderRadius: '4px', 
-              cursor: (totalCharges > baseRefund || selectedPassengerIds.length === 0) ? 'not-allowed' : 'pointer' 
+              cursor: (chargesExceedFare || selectedPassengerIds.length === 0) ? 'not-allowed' : 'pointer' 
             }}
           >
             Confirm Cancellation

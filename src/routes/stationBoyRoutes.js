@@ -18,6 +18,7 @@ router.use(authMiddleware);
 
 // Specific routes first
 router.get('/active', getActiveStationBoys);
+router.get('/payments', getAllPayments);
 
 // CRUD routes
 router.get('/', getAllStationBoys);
@@ -27,7 +28,6 @@ router.put('/:id', updateStationBoy);
 router.delete('/:id', deleteStationBoy);
 
 // Payment entry route
-router.get('/payments', getAllPayments);
 router.post('/:id/payments', createPayment);
 
 // Ledger report route

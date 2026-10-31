@@ -86,7 +86,8 @@ const StationBoyReconciliation = () => {
         <button 
           className="erp-button" 
           onClick={handleReconcile} 
-          disabled={!selectedRecord || selectedRecord.is_reconciled}
+          disabled={!selectedRecord || selectedRecord.is_reconciled || !selectedRecord.isSettled}
+          title={selectedRecord && !selectedRecord.isSettled ? 'Only fully settled payments can be reconciled' : ''}
         >
           Reconcile Selected
         </button>
@@ -116,15 +117,16 @@ const StationBoyReconciliation = () => {
                   <th>Mode</th>
                   <th>Ref No.</th>
                   <th>Amount</th>
+                  <th>Settled</th>
                   <th>Status</th>
                   <th>Reconciled</th>
                 </tr>
               </thead>
               <tbody>
                 {loading && payments.length === 0 ? (
-                  <tr><td colSpan="8" style={{ textAlign: 'center', padding: '20px' }}>Loading...</td></tr>
+                  <tr><td colSpan="9" style={{ textAlign: 'center', padding: '20px' }}>Loading...</td></tr>
                 ) : payments.length === 0 ? (
-                  <tr><td colSpan="8" style={{ textAlign: 'center', padding: '20px' }}>No payment records found.</td></tr>
+                  <tr><td colSpan="9" style={{ textAlign: 'center', padding: '20px' }}>No payment records found.</td></tr>
                 ) : (
                   payments.map(payment => (
                     <tr 
@@ -139,6 +141,15 @@ const StationBoyReconciliation = () => {
                       <td>{payment.payment_mode}</td>
                       <td>{payment.reference_number || '-'}</td>
                       <td style={{ textAlign: 'right', fontWeight: 'bold' }}>{formatCurrency(payment.amount)}</td>
+                      <td style={{ textAlign: 'center' }}>
+                        {payment.isSettled ? (
+                          <span style={{ color: '#155724', fontWeight: 'bold' }}>
+                            Yes ({payment.allocatedBillCount} bill{payment.allocatedBillCount === 1 ? '' : 's'})
+                          </span>
+                        ) : (
+                          <span style={{ color: '#721c24' }}>No</span>
+                        )}
+                      </td>
                       <td>
                         <span className={`status-badge status-${payment.status.toLowerCase()}`}>
                           {payment.status}

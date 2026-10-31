@@ -20,6 +20,8 @@ const PaymentAlloc = require('./PaymentAlloc');
 const PaymentAllocTVL = require('./PaymentAllocTVL');
 const Session = require('./Session');
 const StationBoyPayment = require('./StationBoyPayment');
+const StationBoyPaymentAllocation = require('./StationBoyPaymentAllocation');
+const BillNumberSequence = require('./BillNumberSequence');
 const Config = require('./Config');
 const ReportTemplate = require('./ReportTemplate');
 const FinancialTransactionRef = require('./FinancialTransactionRef');
@@ -253,6 +255,11 @@ BillTVL.hasMany(PaymentAllocation, { foreignKey: 'bill_id', sourceKey: 'bl_id', 
 StationBoy.hasMany(StationBoyPayment, { foreignKey: 'station_boy_id', as: 'payments' });
 StationBoyPayment.belongsTo(StationBoy, { foreignKey: 'station_boy_id', as: 'stationBoy' });
 
+StationBoyPayment.hasMany(StationBoyPaymentAllocation, { foreignKey: 'payment_id', as: 'allocations', constraints: false });
+StationBoyPaymentAllocation.belongsTo(StationBoyPayment, { foreignKey: 'payment_id', as: 'payment', constraints: false });
+StationBoyPaymentAllocation.belongsTo(BillTVL, { foreignKey: 'bill_id', targetKey: 'bl_id', as: 'bill', constraints: false });
+BillTVL.hasMany(StationBoyPaymentAllocation, { foreignKey: 'bill_id', sourceKey: 'bl_id', as: 'stationBoyAllocations', constraints: false });
+
 
 module.exports = {
   FinancialTransactionRef,
@@ -324,5 +331,7 @@ module.exports = {
   PaymentAllocation,
   CustomerLedger,
   StationBoy,
-  StationBoyPayment
+  StationBoyPayment,
+  StationBoyPaymentAllocation,
+  BillNumberSequence
 };

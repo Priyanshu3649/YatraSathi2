@@ -174,6 +174,28 @@ const BillTVL = sequelizeTVL.define('blXbilling', {
     defaultValue: 'PRIMARY',
     comment: 'Type of bill (PRIMARY or CANCELLED_SPLIT)'
   },
+  bl_billing_type: {
+    type: DataTypes.ENUM('R', 'C'),
+    defaultValue: 'R',
+    allowNull: false,
+    comment: 'Billing Type: R = Reservation/issued bill, C = Cancellation document'
+  },
+  bl_entry_no_sequential: {
+    type: DataTypes.STRING(30),
+    allowNull: true,
+    comment: 'Generated: FY-format bill number, NULL for legacy numbers (unique index target)',
+    readOnly: true
+  },
+  bl_original_bill_id: {
+    type: DataTypes.BIGINT,
+    allowNull: true,
+    comment: 'For billing_type C: the bill whose accounting effect this document reverses'
+  },
+  cancellation_reason: {
+    type: DataTypes.TEXT,
+    allowNull: true,
+    comment: 'Reason recorded when a bill is cancelled'
+  },
   bl_passenger_ids: {
     type: DataTypes.JSON,
     allowNull: true,

@@ -975,6 +975,23 @@ export const paymentAPI = {
     }
 
     return data;
+  },
+
+  // Quick-create a customer record (for employees/admin) from booking module
+  quickCreateCustomer: async ({ name, phone }) => {
+    const response = await fetch(`${API_BASE_URL}/employee/customers/quick-create`, {
+      method: 'POST',
+      headers: getHeaders(true),
+      body: JSON.stringify({ name: name?.trim(), phone: phone?.trim() || '' })
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.message || 'Failed to create customer');
+    }
+
+    return data;
   }
 };
 
@@ -1496,7 +1513,7 @@ export const billingAPI = {
     const data = await response.json();
 
     if (!response.ok) {
-      throw new Error(data.message || 'Failed to cancel bill');
+      throw new Error(data.error || data.message || 'Failed to cancel bill');
     }
 
     return data;

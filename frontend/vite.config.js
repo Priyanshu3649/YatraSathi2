@@ -23,6 +23,11 @@ export default defineConfig({
           });
         },
       },
+      '/uploads': {
+        target: 'http://127.0.0.1:5004',
+        changeOrigin: true,
+        secure: false,
+      },
       '/socket.io': {
         target: 'http://127.0.0.1:5004',
         ws: true,

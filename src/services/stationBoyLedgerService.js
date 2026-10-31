@@ -1,54 +1,40 @@
-const { StationBoy, StationBoyPayment, BillTVL } = require('../models');
+const { StationBoy } = require('../models');
 const { sequelizeTVL: sequelize } = require('../../config/db');
 const { QueryTypes } = require('sequelize');
+const settlementService = require('./stationBoySettlementService');
+
+const round2 = settlementService.round2;
 
 class StationBoyLedgerService {
   /**
-   * Calculate Station Boy Ledger
+   * Station Boy Ledger
+   * Payable = net railway fare + station boy incentive (both paid to the station boy)
+   * Payments settle the oldest pending bill first (FIFO).
    */
   async getStationBoyVintageLedger(stationBoyId, fromDate, toDate) {
-    // 1. Fetch Station Boy details
     const stationBoy = await StationBoy.findByPk(stationBoyId);
     if (!stationBoy) {
       throw new Error(`Station Boy not found with ID ${stationBoyId}`);
     }
 
-    // 2. Calculate default dates: Current Financial Year (April 1st to March 31st)
     const today = new Date();
     const currentYear = today.getFullYear();
     const currentMonth = today.getMonth(); // 0-indexed: April is 3
     const startYear = currentMonth >= 3 ? currentYear : currentYear - 1;
 
-    const defaultFromDate = `${startYear}-04-01`;
-    const defaultToDate = `${startYear + 1}-03-31`;
+    const finalFromDate = fromDate || `${startYear}-04-01`;
+    const finalToDate = toDate || `${startYear + 1}-03-31`;
 
-    const finalFromDate = fromDate || defaultFromDate;
-    const finalToDate = toDate || defaultToDate;
+    const formattedFromDate = this.formatDateStr(finalFromDate);
+    const formattedToDate = this.formatDateStr(finalToDate);
 
-    // Helper to format date ONLY to YYYY-MM-DD
-    const formatDateStr = (d) => {
-      const dateObj = new Date(d);
-      if (isNaN(dateObj)) return '';
-      const year = dateObj.getFullYear();
-      const month = String(dateObj.getMonth() + 1).padStart(2, '0');
-      const day = String(dateObj.getDate()).padStart(2, '0');
-      return `${year}-${month}-${day}`;
-    };
+    const allBills = await settlementService.getPayableBills(stationBoyId);
 
-    const formattedFromDate = formatDateStr(finalFromDate);
-    const formattedToDate = formatDateStr(finalToDate);
-
-    // 3. Calculate Opening Balance: Sum(Incentives) - Sum(Payments) before finalFromDate
-    const [incentivesBefore] = await sequelize.query(`
-      SELECT COALESCE(SUM(station_boy_incentive_amount), 0) AS total_incentive
-      FROM blXbilling
-      WHERE station_boy_id = :stationBoyId
-        AND status NOT IN ('CANCELLED', 'CAN')
-        AND bl_billing_date < :fromDate
-    `, {
-      replacements: { stationBoyId, fromDate: formattedFromDate },
-      type: QueryTypes.SELECT
-    });
+    const openingPayable = round2(
+      allBills
+        .filter((bill) => this.formatDateStr(bill.billDate) < formattedFromDate)
+        .reduce((sum, bill) => sum + bill.payable, 0)
+    );
 
     const [paymentsBefore] = await sequelize.query(`
       SELECT COALESCE(SUM(amount), 0) AS total_payment
@@ -61,102 +47,152 @@ class StationBoyLedgerService {
       type: QueryTypes.SELECT
     });
 
-    const totalIncentiveBefore = parseFloat(incentivesBefore?.total_incentive || 0);
-    const totalPaymentBefore = parseFloat(paymentsBefore?.total_payment || 0);
-    const openingBalance = totalIncentiveBefore - totalPaymentBefore;
+    const openingPayments = round2(paymentsBefore?.total_payment);
+    const openingBalance = round2(openingPayable - openingPayments);
 
-    // 4. Fetch Bill Incentives in the range
-    const bills = await sequelize.query(`
-      SELECT 
-        bl_id AS id,
-        bl_billing_date AS date,
-        bl_bill_no AS invoice_number,
-        station_boy_incentive_amount AS amount,
-        bl_created_at AS created_at
-      FROM blXbilling
-      WHERE station_boy_id = :stationBoyId
-        AND bl_billing_date >= :fromDate
-        AND bl_billing_date <= :toDate
-        AND status NOT IN ('CANCELLED', 'CAN')
-        AND station_boy_incentive_amount > 0
-    `, {
-      replacements: { stationBoyId, fromDate: formattedFromDate, toDate: formattedToDate },
-      type: QueryTypes.SELECT
+    const periodBills = allBills.filter((bill) => {
+      const billDate = this.formatDateStr(bill.billDate);
+      return billDate >= formattedFromDate && billDate <= formattedToDate;
     });
 
-    // 5. Fetch Payments in the range
     const payments = await sequelize.query(`
-      SELECT 
+      SELECT
         id,
         payment_date AS date,
         reference_number,
         amount,
         payment_mode,
         remarks,
-        created_at
+        is_reconciled,
+        reconciled_at,
+        created_at,
+        (SELECT COALESCE(SUM(allocated_amount), 0) FROM sbXsbpayalloc WHERE payment_id = sbXsbpay.id) AS allocated
       FROM sbXsbpay
       WHERE station_boy_id = :stationBoyId
         AND payment_date >= :fromDate
         AND payment_date <= :toDate
         AND status = 'ACTIVE'
+      ORDER BY payment_date ASC, id ASC
     `, {
       replacements: { stationBoyId, fromDate: formattedFromDate, toDate: formattedToDate },
       type: QueryTypes.SELECT
     });
 
-    // 6. Map and merge entries
-    const billEntries = (bills || []).map(b => ({
-      id: b.id,
-      date: formatDateStr(b.date),
-      transactionType: 'BILL_INCENTIVE',
-      particulars: `Incentive from Bill ${b.invoice_number}`,
-      reference: b.invoice_number || '',
-      incentive: parseFloat(b.amount) || 0,
+    const paymentIds = payments.map((payment) => payment.id);
+    let paymentAllocations = [];
+    if (paymentIds.length > 0) {
+      paymentAllocations = await sequelize.query(`
+        SELECT
+          a.payment_id,
+          a.bill_id,
+          a.allocated_amount,
+          a.is_reconciled,
+          b.bl_bill_no,
+          b.bl_sub_bill_no,
+          b.bl_billing_date
+        FROM sbXsbpayalloc a
+        JOIN blXbilling b ON b.bl_id = a.bill_id
+        WHERE a.payment_id IN (:paymentIds)
+        ORDER BY b.bl_billing_date ASC, a.bill_id ASC
+      `, {
+        replacements: { paymentIds },
+        type: QueryTypes.SELECT
+      });
+    }
+
+    const allocationsByPayment = new Map();
+    for (const allocation of paymentAllocations) {
+      const paymentId = Number(allocation.payment_id);
+      if (!allocationsByPayment.has(paymentId)) {
+        allocationsByPayment.set(paymentId, []);
+      }
+      allocationsByPayment.get(paymentId).push({
+        billId: allocation.bill_id,
+        billNo: allocation.bl_bill_no,
+        subBillNo: allocation.bl_sub_bill_no || null,
+        billDate: this.formatDateStr(allocation.bl_billing_date),
+        amount: round2(allocation.allocated_amount),
+        isReconciled: Boolean(allocation.is_reconciled)
+      });
+    }
+
+    const billEntries = periodBills.map((bill) => ({
+      id: bill.billId,
+      date: this.formatDateStr(bill.billDate),
+      transactionType: 'BILL_PAYABLE',
+      particulars: `Net railway fare + incentive - Bill ${bill.billNo}${bill.subBillNo ? ` (${bill.subBillNo})` : ''}`,
+      reference: bill.billNo + (bill.subBillNo ? ` / ${bill.subBillNo}` : ''),
+      railwayFare: bill.railwayFare,
+      incentive: bill.incentive,
+      payable: bill.payable,
       payment: 0,
-      created_at: b.created_at
+      settledAmount: bill.allocated,
+      pendingAmount: bill.pending,
+      settlementStatus: bill.settlementStatus,
+      created_at: bill.createdAt
     }));
 
-    const paymentEntries = (payments || []).map(p => ({
-      id: p.id,
-      date: formatDateStr(p.date),
-      transactionType: 'PAYMENT',
-      particulars: p.remarks || 'Payment Made',
-      reference: p.reference_number || `SBPAY-${p.id}`,
-      incentive: 0,
-      payment: parseFloat(p.amount) || 0,
-      created_at: p.created_at
-    }));
+    const paymentEntries = payments.map((payment) => {
+      const amount = round2(payment.amount);
+      const allocated = round2(payment.allocated);
+      const allocations = allocationsByPayment.get(Number(payment.id)) || [];
+      const isFullySettled = allocated >= amount - 0.009;
+
+      return {
+        id: payment.id,
+        date: this.formatDateStr(payment.date),
+        transactionType: 'PAYMENT',
+        particulars: payment.remarks || 'Payment made to station boy',
+        reference: payment.reference_number || `SBPAY-${payment.id}`,
+        railwayFare: 0,
+        incentive: 0,
+        payable: 0,
+        payment: amount,
+        settledAmount: allocated,
+        pendingAmount: round2(Math.max(0, amount - allocated)),
+        settlementStatus: isFullySettled ? 'SETTLED' : 'UNSETTLED',
+        isReconciled: Boolean(payment.is_reconciled),
+        reconciledAt: payment.reconciled_at,
+        allocations,
+        created_at: payment.created_at
+      };
+    });
 
     const mergedEntries = [...billEntries, ...paymentEntries];
 
-    // Sort entries: date ASC, created_at ASC, id ASC
     mergedEntries.sort((a, b) => {
       const dateA = new Date(a.date).getTime();
       const dateB = new Date(b.date).getTime();
       if (dateA !== dateB) return dateA - dateB;
 
-      const timeA = new Date(a.created_at || 0).getTime();
-      const timeB = new Date(b.created_at || 0).getTime();
-      if (timeA !== timeB) return timeA - timeB;
+      // Bills before payments on the same day so a payment settles that day's bill first.
+      if (a.transactionType !== b.transactionType) {
+        return a.transactionType === 'BILL_PAYABLE' ? -1 : 1;
+      }
 
       return a.id - b.id;
     });
 
-    // 7. Calculate running balances and totals
     let runningBalance = openingBalance;
+    let totalRailwayFare = 0;
     let totalIncentive = 0;
+    let totalPayable = 0;
     let totalPayment = 0;
 
-    const entries = mergedEntries.map(entry => {
-      runningBalance = runningBalance + entry.incentive - entry.payment;
-      totalIncentive += entry.incentive;
-      totalPayment += entry.payment;
+    const entries = mergedEntries.map((entry) => {
+      runningBalance = round2(runningBalance + entry.payable - entry.payment);
+      totalRailwayFare = round2(totalRailwayFare + entry.railwayFare);
+      totalIncentive = round2(totalIncentive + entry.incentive);
+      totalPayable = round2(totalPayable + entry.payable);
+      totalPayment = round2(totalPayment + entry.payment);
 
       return {
         ...entry,
         balance: runningBalance
       };
     });
+
+    const outstanding = round2(allBills.reduce((sum, bill) => sum + bill.pending, 0));
 
     return {
       success: true,
@@ -172,11 +208,27 @@ class StationBoyLedgerService {
       openingBalance,
       entries,
       totals: {
+        railwayFare: totalRailwayFare,
         incentive: totalIncentive,
+        payable: totalPayable,
         payment: totalPayment
       },
+      outstanding,
       closingBalance: runningBalance
     };
+  }
+
+  formatDateStr(d) {
+    if (!d) return '';
+    if (typeof d === 'string' && /^\d{4}-\d{2}-\d{2}/.test(d)) {
+      return d.slice(0, 10);
+    }
+    const dateObj = new Date(d);
+    if (Number.isNaN(dateObj.getTime())) return '';
+    const year = dateObj.getFullYear();
+    const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+    const day = String(dateObj.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
   }
 }
 

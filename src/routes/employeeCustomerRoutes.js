@@ -2,7 +2,8 @@ const express = require('express');
 const { 
   searchCustomers,
   getCustomerById,
-  findCustomerByPhone
+  findCustomerByPhone,
+  quickCreateCustomer
 } = require('../controllers/customerController');
 const authMiddleware = require('../middleware/authMiddleware');
 
@@ -25,6 +26,7 @@ router.use((req, res, next) => {
 });
 
 // Employee customer search and access routes
+router.post('/quick-create', quickCreateCustomer); // Quick-create from Booking module
 router.get('/search', searchCustomers);
 router.get('/phone/:phoneNumber', findCustomerByPhone); // MANDATORY: Phone lookup endpoint for employees
 router.get('/:id', getCustomerById);

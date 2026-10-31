@@ -6,6 +6,7 @@ import { parseError, validateFormData } from '../utils/errorParser';
 import PaginationControls from './common/PaginationControls';
 import useERPFilters from '../hooks/useERPFilters';
 import CustomerServiceChargeModal from './Admin/CustomerServiceChargeModal';
+import SaveConfirmationModal from './common/SaveConfirmationModal';
 import '../styles/vintage-erp-theme.css';
 import '../styles/dynamic-admin-panel.css';
 
@@ -41,6 +42,9 @@ const DynamicAdminPanel = ({ initialModule = 'applications' }) => {
     totalPages: 1,
     totalRecords: 0
   });
+
+  // Save Confirmation Modal state
+  const [showSaveModal, setShowSaveModal] = useState(false);
 
   // Service Charge Modal state
   const [serviceChargeModal, setServiceChargeModal] = useState({
@@ -316,9 +320,9 @@ const DynamicAdminPanel = ({ initialModule = 'applications' }) => {
           { value: 'INACTIVE', label: 'INACTIVE' }
         ]}
       ],
-      columns: ['id', 'name', 'phone', 'address', 'status', 'totalIncentive', 'totalPaid', 'pendingPayable'],
-      columnLabels: ['ID', 'Name', 'Phone', 'Address', 'Status', 'Total Incentive', 'Total Paid', 'Pending'],
-      columnWidths: ['80px', '200px', '130px', '200px', '100px', '120px', '120px', '120px'],
+      columns: ['id', 'name', 'phone', 'status', 'totalRailwayFare', 'totalIncentive', 'totalPayable', 'totalPaid', 'pendingPayable'],
+      columnLabels: ['ID', 'Name', 'Phone', 'Status', 'Railway Fare', 'Incentive', 'Total Payable', 'Total Paid', 'Pending'],
+      columnWidths: ['70px', '180px', '120px', '90px', '120px', '110px', '120px', '110px', '110px'],
       filterFields: ['name', 'phone', 'status']
     },
     employees: {
@@ -808,7 +812,7 @@ const DynamicAdminPanel = ({ initialModule = 'applications' }) => {
     const formFields = currentModule.fields.map(f => f.name);
     const currIdx = formFields.indexOf(fieldName);
     
-    if (e.key === 'Enter' || (e.key === 'Tab' && !e.shiftKey)) {
+    if (e.key === 'Tab' && !e.shiftKey) {
       if (currIdx !== -1 && currIdx < formFields.length - 1) {
         e.preventDefault();
         const nextName = formFields[currIdx + 1];
@@ -817,9 +821,23 @@ const DynamicAdminPanel = ({ initialModule = 'applications' }) => {
           nextEl.focus();
           if (nextEl.select) nextEl.select();
         }
-      } else if (currIdx === formFields.length - 1 && e.key === 'Enter') {
+      } else if (currIdx === formFields.length - 1) {
+        // Tab after the last field (e.g. permanentAddress) opens confirmation modal
         e.preventDefault();
-        handleSave();
+        setShowSaveModal(true);
+      }
+    } else if (e.key === 'Enter') {
+      if (currIdx !== -1 && currIdx < formFields.length - 1) {
+        e.preventDefault();
+        const nextName = formFields[currIdx + 1];
+        const nextEl = document.querySelector(`[name="${nextName}"]`);
+        if (nextEl) {
+          nextEl.focus();
+          if (nextEl.select) nextEl.select();
+        }
+      } else if (currIdx === formFields.length - 1) {
+        e.preventDefault();
+        setShowSaveModal(true);
       }
     } else if (e.key === 'Tab' && e.shiftKey) {
       if (currIdx > 0) {
@@ -1147,9 +1165,9 @@ const DynamicAdminPanel = ({ initialModule = 'applications' }) => {
     // Clear inline filters
     clearFilters();
     
-    // Clear filter timeout
-    if (filterTimeout) {
-      clearTimeout(filterTimeout);
+    // Clear filter debounce
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
     }
     
     // Reload full dataset
@@ -2487,6 +2505,17 @@ const DynamicAdminPanel = ({ initialModule = 'applications' }) => {
         customerName={serviceChargeModal.customerName}
         customerNo={serviceChargeModal.customerNo}
         onClose={() => setServiceChargeModal(prev => ({ ...prev, isOpen: false }))}
+      />
+
+      {/* Save Confirmation Modal */}
+      <SaveConfirmationModal
+        isOpen={showSaveModal}
+        onConfirm={async () => {
+          setShowSaveModal(false);
+          await handleSave();
+        }}
+        onCancel={() => setShowSaveModal(false)}
+        message="You have reached the end of the form. Save this record?"
       />
     </div>
   );

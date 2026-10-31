@@ -15,7 +15,7 @@ function convertUserIdToInt(userId) {
 
 const getAllStationBoys = async (req, res) => {
   try {
-    // Fetch all station boys with aggregated incentives and payments using safe subqueries
+    // Fetch all station boys with aggregated payables and payments using safe subqueries
     const stationBoys = await sequelize.query(`
       SELECT 
         sb.id,
@@ -24,10 +24,22 @@ const getAllStationBoys = async (req, res) => {
         sb.address,
         sb.status,
         (
-          SELECT COALESCE(SUM(b.station_boy_incentive_amount), 0) 
+          SELECT COALESCE(SUM(b.bl_railway_fare), 0) 
           FROM blXbilling b 
           WHERE b.station_boy_id = sb.id 
-            AND b.status NOT IN ('CANCELLED', 'CAN')
+            AND COALESCE(b.is_cancelled, 0) = 0
+            AND COALESCE(b.is_deleted, 0) = 0
+            AND (b.status IS NULL OR b.status NOT IN ('CANCELLED', 'CAN'))
+            AND (b.bl_status IS NULL OR b.bl_status NOT IN ('CANCELLED', 'CAN'))
+        ) AS totalRailwayFare,
+        (
+          SELECT COALESCE(SUM(COALESCE(b.station_boy_incentive_amount, b.bl_sb_incentive, 0)), 0) 
+          FROM blXbilling b 
+          WHERE b.station_boy_id = sb.id 
+            AND COALESCE(b.is_cancelled, 0) = 0
+            AND COALESCE(b.is_deleted, 0) = 0
+            AND (b.status IS NULL OR b.status NOT IN ('CANCELLED', 'CAN'))
+            AND (b.bl_status IS NULL OR b.bl_status NOT IN ('CANCELLED', 'CAN'))
         ) AS totalIncentive,
         (
           SELECT COALESCE(SUM(p.amount), 0) 
@@ -39,11 +51,15 @@ const getAllStationBoys = async (req, res) => {
       ORDER BY sb.name ASC
     `, { type: QueryTypes.SELECT });
 
-    // Format response to include pending amount
+    // Format response to include total payable and pending amount
+    const round2 = (value) => Math.round((Number(value) || 0) * 100) / 100;
+
     const formattedData = stationBoys.map(sb => {
-      const totalIncentive = parseFloat(sb.totalIncentive || 0);
-      const totalPaid = parseFloat(sb.totalPaid || 0);
-      const pendingPayable = totalIncentive - totalPaid;
+      const totalRailwayFare = round2(sb.totalRailwayFare);
+      const totalIncentive = round2(sb.totalIncentive);
+      const totalPaid = round2(sb.totalPaid);
+      const totalPayable = round2(totalRailwayFare + totalIncentive);
+      const pendingPayable = round2(Math.max(0, totalPayable - totalPaid));
 
       return {
         id: sb.id,
@@ -51,7 +67,9 @@ const getAllStationBoys = async (req, res) => {
         phone: sb.phone || '',
         address: sb.address || '',
         status: sb.status,
+        totalRailwayFare,
         totalIncentive,
+        totalPayable,
         totalPaid,
         pendingPayable
       };

@@ -3,11 +3,11 @@
  * Contains functions specifically for employee payment operations
  */
 
-const { 
+const {
   ptXpayment: Payment,
   pnXpnr: Pnr,
   paXpayalloc: PaymentAlloc,
-  bkXbooking: Booking
+  BookingTVL: Booking
 } = require('../models');
 const { sequelize, sequelizeTVL } = require('../../config/db');
 const { Op, QueryTypes } = require('sequelize');
@@ -655,7 +655,7 @@ const deletePayment = async (req, res) => {
 const createCustomerPayment = async (req, res) => {
   const transaction = await sequelizeTVL.transaction();
   try {
-    const { customerId, amount, mode, refNo, paymentDate, remarks } = req.body;
+    const { customerId, amount, mode, refNo, paymentDate, remarks, pnr, bookingId } = req.body;
 
     if (!customerId || !amount) {
       return res.status(400).json({
@@ -664,9 +664,38 @@ const createCustomerPayment = async (req, res) => {
       });
     }
 
+    // Settlement prefers an explicit PNR; otherwise resolve it from the booking.
+    let settlementPnr = pnr || null;
+    if (!settlementPnr && bookingId) {
+      const booking = await Booking.findByPk(bookingId, { transaction });
+      settlementPnr = booking ? booking.bk_pnr : null;
+    }
+
+    // ptXpayment.pt_custid is BIGINT while customer identifiers are strings, so
+    // the ledger keeps the canonical cu_usid and the payment keeps its numeric half.
+    const { CustomerTVL } = require('../models');
+    const customer = await CustomerTVL.findOne({
+      where: {
+        [Op.or]: [
+          { cu_usid: customerId },
+          { cu_cusid: customerId },
+          { cu_custno: customerId }
+        ]
+      },
+      transaction
+    });
+    const ledgerCustomerId = customer ? customer.cu_usid : customerId;
+    const numericCustomerId = parseInt(String(customer ? customer.cu_cusid : customerId).replace(/\D/g, ''), 10);
+    if (!Number.isFinite(numericCustomerId)) {
+      return res.status(400).json({
+        success: false,
+        message: `Customer ${customerId} has no numeric id to post the payment against`
+      });
+    }
+
     // Resolve Account ID (pt_acid)
     const { Account: AccountModel } = require('../models');
-    let account = await AccountModel.findOne({ where: { ac_usid: customerId }, transaction });
+    let account = await AccountModel.findOne({ where: { ac_usid: ledgerCustomerId }, transaction });
     if (!account) {
       account = await AccountModel.findOne({ transaction });
     }
@@ -678,7 +707,7 @@ const createCustomerPayment = async (req, res) => {
 
     // Create payment record in ptXpayment
     const payment = await Payment.create({
-      pt_custid: customerId,
+      pt_custid: numericCustomerId,
       pt_totalamt: amount,
       pt_amount: amount,
       pt_status: 'ACTIVE',
@@ -702,12 +731,13 @@ const createCustomerPayment = async (req, res) => {
 
     // Trigger CustomerLedgerService auto-allocation
     const CustomerLedgerService = require('../services/CustomerLedgerService');
-    await CustomerLedgerService.allocatePaymentOnCreation(
+    const settlement = await CustomerLedgerService.allocatePaymentOnCreation(
       payment.pt_ptid,
-      customerId,
+      ledgerCustomerId,
       parseFloat(amount),
       transaction,
-      req.user.us_usid
+      req.user.us_usid,
+      { pnr: settlementPnr }
     );
 
     await transaction.commit();
@@ -726,7 +756,8 @@ const createCustomerPayment = async (req, res) => {
     res.status(201).json({
       success: true,
       message: 'Customer payment created and allocated successfully',
-      payment
+      payment,
+      settlement
     });
 
   } catch (error) {
